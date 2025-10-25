@@ -536,6 +536,16 @@ export class TabletRegistrationService {
         return false;
       }
 
+      // Log GPS data for debugging (occasionally)
+      if (Math.random() < 0.05) { // 5% of updates
+        console.log(`📍 [GPS] Slot ${this.registration.slotNumber} Location:`, {
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          speed: speed ? `${(speed * 3.6).toFixed(1)} km/h` : '0 km/h',
+          accuracy: `${accuracy.toFixed(0)}m`
+        });
+      }
+
       // Validate speed value - ensure it's non-negative
       const validSpeed = speed && speed >= 0 ? speed : 0;
 
@@ -714,7 +724,7 @@ export class TabletRegistrationService {
 
       this.isTracking = true;
 
-      // Start periodic location updates (every 7 seconds)
+      // Start periodic location updates (every 2 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
           // Skip location updates if simulating offline
@@ -725,7 +735,7 @@ export class TabletRegistrationService {
 
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
-            timeInterval: 7000,
+            timeInterval: 2000,
             distanceInterval: 5, // Update every 5 meters
           });
 
@@ -748,7 +758,7 @@ export class TabletRegistrationService {
         } catch (error) {
           console.error('Error updating location:', error);
         }
-      }, 7000); // Update every 7 seconds
+      }, 2000); // Update every 2 seconds
 
       log.deviceTracking('Location tracking started');
     } catch (error) {
@@ -1326,49 +1336,8 @@ export class TabletRegistrationService {
     }
   }
 
-  // Track ad playback
-  async trackAdPlayback(adId: string, adTitle: string, adDuration: number, viewTime: number = 0): Promise<boolean> {
-    try {
-      const registrationData = await this.getRegistrationData();
-      if (!registrationData) {
-        console.error('No registration data found');
-        return false;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/screenTracking/trackAd`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deviceId: registrationData.deviceId,
-          adId,
-          adTitle,
-          adDuration,
-          viewTime
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        // Only log analytics occasionally to reduce noise
-        if (Math.random() < 0.3) { // Log ~30% of analytics
-          log.adAnalytics('Ad playback tracked successfully', { 
-            success: result.success, 
-            totalAdsPlayed: result.data?.totalAdsPlayed,
-            totalAdImpressions: result.data?.totalAdImpressions 
-          });
-        }
-        return true;
-      } else {
-        console.error('Failed to track ad playback:', response.status, response.statusText);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error tracking ad playback:', error);
-      return false;
-    }
-  }
+  // ❌ REMOVED: trackAdPlayback() - was causing duplicate tracking
+  // Ad tracking now handled directly in AdPlayer via /deviceTracking/ad-playback endpoint
 
   // End ad playback
   async endAdPlayback(): Promise<boolean> {

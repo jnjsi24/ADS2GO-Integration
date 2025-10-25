@@ -60,6 +60,47 @@ router.post('/updateLocation', async (req, res) => {
         message: 'Device tracking record not found. Please register device first.'
       });
     }
+    
+    // ✅ MASTER SLOT VALIDATION: Only accept location updates from master slot
+    // Find which slot this deviceId belongs to
+    if (deviceTracking.slots && deviceTracking.slots.length > 0) {
+      const currentSlot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+      const currentSlotNumber = currentSlot?.slotNumber;
+      
+      if (currentSlotNumber) {
+        const slot1 = deviceTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
+        const slot2 = deviceTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
+        
+        // Check which slot is master (online)
+        const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+        const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+        
+        let masterSlotNumber = null;
+        if (slot1Online) {
+          masterSlotNumber = 1;
+        } else if (slot2Online) {
+          masterSlotNumber = 2;
+        }
+        
+        // Reject location update if it's not from the master slot
+        if (masterSlotNumber && currentSlotNumber !== masterSlotNumber) {
+          console.log(`🚫 [Master Location] Rejecting location update from ${deviceId} (Slot ${currentSlotNumber}) - Master is Slot ${masterSlotNumber}`);
+          return res.json({
+            success: true,
+            message: `Location update ignored - Slot ${masterSlotNumber} is the master`,
+            data: {
+              deviceId,
+              deviceSlot: currentSlotNumber,
+              masterSlot: masterSlotNumber,
+              isOnline: deviceStatusService.getDeviceStatus(deviceId)?.isOnline || false,
+              reason: 'Only master slot can update location'
+            }
+          });
+        }
+        
+        console.log(`✅ [Master Location] Accepting location update from ${deviceId} (Slot ${currentSlotNumber}, master slot)`);
+      }
+    }
 
     // Get address from coordinates using OSM (optional - don't fail if geocoding fails)
     let address = '';
@@ -852,7 +893,10 @@ router.get('/path/:deviceId', async (req, res) => {
 // GET /compliance - Get compliance report
 router.get('/compliance', async (req, res) => {
   const requestStartTime = Date.now();
-  console.log('🕐 [COMPLIANCE] Request started at:', new Date().toISOString());
+  // Reduced verbosity - only log if DEBUG is enabled
+  if (process.env.DEBUG_COMPLIANCE === 'true') {
+    logger.debug('[COMPLIANCE] Request started');
+  }
   
   try {
     const { date, skipGeocoding } = req.query;
@@ -965,7 +1009,6 @@ router.get('/compliance', async (req, res) => {
       
       const historicalDataPromises = registeredMaterialIds.map(async (materialId) => {
         try {
-          console.log(`🔍 [HISTORICAL] Looking for materialId: ${materialId}`);
           const queryStartTime = Date.now();
           
           // ⚡ OPTIMIZATION: Use aggregation to only fetch the specific date we need
@@ -1000,11 +1043,12 @@ router.get('/compliance', async (req, res) => {
           ]);
           
           const queryDuration = Date.now() - queryStartTime;
-          console.log(`⏱️ [HISTORICAL] Optimized query for ${materialId} took ${queryDuration}ms`);
+          if (process.env.DEBUG_COMPLIANCE === 'true' && queryDuration > 100) {
+            logger.debug(`[HISTORICAL] Query for ${materialId} took ${queryDuration}ms`);
+          }
           
           if (result && result.length > 0) {
             const dayData = result[0];
-            console.log(`✅ [HISTORICAL] Found data for ${materialId} on ${targetDateOnly.toISOString().split('T')[0]}`);
             
             return {
               materialId,
@@ -1017,11 +1061,10 @@ router.get('/compliance', async (req, res) => {
               }
             };
           } else {
-            console.log(`⚠️ [HISTORICAL] No data for ${materialId} on ${targetDateOnly.toISOString().split('T')[0]}`);
             return null;
           }
         } catch (error) {
-          console.error(`❌ [HISTORICAL] Error fetching data for ${materialId}:`, error);
+          logger.error(`[HISTORICAL] Error fetching data for ${materialId}:`, error);
           return null;
         }
       });
@@ -1033,12 +1076,13 @@ router.get('/compliance', async (req, res) => {
       historicalResults.forEach(result => {
         if (result && result.data) {
           historicalDataMap.set(result.materialId, result.data);
-          console.log(`✅ [HISTORICAL] Found data for ${result.materialId}: ${result.data.totalHoursOnline}h, ${result.data.totalDistanceTraveled.toFixed(2)}km`);
         }
       });
       
       const historicalFetchDuration = Date.now() - historicalFetchStartTime;
-      console.log(`📊 [HISTORICAL] Loaded data for ${historicalDataMap.size}/${registeredMaterialIds.length} materials in ${historicalFetchDuration}ms (${(historicalFetchDuration / 1000).toFixed(2)}s)`);
+      if (process.env.DEBUG_COMPLIANCE === 'true' || historicalFetchDuration > 500) {
+        logger.info(`[HISTORICAL] Loaded ${historicalDataMap.size}/${registeredMaterialIds.length} materials in ${(historicalFetchDuration / 1000).toFixed(2)}s`);
+      }
     }
     
     // First, group all devices by material
@@ -1059,7 +1103,7 @@ router.get('/compliance', async (req, res) => {
           totalAdPlays: 0,
           totalQRScans: 0,
           totalDistanceTraveled: 0,
-          totalHoursOnline: 0,
+          totalHoursOnline: 0, // This will accumulate today's hours from currentHoursToday
           totalAdImpressions: 0,
           totalAdPlayTime: 0,
           isOnline: false,
@@ -1102,9 +1146,6 @@ router.get('/compliance', async (req, res) => {
             // Update slot status - use DeviceStatusManager for real-time status
             const deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
             const deviceStatusOnline = !!(deviceStatus && deviceStatus.isOnline);
-            
-            // Debug logging
-            logger.screenTracking(`🔍 [compliance] Slot ${slot.deviceId}: deviceStatus=`, deviceStatus, 'deviceStatusOnline=', deviceStatusOnline);
             
             // Use real-time WebSocket status from DeviceStatusManager
             // This is the single source of truth for device online status
@@ -1155,17 +1196,33 @@ router.get('/compliance', async (req, res) => {
       // ✅ NEW: Only sum metrics from car record (car-level aggregates already exist)
       // Note: Car-level metrics are the source of truth for the material
       group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
-      group.totalHoursOnline += device.totalHoursOnline || 0;
+      group.totalHoursOnline += device.currentHoursToday || 0; // Use currentHoursToday for daily tracking (not lifetime total)
       
-      // Use the most recent lastSeen
-      if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
-        group.lastSeen = device.lastSeen;
+      // ✅ MASTER SLOT LOCATION: Only use GPS location from the master slot
+      // Priority: Slot 1 location (if Slot 1 is master) → Slot 2 location (if Slot 2 is master)
+      if (masterSlotNumber && device.currentLocation) {
+        // Get the master slot
+        const masterSlot = device.slots.find(s => s.slotNumber === masterSlotNumber);
+        
+        // Only use location if it was reported by the master slot OR if car-level location exists
+        // (car-level location is assumed to come from whichever device is active)
+        // For now, we trust that the currentLocation on the car is from the active master device
+        if (!group.currentLocation || 
+            (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen)) {
+          group.currentLocation = device.currentLocation;
+          logger.screenTracking(`📍 [Master Location] Material ${materialId}: Using location from Slot ${masterSlotNumber}`);
+        }
       }
       
-      // Use the most recent location (from the master slot if available)
-      if (device.currentLocation && (!group.currentLocation || 
-          (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
-        group.currentLocation = device.currentLocation;
+      // Use the most recent lastSeen from master slot
+      if (masterSlotNumber && device.slots) {
+        const masterSlot = device.slots.find(s => s.slotNumber === masterSlotNumber);
+        if (masterSlot && masterSlot.lastSeen && (!group.lastSeen || masterSlot.lastSeen > group.lastSeen)) {
+          group.lastSeen = masterSlot.lastSeen;
+        }
+      } else if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
+        // Fallback: use car-level lastSeen if no master slot
+        group.lastSeen = device.lastSeen;
       }
       
       // ✅ NEW: Filter arrays to only include data from the MASTER slot
@@ -1246,9 +1303,9 @@ router.get('/compliance', async (req, res) => {
         console.log(`📅 [HISTORICAL USED] ${materialId}: Hours=${deviceHours}h, Distance=${deviceDistance.toFixed(2)}km (from historical data)`);
       } else {
         // Real-time mode - use current DeviceTracking data
-        deviceHours = group.totalHoursOnline || 0;
+        deviceHours = group.totalHoursOnline || 0; // Using currentHoursToday accumulated value
         deviceDistance = group.totalDistanceTraveled || 0;
-        console.log(`⏱️ [REAL-TIME USED] ${materialId}: Hours=${deviceHours}h, Distance=${deviceDistance.toFixed(2)}km (from DeviceTracking)`);
+        console.log(`⏱️ [REAL-TIME USED] ${materialId}: Hours=${deviceHours.toFixed(2)}h (today), Distance=${deviceDistance.toFixed(2)}km (from DeviceTracking)`);
       }
       
       const isDeviceOnline = group.isOnline; // Always use real-time status for online/offline indication
@@ -1414,29 +1471,23 @@ router.get('/compliance', async (req, res) => {
       // Priority: Slot 1 (master) → Slot 2 (failover) → fallback to first device
       let primaryDeviceId = group.devices[0].device.deviceId; // Default to first device
       
-      // Debug logging
-      logger.screenTracking(`🔍 [compliance] Material ${materialId} - Slot status:`, {
-        slot1: group.slotStatus.slot1,
-        slot2: group.slotStatus.slot2,
-        devices: group.devices.map(d => ({ deviceId: d.device.deviceId, slotNumber: d.device.slotNumber }))
-      });
+      // Only log slot status in debug mode
+      if (process.env.DEBUG_COMPLIANCE === 'true') {
+        logger.debug(`[compliance] Material ${materialId} - Slot 1: ${group.slotStatus.slot1.online ? 'online' : 'offline'}, Slot 2: ${group.slotStatus.slot2.online ? 'online' : 'offline'}`);
+      }
       
       if (group.slotStatus.slot1.online) {
         // ✅ Slot 1 is master when online (highest priority)
         const slot1Device = group.devices.find(d => d.device.slotNumber === 1);
         if (slot1Device) {
           primaryDeviceId = slot1Device.device.deviceId;
-          logger.screenTracking(`👑 [compliance] Using Slot 1 device (master): ${primaryDeviceId}`);
         }
       } else if (group.slotStatus.slot2.online) {
         // ✅ Slot 2 becomes master when Slot 1 is offline (failover)
         const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
         if (slot2Device) {
           primaryDeviceId = slot2Device.device.deviceId;
-          logger.screenTracking(`👑 [compliance] Using Slot 2 device (failover - Slot 1 offline): ${primaryDeviceId}`);
         }
-      } else {
-        logger.screenTracking(`⚠️ [compliance] No slots online, using default device: ${primaryDeviceId}`);
       }
 
       // Get driver information for this material
@@ -1580,8 +1631,10 @@ router.get('/compliance', async (req, res) => {
     };
 
     const requestDuration = Date.now() - requestStartTime;
-    console.log(`✅ [COMPLIANCE] Sending response after ${requestDuration}ms (${(requestDuration/1000).toFixed(2)}s)`);
-    console.log(`📊 [COMPLIANCE] Sending ${individualScreens.length} screens`);
+    // Only log slow requests or when debug mode is enabled
+    if (process.env.DEBUG_COMPLIANCE === 'true' || requestDuration > 1000) {
+      logger.info(`[COMPLIANCE] Responded with ${individualScreens.length} screens in ${(requestDuration/1000).toFixed(2)}s`);
+    }
     
     res.json({
       success: true,

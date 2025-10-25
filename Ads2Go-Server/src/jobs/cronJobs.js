@@ -108,30 +108,11 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
-    // Daily job to create missing DeviceTracking records - runs every day at 2 AM
-    const createMissingDeviceTrackingTask = cron.schedule('0 2 * * *', async () => {
-      console.log('⏰ Daily missing DeviceTracking creation job triggered');
-      try {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-        
-        await execAsync('node scripts/create-missing-device-tracking.js');
-        console.log('✅ Missing DeviceTracking creation job completed');
-      } catch (error) {
-        console.error('❌ Error in missing DeviceTracking creation job:', error);
-      }
-    }, {
-      scheduled: true,
-      timezone: 'Asia/Manila'
-    });
-
     this.jobs.set('frequentArchive', frequentArchiveTask);
     this.jobs.set('hourlyArchive', hourlyArchiveTask);
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
     this.jobs.set('dailyFreshArchive', dailyFreshArchiveTask);
-    this.jobs.set('createMissingDeviceTracking', createMissingDeviceTrackingTask);
 
     // Hourly cleanup job - runs every hour to clean up old data
     const hourlyCleanupTask = cron.schedule('0 * * * *', async () => {
@@ -355,11 +336,15 @@ class CronJobs {
       
       for (const device of devices) {
         try {
+          // ✅ Preserve completedAt from yesterday for 8 AM lock enforcement
+          const previousCompletedAt = device.currentSession?.completedAt;
+          
           // Reset the daily session for the new day
           device.currentSession = {
             date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate()),
             startTime: new Date(),
             endTime: null,
+            completedAt: previousCompletedAt, // ✅ Preserve for 8 AM lock (12 AM - 7:59 AM)
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             isActive: true,
@@ -393,8 +378,8 @@ class CronJobs {
             displayIssues: 0
           };
           
-          // Update lastSeen to now
-          device.lastSeen = new Date();
+          // ✅ DON'T reset lastSeen - preserve actual last online time for admin tracking
+          // lastSeen will only update when device is actually online and sending data
           
           // Update the date to today
           device.date = todayStr;

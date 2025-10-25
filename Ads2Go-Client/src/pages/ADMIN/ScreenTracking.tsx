@@ -7,6 +7,7 @@ import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
 import { AdminLoader } from "../../components/ProtectedRoute";
 import playbackWebSocketService from '../../services/playbackWebSocketService';
+import { screenComplianceService } from '../../services/screenComplianceService';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -139,6 +140,7 @@ const ScreenTracking: React.FC = () => {
   const [clearMap, setClearMap] = useState(false); // Flag to clear map
   const [showMap, setShowMap] = useState(true); // Control map visibility
   const [openPopupForSelected, setOpenPopupForSelected] = useState(false); // Flag to open popup for selected screen
+  const [currentTime, setCurrentTime] = useState(new Date()); // Current time for display
   
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
@@ -287,18 +289,14 @@ const ScreenTracking: React.FC = () => {
       setRefreshing(true);
       setConnectionStatus('connecting');
       
-      // Fetch compliance report (no auth required for this endpoint)
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
+      // ✅ PHASE 2 OPTIMIZATION: Use shared compliance service with caching
+      // For live tab: Use null as date (always get today's real-time data)
+      // For historical tab: Use selectedDate (get specific date's archived data)
+      const dateParam = activeTab === 'live' ? null : selectedDate;
       
-      const complianceResponse = await fetch(apiUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const complianceData = await screenComplianceService.getCompliance(dateParam, false);
       
-      if (complianceResponse.ok) {
-        const complianceData = await complianceResponse.json();
+      if (complianceData.success) {
         setComplianceReport(complianceData.data);
         const screensData = complianceData.data?.screens || [];
         setScreens(screensData); // Individual device records for screen list
@@ -344,7 +342,7 @@ const ScreenTracking: React.FC = () => {
        setLoading(false);
        setRefreshing(false);
      }
-   }, [selectedDate]);
+   }, [selectedDate, activeTab]); // Re-fetch when date OR tab changes
 
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
@@ -413,10 +411,35 @@ const ScreenTracking: React.FC = () => {
     fetchData();
     fetchMaterials();
     
-    // Temporarily disable auto-refresh to test map markers
-    // const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds for faster updates
-    // return () => clearInterval(interval);
+    // Auto-refresh enabled - refresh every 30 seconds for data consistency
+    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
   }, [selectedDate, fetchData]);
+
+  // Auto-update selectedDate when day changes (for live tab)
+  useEffect(() => {
+    if (activeTab === 'live') {
+      // Check every minute if the day has changed
+      const dayCheckInterval = setInterval(() => {
+        const currentDate = new Date().toISOString().split('T')[0];
+        if (currentDate !== selectedDate) {
+          console.log(`📅 [Day Change] Updating from ${selectedDate} to ${currentDate}`);
+          setSelectedDate(currentDate);
+        }
+      }, 60000); // Check every minute
+      
+      return () => clearInterval(dayCheckInterval);
+    }
+  }, [activeTab, selectedDate]);
+
+  // Auto-update current time display every 30 seconds
+  useEffect(() => {
+    const timeUpdateInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000); // Update every 30 seconds
+    
+    return () => clearInterval(timeUpdateInterval);
+  }, []);
 
   // WebSocket integration for real-time updates
   useEffect(() => {
@@ -639,16 +662,14 @@ const ScreenTracking: React.FC = () => {
     setOpenPopupForSelected(true);
   };
 
-  const getStatusColor = (isOnline: boolean, isCompliant: boolean) => {
-    if (!isOnline) return 'text-red-500';
-    if (isCompliant) return 'text-green-500';
-    return 'text-yellow-500';
+  const getStatusColor = (isOnline: boolean) => {
+    if (!isOnline) return 'text-red-500';    // Offline = Red
+    return 'text-green-500';                  // Online = Green
   };
 
-  const getStatusIcon = (isOnline: boolean, isCompliant: boolean) => {
-    if (!isOnline) return <XCircle className="w-4 h-4" />;
-    if (isCompliant) return <CheckCircle className="w-4 h-4" />;
-    return <AlertTriangle className="w-4 h-4" />;
+  const getStatusIcon = (isOnline: boolean) => {
+    if (!isOnline) return <XCircle className="w-4 h-4" />;        // Offline = ✕
+    return <CheckCircle className="w-4 h-4" />;                   // Online = ✓
   };
 
   const formatTime = (hours: number | undefined | null) => {
@@ -972,34 +993,6 @@ const ScreenTracking: React.FC = () => {
              </div>
            </div>
 
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <CheckCircle className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
-                 <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isCompliant).length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Hours</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                   {screens && screens.length > 0 
-                     ? (screens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / screens.length).toFixed(1)
-                     : '0.0'
-                   }h
-                 </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -1533,8 +1526,28 @@ const ScreenTracking: React.FC = () => {
              <div className="lg:col-span-1">
                <div className="bg-white rounded-lg shadow">
                  <div className="p-4 border-b">
-                   <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
-                   <p className="text-sm text-gray-600">Click to view details</p>
+                   <div className="flex items-start justify-between">
+                     <div>
+                       <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
+                       <p className="text-sm text-gray-600">Click to view details</p>
+                     </div>
+                     <div className="text-right">
+                       <p className="text-sm font-medium text-gray-900">
+                         {currentTime.toLocaleDateString('en-US', { 
+                           month: 'short', 
+                           day: 'numeric', 
+                           year: 'numeric' 
+                         })}
+                       </p>
+                       <p className="text-xs text-gray-500">
+                         {currentTime.toLocaleTimeString('en-US', { 
+                           hour: '2-digit', 
+                           minute: '2-digit',
+                           hour12: true 
+                         })}
+                       </p>
+                     </div>
+                   </div>
                  </div>
                  <div className="max-h-96 overflow-y-auto">
                    {screens?.map((screen) => (
@@ -1550,12 +1563,12 @@ const ScreenTracking: React.FC = () => {
                            <Car className="w-4 h-4 text-gray-500" />
                            <span className="font-medium">{screen.displayId || screen.materialId}</span>
                          </div>
-                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
-                           {getStatusIcon(screen.isOnline, screen.isCompliant)}
-                           <span className="text-xs">
-                             {screen.slot1Status?.toLowerCase() === 'online' || screen.slot2Status?.toLowerCase() === 'online' ? 'ONLINE' : 'OFFLINE'}
-                           </span>
-                         </div>
+                        <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline)}`}>
+                          {getStatusIcon(screen.isOnline)}
+                          <span className="text-xs">
+                            {screen.slot1Status?.toLowerCase() === 'online' || screen.slot2Status?.toLowerCase() === 'online' ? 'ONLINE' : 'OFFLINE'}
+                          </span>
+                        </div>
                        </div>
                        
                        <div className="space-y-1 text-sm text-gray-600">
@@ -1681,19 +1694,9 @@ const ScreenTracking: React.FC = () => {
                            <p>Heading: {selectedScreen.currentLocation.heading}°</p>
                            <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
                          </div>
-                       </div>
-                     )}
-
-                     {pathData && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Path Information</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Total Points: {pathData.totalPoints}</p>
-                           <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
-                         </div>
-                       </div>
-                     )}
-                   </div>
+                      </div>
+                    )}
+                  </div>
                  </div>
                )}
           </div>

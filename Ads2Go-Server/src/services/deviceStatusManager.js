@@ -26,18 +26,14 @@ class DeviceStatusManager {
    * @param {Date} lastSeen - Last seen timestamp
    */
   setWebSocketStatus(deviceId, isConnected, lastSeen = new Date()) {
-    logger.deviceStatus(`🔌 [DeviceStatusManager] WebSocket status for ${deviceId}: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
-    
     if (isConnected) {
       this.webSocketConnections.set(deviceId, { 
         isConnected: true, 
         lastSeen,
         source: 'websocket'
       });
-      logger.deviceStatus(`✅ [DeviceStatusManager] Added WebSocket connection for ${deviceId}`);
     } else {
       this.webSocketConnections.delete(deviceId);
-      logger.deviceStatus(`❌ [DeviceStatusManager] Removed WebSocket connection for ${deviceId}`);
     }
     
     this.updateCachedStatus(deviceId);
@@ -50,8 +46,6 @@ class DeviceStatusManager {
    * @param {Date} lastSeen - Last seen timestamp
    */
   setDatabaseStatus(deviceId, isOnline, lastSeen = new Date()) {
-    logger.deviceStatus(`💾 [DeviceStatusManager] Database status for ${deviceId}: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
-    
     this.databaseStatus.set(deviceId, { 
       isOnline, 
       lastSeen,
@@ -100,8 +94,6 @@ class DeviceStatusManager {
   calculateDeviceStatus(deviceId) {
     const now = Date.now();
     
-    // Debug: console.log(`🔍 [DeviceStatusManager] Calculating status for ${deviceId}`);
-    
     // Priority 1: Active WebSocket connection (highest priority)
     const wsStatus = this.webSocketConnections.get(deviceId);
     if (wsStatus && wsStatus.isConnected) {
@@ -112,18 +104,15 @@ class DeviceStatusManager {
         confidence: 'high'
       };
       this.statusCache.set(deviceId, { ...status, timestamp: now });
-      logger.deviceStatus(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (WebSocket, high confidence)`);
       return status;
     }
 
-    // Priority 2: Recent database activity (30 seconds fallback)
+    // Priority 2: Recent database activity (15 seconds fallback)
     const dbStatus = this.databaseStatus.get(deviceId);
     if (dbStatus && dbStatus.isOnline) {
       // Ensure lastSeen is a valid Date
       const lastSeenTime = dbStatus.lastSeen instanceof Date ? dbStatus.lastSeen.getTime() : new Date(dbStatus.lastSeen).getTime();
-      if (isNaN(lastSeenTime)) {
-        console.warn(`⚠️ [DeviceStatusManager] ${deviceId}: Invalid lastSeen timestamp`);
-      } else {
+      if (!isNaN(lastSeenTime)) {
         const timeSinceLastSeen = (now - lastSeenTime) / 1000;
         if (timeSinceLastSeen <= this.databaseFallbackTimeout) {
           const status = { 
@@ -133,10 +122,7 @@ class DeviceStatusManager {
             confidence: 'medium'
           };
           this.statusCache.set(deviceId, { ...status, timestamp: now });
-          logger.deviceStatus(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (Database, medium confidence, ${timeSinceLastSeen.toFixed(1)}s ago)`);
           return status;
-        } else {
-          logger.deviceStatus(`⏰ [DeviceStatusManager] ${deviceId}: Database status too old (${timeSinceLastSeen.toFixed(1)}s ago)`);
         }
       }
     }
@@ -149,7 +135,6 @@ class DeviceStatusManager {
       confidence: 'low'
     };
     this.statusCache.set(deviceId, { ...status, timestamp: now });
-    logger.deviceStatus(`❌ [DeviceStatusManager] ${deviceId}: OFFLINE (Timeout, low confidence)`);
     return status;
   }
 
@@ -210,7 +195,6 @@ class DeviceStatusManager {
       }
     };
     
-    console.log('📊 [DeviceStatusManager] Status Summary:', summary);
     return summary;
   }
 
@@ -221,7 +205,6 @@ class DeviceStatusManager {
     this.webSocketConnections.clear();
     this.databaseStatus.clear();
     this.statusCache.clear();
-    console.log('🧹 [DeviceStatusManager] Cache cleared');
   }
 }
 

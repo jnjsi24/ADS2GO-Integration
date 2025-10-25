@@ -104,45 +104,40 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
-    // ✅ NEW: Check 8-hour completion lock (blocks 12 AM - 7:59 AM after completing 8 hours)
+    // ✅ TIME-BASED LOCK: Block ALL registrations between 12:00 AM - 7:59 AM (regardless of 8hr completion)
+    const now = new Date();
+    const currentHour = now.getHours(); // 0-23
+    
+    // Check if current time is between 12:00 AM (0) and 7:59 AM (7)
+    const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
+    
+    if (isBeforeEightAM) {
+      console.log(`🔒 [Registration Blocked] ${materialId} cannot start before 8:00 AM`);
+      console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
+      console.log(`   Reason: Drivers are not allowed to work between 12:00 AM - 7:59 AM`);
+      
+      return res.status(403).json({
+        success: false,
+        blocked: true,
+        message: 'Ad player is locked until 8:00 AM. Drivers cannot work during midnight hours.',
+        reason: 'TIME_BASED_LOCK',
+        details: {
+          currentHour: currentHour,
+          currentTime: now.toISOString(),
+          unlockTime: '8:00 AM',
+          lockPeriod: '12:00 AM - 7:59 AM'
+        }
+      });
+    }
+    
+    // ✅ Clear completedAt when device registers at or after 8 AM (start of allowed work period)
     const DeviceTracking = require('../models/deviceTracking');
     const existingTracking = await DeviceTracking.findOne({ materialId });
     
-    if (existingTracking && existingTracking.currentSession) {
-      const now = new Date();
-      const currentHour = now.getHours(); // 0-23
-      
-      // Check if current time is between 12:00 AM (0) and 7:59 AM (7)
-      const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
-      
-      if (isBeforeEightAM && existingTracking.currentSession.completedAt) {
-        // Check if completedAt was yesterday or earlier (not today)
-        const completedDate = new Date(existingTracking.currentSession.completedAt);
-        completedDate.setHours(0, 0, 0, 0);
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const wasCompletedBeforeToday = completedDate.getTime() < today.getTime();
-        
-        if (wasCompletedBeforeToday) {
-          console.log(`🔒 [Registration Blocked] ${materialId} completed 8 hours yesterday, cannot start before 8 AM`);
-          console.log(`   Completed at: ${existingTracking.currentSession.completedAt.toISOString()}`);
-          console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
-          
-          return res.status(403).json({
-            success: false,
-            blocked: true,
-            message: 'Ad player is locked until 8:00 AM',
-            reason: '8_HOUR_LOCK',
-            details: {
-              completedAt: existingTracking.currentSession.completedAt,
-              unlockTime: '8:00 AM',
-              currentHour: currentHour
-            }
-          });
-        }
-      }
+    if (existingTracking && existingTracking.currentSession && existingTracking.currentSession.completedAt) {
+      console.log(`🔓 [Registration Unlocked] ${materialId} registering at ${currentHour}:00 - clearing completedAt from previous day`);
+      existingTracking.currentSession.completedAt = undefined;
+      await existingTracking.save();
     }
 
     // Find the tablet document for this material
@@ -194,6 +189,33 @@ router.post('/registerTablet', async (req, res) => {
         success: false,
         message: `Slot ${slotNumber} is already occupied by device ${existingTablet.deviceId}`
       });
+    }
+
+    // ✅ MASTER-SLAVE VALIDATION: Slot 1 must be registered before Slot 2
+    // Slot 1 is the master, Slot 2 is the slave - enforce strict ordering
+    if (slotNumber === 2) {
+      const slot1 = tablet.tablets.find(t => t.tabletNumber === 1);
+      
+      // Check if Slot 1 exists and has a registered device
+      if (!slot1 || !slot1.deviceId || slot1.status === 'OFFLINE') {
+        console.log(`🚫 [Registration Blocked] Cannot register Slot 2 - Slot 1 must be registered first`);
+        console.log(`   Slot 1 status: ${slot1 ? (slot1.deviceId ? slot1.status : 'Not registered') : 'Not configured'}`);
+        
+        return res.status(400).json({
+          success: false,
+          blocked: true,
+          message: 'Cannot register Slot 2 before Slot 1',
+          reason: 'MASTER_SLAVE_ORDER',
+          details: {
+            slotNumber: 2,
+            requiredSlot: 1,
+            slot1Status: slot1 ? (slot1.deviceId ? slot1.status : 'NOT_REGISTERED') : 'NOT_CONFIGURED',
+            explanation: 'Slot 1 (Master) must be registered and online before Slot 2 (Slave) can be registered'
+          }
+        });
+      }
+      
+      console.log(`✅ [Registration] Slot 1 is registered (${slot1.deviceId}) - allowing Slot 2 registration`);
     }
 
     // Update the tablet slot

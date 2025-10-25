@@ -44,13 +44,12 @@ class DeviceStatusService {
     
     // Handle WebSocket upgrade
     server.on('upgrade', (request, socket, head) => {
-      logger.websocket(`🔌 WebSocket upgrade request received: ${request.url}`);
-      logger.websocket(`🔌 Headers:`, request.headers);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`WebSocket upgrade request: ${request.url}`);
+      }
       
       const url = new URL(request.url, `http://${request.headers.host}`);
       const pathname = url.pathname;
-      
-      logger.websocket(`🔌 Parsed URL - Pathname: ${pathname}, Search: ${url.search}`);
       
       if (pathname === '/ws/status') {
         // Get device ID from query params or headers
@@ -59,17 +58,16 @@ class DeviceStatusService {
         
         
         if (!deviceId) {
-          console.error('No device ID provided in WebSocket upgrade request');
-          console.log('Available headers:', request.headers);
-          console.log('Query params:', Object.fromEntries(url.searchParams));
+          logger.error('No device ID provided in WebSocket upgrade request');
           socket.destroy();
           return;
         }
         
-        console.log(`WebSocket upgrade request for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        if (process.env.DEBUG_WEBSOCKET === 'true') {
+          logger.debug(`WebSocket upgrade for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          console.log(`✅ WebSocket upgrade successful for device: ${deviceId}`);
           
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId;
@@ -100,28 +98,12 @@ class DeviceStatusService {
         
         
         if (!deviceId && !isAdmin) {
-          console.error('No device ID provided in WebSocket playback upgrade request');
+          logger.error('No device ID provided in WebSocket playback upgrade request');
           socket.destroy();
           return;
         }
         
-        if (isAdmin) {
-          // Only log admin WebSocket connection in verbose mode
-          if (process.env.VERBOSE_LOGS === 'true') {
-            logger.websocket(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
-          }
-        } else {
-          // Only log device WebSocket requests in verbose mode
-          if (process.env.VERBOSE_LOGS === 'true') {
-            console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
-          }
-        }
-        
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          // Only log WebSocket upgrade in verbose mode
-          if (process.env.VERBOSE_LOGS === 'true') {
-            console.log(`✅ WebSocket playback upgrade successful for device: ${deviceId || 'ADMIN'}`);
-          }
           
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
@@ -146,9 +128,15 @@ class DeviceStatusService {
           this.handlePlaybackConnection(ws, request);
         });
       } else {
-        console.log(`Rejected WebSocket connection to unknown path: ${pathname}`);
+        console.log(`❌ Rejected WebSocket connection to unknown path: ${pathname}`);
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
       }
+    });
+    
+    // Add error handler for the upgrade event
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
     });
     
     this.startPingInterval();
@@ -160,26 +148,15 @@ class DeviceStatusService {
     const deviceId = ws.deviceId || request.headers['device-id'];
     const materialId = ws.materialId || request.headers['material-id'];
     
-    console.log('handleConnection called with:');
-    console.log('- ws.deviceId:', ws.deviceId);
-    console.log('- ws.materialId:', ws.materialId);
-    console.log('- request.headers[device-id]:', request.headers['device-id']);
-    console.log('- request.headers[material-id]:', request.headers['material-id']);
-    console.log('- Final deviceId:', deviceId);
-    console.log('- Final materialId:', materialId);
-    
     if (!deviceId) {
-      console.error('No device ID provided in WebSocket connection');
+      logger.error('No device ID provided in WebSocket connection');
       ws.close(4001, 'Device ID is required');
       return;
     }
-    
-    console.log(`🔌 New WebSocket connection from device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
 
     // Clean up any existing connection for this device
     const existingConnection = this.activeConnections.get(deviceId);
     if (existingConnection && existingConnection !== ws) {
-      console.log(`Replacing existing connection for device: ${deviceId}`);
       existingConnection.terminate();
     }
 
@@ -190,8 +167,10 @@ class DeviceStatusService {
     
     // Broadcast updated device list to all clients
     this.broadcastDeviceList();
-    console.log(`Device connected: ${deviceId}`);
-    console.log(`📱 Online Device: ${this.activeConnections.size}`);
+    
+    if (process.env.DEBUG_WEBSOCKET === 'true') {
+      logger.debug(`Device connected: ${deviceId} (${this.activeConnections.size} online)`);
+    }
     
     // Update device status in the database
     this.updateDeviceStatus(deviceId, true).catch(err => {
@@ -223,11 +202,9 @@ class DeviceStatusService {
     }
 
     ws.on('close', (code, reason) => {
-      console.log(`🔌 [WebSocket] Device disconnected: ${deviceId} - Code: ${code}, Reason: ${reason}`);
-      
-      // Always handle disconnect regardless of activeConnections check
-      // The activeConnections check was preventing database updates
-      console.log(`🔄 [WebSocket] Processing disconnect for device: ${deviceId}`);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`Device disconnected: ${deviceId}`);
+      }
       
       this.removeConnection(deviceId);
       this.handleDisconnect(deviceId).catch(err => {
@@ -235,7 +212,6 @@ class DeviceStatusService {
       });
       
       // Update DeviceStatusManager with WebSocket disconnection
-      console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
       deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       
       // Immediately broadcast status update for real-time response
@@ -245,17 +221,12 @@ class DeviceStatusService {
       if (deviceId !== ws.materialId) {
         this.findFullDeviceId(deviceId, ws.materialId).then(fullDeviceId => {
           if (fullDeviceId && fullDeviceId !== deviceId) {
-            console.log(`🔄 [DeviceStatusManager] Also updating full device ID: ${fullDeviceId} as offline`);
             deviceStatusManager.setWebSocketStatus(fullDeviceId, false, new Date());
-          } else {
-            console.log(`⚠️ [DeviceStatusManager] No full device ID found for ${deviceId}`);
           }
         }).catch(err => {
-          console.error('Error finding full device ID on disconnect:', err);
+          logger.error('Error finding full device ID on disconnect:', err);
         });
       }
-      
-      console.log(`📱 Online Device: ${this.activeConnections.size}`);
     });
     
     // Handle ping/pong to detect dead connections
@@ -398,6 +369,14 @@ class DeviceStatusService {
         } else if (message.type === 'syncRequest') {
           // Handle synchronization requests
           this.handleSyncRequest(deviceId, materialId, slotNumber, message);
+        } else if (message.type === 'displayData') {
+          // Handle display data from master (Slot 1) to broadcast to slave (Slot 2)
+          console.log(`📺 [WebSocket] Received displayData from Slot ${slotNumber}:`, {
+            materialId,
+            slotNumber,
+            data: message.data
+          });
+          this.broadcastDisplayData(materialId, slotNumber, message);
         }
       } catch (error) {
         console.error('Error processing WebSocket Playback Message:', error);
@@ -508,16 +487,9 @@ class DeviceStatusService {
         return;
       }
 
-      // Log GPS processing occasionally (5% of updates)
-      if (Math.random() < 0.05) {
-        console.log(`📍 [GPS WebSocket] Processing GPS from ${deviceId}:`, {
-          materialId,
-          slot: deviceSlot,
-          lat: lat.toFixed(6),
-          lng: lng.toFixed(6),
-          speed: `${(speed * 3.6).toFixed(1)} km/h`,
-          accuracy: `${accuracy}m`
-        });
+      // Log GPS processing only in debug mode
+      if (process.env.DEBUG_GPS === 'true') {
+        logger.debug(`GPS from ${deviceId}: ${lat.toFixed(6)}, ${lng.toFixed(6)}, ${(speed * 3.6).toFixed(1)} km/h`);
       }
 
       // Update device tracking with GPS data
@@ -754,7 +726,8 @@ class DeviceStatusService {
       currentTime: playbackData.currentTime,
       duration: playbackData.duration,
       progress: playbackData.progress,
-      timestamp: new Date().toISOString(),
+      startTime: playbackData.startTime || now.toISOString(), // ✅ FIXED: Send real ad start time
+      timestamp: new Date().toISOString(), // Current message timestamp (for update tracking)
       gpsData: playbackData.gpsData || null,  // Include GPS data if available (real-time location)
       sessionStatus: sessionStatus  // ✅ NEW: Include session status for real-time driver progress
     };
@@ -1396,7 +1369,9 @@ class DeviceStatusService {
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       });
 
-      logger.websocket(`🔄 Real-Time Connection Check: ${this.activeConnections.size}`);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`Real-Time Connection Check: ${this.activeConnections.size}`);
+      }
     }, 10000); // 10 seconds for faster real-time checking
   }
 
@@ -1542,6 +1517,43 @@ class DeviceStatusService {
           connection.ws.send(JSON.stringify(syncMessage));
         } catch (error) {
           console.error(`❌ [SlotSync] Error sending sync to slot ${slotNumber}:`, error);
+        }
+      }
+    });
+  }
+
+  // Broadcast display data from master (Slot 1) to slave (Slot 2)
+  broadcastDisplayData(materialId, sourceSlotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      console.log(`⚠️ [DisplayData] No material connections found for ${materialId}`);
+      return;
+    }
+
+    // Only broadcast if source is Slot 1 (master)
+    if (sourceSlotNumber !== 1) {
+      console.log(`⚠️ [DisplayData] Ignoring displayData from Slot ${sourceSlotNumber} - only Slot 1 can broadcast`);
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    const displayMessage = {
+      type: 'displayData',
+      sourceSlot: sourceSlotNumber,
+      materialId: materialId,
+      data: message.data,
+      timestamp: message.timestamp || new Date().toISOString()
+    };
+
+    console.log(`📺 [DisplayData] Broadcasting display data from Slot ${sourceSlotNumber} to slaves`);
+
+    // Send to all other slots (only Slot 2 should receive)
+    connections.forEach((ws) => {
+      if (ws.slotNumber !== sourceSlotNumber && ws.readyState === WebSocket.OPEN) {
+        console.log(`📺 [DisplayData] Sending display data to Slot ${ws.slotNumber}`);
+        try {
+          ws.send(JSON.stringify(displayMessage));
+        } catch (error) {
+          console.error(`❌ [DisplayData] Error sending to Slot ${ws.slotNumber}:`, error);
         }
       }
     });

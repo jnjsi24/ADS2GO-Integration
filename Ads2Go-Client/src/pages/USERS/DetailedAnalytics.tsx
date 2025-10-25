@@ -13,6 +13,7 @@ import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics'
 import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { useMyAdsStatic } from '../../hooks/useMyAds';
 
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
@@ -108,14 +109,13 @@ const DetailedAnalytics: React.FC = () => {
     }
   });
 
-  // Fetch overall analytics data for Top Performing Ads (always uses 'all' period)
-  const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
-    variables: { 
-      period: 'all' // Always fetch overall data for Top Performing Ads
-    },
-    fetchPolicy: 'cache-first',
-    errorPolicy: 'all'
-  });
+  // ✅ PERFORMANCE FIX: Reuse analyticsData for Top Performing Ads instead of separate query
+  // This eliminates a duplicate query with period='all' that was causing slow loading
+  const overallAnalyticsData = analyticsData;
+
+  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed here)
+  // Now shares cache with Dashboard and other components
+  const { data: myAdsData } = useMyAdsStatic();
 
   // Get user's first name from UserAuthContext
   useEffect(() => {
@@ -124,20 +124,67 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [user]);
 
-  // Memoized device extraction from analytics data
+  // Memoized device extraction - combines deployed devices with analytics data
   const extractedDevices = useMemo(() => {
-    if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
-      const devices = directAnalyticsData.deviceStats.map((device: any, index: number) => ({
-        id: device.materialId || `device-${index}`,
-        name: device.materialId || `Vehicle ${index + 1}`,
-        materialId: device.materialId || `device-${index}`,
-        isOnline: device.isOnline || false,
-        deviceStatus: device.deviceStatus || null
-      }));
-      return devices;
+    // Step 1: Get all deployed devices from user's ads (RUNNING or APPROVED status)
+    const deployedDevices = new Map<string, any>();
+    
+    if (myAdsData?.getMyAds) {
+      const runningAds = myAdsData.getMyAds.filter((ad: any) => 
+        ad.status === 'RUNNING' || ad.status === 'APPROVED'
+      );
+      
+      runningAds.forEach((ad: any) => {
+        if (ad.materialId && Array.isArray(ad.materialId)) {
+          ad.materialId.forEach((material: any) => {
+            if (material.materialId && !deployedDevices.has(material.materialId)) {
+              deployedDevices.set(material.materialId, {
+                id: material.materialId,
+                name: material.materialId,
+                materialId: material.materialId,
+                isOnline: false, // Default to offline, will be updated if we have analytics data
+                deviceStatus: null,
+                hasAnalyticsData: false // Flag to track if device has data
+              });
+            }
+          });
+        }
+      });
     }
-    return [];
-  }, [analyticsData, directAnalyticsData]);
+    
+    // Step 2: Merge with analytics data (deviceStats) to get online status and data flag
+    if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
+      directAnalyticsData.deviceStats.forEach((device: any) => {
+        if (device.materialId) {
+          if (deployedDevices.has(device.materialId)) {
+            // Update existing deployed device with analytics data
+            const existingDevice = deployedDevices.get(device.materialId);
+            deployedDevices.set(device.materialId, {
+              ...existingDevice,
+              isOnline: device.isOnline || false,
+              deviceStatus: device.deviceStatus || null,
+              hasAnalyticsData: true
+            });
+          } else {
+            // Add device that has analytics data but might not be in current deployment
+            // (could be from previous deployments)
+            deployedDevices.set(device.materialId, {
+              id: device.materialId,
+              name: device.materialId,
+              materialId: device.materialId,
+              isOnline: device.isOnline || false,
+              deviceStatus: device.deviceStatus || null,
+              hasAnalyticsData: true
+            });
+          }
+        }
+      });
+    }
+    
+    // Convert Map to Array and sort (deployed devices first, then by name)
+    const devicesArray = Array.from(deployedDevices.values());
+    return devicesArray.sort((a, b) => a.name.localeCompare(b.name));
+  }, [analyticsData, directAnalyticsData, myAdsData]);
 
   // Memoized ad extraction from analytics data
   const extractedAds = useMemo(() => {
@@ -578,7 +625,9 @@ const DetailedAnalytics: React.FC = () => {
                                 <Monitor className="w-4 h-4" />
                                 <div>
                                   <div className="font-medium">{device.name}</div>
-                                  <div className="text-xs text-gray-500">Individual device analytics</div>
+                                  <div className="text-xs text-gray-500">
+                                    {device.hasAnalyticsData ? 'Individual device analytics' : 'No data yet'}
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center space-x-2">
@@ -830,13 +879,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1 font-medium">Total Ad Plays</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {analyticsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
                       )}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Times your ads were displayed</p>
                   </div>
                   <div className="p-4 bg-blue-100 rounded-full shadow-sm">
@@ -849,13 +898,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1 font-medium">QR Scans</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {analyticsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalQRScans || 0).toLocaleString()
                       )}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">QR codes scanned by users</p>
                   </div>
                   <div className="p-4 bg-green-100 rounded-full shadow-sm">
@@ -868,13 +917,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1 font-medium">Active Devices</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {analyticsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalMaterials || 0).toLocaleString()
                       )}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Devices showing your ads</p>
                   </div>
                   <div className="p-4 bg-orange-100 rounded-full shadow-sm">
@@ -887,13 +936,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1 font-medium">Online Devices</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {analyticsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         availableDevices.filter(device => device.isOnline).length
                       )}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Currently connected devices</p>
                   </div>
                   <div className="p-4 bg-green-100 rounded-full shadow-sm">
@@ -906,13 +955,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600 mb-1 font-medium">Completion Rate</p>
-                    <p className="text-3xl font-bold text-gray-900">
+                    <div className="text-3xl font-bold text-gray-900">
                       {analyticsLoading ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
                       )}
-                    </p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Average ad completion</p>
                   </div>
                   <div className="p-4 bg-purple-100 rounded-full shadow-sm">

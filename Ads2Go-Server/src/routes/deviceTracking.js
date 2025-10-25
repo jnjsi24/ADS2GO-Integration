@@ -94,6 +94,52 @@ router.post('/location-update',
     // Find or create car tracking record for today
     let carTracking = await DeviceTracking.findByMaterialId(materialId);
     
+    // ✅ MASTER SLOT VALIDATION: Only accept location updates from master slot
+    // Priority: Slot 1 (if online) → Slot 2 (if Slot 1 offline)
+    if (carTracking && carTracking.slots && carTracking.slots.length > 0) {
+      const deviceStatusService = require('../services/deviceStatusService');
+      const slot1 = carTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
+      const slot2 = carTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
+      
+      // Check which slot is master (online)
+      const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+      const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+      
+      let masterSlotNumber = null;
+      if (slot1Online) {
+        masterSlotNumber = 1;
+      } else if (slot2Online) {
+        masterSlotNumber = 2;
+      }
+      
+      // Log master detection details
+      console.log(`🔍 [Master Detection] Material ${materialId}:`, {
+        slot1: { deviceId: slot1?.deviceId, online: slot1Online },
+        slot2: { deviceId: slot2?.deviceId, online: slot2Online },
+        masterSlot: masterSlotNumber,
+        incomingSlot: parseInt(deviceSlot),
+        location: { lat: lat.toFixed(6), lng: lng.toFixed(6) }
+      });
+      
+      // Reject location update if it's not from the master slot
+      if (masterSlotNumber && parseInt(deviceSlot) !== masterSlotNumber) {
+        console.log(`🚫 [Master Location] Rejecting location update from Slot ${deviceSlot} - Master is Slot ${masterSlotNumber}`);
+        return res.json({
+          success: true,
+          message: `Location update ignored - Slot ${masterSlotNumber} is the master`,
+          data: {
+            materialId,
+            deviceId,
+            deviceSlot: parseInt(deviceSlot),
+            masterSlot: masterSlotNumber,
+            reason: 'Only master slot can update location'
+          }
+        });
+      }
+      
+      console.log(`✅ [Master Location] Accepting location update from Slot ${deviceSlot} (master slot)`);
+    }
+    
     // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
     if (!carTracking) {
       carTracking = await DeviceTracking.findByDeviceId(deviceId);
@@ -490,6 +536,40 @@ router.post('/ad-playback', async (req, res) => {
       console.log(`✅ [AdPlayback] Master slot - incremented totals`);
     } else {
       console.log(`💤 [AdPlayback] Slave slot - skipped incrementing totals`);
+    }
+    
+    // ✅ Update ad performance tracking (filter out entries without userId before adding new ones)
+    deviceTracking.adPerformance = deviceTracking.adPerformance.filter(perf => perf.userId);
+    
+    // ✅ Only update adPerformance if we have userId and this is the master slot
+    if (userId && isMasterSlot) {
+      let adPerf = deviceTracking.adPerformance.find(ad => ad.adId === adId);
+      if (!adPerf) {
+        adPerf = {
+          adId,
+          userId,
+          adTitle,
+          playCount: 0,
+          totalViewTime: 0,
+          averageViewTime: 0,
+          completionRate: 0,
+          firstPlayed: new Date(),
+          lastPlayed: new Date(),
+          impressions: 0
+        };
+        deviceTracking.adPerformance.push(adPerf);
+      }
+      
+      adPerf.playCount += 1;
+      adPerf.totalViewTime += parseInt(viewTime);
+      adPerf.impressions += 1;
+      adPerf.lastPlayed = new Date();
+      adPerf.averageViewTime = adPerf.totalViewTime / adPerf.playCount;
+      adPerf.completionRate = adDuration > 0 ? (adPerf.totalViewTime / (adPerf.playCount * adDuration)) * 100 : 0;
+      
+      console.log(`✅ [AdPlayback] Updated adPerformance for ${adTitle}: playCount=${adPerf.playCount}, totalViewTime=${adPerf.totalViewTime}`);
+    } else if (!isMasterSlot) {
+      console.log(`💤 [AdPlayback] Slave slot - skipped updating adPerformance`);
     }
     
     // Clean up old ad playbacks (keep only last 800)

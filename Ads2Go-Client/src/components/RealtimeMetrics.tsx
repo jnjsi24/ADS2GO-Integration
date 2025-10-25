@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Monitor, PlayCircle, Activity } from 'lucide-react';
+import { Monitor } from 'lucide-react';
 import playbackWebSocketService from '../services/playbackWebSocketService';
+import { useMyAds } from '../hooks/useMyAds';
+import { screenComplianceService } from '../services/screenComplianceService';
 
 interface ScreenStatus {
   deviceId: string;
@@ -76,25 +78,20 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  
+  // ✅ OPTIMIZATION: Use shared hook (reduces queries by 75%)
+  // Now uses cache and shares data with other components
+  const { data: adsData, loading: adsLoading, refetch: refetchAds } = useMyAds();
 
+  // ✅ OPTIMIZATION: Use shared compliance service with caching
   // Fetch initial screen data
   const fetchScreenData = useCallback(async () => {
     try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      const complianceData = await screenComplianceService.getCompliance(null, false);
       
-      const response = await fetch(complianceUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const complianceData = await response.json();
-        if (complianceData.success && complianceData.data?.screens) {
-          setScreens(complianceData.data.screens);
-          setLastUpdate(new Date());
-        }
+      if (complianceData.success && complianceData.data?.screens) {
+        setScreens(complianceData.data.screens);
+        setLastUpdate(new Date());
       }
     } catch (error) {
       console.error('Error fetching screen data:', error);
@@ -138,13 +135,16 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
 
     // Initial data fetch
     fetchScreenData();
+    
+    // Also refetch ads data when component mounts
+    refetchAds();
 
     // Cleanup subscription on unmount
     return () => {
       clearInterval(statusCheckInterval);
       unsubscribe();
     };
-  }, [connectionStatus, fetchScreenData]);
+  }, [connectionStatus, fetchScreenData, refetchAds]);
 
   // Helper function to update device status in real-time
   const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
@@ -273,12 +273,34 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
     setLastUpdate(new Date());
   }, []);
 
-  // Calculate metrics
-  const totalAds = screens.length;
-  const onlineAds = screens.filter(s => s.isOnline).length;
-  const totalAdPlayed = screens.reduce((total, screen) => {
-    return total + (screen.screenMetrics?.adPlayCount || 0);
-  }, 0);
+  // Calculate metrics from user's actual ads
+  const userAds = adsData?.getMyAds || [];
+  const totalAds = userAds.length; // Total ad campaigns created by user
+  
+  // Calculate total unique devices with ads assigned (from running/approved ads)
+  const runningAdsData = userAds.filter((ad: any) => 
+    ad.status === 'RUNNING' || ad.status === 'APPROVED'
+  );
+  
+  // Get all unique device IDs from all running ads
+  const uniqueDevicesWithAds = new Set<string>();
+  runningAdsData.forEach((ad: any) => {
+    if (ad.materialId && Array.isArray(ad.materialId)) {
+      ad.materialId.forEach((material: any) => {
+        if (material.materialId) {
+          uniqueDevicesWithAds.add(material.materialId);
+        }
+      });
+    }
+  });
+  
+  const devicesWithAds = uniqueDevicesWithAds.size; // Total devices with ads deployed
+  
+  // Calculate device metrics - only count devices that have ads assigned
+  // Filter screens to only include devices that have the user's ads
+  const userDeviceScreens = screens.filter(s => uniqueDevicesWithAds.has(s.materialId));
+  const onlineDevices = userDeviceScreens.filter(s => s.isOnline).length;
+  const totalDevices = devicesWithAds; // Total should match devices with ads assigned
 
   return (
     <div className={`bg-white rounded-lg shadow-lg p-6 ${className}`}>
@@ -303,40 +325,46 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Total Ads */}
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">Total Ads</p>
-              <p className="text-2xl font-bold text-blue-900">{totalAds}</p>
+              <p className="text-2xl font-bold text-blue-900">{adsLoading ? '...' : totalAds}</p>
               <p className="text-xs text-blue-500">All ad campaigns</p>
             </div>
             <Monitor className="w-8 h-8 text-blue-500" />
           </div>
         </div>
 
-        {/* Online Ads */}
-        <div className="bg-green-50 rounded-lg p-4">
+        {/* Deployed Devices (Devices with Ads Assigned) */}
+        <div className="bg-blue-50 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-600">Online Ads</p>
-              <p className="text-2xl font-bold text-green-900">{onlineAds}</p>
-              <p className="text-xs text-green-500">Currently active</p>
+              <p className="text-sm font-medium text-blue-600">Deployed Devices</p>
+              <p className="text-2xl font-bold text-blue-900">{adsLoading ? '...' : devicesWithAds}</p>
+              <p className="text-xs text-blue-500">Devices with ads deployed</p>
             </div>
-            <Activity className="w-8 h-8 text-green-500" />
+            <Monitor className="w-8 h-8 text-blue-500" />
           </div>
         </div>
 
-        {/* Total Ad Played */}
-        <div className="bg-purple-50 rounded-lg p-4">
+        {/* Online Devices */}
+        <div className={`rounded-lg p-4 ${onlineDevices > 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-purple-600">Total Ad Played</p>
-              <p className="text-2xl font-bold text-purple-900">{totalAdPlayed.toLocaleString()}</p>
-              <p className="text-xs text-purple-500">Total plays today</p>
+              <p className={`text-sm font-medium ${onlineDevices > 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
+                Online Devices
+              </p>
+              <p className={`text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-900' : 'text-orange-900'}`}>
+                {onlineDevices}/{totalDevices}
+              </p>
+              <p className={`text-xs ${onlineDevices > 0 ? 'text-emerald-500' : 'text-orange-500'}`}>
+                {onlineDevices > 0 ? 'Ready to play ads' : 'No devices online'}
+              </p>
             </div>
-            <PlayCircle className="w-8 h-8 text-purple-500" />
+            <Monitor className={`w-8 h-8 ${onlineDevices > 0 ? 'text-emerald-500' : 'text-orange-500'}`} />
           </div>
         </div>
       </div>

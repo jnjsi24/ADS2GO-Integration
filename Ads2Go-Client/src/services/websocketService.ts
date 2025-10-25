@@ -49,10 +49,13 @@ class WebSocketService {
         return;
       }
       
-      this.socket = new WebSocket(this.getWebSocketUrl());
+      const wsUrl = this.getWebSocketUrl();
+      console.log(`🔌 [WebSocket] Attempting to connect to: ${wsUrl}`);
+      
+      this.socket = new WebSocket(wsUrl);
       this.setupEventListeners();
     } catch (error) {
-      console.error('WebSocket connection error:', error);
+      console.error('❌ [WebSocket] Connection error:', error);
       this.handleReconnect();
     }
   }
@@ -61,6 +64,7 @@ class WebSocketService {
     if (!this.socket) return;
 
     this.socket.onopen = () => {
+      console.log('✅ [WebSocket] Connected successfully');
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.emit('connect', {});
@@ -87,7 +91,9 @@ class WebSocketService {
     this.socket.onerror = (error) => {
       // Only log error on first attempt to avoid spam
       if (this.reconnectAttempts === 0) {
-        console.warn('WebSocket connection failed, will retry...');
+        console.warn('❌ [WebSocket] Connection failed, will retry...');
+        console.warn('Error details:', error);
+        console.warn('Target URL:', this.getWebSocketUrl());
       }
       this.emit('error', error);
     };

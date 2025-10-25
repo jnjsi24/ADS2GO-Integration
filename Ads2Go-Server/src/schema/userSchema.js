@@ -242,7 +242,7 @@ const typeDefs = gql`
     # User queries
     getOwnUserDetails: User
     checkPasswordStrength(password: String!): PasswordStrength!
-    getUserAnalytics(startDate: String, endDate: String, period: String): UserAnalytics
+    getUserAnalytics(startDate: String, endDate: String, period: String, adId: String): UserAnalytics
     getUserAdDetails(adId: String!): UserAdDetails
     getUserNotificationPreferences: UserNotificationPreferences!
     getQueuedEmailStats: QueuedEmailStats!

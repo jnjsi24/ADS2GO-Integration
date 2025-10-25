@@ -21,7 +21,9 @@ import {
   MapPin,
   Activity,
   Info,
-  CreditCard
+  CreditCard,
+  RefreshCw,
+  Calendar
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { DELETE_AD } from '../../graphql/user';
@@ -33,48 +35,52 @@ import Payment from './Payment';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
+import { useMyAdsStatic } from '../../hooks/useMyAds';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { screenComplianceService } from '../../services/screenComplianceService';
 
-const GET_MY_ADS = gql`
-  query GetMyAds {
-    getMyAds {
-      id
-      title
-      description
-      adFormat
-      mediaFile
-      adType
-      vehicleType
-      price
-      status
-      paymentStatus
-      reasonForReject
-      createdAt
-      startTime
-      endTime
-      adLengthSeconds
-      durationDays
-      planId {
-        id
-        name
-        durationDays
-        playsPerDayPerDevice
-        numberOfDevices
-        adLengthSeconds
-        pricePerPlay
-        totalPrice
-      }
-      materialId {
-        id
-        materialId
-        materialType
-        category
-        description
-        mountedAt
-        dismountedAt
-      }
-    }
-  }
-`;
+// ✅ REMOVED: Inline query definition - now using centralized import
+// const GET_MY_ADS = gql`
+//   query GetMyAds {
+//     getMyAds {
+//       id
+//       title
+//       description
+//       adFormat
+//       mediaFile
+//       adType
+//       vehicleType
+//       price
+//       status
+//       paymentStatus
+//       reasonForReject
+//       createdAt
+//       startTime
+//       endTime
+//       adLengthSeconds
+//       durationDays
+//       planId {
+//         id
+//         name
+//         durationDays
+//         playsPerDayPerDevice
+//         numberOfDevices
+//         adLengthSeconds
+//         pricePerPlay
+//         totalPrice
+//       }
+//       materialId {
+//         id
+//         materialId
+//         materialType
+//         category
+//         description
+//         mountedAt
+//         dismountedAt
+//       }
+//     }
+//   }
+// `;
 
 
 
@@ -94,7 +100,7 @@ type QrImpression = {
 
 type DeviceNotification = {
   id: string;
-  type: 'DEVICE_ONLINE' | 'DEVICE_OFFLINE' | 'MILESTONE_ACHIEVED' | 'QR_SCAN' | 'DEVICE_ERROR';
+  type: 'DEVICE_ONLINE' | 'DEVICE_OFFLINE' | 'MILESTONE_ACHIEVED' | 'QR_SCAN' | 'DEVICE_ERROR' | 'AD_EXPIRING_SOON';
   message: string;
   timestamp: string;
   materialId: string;
@@ -115,6 +121,18 @@ type DeviceLocation = {
   lastSeen: string;
   totalDistance: number;
   currentHours: number;
+  slotNumber?: number; // Slot number (1-5)
+  isMasterDevice?: boolean; // Is this the master device for its material
+};
+
+type MaterialSlotInfo = {
+  materialId: string;
+  slots: Array<{
+    slotNumber: number;
+    deviceId: string;
+    isOnline: boolean;
+  }>;
+  masterDeviceId: string | null; // ID of the current master device
 };
 
 // Real-time QR scan data will be fetched from API
@@ -285,14 +303,14 @@ const AdDetailsPage: React.FC = () => {
   const [qrImpressions, setQrImpressions] = useState<QrImpression[]>([]);
   const [deviceNotifications, setDeviceNotifications] = useState<DeviceNotification[]>([]);
   const [deviceLocations, setDeviceLocations] = useState<DeviceLocation[]>([]);
+  const [materialSlots, setMaterialSlots] = useState<MaterialSlotInfo[]>([]); // Track slots for each material
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [dataLoading, setDataLoading] = useState(true);
   
-  // Fetch user ads (which already include paymentStatus)
-  const { loading, error, data } = useQuery(GET_MY_ADS, {
-    fetchPolicy: 'network-only',
-  });
+  // ✅ OPTIMIZATION: Use shared hook (static variant - fetches once, then uses cache)
+  // Removed inline query definition, now imports from centralized location
+  const { loading, error, data } = useMyAdsStatic();
 
   // Handle query errors
   useEffect(() => {
@@ -302,6 +320,7 @@ const AdDetailsPage: React.FC = () => {
   }, [error]);
 
   // Delete ad mutation
+  // ✅ OPTIMIZATION: Now uses centralized GET_MY_ADS import for refetchQueries
   const [deleteAd, { loading: deleteLoading, error: deleteError, data: deleteData }] = useMutation(DELETE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
   });
@@ -378,18 +397,19 @@ const AdDetailsPage: React.FC = () => {
       const materials = ad.materialId;
       // console.log('🔍 Material data (array):', materials); // Debug log
       
-      // Create options for each material
-      const newOptions = materials.map((material: any, index: number) => {
+      // Create options for each material, with "All Materials" as first option
+      const materialOptions = materials.map((material: any, index: number) => {
         return `${material.materialId || `Material ${index + 1}`} (${material.materialType || 'Unknown Type'})`;
       });
       
-      setAdOptions(newOptions);
-      setSelectedAd(newOptions[0]);
+      // Add "All Materials" option at the beginning
+      const newOptions = [`All Materials (${materials.length} total)`, ...materialOptions];
       
-      // Set the first material as selected by default
-      if (materials.length > 0) {
-        setSelectedMaterialId(materials[0].materialId);
-      }
+      setAdOptions(newOptions);
+      setSelectedAd(newOptions[0]); // Default to "All Materials"
+      
+      // ✅ Keep selectedMaterialId as null to show all markers by default
+      setSelectedMaterialId(null);
     } else if (ad && (!ad.materialId || !Array.isArray(ad.materialId) || ad.materialId.length === 0)) {
       setAdOptions(["No Material Available"]);
       setSelectedAd("No Material Available");
@@ -453,41 +473,67 @@ const AdDetailsPage: React.FC = () => {
     return;
   }, []);
 
+  // ✅ PHASE 2 OPTIMIZATION: Use shared compliance service with caching
   // Fetch device locations for this ad using the same endpoint as admin pages
   const fetchDeviceLocations = useCallback(async (adId: string) => {
     try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      const complianceData = await screenComplianceService.getCompliance(null, false);
       
-      // console.log(`🔍 [AdDetailsPage] Fetching device data from compliance endpoint: ${complianceUrl}`);
-      
-      const response = await fetch(complianceUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        // Endpoint doesn't exist, skip device locations
-        console.log('⚠️ Compliance endpoint not available, skipping device locations fetch');
-        return;
-      }
-      
-      if (response.ok) {
-        const complianceData = await response.json();
-        // console.log('✅ [AdDetailsPage] Compliance data received:', complianceData);
-        
-        if (complianceData.success && complianceData.data?.screens) {
-          // Filter screens that have this ad deployed
-          const relevantScreens = complianceData.data.screens.filter((screen: any) => {
+      if (complianceData.success) {
+        if (complianceData.data?.materialScreens) {
+          // ✅ Use materialScreens (car-level data) instead of screens (individual device records)
+          const relevantScreens = complianceData.data.materialScreens.filter((screen: any) => {
             // Check if any of the ad's materials match this screen's materialId
             return ad?.materialId && Array.isArray(ad.materialId) && 
                    ad.materialId.some((material: any) => material.materialId === screen.materialId);
           });
           
-          // console.log(`📱 Found ${relevantScreens.length} devices for ad ${adId} out of ${complianceData.data.screens.length} total screens`);
+          console.log(`📱 Found ${relevantScreens.length} cars for ad ${adId} out of ${complianceData.data.materialScreens.length} total materials`);
           
-          const locations: DeviceLocation[] = relevantScreens.map((screen: any) => ({
+          // Extract material slot information for master device detection
+          const slotInfoArray: MaterialSlotInfo[] = relevantScreens.map((screen: any) => {
+            const slotStatus = screen.slotStatus || {};
+            const slots = [];
+            
+            // Add Slot 1 if exists
+            if (slotStatus.slot1?.deviceId) {
+              slots.push({
+                slotNumber: 1,
+                deviceId: slotStatus.slot1.deviceId,
+                isOnline: slotStatus.slot1.online || false
+              });
+            }
+            
+            // Add Slot 2 if exists
+            if (slotStatus.slot2?.deviceId) {
+              slots.push({
+                slotNumber: 2,
+                deviceId: slotStatus.slot2.deviceId,
+                isOnline: slotStatus.slot2.online || false
+              });
+            }
+            
+            // Determine master device: Slot 1 if online, else Slot 2 if online, else null
+            let masterDeviceId = null;
+            if (slotStatus.slot1?.online && slotStatus.slot1?.deviceId) {
+              masterDeviceId = slotStatus.slot1.deviceId;
+            } else if (slotStatus.slot2?.online && slotStatus.slot2?.deviceId) {
+              masterDeviceId = slotStatus.slot2.deviceId;
+            }
+            
+            console.log(`🎯 [Master Device] Material ${screen.materialId}: Master = ${masterDeviceId || 'None'}`);
+            
+            return {
+              materialId: screen.materialId,
+              slots,
+              masterDeviceId
+            };
+          });
+          
+          setMaterialSlots(slotInfoArray);
+          
+          // Map ALL relevant screens to DeviceLocation (don't filter by GPS for status display)
+          const allLocations: DeviceLocation[] = relevantScreens.map((screen: any) => ({
             deviceId: screen.materialId,
             materialId: screen.materialId,
             lat: screen.currentLocation?.lat || 0,
@@ -496,12 +542,25 @@ const AdDetailsPage: React.FC = () => {
             timestamp: screen.lastSeen,
             isOnline: screen.isOnline,
             lastSeen: screen.lastSeen,
-            totalDistance: screen.totalDistanceToday || 0,
-            currentHours: screen.currentHours || 0
+            totalDistance: screen.totalDistance || 0,
+            currentHours: screen.totalHours || 0
           }));
           
-          setAllDeviceLocations(locations);
-          setDeviceLocations(locations);
+          // ✅ For MAP display only: filter out devices with invalid GPS coordinates
+          const locationsWithValidGPS: DeviceLocation[] = allLocations.filter((loc) => {
+            const hasValidLocation = loc.lat !== 0 && loc.lng !== 0;
+            if (!hasValidLocation) {
+              console.log(`⚠️ [AdDetailsPage] ${loc.materialId} has no valid GPS - will show status but not on map`);
+            }
+            return hasValidLocation;
+          });
+          
+          console.log(`📊 [AdDetailsPage] ${allLocations.length} total devices (${locationsWithValidGPS.length} with valid GPS for map)`);
+          
+          // Use ALL locations for status display (Details tab)
+          setAllDeviceLocations(allLocations);
+          // Use filtered locations for map display only
+          setDeviceLocations(locationsWithValidGPS);
         } else {
           console.error('❌ [AdDetailsPage] Invalid compliance data format:', complianceData);
         }
@@ -529,7 +588,7 @@ const AdDetailsPage: React.FC = () => {
       // Set fallback device ID directly (no API call needed)
       setFallbackDeviceId();
 
-      // Fetch real-time data for this ad
+      // Fetch real-time data for this ad (initial fetch)
       if (ad.id) {
         fetchQRScans(ad.id);
         fetchDeviceLocations(ad.id);
@@ -539,6 +598,25 @@ const AdDetailsPage: React.FC = () => {
         const materialIds: string[] = ad.materialId.map((material: any) => material.materialId);
         fetchDeviceNotifications(materialIds);
       }
+
+      // ✅ Set up auto-refresh every 5 seconds for real-time status updates (silent background refresh)
+      const refreshInterval = setInterval(() => {
+        // Silently refresh device locations and status in background for real-time updates
+        if (ad.id) {
+          fetchDeviceLocations(ad.id); // Updates device online/offline status every 5s
+          fetchQRScans(ad.id);
+        }
+        
+        if (ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0) {
+          const materialIds: string[] = ad.materialId.map((material: any) => material.materialId);
+          fetchDeviceNotifications(materialIds);
+        }
+      }, 5000); // Refresh every 5 seconds for real-time status
+
+      // Cleanup interval on unmount
+      return () => {
+        clearInterval(refreshInterval);
+      };
     }
   }, [ad, fetchQRScans, fetchDeviceNotifications, fetchDeviceLocations]);
 
@@ -588,6 +666,10 @@ const AdDetailsPage: React.FC = () => {
         
         // Also update device online status
         updateDeviceStatus(update.deviceId, true, update.timestamp);
+      } else if (update.type === 'qrScanUpdate' || (update.type === 'qrScan')) {
+        // ✅ NEW: Handle QR scan updates from WebSocket
+        console.log('📱 [QR Scan] Received QR scan update:', update);
+        handleQRScanUpdate(update);
       }
     });
 
@@ -605,6 +687,22 @@ const AdDetailsPage: React.FC = () => {
     };
   }, [connectionStatus]);
 
+  // Helper function to check if a device is the master for its material
+  const isMasterDevice = useCallback((deviceId: string): boolean => {
+    // Find the material slot info that contains this deviceId
+    const materialInfo = materialSlots.find(m => 
+      m.slots.some(s => s.deviceId === deviceId)
+    );
+    
+    if (!materialInfo) {
+      // If we don't have slot info yet, assume it's a master (to avoid missing notifications)
+      return true;
+    }
+    
+    // Check if this device is the current master
+    return materialInfo.masterDeviceId === deviceId;
+  }, [materialSlots]);
+
   // Helper function to update device status in real-time
   const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
     setDeviceLocations(prevLocations => {
@@ -620,7 +718,15 @@ const AdDetailsPage: React.FC = () => {
       });
     });
 
-    // Add notification for device status change
+    // ✅ MASTER DEVICE FILTER: Only create notifications for master devices
+    if (!isMasterDevice(deviceId)) {
+      console.log(`🔇 [Notification] Skipping notification for ${deviceId} - not a master device`);
+      return;
+    }
+
+    console.log(`📢 [Notification] Creating notification for master device ${deviceId}`);
+
+    // Add notification for device status change (ONLY for master devices)
     const notification: DeviceNotification = {
       id: `device-${deviceId}-${Date.now()}`,
       type: isOnline ? 'DEVICE_ONLINE' : 'DEVICE_OFFLINE',
@@ -634,7 +740,7 @@ const AdDetailsPage: React.FC = () => {
 
     setDeviceNotifications(prev => [notification, ...prev.slice(0, 49)]); // Keep last 50 notifications
     setLastUpdate(new Date());
-  }, [deviceLocations]);
+  }, [deviceLocations, isMasterDevice]);
 
   // Helper function to update device location in real-time
   const updateDeviceLocation = useCallback((deviceId: string, locationData: any) => {
@@ -725,11 +831,58 @@ const AdDetailsPage: React.FC = () => {
     });
   }, [deviceLocations, deviceNotifications]);
   
+  // ✅ NEW: Check for ad expiring soon notification
+  useEffect(() => {
+    if (!ad || !ad.endTime) return;
+    
+    const now = new Date();
+    const endDate = new Date(ad.endTime);
+    const daysUntilEnd = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Show notification if ad is ending within 2 days
+    if (daysUntilEnd > 0 && daysUntilEnd <= 2) {
+      // Check if we already have an expiring notification for this ad
+      const existingExpiringNotification = deviceNotifications.find(n => 
+        n.type === 'AD_EXPIRING_SOON' && 
+        n.data?.adId === ad.id
+      );
+      
+      if (!existingExpiringNotification) {
+        console.log(`⏰ [Ad Expiring] Ad "${ad.title}" expires in ${daysUntilEnd} day(s)`);
+        
+        const message = daysUntilEnd === 1 
+          ? `Your ad campaign "${ad.title}" will end tomorrow!`
+          : `Your ad campaign "${ad.title}" will end in ${daysUntilEnd} days`;
+        
+        const notification: DeviceNotification = {
+          id: `expiring-${ad.id}-${Date.now()}`,
+          type: 'AD_EXPIRING_SOON',
+          message,
+          timestamp: new Date().toISOString(),
+          materialId: '', // Not device-specific
+          deviceId: '', // Not device-specific
+          data: { adId: ad.id, daysUntilEnd },
+          read: false,
+          priority: 'HIGH'
+        };
+        
+        setDeviceNotifications(prev => [notification, ...prev.slice(0, 49)]);
+      }
+    }
+  }, [ad, deviceNotifications]);
+  
 
   // State for selected period filter (for chart)
   const [selectedPeriod, setSelectedPeriod] = useState<'Weekly' | 'Daily'>('Daily');
   // State for active tab
-  const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity' | 'TabletActivity'>('Details');
+  const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity' | 'TabletActivity' | 'Analytics'>('Details');
+  
+  // Analytics state
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [analyticsCacheTime, setAnalyticsCacheTime] = useState<number | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   
   // Fixed format date function to handle both timestamp strings and date strings
   const formatDate = (dateValue: string | number) => {
@@ -776,6 +929,120 @@ const AdDetailsPage: React.FC = () => {
       return 'Invalid Date Range';
     }
   };
+
+  // Fetch analytics data from DeviceDataHistoryV2 (following ScreenTracking.tsx pattern)
+  const fetchAnalytics = useCallback(async (skipCache = false) => {
+    if (!id) {
+      console.log('❌ No ad ID, skipping analytics fetch');
+      return;
+    }
+    
+    // Check cache first (5 minute expiry)
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    
+    if (!skipCache && analyticsData && analyticsCacheTime && (now - analyticsCacheTime < CACHE_DURATION)) {
+      const timeLeft = Math.round((CACHE_DURATION - (now - analyticsCacheTime)) / 1000);
+      console.log(`📊 [Analytics] Using cached data (${timeLeft}s remaining)`);
+      return;
+    }
+    
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    setLoadingProgress(0);
+    
+    // Simulate progress (since backend doesn't send progress)
+    const progressInterval = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev; // Stop at 90% until real data arrives
+        return prev + 10;
+      });
+    }, 3000); // Update every 3 seconds
+    
+    try {
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+      const url = `${baseUrl}/api/adAnalytics/${id}`;
+      
+      console.log('📊 [Analytics] Fetching from:', url);
+      
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📊 [Analytics] Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [Analytics] Fetch failed:', response.status, errorText);
+        
+        // Try to parse error message
+        try {
+          const errorJson = JSON.parse(errorText);
+          setAnalyticsError(errorJson.message || `Failed to fetch analytics (${response.status})`);
+        } catch (e) {
+          setAnalyticsError(`Failed to fetch analytics: ${response.status}`);
+        }
+        return;
+      }
+      
+      const result = await response.json();
+      console.log('📊 [Analytics] Result received:', {
+        success: result.success,
+        hasData: !!result.data,
+        totalPlays: result.data?.totalPlays
+      });
+      
+      if (result.success) {
+        setAnalyticsData(result.data);
+        setAnalyticsCacheTime(Date.now()); // Cache the data
+        setLoadingProgress(100);
+        console.log('✅ [Analytics] Data loaded successfully and cached');
+      } else {
+        setAnalyticsError(result.message || 'Failed to load analytics');
+        console.error('❌ [Analytics] Error:', result.message);
+      }
+    } catch (error: any) {
+      console.error('❌ [Analytics] Exception:', error);
+      
+      // Check for network/timeout errors
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        setAnalyticsError('Network error. Please check your connection and try again.');
+      } else if (error.message.includes('timeout')) {
+        setAnalyticsError('Request timeout. The server took too long to respond. Please try again.');
+      } else {
+        setAnalyticsError(error.message || 'Failed to load analytics data');
+      }
+    } finally {
+      clearInterval(progressInterval);
+      setAnalyticsLoading(false);
+      console.log('📊 [Analytics] Loading finished');
+    }
+  }, [id, analyticsData, analyticsCacheTime]);
+
+  // Fetch analytics when Analytics tab is active
+  useEffect(() => {
+    if (activeTab === 'Analytics' && !analyticsData) {
+      fetchAnalytics();
+    }
+  }, [activeTab, fetchAnalytics, analyticsData]);
+
+  // ✅ Auto-refresh Analytics every 30 seconds when Analytics tab is active (respects cache)
+  useEffect(() => {
+    if (activeTab === 'Analytics') {
+      const analyticsRefreshInterval = setInterval(() => {
+        // Silently refresh analytics in background (respects 5-minute cache)
+        fetchAnalytics(false); // false = use cache if valid
+      }, 30000); // Every 30 seconds
+
+      return () => clearInterval(analyticsRefreshInterval);
+    }
+  }, [activeTab, fetchAnalytics]);
 
   // Calculate duration in days between start and end dates
   const calculateDuration = (startDate: string, endDate: string) => {
@@ -1087,6 +1354,29 @@ const AdDetailsPage: React.FC = () => {
                   </button>
                 </div>
               )}
+              
+              {/* Analytics tab - show if running */}
+              {(ad.status === 'RUNNING' || ad.status === 'APPROVED') && (
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveTab('Analytics')}
+                    className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                      activeTab === 'Analytics' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+                    }`}
+                  >
+                    Analytics
+
+                    {/* Hover underline with framer-motion */}
+                    <motion.div
+                      className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: activeTab === 'Analytics' ? '100%' : 0 }}
+                      whileHover={{ width: '100%' }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Delete Button - Only show if not fully paid and approved */}
@@ -1132,11 +1422,53 @@ const AdDetailsPage: React.FC = () => {
                     <p className="text-sm font-semibold text-black/90 mb-2">Devices:</p>
                     {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 ? (
                       <div className="space-y-1">
-                        {ad.materialId.map((material: any, index: number) => (
-                          <div key={material.id || index} className="text-sm text-black/70">
-                            🚗 - {material.materialId || 'N/A'}
-                          </div>
-                        ))}
+                        {ad.materialId.map((material: any, index: number) => {
+                          // Find the online status for this material from ALL locations (not just those with GPS)
+                          const deviceLocation = allDeviceLocations.find(
+                            (loc) => loc.materialId === material.materialId
+                          );
+                          
+                          const isOnline = deviceLocation?.isOnline || false;
+                          const lastSeen = deviceLocation?.lastSeen;
+                          
+                          // Format last seen time
+                          const getLastSeenText = () => {
+                            if (!lastSeen) return 'Unknown';
+                            const now = new Date();
+                            const lastSeenDate = new Date(lastSeen);
+                            const diffMs = now.getTime() - lastSeenDate.getTime();
+                            const diffMins = Math.floor(diffMs / 60000);
+                            
+                            if (diffMins < 1) return 'Just now';
+                            if (diffMins < 60) return `${diffMins}m ago`;
+                            const diffHours = Math.floor(diffMins / 60);
+                            if (diffHours < 24) return `${diffHours}h ago`;
+                            return `${Math.floor(diffHours / 24)}d ago`;
+                          };
+                          
+                          return (
+                            <div 
+                              key={material.id || index} 
+                              className="text-sm flex items-center justify-end space-x-2"
+                              title={isOnline ? 'Online' : `Offline - Last seen: ${getLastSeenText()}`}
+                            >
+                              <span className="text-black/70">
+                                🚗 {material.materialId || 'N/A'}
+                              </span>
+                              {isOnline ? (
+                                <span className="flex items-center text-green-600 font-medium">
+                                  <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                                  Online
+                                </span>
+                              ) : (
+                                <span className="flex items-center text-red-600 font-medium">
+                                  <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+                                  Offline
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-black/70">No devices assigned</p>
@@ -1180,6 +1512,7 @@ const AdDetailsPage: React.FC = () => {
                     {notification.type === 'MILESTONE_ACHIEVED' && <Target size={20} className="text-blue-500" />}
                     {notification.type === 'QR_SCAN' && <QrCode size={20} className="text-purple-500" />}
                     {notification.type === 'DEVICE_ERROR' && <AlertTriangle size={20} className="text-orange-500" />}
+                    {notification.type === 'AD_EXPIRING_SOON' && <Calendar size={20} className="text-yellow-600" />}
                   </div>
                   <div className="flex-1">
                     <p className="text-black/90 text-sm font-medium">{notification.message}</p>
@@ -1227,6 +1560,154 @@ const AdDetailsPage: React.FC = () => {
                   <p className="text-lg font-medium mb-2">No Activity Yet</p>
                   <p className="text-sm text-gray-600">
                     Device activity and QR scans will appear here in real-time.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Analytics Tab */}
+          {activeTab === 'Analytics' && (
+            <div className="space-y-4">
+              {analyticsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
+                  <div className="text-center space-y-2">
+                    <p className="text-lg font-medium text-gray-900">Loading Analytics...</p>
+                    <p className="text-sm text-gray-600">
+                      Processing historical data from all devices
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      This may take 20-30 seconds for complete analytics
+                    </p>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-64 bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${loadingProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">{loadingProgress}%</p>
+                </div>
+              ) : analyticsError ? (
+                <div className="text-center bg-red-50 rounded-lg text-red-600 py-8">
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
+                  <p className="text-lg font-medium mb-2">Error Loading Analytics</p>
+                  <p className="text-sm">{analyticsError}</p>
+                  <button
+                    onClick={fetchAnalytics}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : analyticsData ? (
+                <>
+                  {/* Cache indicator */}
+                  {analyticsCacheTime && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Info className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm text-blue-900">
+                          Cached data from {new Date(analyticsCacheTime).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => fetchAnalytics(true)}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center space-x-1"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Summary Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <div className="text-sm font-medium text-blue-600">Total Plays</div>
+                      <div className="text-2xl font-bold text-blue-900">{analyticsData.totalPlays?.toLocaleString() || 0}</div>
+                      <div className="text-xs text-blue-500">All devices</div>
+                    </div>
+                    
+                    <div className="bg-orange-50 rounded-lg p-4">
+                      <div className="text-sm font-medium text-orange-600">QR Scans</div>
+                      <div className="text-2xl font-bold text-orange-900">{analyticsData.totalQRScans?.toLocaleString() || 0}</div>
+                      <div className="text-xs text-orange-500">Total scans</div>
+                    </div>
+                  </div>
+
+                  {/* Daily Performance Chart */}
+                  {analyticsData.dailyPerformance && analyticsData.dailyPerformance.length > 0 && (
+                    <div className="bg-white/60 rounded-lg p-4">
+                      <h4 className="text-md font-semibold text-gray-800 mb-4">Daily Performance</h4>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={analyticsData.dailyPerformance}>
+                          <XAxis 
+                            dataKey="date" 
+                            tick={{ fontSize: 12 }}
+                            tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                            labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                            formatter={(value: any, name: string) => [
+                              value.toLocaleString(),
+                              name === 'plays' ? 'Plays' : 'QR Scans'
+                            ]}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="plays" 
+                            stroke="#3b82f6" 
+                            fill="#93c5fd" 
+                            fillOpacity={0.6}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Device Performance Table */}
+                  {analyticsData.devicePerformance && analyticsData.devicePerformance.length > 0 && (
+                    <div className="bg-white/60 rounded-lg p-4">
+                      <h4 className="text-md font-semibold text-gray-800 mb-4">Device Performance</h4>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Plays</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">QR Scans</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {analyticsData.devicePerformance.map((device: any, index: number) => (
+                              <tr key={device.materialId || index} className="hover:bg-gray-50">
+                                <td className="px-4 py-2 text-sm text-gray-900">{device.materialId}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{device.plays?.toLocaleString() || 0}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{device.qrScans?.toLocaleString() || 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Data Source Info */}
+                  <div className="text-xs text-gray-500 text-center">
+                    <Info className="w-4 h-4 inline mr-1" />
+                    Data from DeviceDataHistoryV2 • Last updated: {analyticsData.metadata?.generatedAt ? new Date(analyticsData.metadata.generatedAt).toLocaleString() : 'N/A'}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center bg-white/60 rounded-lg text-gray-600 py-8">
+                  <Activity className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p className="text-lg font-medium mb-2">No Analytics Data</p>
+                  <p className="text-sm">
+                    Analytics data will appear once your ad starts playing on devices.
                   </p>
                 </div>
               )}
@@ -1318,14 +1799,21 @@ const AdDetailsPage: React.FC = () => {
               className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
                   <div className="flex flex-col items-start">
                     <div className="font-medium">
-                      {ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 
-                        ? ad.materialId[0].materialId 
-                        : 'No Material'}
+                      {selectedMaterialId 
+                        ? selectedMaterialId
+                        : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
+                          ? 'All Materials'
+                          : 'No Material'}
                     </div>
                     <div className="text-gray-500 text-xs">
-                      ({ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 
-                        ? ad.materialId[0].materialType 
-                        : 'Unknown Type'})
+                      {selectedMaterialId
+                        ? (() => {
+                            const material = ad?.materialId?.find((m: any) => m.materialId === selectedMaterialId);
+                            return material ? `(${material.materialType || 'Unknown Type'})` : '';
+                          })()
+                        : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
+                          ? `(${ad.materialId.length} locations)`
+                          : '(Unknown Type)'}
                     </div>
                   </div>
               <ChevronDown
@@ -1346,20 +1834,27 @@ const AdDetailsPage: React.FC = () => {
                       className="absolute z-50 top-full mt-2 w-full shadow-lg bg-white/90 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
                     >
                       {adOptions.map((adOption, index) => {
-                        // Find the corresponding material ID
-                        const materialId = ad?.materialId && Array.isArray(ad.materialId) && ad.materialId[index] 
-                          ? ad.materialId[index].materialId 
-                          : null;
+                        // First option is "All Materials" (index 0), rest are individual materials
+                        // Material array is offset by 1 because of "All Materials" option
+                        const materialId = index === 0 
+                          ? null // "All Materials" option
+                          : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId[index - 1] 
+                            ? ad.materialId[index - 1].materialId 
+                            : null;
                         
                         return (
                     <button
                       key={adOption}
                       onClick={() => {
                         setSelectedAd(adOption);
-                              setSelectedMaterialId(materialId);
+                              setSelectedMaterialId(materialId); // null for "All Materials", specific ID for individual materials
                         setShowAdDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
+                      className={`block w-full text-left px-4 py-2 ml-2 text-xs transition-colors duration-150 ${
+                        (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
+                          ? 'bg-blue-50 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-white/60'
+                      }`}
                     >
                       {adOption}
                     </button>
