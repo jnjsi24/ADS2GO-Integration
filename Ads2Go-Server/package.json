@@ -4,10 +4,10 @@
   "description": "",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "start:verbose": "node smartlogger.js",
-    "dev:verbose": "VERBOSE_LOGS=true nodemon src/index.js"
+    "start": "node --max-old-space-size=4096 src/index.js",
+    "dev": "nodemon --max-old-space-size=4096 src/index.js",
+    "start:verbose": "node --max-old-space-size=4096 smartlogger.js",
+    "dev:verbose": "VERBOSE_LOGS=true nodemon --max-old-space-size=4096 src/index.js"
   },
   "author": "",
   "license": "ISC",

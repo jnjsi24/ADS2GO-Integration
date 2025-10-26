@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Play, 
   Pause, 
@@ -80,6 +80,12 @@ const AdminAdsControl: React.FC = () => {
   React.useEffect(() => {
     hasInitiallyLoadedRef.current = hasInitiallyLoaded;
   }, [hasInitiallyLoaded]);
+  
+  // Use ref for isUserControlling to avoid recreating the main useEffect
+  const isUserControllingRef = useRef(false);
+  useEffect(() => {
+    isUserControllingRef.current = isUserControlling;
+  }, [isUserControlling]);
 
   // Responsive state
   const [isMobile, setIsMobile] = useState(false);
@@ -166,9 +172,9 @@ const AdminAdsControl: React.FC = () => {
           }),
           new Promise((_, reject) => {
             timeoutId = setTimeout(() => {
-              console.error('⏱️ Compliance request timed out after 30 seconds');
-              reject(new Error('Compliance request timeout (30s)'));
-            }, 30000);
+              console.log('⏱️ Compliance request timed out after 90 seconds (non-critical, will retry)');
+              reject(new Error('Compliance request timeout (90s)'));
+            }, 90000);
           })
         ]),
         
@@ -256,9 +262,14 @@ const AdminAdsControl: React.FC = () => {
             setScreens([]);
           }
         } else {
-        console.error('❌ Error fetching compliance data:', complianceResult.reason);
-        console.error('❌ Compliance result status:', complianceResult.status);
-        console.error('❌ Full compliance result:', complianceResult);
+          // Check if it's a timeout error - these are expected and non-critical
+          if (complianceResult.reason?.message?.includes('timeout')) {
+            console.log('⏱️ Compliance request timed out (non-critical, will retry on next refresh)');
+          } else {
+            console.error('❌ Error fetching compliance data:', complianceResult.reason);
+            console.error('❌ Compliance result status:', complianceResult.status);
+            console.error('❌ Full compliance result:', complianceResult);
+          }
           setScreens([]);
         }
       
@@ -274,10 +285,12 @@ const AdminAdsControl: React.FC = () => {
         console.log('📊 Analytics data received');
         setAdAnalytics(analyticsResult.value);
       } else {
-        console.error('❌ Error fetching analytics:', analyticsResult.reason);
-        // Handle timeout errors specifically
-        if (analyticsResult.reason instanceof Error && analyticsResult.reason.name === 'TimeoutError') {
-          console.warn('⚠️ Analytics request timed out - this is usually due to slow server response');
+        // Handle timeout errors specifically - they're expected and non-critical
+        if (analyticsResult.reason instanceof Error && 
+            (analyticsResult.reason.name === 'TimeoutError' || analyticsResult.reason.message?.includes('timed out'))) {
+          console.log('⏱️ Analytics request timed out (non-critical, will retry on next refresh)');
+        } else {
+          console.error('❌ Error fetching analytics:', analyticsResult.reason);
         }
       }
       
@@ -403,7 +416,7 @@ const AdminAdsControl: React.FC = () => {
         return;
       }
       
-      if (!isUserControlling) {
+      if (!isUserControllingRef.current) {
         console.log('🔄 [AdminAdsControl] Auto-refresh triggered');
         autoRefreshData();
       } else {
@@ -517,6 +530,57 @@ const AdminAdsControl: React.FC = () => {
             return screen;
           });
         });
+      } else if (update.type === 'displayData') {
+        // ✨ NEW: Handle real-time display data from ad player
+        setScreens(prevScreens => {
+          return prevScreens.map(screen => {
+            // Match by materialId
+            if (screen.displayId === (update as any).materialId || screen.materialId === (update as any).materialId) {
+              const displayData = (update as any).data;
+              const adDetails = displayData.adDetails;
+              
+              // If ad details are provided (ad changed), create/update currentAd
+              if (adDetails) {
+                return {
+                  ...screen,
+                  screenMetrics: {
+                    ...screen.screenMetrics,
+                    currentAd: {
+                      adId: adDetails.adId,
+                      adTitle: adDetails.adTitle,
+                      adDuration: adDetails.adDuration,
+                      currentTime: displayData.currentTime,
+                      progress: displayData.currentTime && adDetails.adDuration
+                        ? (displayData.currentTime / adDetails.adDuration) * 100
+                        : 0,
+                      state: displayData.isPaused ? 'paused' : 'playing',
+                      startTime: new Date().toISOString()
+                    }
+                  }
+                };
+              }
+              
+              // If no ad details but we have existing currentAd, just update progress/state
+              if (screen.screenMetrics?.currentAd) {
+                return {
+                  ...screen,
+                  screenMetrics: {
+                    ...screen.screenMetrics,
+                    currentAd: {
+                      ...screen.screenMetrics.currentAd,
+                      currentTime: displayData.currentTime || screen.screenMetrics.currentAd.currentTime,
+                      progress: displayData.currentTime && screen.screenMetrics.currentAd.adDuration
+                        ? (displayData.currentTime / screen.screenMetrics.currentAd.adDuration) * 100
+                        : screen.screenMetrics.currentAd.progress,
+                      state: displayData.isPaused ? 'paused' : 'playing'
+                    }
+                  }
+                };
+              }
+            }
+            return screen;
+          });
+        });
       } else if (update.type === 'deviceList') {
         // ✨ OPTIMIZATION: Debounce deviceList updates to prevent spam
         // Empty device lists are being sent repeatedly, causing excessive re-renders
@@ -572,7 +636,7 @@ const AdminAdsControl: React.FC = () => {
       }
       unsubscribe();
     };
-  }, [fetchData, autoRefreshData, isUserControlling]);
+  }, [fetchData, autoRefreshData]); // isUserControlling removed - now using ref to prevent recreation
 
   // Toggle play/pause handler
   const handleTogglePlayPause = async () => {
@@ -727,8 +791,9 @@ const AdminAdsControl: React.FC = () => {
       }
       
       if (result.success) {
-        // Refresh data after successful action
-        await fetchData();
+        // ✨ OPTIMIZATION: No need to refresh data - WebSocket provides real-time updates
+        // This significantly improves response time for control commands
+        console.log('✅ Bulk action completed - WebSocket will provide real-time updates');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
@@ -890,8 +955,9 @@ const AdminAdsControl: React.FC = () => {
           });
         }
         
-        // Refresh data after successful action
-        await fetchData();
+        // ✨ OPTIMIZATION: No need to refresh data - WebSocket provides real-time updates
+        // This significantly improves response time for control commands
+        console.log('✅ Screen action completed - WebSocket will provide real-time updates');
         
         if (successCount < totalCount) {
           // This is actually a success with some devices offline - show as info, not error

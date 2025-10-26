@@ -58,10 +58,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [lastTapTime, setLastTapTime] = useState<number>(0);
   const [showControls, setShowControls] = useState(false);
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
-  const [websocketUpdatesStarted, setWebsocketUpdatesStarted] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [qrCodeReady, setQrCodeReady] = useState(false);
   const [videoActuallyStarted, setVideoActuallyStarted] = useState(false);
+  
+  // Guard to prevent multiple concurrent handleVideoEnd calls
+  const isHandlingVideoEnd = useRef(false);
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(3);
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
@@ -585,13 +587,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Handle display data for duplication (slave devices)
   const handleDisplayData = (message: any) => {
     try {
-      console.log('📺 [AdPlayer] Received display data:', message);
-      
       const { data, sourceSlot, materialId: msgMaterialId } = message;
       
       // Only Slot 2 should process display data from Slot 1
       if (slotNumber !== 2) {
-        console.log('👑 [AdPlayer] Ignoring display data - this is not Slot 2');
         return;
       }
       
@@ -614,31 +613,77 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // Apply display data to mirror the master
       if (data) {
-        console.log('📺 [AdPlayer] Mirroring Slot 1 display:', {
-          adIndex: data.adIndex,
-          currentTime: data.currentTime?.toFixed(1),
-          isPaused: data.isPaused
-        });
+        const adChanged = data.adIndex !== undefined && data.adIndex !== currentAdIndex;
         
-        // Update ad index if different (this will trigger ad change)
-        if (data.adIndex !== undefined && data.adIndex !== currentAdIndex) {
-          console.log(`📺 [AdPlayer] Switching to ad index ${data.adIndex} to match master`);
+        // Log only on ad changes or pause state changes
+        if (adChanged || (data.isPaused !== undefined && data.isPaused !== isPaused)) {
+          console.log('📺 [AdPlayer] Mirroring master:', {
+            adIndex: data.adIndex,
+            currentTime: data.currentTime?.toFixed(1),
+            isPaused: data.isPaused,
+            adChanged
+          });
+        }
+        
+        // ✅ ONLY sync position when ad changes (not every 100ms)
+        if (adChanged) {
+          console.log(`📺 [Slave Sync] Switching to ad ${data.adIndex} and syncing to position ${data.currentTime?.toFixed(1)}s`);
           setCurrentAdIndex(data.adIndex);
+          
+          // ⏳ Wait for slave video to finish buffering before syncing position
+          if (data.currentTime !== undefined && videoRef.current) {
+            const waitForVideoReady = async () => {
+              let attempts = 0;
+              const maxAttempts = 20; // Max 2 seconds (20 * 100ms)
+              
+              // Poll video status until it's fully loaded
+              while (attempts < maxAttempts) {
+                try {
+                  const status = await videoRef.current?.getStatusAsync();
+                  
+                  if (status && status.isLoaded && !status.isBuffering) {
+                    // Video is ready! Now sync position
+                    console.log(`✅ [Slave Sync] Video buffered and ready (took ${attempts * 100}ms), syncing to ${data.currentTime?.toFixed(1)}s`);
+                    await videoRef.current?.setPositionAsync(data.currentTime * 1000);
+                    
+                    // Ensure video starts playing
+                    if (!data.isPaused) {
+                      await videoRef.current?.playAsync();
+                    }
+                    break;
+                  }
+                  
+                  // Still buffering, wait 100ms and check again
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  attempts++;
+                  
+                  if (attempts % 5 === 0) {
+                    console.log(`⏳ [Slave Sync] Still buffering... (${attempts * 100}ms elapsed)`);
+                  }
+                } catch (err) {
+                  console.warn(`⚠️ [Slave Sync] Error checking video status:`, err);
+                  break;
+                }
+              }
+              
+              if (attempts >= maxAttempts) {
+                console.warn(`⚠️ [Slave Sync] Buffering timeout after ${maxAttempts * 100}ms, syncing anyway`);
+                try {
+                  await videoRef.current?.setPositionAsync(data.currentTime * 1000);
+                } catch (err) {
+                  // Ignore
+                }
+              }
+            };
+            
+            waitForVideoReady().catch(err => {
+              console.error('❌ [Slave Sync] Error waiting for video ready:', err);
+            });
+          }
         }
         
-        // Sync video position (with small delay to allow ad to load)
-        if (data.currentTime !== undefined && videoRef.current) {
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.setPositionAsync(data.currentTime * 1000).catch(err => {
-                // Ignore seek errors during video loading
-              });
-            }
-          }, 100);
-        }
-        
-        // Update playback state
-        if (data.isPaused !== undefined) {
+        // ✅ Update playback state (pause/resume)
+        if (data.isPaused !== undefined && data.isPaused !== isPaused) {
           setIsPaused(data.isPaused);
           
           if (videoRef.current) {
@@ -713,8 +758,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         });
       }
       
-      // 3. Clear current ad
-      setCurrentAd(null);
+      // 3. Clear current ad and pause playback
+      // Note: currentAd is computed from currentAdIndex, so we just pause
       setIsPlaying(false);
       setIsPaused(true);
       
@@ -817,25 +862,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   };
 
-  // Helper function to send playback updates
-  // Slot 1 (Master): always send updates and broadcast display data
-  // Slot 2 (Slave): NEVER send updates when in mirror mode, only when promoted to master (failover)
+  // ❌ REMOVED: Per-second playback updates (not needed for progress bar)
+  // Helper function to send playback updates - DEPRECATED
   const sendPlaybackUpdate = (playbackData: any) => {
-    // Slot 2 in mirror mode: skip all updates
-    if (slotNumber === 2 && masterConnected) {
-      // Silent skip - Slot 2 is just mirroring, no updates needed
-      return;
-    }
-    
-    // Slot 1 or Slot 2 in failover mode: send updates
-    if (slotNumber === 1 || (slotNumber === 2 && !masterConnected)) {
-      playbackWebSocketService.updatePlaybackDataAndSend(playbackData);
-      
-      // Log failover updates when Slot 2 takes over
-      if (slotNumber === 2 && !masterConnected) {
-        console.log('⚡ [AdPlayer] Slot 2 FAILOVER - Sending updates because master is offline');
-      }
-    }
+    // No-op: Playback updates have been disabled
+    return;
   };
 
   // Track ad playback
@@ -1568,7 +1599,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         const hasCached = await loadCachedAds();
         if (hasCached) {
           setIsDeviceOffline(true);
-          setWebsocketUpdatesStarted(false); // Reset flag for cached ads
+          // Cached ads loaded
           setLoading(false);
           return;
         } else {
@@ -1588,7 +1619,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         if (validAds.length > 0) {
           setAds(validAds);
           setCurrentAdIndex(0);
-          setWebsocketUpdatesStarted(false); // Reset flag for new ads
+          // New ads loaded
           console.log('Loaded valid ads from server:', validAds.length);
           
           // Cache the valid ads for offline use
@@ -1796,7 +1827,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // This prevents duplicate tracking
       
       // Reset states for new ad
-      setWebsocketUpdatesStarted(false);
       setVideoActuallyStarted(false);
       setAdStartTime(null); // Reset ad start time - will be set when video actually plays
       
@@ -1828,20 +1858,30 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   }
 
   const handleVideoEnd = async () => {
-    // End tracking for current ad
-    await endAdPlayback();
+    // 🛡️ GUARD: Prevent multiple concurrent calls
+    if (isHandlingVideoEnd.current) {
+      console.log('⚠️ handleVideoEnd already in progress, skipping duplicate call');
+      return;
+    }
     
-    // Stop WebSocket updates completely
-    playbackWebSocketService.stopPlaybackUpdates();
+    isHandlingVideoEnd.current = true;
+    console.log(`🎬 handleVideoEnd called - currentAdIndex: ${currentAdIndex}, total ads: ${ads.length}`);
     
-    // Set transitioning state to prevent false progress
-    setIsTransitioning(true);
-    
-    // Reset ad start time for next ad
-    setAdStartTime(null);
-    
-    // Reset WebSocket updates flag for next ad
-    setWebsocketUpdatesStarted(false);
+    try {
+      // End tracking for current ad
+      await endAdPlayback();
+      
+      // Stop WebSocket updates completely
+      playbackWebSocketService.stopPlaybackUpdates();
+      
+      // Set transitioning state to prevent false progress
+      setIsTransitioning(true);
+      
+      // Reset ad start time for next ad
+      setAdStartTime(null);
+      
+      // Reset video started flag for next ad
+      setVideoActuallyStarted(false);
     
     // If no user ads available, loop the company ad
     if (ads.length === 0) {
@@ -1851,6 +1891,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       } else {
         console.log('⚠️ No company ads available either');
       }
+      // Clear transitioning state to allow company ad to loop
+      setTimeout(() => {
+        setIsTransitioning(false);
+        // Clear guard after state update
+        isHandlingVideoEnd.current = false;
+      }, 100);
       return;
     }
     
@@ -1871,14 +1917,19 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       if (currentAdIndex >= 0) {
         // Move to next ad
         if (currentAdIndex < ads.length - 1) {
-          setCurrentAdIndex(currentAdIndex + 1);
-          console.log(`➡️ Next user ad: ${currentAdIndex + 1}/${ads.length}`);
+          setTimeout(() => {
+            setCurrentAdIndex(currentAdIndex + 1);
+            setIsTransitioning(false); // Clear transitioning state
+            isHandlingVideoEnd.current = false; // Clear guard
+            console.log(`➡️ Next user ad: ${currentAdIndex + 1}/${ads.length}`);
+          }, 100);
         } else {
           // Finished user ads, start company ad rotation (first repeat)
           setTimeout(() => {
             setCurrentAdIndex(-1);
             setCompanyAdRepeatIndex(0);
             setIsTransitioning(false); // Clear transitioning state
+            isHandlingVideoEnd.current = false; // Clear guard
             console.log(`➡️ User ads complete, showing company ad repeat 1/${companyAdsNeeded}`);
           }, 100);
         }
@@ -1892,6 +1943,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             setCompanyAdRepeatIndex(currentRepeat);
             setCurrentAdIndex(-1); // Keep showing company ad
             setIsTransitioning(false); // Clear transitioning state
+            isHandlingVideoEnd.current = false; // Clear guard
             console.log(`➡️ Company ad repeat ${currentRepeat + 1}/${companyAdsNeeded}`);
           }, 100);
         } else {
@@ -1900,28 +1952,44 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             setCurrentAdIndex(0);
             setCompanyAdRepeatIndex(0);
             setIsTransitioning(false); // Clear transitioning state
+            isHandlingVideoEnd.current = false; // Clear guard
             console.log(`🔄 Company ad rotation complete (played ${companyAdsNeeded}x), looping back to first user ad`);
           }, 100);
         }
       }
     } else if (ads.length >= TARGET_SLOTS) {
       // All 5 slots are full: cycle through user ads only
-      if (currentAdIndex < ads.length - 1) {
-        setCurrentAdIndex(currentAdIndex + 1);
-        console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length}`);
-      } else {
-        setCurrentAdIndex(0); // Loop back to first ad
-        console.log(`🔄 Looping back to first ad (completed ${ads.length} ads)`);
-      }
+      setTimeout(() => {
+        if (currentAdIndex < ads.length - 1) {
+          setCurrentAdIndex(currentAdIndex + 1);
+          console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length}`);
+        } else {
+          setCurrentAdIndex(0); // Loop back to first ad
+          console.log(`🔄 Looping back to first ad (completed ${ads.length} ads)`);
+        }
+        // Clear transitioning state to allow next ad to play
+        setIsTransitioning(false);
+        isHandlingVideoEnd.current = false; // Clear guard
+      }, 100);
     } else {
       // No company ads available to fill, just loop user ads
-      if (currentAdIndex < ads.length - 1) {
-        setCurrentAdIndex(currentAdIndex + 1);
-        console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length} (no company ads to fill)`);
-      } else {
-        setCurrentAdIndex(0);
-        console.log(`🔄 Looping back to first ad (no company ads available for filling)`);
-      }
+      setTimeout(() => {
+        if (currentAdIndex < ads.length - 1) {
+          setCurrentAdIndex(currentAdIndex + 1);
+          console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length} (no company ads to fill)`);
+        } else {
+          setCurrentAdIndex(0);
+          console.log(`🔄 Looping back to first ad (no company ads available for filling)`);
+        }
+        // Clear transitioning state to allow next ad to play
+        setIsTransitioning(false);
+        isHandlingVideoEnd.current = false; // Clear guard
+      }, 100);
+    }
+    } catch (error) {
+      console.error('❌ Error in handleVideoEnd:', error);
+      // Clear guard on error
+      isHandlingVideoEnd.current = false;
     }
   };
 
@@ -2155,6 +2223,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           resizeMode={isLocked ? ResizeMode.CONTAIN : ResizeMode.COVER}
           shouldPlay={!isPaused}
           isLooping={false}
+          progressUpdateIntervalMillis={100} // ⚡ Update every 100ms for smooth master/slave sync
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
               setIsPlaying(status.isPlaying || false);
@@ -2165,7 +2234,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                   currentTime: status.positionMillis / 1000, // Convert to seconds
                   isPaused: !status.isPlaying,
                   adIndex: currentAdIndex,
-                  timestamp: new Date().toISOString()
+                  timestamp: new Date().toISOString(),
+                  // ✨ NEW: Include ad details for admin monitoring
+                  adDetails: currentAd ? {
+                    adId: currentAd.adId,
+                    adTitle: currentAd.adTitle,
+                    adDuration: status.durationMillis ? status.durationMillis / 1000 : currentAd.adDuration,
+                    isCompanyAd: currentAd.isCompanyAd || false
+                  } : null
                 };
                 
                 playbackWebSocketService.sendDisplayData(displayData);
@@ -2187,39 +2263,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                     setAdStartTime(new Date()); // ✅ Start timer - tracking happens at END in endAdPlayback()
                     // ❌ REMOVED: trackAdPlayback() call here - only track at END with actual view time
                     
-                    // NOW start WebSocket updates when video is CONFIRMED playing
-                    console.log('🎬 [AdPlayer] Video CONFIRMED playing - starting WebSocket updates NOW');
-                    // Use actual video duration if available
-                    const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
-                    playbackWebSocketService.startPlaybackUpdates({
-                      adId: currentAd.adId,
-                      adTitle: currentAd.adTitle,
-                      state: 'playing',
-                      currentTime: status.positionMillis / 1000, // Use actual position
-                      duration: duration,
-                      progress: duration > 0 ? ((status.positionMillis / 1000) / duration) * 100 : 0,
-                      remainingTime: duration - (status.positionMillis / 1000),
-                      playbackRate: status.rate || 1.0,
-                      volume: status.volume || 1.0,
-                      isMuted: status.isMuted || false,
-                      hasJustStarted: true,
-                      adDetails: {
-                        adId: currentAd.adId,
-                        adTitle: currentAd.adTitle,
-                        adDuration: currentAd.duration,
-                        mediaFile: currentAd.mediaFile,
-                        slotNumber: slotNumber,
-                        materialId: materialId,
-                        isCompanyAd: currentAdIndex === -1,
-                        adIndex: currentAdIndex,
-                        totalAds: ads.length
-                      },
-                      startTime: new Date().toISOString(),
-                      gpsData: currentGPS // Include real-time GPS data
-                    });
+                    // ❌ REMOVED: Per-second playback updates (not needed for progress bar)
+                    // console.log('🎬 [AdPlayer] Video CONFIRMED playing - starting WebSocket updates NOW');
                     
-                    // Mark that WebSocket updates have started and video has actually started
-                    setWebsocketUpdatesStarted(true);
+                    // Mark that video has actually started
                     setVideoActuallyStarted(true);
                   } else {
                     console.log('🎬 Video stopped playing during delay, not starting WebSocket updates');
@@ -2227,112 +2274,29 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 }, 500); // 500ms delay to ensure video is really playing
               }
               
-              // Send ultra-detailed real-time WebSocket updates during playback
-              if (currentAd && status.isPlaying && status.isLoaded && !isTransitioning && websocketUpdatesStarted) {
-                // Only send progress updates when video is ACTUALLY playing and WebSocket updates have started
-                const currentTime = status.positionMillis / 1000;
-                // Use the actual video duration from the video player, not the ad data
-                const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
-                const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-                
-                // Calculate remaining time and playback speed
-                const remainingTime = Math.max(0, duration - currentTime);
-                const playbackRate = status.rate || 1.0;
-                const volume = status.volume || 1.0;
-                
-                playbackWebSocketService.updatePlaybackData({
-                  state: 'playing',
-                  currentTime: currentTime,
-                  duration: duration,
-                  progress: progress,
-                  remainingTime: remainingTime,
-                  playbackRate: playbackRate,
-                  volume: volume,
-                  isMuted: status.isMuted || false,
-                  hasJustStarted: (status as any).hasJustStarted || false,
-                  hasJustFinished: (status as any).hasJustFinished || false,
-                  // Additional detailed info
-                  adDetails: {
-                    adId: currentAd.adId,
-                    adTitle: currentAd.adTitle,
-                    adDuration: currentAd.duration,
-                    mediaFile: currentAd.mediaFile,
-                    slotNumber: slotNumber,
-                    materialId: materialId,
-                    isCompanyAd: currentAdIndex === -1,
-                    adIndex: currentAdIndex,
-                    totalAds: ads.length
-                  },
-                  gpsData: currentGPS // Include real-time GPS data
-                });
-              } else if (currentAd && !status.isPlaying && status.positionMillis > 0 && status.isLoaded && !isTransitioning) {
-                // Video is paused (but loaded)
-                const currentTime = status.positionMillis / 1000;
-                // Use the actual video duration from the video player
-                const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
-                const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-                const remainingTime = Math.max(0, duration - currentTime);
-                
-                playbackWebSocketService.updatePlaybackData({
-                  state: 'paused',
-                  currentTime: currentTime,
-                  duration: duration,
-                  progress: progress,
-                  remainingTime: remainingTime,
-                  playbackRate: status.rate || 1.0,
-                  volume: status.volume || 1.0,
-                  isMuted: status.isMuted || false,
-                  adDetails: {
-                    adId: currentAd.adId,
-                    adTitle: currentAd.adTitle,
-                    adDuration: currentAd.duration,
-                    mediaFile: currentAd.mediaFile,
-                    slotNumber: slotNumber,
-                    materialId: materialId,
-                    isCompanyAd: currentAdIndex === -1,
-                    adIndex: currentAdIndex,
-                    totalAds: ads.length
-                  },
-                  gpsData: currentGPS // Include real-time GPS data
-                });
-              } else if (currentAd && (!status.isLoaded || !status.isPlaying)) {
-                // Video is buffering/loading - DON'T send any updates, just stop the interval
-                // This prevents false progress updates during buffering
+              // ❌ REMOVED: Per-second playback updates during playback
+              // These are not needed for progress bar functionality
+              
+              // Clean up any lingering playback update intervals when video is not playing
+              if (currentAd && (!status.isLoaded || !status.isPlaying)) {
                 playbackWebSocketService.stopPlaybackUpdates();
-                
-                // Only send one buffering state update, then stop
-                if (!websocketUpdatesStarted) {
-                  const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
-                  
-                  sendPlaybackUpdate({
-                    adId: currentAd.adId,
-                    adTitle: currentAd.adTitle,
-                    state: 'buffering',
-                    currentTime: 0, // Always 0 during buffering
-                    duration: duration,
-                    progress: 0, // Always 0 during buffering
-                    remainingTime: duration,
-                    playbackRate: 0,
-                    volume: status.volume || 1.0,
-                    isMuted: status.isMuted || false,
-                    adDetails: {
-                      adId: currentAd.adId,
-                      adTitle: currentAd.adTitle,
-                      adDuration: currentAd.duration,
-                      mediaFile: currentAd.mediaFile,
-                      slotNumber: slotNumber,
-                      materialId: materialId,
-                      isCompanyAd: currentAdIndex === -1,
-                      adIndex: currentAdIndex,
-                      totalAds: ads.length
-                    }
-                  });
-                  
-                  setWebsocketUpdatesStarted(true);
+              }
+              
+              // 🔍 DEBUG: Log video position near end
+              if (status.positionMillis && status.durationMillis) {
+                const progress = (status.positionMillis / status.durationMillis) * 100;
+                if (progress > 95) {
+                  console.log(`🔍 Video near end: ${progress.toFixed(1)}% (${status.positionMillis}ms / ${status.durationMillis}ms)`);
                 }
               }
               
-              if (status.didJustFinish) {
+              // Check for video end - use multiple signals
+              const isVideoEnded = status.didJustFinish || 
+                                   (status.positionMillis && status.durationMillis && 
+                                    status.positionMillis >= status.durationMillis - 100); // Within 100ms of end
+              
+              if (isVideoEnded) {
+                console.log(`🎬 Video ended detected! didJustFinish=${status.didJustFinish}, position=${status.positionMillis}, duration=${status.durationMillis}`);
                 // Stop WebSocket updates when ad ends
                 playbackWebSocketService.stopPlaybackUpdates();
                 handleVideoEnd();
@@ -2433,7 +2397,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             if (Math.random() < 0.3) { // Log ~30% of video events
               log.adPlayback('Video ready', { adTitle: currentAd?.adTitle });
             }
-            if (currentAd && !websocketUpdatesStarted) {
+            if (currentAd) {
               // Only log debug info occasionally
               if (Math.random() < 0.1) { // Log ~10% of debug info
                 log.adPlayback('Video ready - waiting for playback');
@@ -2441,34 +2405,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               
               // Clear transitioning state - video is ready
               setIsTransitioning(false);
-              
-              // DON'T start WebSocket updates yet - wait for actual playback
-              // Just send a single buffering state to indicate video is ready
-              sendPlaybackUpdate({
-                adId: currentAd.adId,
-                adTitle: currentAd.adTitle,
-                state: 'buffering', // Still buffering until actually playing
-                currentTime: 0,
-                duration: currentAd.duration,
-                progress: 0,
-                remainingTime: currentAd.duration,
-                playbackRate: 0,
-                volume: 1.0,
-                isMuted: false,
-                adDetails: {
-                  adId: currentAd.adId,
-                  adTitle: currentAd.adTitle,
-                  adDuration: currentAd.duration,
-                  mediaFile: currentAd.mediaFile,
-                  slotNumber: slotNumber,
-                  materialId: materialId,
-                  isCompanyAd: currentAdIndex === -1,
-                  adIndex: currentAdIndex,
-                  totalAds: ads.length
-                }
-              });
-              
-              // DON'T set websocketUpdatesStarted yet - wait for actual playback
             }
           }}
         />

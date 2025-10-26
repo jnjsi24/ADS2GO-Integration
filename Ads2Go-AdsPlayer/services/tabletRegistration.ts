@@ -144,6 +144,8 @@ export class TabletRegistrationService {
   private isSimulatingOffline = false;
   private appStateListener: any = null;
   private isReregistering = false; // Prevent concurrent re-registration attempts
+  private lastServerVerification: number = 0; // Track last server verification time
+  private serverVerificationInterval: number = 60000; // Verify with server only once per minute
   
   // Speed violation tracking
   private currentSpeedLimit: number = 50; // Default urban speed limit
@@ -276,11 +278,32 @@ export class TabletRegistrationService {
         return false;
       }
 
+      // ⚡ OPTIMIZATION: Only verify with server once per minute to avoid blocking ad player
+      // This prevents the ad player from waiting for server response on every mount
+      const now = Date.now();
+      const timeSinceLastVerification = now - this.lastServerVerification;
+      const shouldVerifyWithServer = timeSinceLastVerification > this.serverVerificationInterval;
+      
+      if (!shouldVerifyWithServer) {
+        log.deviceTracking(`Skipping server verification (last checked ${(timeSinceLastVerification / 1000).toFixed(0)}s ago), using cached registration`);
+        return this.registration?.isRegistered || false;
+      }
+
       // IMPORTANT: Verify with server that this tablet is still registered
       // This handles the case where admin unregistered the tablet from the dashboard
       try {
-        log.deviceTracking('Verifying registration with server');
-        const response = await fetch(`${API_BASE_URL}/tablet/configuration/${this.registration.materialId}`);
+        log.deviceTracking('Verifying registration with server (cached verification expired)');
+        this.lastServerVerification = now; // Update timestamp before making request
+        
+        // Create abort controller with timeout (React Native compatible)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_BASE_URL}/tablet/configuration/${this.registration.materialId}`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
           const config = await response.json();
@@ -309,7 +332,7 @@ export class TabletRegistrationService {
                 return false;
               }
               
-              log.deviceTracking('Server confirmed registration is still valid');
+              log.deviceTracking('✅ Server confirmed registration is still valid');
               return this.registration.isRegistered || false;
             } else {
               console.log('❌ Slot not found on server');
@@ -327,7 +350,12 @@ export class TabletRegistrationService {
           return this.registration?.isRegistered || false;
         }
       } catch (error) {
-        console.error('❌ Error verifying registration with server:', error);
+        // Check for abort/timeout error (when controller.abort() is called)
+        if ((error as Error).name === 'AbortError') {
+          console.log('⏱️ Server verification timed out (5s), using cached local registration');
+        } else {
+          console.error('❌ Error verifying registration with server:', error);
+        }
         // If server check fails, trust local data for now
         return this.registration?.isRegistered || false;
       }
@@ -410,6 +438,9 @@ export class TabletRegistrationService {
         
         // Clear the "cleared" flag since we now have a valid registration
         await AsyncStorage.removeItem('registration_cleared');
+        
+        // Reset server verification cache to force immediate verification on next check
+        this.lastServerVerification = Date.now();
         
         // Update WebSocket service with new device info
         await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId, registration.slotNumber);
@@ -1031,8 +1062,9 @@ export class TabletRegistrationService {
       this.appStateListener = null;
     }
     
-    // Clear registration data
+    // Clear registration data and reset server verification cache
     this.registration = null;
+    this.lastServerVerification = 0; // Force server verification on next check
     
     try {
       // Set a flag to indicate registration was explicitly cleared FIRST

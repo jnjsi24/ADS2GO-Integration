@@ -8,22 +8,24 @@ class UserAnalyticsSyncJob {
   constructor() {
     this.isRunning = false;
     this.lastSync = null;
+    this.isSyncing = false; // Track if a sync operation is currently running
   }
 
-  // Start the sync job - runs every 3 minutes
+  // ✨ OPTIMIZATION: Reduced from 3 minutes to 10 minutes to reduce memory pressure
+  // Start the sync job - runs every 10 minutes
   start() {
     if (this.isRunning) {
       console.log('⚠️ UserAnalyticsSyncJob is already running');
       return;
     }
 
-    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 3 minutes');
+    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 10 minutes');
     
     // Run immediately on start
     this.syncAllUsers();
     
-    // Schedule to run every 3 minutes
-    this.cronJob = cron.schedule('*/3 * * * *', () => {
+    // Schedule to run every 10 minutes (reduced from 3 minutes to reduce memory pressure)
+    this.cronJob = cron.schedule('*/10 * * * *', () => {
       this.syncAllUsers();
     }, {
       scheduled: true,
@@ -45,6 +47,14 @@ class UserAnalyticsSyncJob {
 
   // Sync all users with fresh data from DeviceDataHistoryV2
   async syncAllUsers() {
+    // ✨ OPTIMIZATION: Prevent concurrent executions to avoid memory crashes
+    if (this.isSyncing) {
+      console.log('⏭️ Skipping sync - previous sync still running');
+      return;
+    }
+
+    this.isSyncing = true;
+    
     try {
       console.log('🔄 Starting UserAnalytics sync with DeviceDataHistoryV2...');
       const startTime = new Date();
@@ -98,6 +108,9 @@ class UserAnalyticsSyncJob {
 
     } catch (error) {
       console.error('❌ Error in UserAnalyticsSyncJob:', error);
+    } finally {
+      // ✨ OPTIMIZATION: Always reset isSyncing flag to allow next execution
+      this.isSyncing = false;
     }
   }
 
@@ -545,6 +558,7 @@ class UserAnalyticsSyncJob {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       const UserAnalytics = require('../models/userAnalytics');
 
+      // ✨ OPTIMIZATION: Use allowDiskUse to prevent memory crashes with large datasets
       // Aggregate daily stats (user-scoped)
       const [dailyFacet] = await DeviceDataHistoryV2.aggregate([
         { $match: { 'dailyData.date': { $gte: startDate, $lte: endDate } } },
@@ -614,7 +628,7 @@ class UserAnalyticsSyncJob {
            ]
          }
         }
-      ]);
+      ]).allowDiskUse(true); // ← CRITICAL: Prevents memory crashes by using disk for large datasets
 
       const adPerf = dailyFacet?.adPerf?.[0] || { totalImpressions: 0, totalPlayTime: 0, totalAdsPlayed: 0 };
       const totalQRScans = dailyFacet?.qr?.[0]?.totalQRScans || 0;

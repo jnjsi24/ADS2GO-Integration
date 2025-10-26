@@ -245,8 +245,7 @@ const DeviceDataHistoryV2Schema = new mongoose.Schema({
   materialId: { 
     type: String, 
     required: true,
-    unique: true,
-    index: true
+    unique: true // Unique constraint automatically creates an index, no need for 'index: true'
   },
   carGroupId: { 
     type: String, 
@@ -296,7 +295,7 @@ const DeviceDataHistoryV2Schema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-DeviceDataHistoryV2Schema.index({ materialId: 1 });
+// Note: materialId already has a unique index from schema definition, no need to index again
 DeviceDataHistoryV2Schema.index({ carGroupId: 1 });
 DeviceDataHistoryV2Schema.index({ updatedAt: -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': -1 });
@@ -454,7 +453,7 @@ DeviceDataHistoryV2Schema.post('save', async function(doc) {
 });
 
 // ⚡ PERFORMANCE INDEXES - Critical for fast analytics queries
-DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1 }); // Date range queries
+// Note: 'dailyData.date' already indexed at line 302, removed duplicate
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1 }); // User filter
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.adId': 1 }); // Ad filter
 DeviceDataHistoryV2Schema.index({ 

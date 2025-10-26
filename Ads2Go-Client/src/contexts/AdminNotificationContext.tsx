@@ -119,7 +119,12 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending ads errors with useEffect instead of onError
   useEffect(() => {
     if (pendingAdsError) {
-      console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
+      // Check if it's a timeout error - these are expected and non-critical
+      if (pendingAdsError.message?.includes('timed out') || pendingAdsError.message?.includes('timeout')) {
+        console.log('⏱️ AdminNotificationContext: Pending ads query timed out (non-critical, will retry)');
+      } else {
+        console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
+      }
       setPendingAds([]);
     }
   }, [pendingAdsError]);
@@ -144,7 +149,12 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending materials errors with useEffect instead of onError
   useEffect(() => {
     if (pendingMaterialsError) {
-      console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
+      // Check if it's a timeout error - these are expected and non-critical
+      if (pendingMaterialsError.message?.includes('timed out') || pendingMaterialsError.message?.includes('timeout')) {
+        console.log('⏱️ AdminNotificationContext: Pending materials query timed out (non-critical, will retry)');
+      } else {
+        console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
+      }
       setPendingMaterials([]);
     }
   }, [pendingMaterialsError]);

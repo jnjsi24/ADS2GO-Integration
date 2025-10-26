@@ -257,8 +257,7 @@ const UserAnalyticsSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
     required: true,
-    unique: true,
-    index: true
+    unique: true // Unique constraint automatically creates an index
   },
   
   // Array of ads for this user
@@ -356,7 +355,7 @@ UserAnalyticsSchema.methods.toString = function() {
 };
 
 // Indexes for efficient queries
-UserAnalyticsSchema.index({ userId: 1 });
+// Note: userId already has a unique index from schema definition, no need to index again
 UserAnalyticsSchema.index({ 'ads.adId': 1 });
 UserAnalyticsSchema.index({ 'ads.materials.materialId': 1 });
 UserAnalyticsSchema.index({ lastUpdated: -1 });

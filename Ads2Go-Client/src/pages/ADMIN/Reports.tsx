@@ -237,10 +237,14 @@ const Reports: React.FC = () => {
       await updateReport({
         variables: {
           id: selectedReport.id,
-          status: updateData.status,
-          adminNotes: updateData.adminNotes
+          input: {
+            status: updateData.status,
+            adminNotes: updateData.adminNotes
+          }
         },
-        refetchQueries: [{ query: GET_ALL_USER_REPORTS }],
+        refetchQueries: [
+          { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
+        ],
       });
       setIsUpdateModalOpen(false);
       setSelectedReport(null);
@@ -256,14 +260,17 @@ const Reports: React.FC = () => {
           updateReport({
             variables: {
               id,
-              status
-            }
+              input: {
+                status
+              }
+            },
+            refetchQueries: [
+              { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
+            ],
           })
         )
       );
       setSelectedReports([]);
-      // Refetch data to update UI
-      // You might want to use Apollo Client's cache update instead
     } catch (error) {
       console.error('Error bulk updating reports:', error);
     }
@@ -748,9 +755,17 @@ const Reports: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gray-600" />
-                  <strong className="text-sm font-medium text-gray-700">User Email</strong>
+                  <strong className="text-sm font-medium text-gray-700">
+                    {reportSource === 'users' ? 'User Email' : 'Driver Email'}
+                  </strong>
                 </div>
-                <p className="mt-1 font-semibold text-black">{selectedReport.user.email}</p>
+                <p className="mt-1 font-semibold text-black">
+                  {reportSource === 'users' && selectedReport.user
+                    ? selectedReport.user.email
+                    : reportSource === 'drivers' && selectedReport.driver
+                    ? selectedReport.driver.email
+                    : 'N/A'}
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-2">

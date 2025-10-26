@@ -469,98 +469,133 @@ class DeviceStatusService {
   }
 
   async processGPSData(deviceId, gpsData, adDetails) {
-    try {
-      const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId || adDetails?.materialId;
-      const deviceSlot = connection?.slotNumber || adDetails?.slotNumber;
+    const connection = this.activeConnections.get(deviceId);
+    const materialId = connection?.materialId || adDetails?.materialId;
+    const deviceSlot = connection?.slotNumber || adDetails?.slotNumber;
 
-      if (!materialId || !deviceSlot) {
-        // Skip GPS processing if we don't have materialId or slot
-        return;
-      }
+    if (!materialId || !deviceSlot) {
+      // Skip GPS processing if we don't have materialId or slot
+      return;
+    }
 
-      // Validate GPS data
-      const { lat, lng, speed, heading, accuracy, altitude, timestamp } = gpsData;
-      
-      // Skip invalid GPS coordinates
-      if (!lat || !lng || lat === 0 && lng === 0) {
-        return;
-      }
+    // Validate GPS data
+    const { lat, lng, speed, heading, accuracy, altitude, timestamp } = gpsData;
+    
+    // Skip invalid GPS coordinates
+    if (!lat || !lng || lat === 0 && lng === 0) {
+      return;
+    }
 
-      // Log GPS processing only in debug mode
-      if (process.env.DEBUG_GPS === 'true') {
-        logger.debug(`GPS from ${deviceId}: ${lat.toFixed(6)}, ${lng.toFixed(6)}, ${(speed * 3.6).toFixed(1)} km/h`);
-      }
+    // Log GPS processing only in debug mode
+    if (process.env.DEBUG_GPS === 'true') {
+      logger.debug(`GPS from ${deviceId}: ${lat.toFixed(6)}, ${lng.toFixed(6)}, ${(speed * 3.6).toFixed(1)} km/h`);
+    }
 
-      // Update device tracking with GPS data
-      const DeviceTracking = require('../models/deviceTracking');
-      let carTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Retry logic for handling version conflicts
+    const maxRetries = 3;
+    let retryCount = 0;
+    let lastError = null;
 
-      if (!carTracking) {
-        // Device tracking record not found - skip GPS update
-        // The HTTP fallback will create the record if needed
-        return;
-      }
+    while (retryCount < maxRetries) {
+      try {
+        // Update device tracking with GPS data
+        const DeviceTracking = require('../models/deviceTracking');
+        let carTracking = await DeviceTracking.findByMaterialId(materialId);
 
-      // Check if we should update the location (avoid excessive updates)
-      const shouldUpdate = await this.shouldUpdateGPSLocation(
-        carTracking,
-        lat,
-        lng,
-        accuracy,
-        timestamp
-      );
-
-      if (!shouldUpdate) {
-        return; // Skip this update
-      }
-
-      // Update current location
-      carTracking.currentLocation = {
-        type: 'Point',
-        coordinates: [lng, lat],
-        accuracy,
-        speed: speed || 0,
-        heading: heading || 0,
-        altitude: altitude || undefined,
-        timestamp: new Date(timestamp || Date.now())
-      };
-
-      // Add to location history (for route tracking)
-      if (!carTracking.locationHistory) {
-        carTracking.locationHistory = [];
-      }
-
-      carTracking.locationHistory.push({
-        type: 'Point',
-        coordinates: [lng, lat],
-        timestamp: new Date(timestamp || Date.now()),
-        speed: speed || 0,
-        heading: heading || 0,
-        accuracy
-      });
-
-      // Keep only last 1000 location points to avoid excessive storage
-      if (carTracking.locationHistory.length > 1000) {
-        carTracking.locationHistory = carTracking.locationHistory.slice(-1000);
-      }
-
-      // Update distance traveled
-      if (carTracking.currentSession && speed > 0) {
-        const timeDiff = Date.now() - new Date(carTracking.currentSession.lastOnlineUpdate).getTime();
-        const hours = timeDiff / (1000 * 60 * 60);
-        const distanceKm = (speed * 3.6) * hours; // speed in km/h * hours
-        
-        if (distanceKm > 0 && distanceKm < 10) { // Sanity check: less than 10km per update
-          carTracking.currentSession.totalDistanceTraveled += distanceKm;
+        if (!carTracking) {
+          // Device tracking record not found - skip GPS update
+          // The HTTP fallback will create the record if needed
+          return;
         }
+
+        // Check if we should update the location (avoid excessive updates)
+        const shouldUpdate = await this.shouldUpdateGPSLocation(
+          carTracking,
+          lat,
+          lng,
+          accuracy,
+          timestamp
+        );
+
+        if (!shouldUpdate) {
+          return; // Skip this update
+        }
+
+        // Update current location
+        carTracking.currentLocation = {
+          type: 'Point',
+          coordinates: [lng, lat],
+          accuracy,
+          speed: speed || 0,
+          heading: heading || 0,
+          altitude: altitude || undefined,
+          timestamp: new Date(timestamp || Date.now())
+        };
+
+        // Add to location history (for route tracking)
+        if (!carTracking.locationHistory) {
+          carTracking.locationHistory = [];
+        }
+
+        carTracking.locationHistory.push({
+          type: 'Point',
+          coordinates: [lng, lat],
+          timestamp: new Date(timestamp || Date.now()),
+          speed: speed || 0,
+          heading: heading || 0,
+          accuracy
+        });
+
+        // Keep only last 1000 location points to avoid excessive storage
+        if (carTracking.locationHistory.length > 1000) {
+          carTracking.locationHistory = carTracking.locationHistory.slice(-1000);
+        }
+
+        // Update distance traveled
+        if (carTracking.currentSession && speed > 0) {
+          const timeDiff = Date.now() - new Date(carTracking.currentSession.lastOnlineUpdate).getTime();
+          const hours = timeDiff / (1000 * 60 * 60);
+          const distanceKm = (speed * 3.6) * hours; // speed in km/h * hours
+          
+          if (distanceKm > 0 && distanceKm < 10) { // Sanity check: less than 10km per update
+            carTracking.currentSession.totalDistanceTraveled += distanceKm;
+          }
+        }
+
+        // Save the updated tracking record
+        await carTracking.save();
+        
+        // Success! Exit the retry loop
+        return;
+
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a version conflict error (check multiple ways mongoose might indicate this)
+        const isVersionError = error.name === 'VersionError' || 
+                               error.constructor.name === 'VersionError' ||
+                               error.message?.includes('No matching document found') ||
+                               error.message?.includes('version');
+        
+        if (isVersionError) {
+          retryCount++;
+          if (retryCount < maxRetries) {
+            // Wait a bit before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, 50 * retryCount));
+            continue; // Retry
+          } else {
+            // Max retries exceeded for version conflict - silently fail (this is expected with high-frequency GPS)
+            if (process.env.DEBUG_GPS === 'true') {
+              console.warn(`⚠️ GPS update for ${deviceId} failed after ${maxRetries} retries (version conflict)`);
+            }
+            return;
+          }
+        }
+        
+        // For non-version errors, log and exit
+        console.error(`Error processing GPS data for device ${deviceId}:`, error);
+        return;
       }
-
-      // Save the updated tracking record
-      await carTracking.save();
-
-    } catch (error) {
-      console.error(`Error processing GPS data for device ${deviceId}:`, error);
     }
   }
 
@@ -665,30 +700,21 @@ class DeviceStatusService {
       }
 
       // Update the current ad information in the database
+      // Query by materialId since DeviceTracking stores devices in slots array
       const result = await DeviceTracking.findOneAndUpdate(
-        { deviceId: deviceId },
+        { materialId },
         { $set: updateData },
         { new: true }
       );
 
       if (result) {
-        console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
-        console.log(`📊 Current ad data:`, result.currentAd);
-      } else {
-        console.log(`❌ No DeviceTracking document found for device ${deviceId}`);
-        
-        // Try alternative query by materialId
-        const altResult = await DeviceTracking.findOneAndUpdate(
-          { materialId },
-          { $set: updateData },
-          { new: true }
-        );
-        
-        if (altResult) {
+        // Only log in debug mode to reduce verbosity
+        if (process.env.DEBUG_ADS === 'true') {
           console.log(`✅ Updated current ad via materialId ${materialId}: ${playbackData.adTitle}`);
-        } else {
-          console.log(`❌ No DeviceTracking document found for materialId ${materialId} either`);
         }
+      } else {
+        // This is unexpected - log it
+        console.log(`⚠️ No DeviceTracking document found for materialId ${materialId}`);
       }
 
     } catch (error) {
@@ -726,7 +752,7 @@ class DeviceStatusService {
       currentTime: playbackData.currentTime,
       duration: playbackData.duration,
       progress: playbackData.progress,
-      startTime: playbackData.startTime || now.toISOString(), // ✅ FIXED: Send real ad start time
+      startTime: playbackData.startTime || new Date().toISOString(), // ✅ FIXED: Send real ad start time
       timestamp: new Date().toISOString(), // Current message timestamp (for update tracking)
       gpsData: playbackData.gpsData || null,  // Include GPS data if available (real-time location)
       sessionStatus: sessionStatus  // ✅ NEW: Include session status for real-time driver progress
@@ -921,8 +947,8 @@ class DeviceStatusService {
         deviceStatusManager.setDatabaseStatus(shortDeviceId, status, now);
       }
       
-      // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(deviceTracking.deviceId, deviceTracking.isOnline, 'database');
+      // Broadcast the status update to all connected clients (use the deviceId parameter, not deviceTracking.deviceId)
+      this.broadcastDeviceUpdate(deviceId, deviceTracking.isOnline, 'database');
       
       // Also update the device list
       this.broadcastDeviceList();
@@ -967,8 +993,8 @@ class DeviceStatusService {
       // Update DeviceStatusManager with database status
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
       
-      // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(deviceTracking.deviceId, deviceTracking.isOnline, 'database');
+      // Broadcast the status update to all connected clients (use the deviceId parameter, not deviceTracking.deviceId)
+      this.broadcastDeviceUpdate(deviceId, deviceTracking.isOnline, 'database');
       
       // Also update the device list
       this.broadcastDeviceList();
@@ -1258,6 +1284,12 @@ class DeviceStatusService {
   }
 
   broadcastDeviceUpdate(deviceId, isOnline, source = 'websocket') {
+    // Skip broadcasting if deviceId is undefined or null
+    if (!deviceId) {
+      console.warn('⚠️ [broadcastDeviceUpdate] Skipping broadcast - deviceId is undefined or null');
+      return;
+    }
+    
     const device = {
       deviceId,
       isOnline,
@@ -1554,6 +1586,17 @@ class DeviceStatusService {
           ws.send(JSON.stringify(displayMessage));
         } catch (error) {
           console.error(`❌ [DisplayData] Error sending to Slot ${ws.slotNumber}:`, error);
+        }
+      }
+    });
+
+    // ✨ NEW: Also broadcast to admin clients for real-time monitoring
+    this.activeConnections.forEach((ws, deviceId) => {
+      if (ws.isAdmin && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(displayMessage));
+        } catch (error) {
+          console.error(`❌ [DisplayData] Error sending to admin:`, error);
         }
       }
     });

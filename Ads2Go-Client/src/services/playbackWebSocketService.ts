@@ -139,22 +139,41 @@ class PlaybackWebSocketService {
           } else if (message.type === 'deviceUpdate') {
             // Only log device updates in verbose mode
             if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-              console.log('📱 [Admin WebSocket] Received device update:', message.device);
+              console.log('📱 [Admin WebSocket] Received device update:', message.device || message);
             }
             
             // Forward device update to callbacks
-            this.callbacks.forEach(callback => {
-              try {
-                callback({
-                  type: 'deviceUpdate',
-                  deviceId: message.device.deviceId,
-                  isOnline: message.device.isOnline,
-                  lastSeen: message.device.lastSeen
-                });
-              } catch (error) {
-                console.error('Error in device update callback:', error);
-              }
-            });
+            // Handle both message formats: wrapped (message.device) and direct (message.deviceId)
+            let deviceId, isOnline, lastSeen;
+            
+            if (message.device && message.device.deviceId) {
+              // Wrapped format: { type: 'deviceUpdate', device: { deviceId, isOnline, lastSeen } }
+              deviceId = message.device.deviceId;
+              isOnline = message.device.isOnline;
+              lastSeen = message.device.lastSeen;
+            } else if (message.deviceId) {
+              // Direct format: { type: 'deviceUpdate', deviceId, isOnline, lastSeen }
+              deviceId = message.deviceId;
+              isOnline = message.isOnline;
+              lastSeen = message.lastSeen;
+            }
+            
+            if (deviceId) {
+              this.callbacks.forEach(callback => {
+                try {
+                  callback({
+                    type: 'deviceUpdate',
+                    deviceId: deviceId,
+                    isOnline: isOnline,
+                    lastSeen: lastSeen
+                  });
+                } catch (error) {
+                  console.error('Error in device update callback:', error);
+                }
+              });
+            } else {
+              console.warn('⚠️ [Admin WebSocket] Received deviceUpdate with missing device data:', message);
+            }
           } else if (message.type === 'deviceList') {
             // Only log device list in verbose mode
             if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
@@ -208,6 +227,29 @@ class PlaybackWebSocketService {
                 });
               } catch (error) {
                 console.error('Error in playback update callback:', error);
+              }
+            });
+          } else if (message.type === 'displayData') {
+            // ✨ NEW: Handle real-time display data from ad player (for live ad monitoring)
+            console.log('📺 [Admin WebSocket] Received display data:', {
+              materialId: message.materialId,
+              adIndex: message.data?.adIndex,
+              currentTime: message.data?.currentTime?.toFixed(1),
+              isPaused: message.data?.isPaused
+            });
+            
+            // Forward display data to callbacks
+            this.callbacks.forEach(callback => {
+              try {
+                callback({
+                  type: 'displayData',
+                  materialId: message.materialId,
+                  sourceSlot: message.sourceSlot,
+                  data: message.data,
+                  timestamp: message.timestamp
+                });
+              } catch (error) {
+                console.error('Error in display data callback:', error);
               }
             });
           }

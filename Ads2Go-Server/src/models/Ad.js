@@ -400,4 +400,16 @@ AdSchema.post('save', async function (doc) {
   }
 });
 
+// ⚡ CRITICAL PERFORMANCE INDEXES - Add indexes to prevent table scans
+// These indexes are ESSENTIAL for fast analytics queries
+AdSchema.index({ userId: 1 }); // User filter (most common)
+AdSchema.index({ status: 1 }); // Status filter
+AdSchema.index({ paymentStatus: 1 }); // Payment filter
+AdSchema.index({ adStatus: 1 }); // Ad status filter
+AdSchema.index({ userId: 1, paymentStatus: 1, status: 1 }); // Compound for analytics queries
+AdSchema.index({ 'targetDevices': 1 }); // Array index for material lookup
+AdSchema.index({ startTime: 1, endTime: 1 }); // Date range queries
+AdSchema.index({ createdAt: -1 }); // Sort by creation date
+AdSchema.index({ updatedAt: -1 }); // Sort by update date
+
 module.exports = mongoose.model('Ad', AdSchema);

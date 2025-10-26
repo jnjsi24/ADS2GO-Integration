@@ -46,7 +46,7 @@ const httpLink = createHttpLink({
   fetch: (uri, options) => {
     return fetch(uri, {
       ...options,
-      signal: AbortSignal.timeout(60000), // 60 second timeout (increased for analytics queries)
+      signal: AbortSignal.timeout(90000), // 90 second timeout (increased for analytics and notification queries)
     });
   }
 });
@@ -126,11 +126,15 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
     });
   }
   if (networkError) {
-    // Suppress timeout errors for analytics queries - they're handled in the component
+    // Suppress timeout errors for analytics queries and notification queries - they're handled in the component
     if (networkError.message === 'signal timed out' && 
         (operation.operationName === 'getUserAnalytics' || 
-         operation.operationName === 'GetUserAnalytics')) {
-      console.log(`[GraphQL]: Analytics query timed out - this can happen with large datasets`);
+         operation.operationName === 'GetUserAnalytics' ||
+         operation.operationName === 'getPendingAds' ||
+         operation.operationName === 'GetPendingAds' ||
+         operation.operationName === 'getPendingMaterials' ||
+         operation.operationName === 'GetPendingMaterials')) {
+      console.log(`[GraphQL]: ${operation.operationName} query timed out - this can happen with large datasets`);
       return;
     }
     console.error(`[Network error]: ${networkError}`);
