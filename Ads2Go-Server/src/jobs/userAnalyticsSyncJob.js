@@ -2,27 +2,30 @@ const cron = require('node-cron');
 const UserAnalyticsService = require('../services/userAnalyticsService');
 const UserAnalytics = require('../models/userAnalytics');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 class UserAnalyticsSyncJob {
   constructor() {
     this.isRunning = false;
     this.lastSync = null;
+    this.isSyncing = false; // Track if a sync operation is currently running
   }
 
-  // Start the sync job - runs every 3 minutes
+  // ✨ OPTIMIZATION: Reduced from 3 minutes to 10 minutes to reduce memory pressure
+  // Start the sync job - runs every 10 minutes
   start() {
     if (this.isRunning) {
       console.log('⚠️ UserAnalyticsSyncJob is already running');
       return;
     }
 
-    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 3 minutes');
+    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 10 minutes');
     
     // Run immediately on start
     this.syncAllUsers();
     
-    // Schedule to run every 3 minutes
-    this.cronJob = cron.schedule('*/3 * * * *', () => {
+    // Schedule to run every 10 minutes (reduced from 3 minutes to reduce memory pressure)
+    this.cronJob = cron.schedule('*/10 * * * *', () => {
       this.syncAllUsers();
     }, {
       scheduled: true,
@@ -44,13 +47,21 @@ class UserAnalyticsSyncJob {
 
   // Sync all users with fresh data from DeviceDataHistoryV2
   async syncAllUsers() {
+    // ✨ OPTIMIZATION: Prevent concurrent executions to avoid memory crashes
+    if (this.isSyncing) {
+      console.log('⏭️ Skipping sync - previous sync still running');
+      return;
+    }
+
+    this.isSyncing = true;
+    
     try {
       console.log('🔄 Starting UserAnalytics sync with DeviceDataHistoryV2...');
       const startTime = new Date();
       
       // Get all users
       const users = await User.find({}).select('_id firstName lastName');
-      console.log(`👥 Found ${users.length} users to sync`);
+      logger.database(`👥 Found ${users.length} users to sync`);
 
       if (users.length === 0) {
         console.log('❌ No users found for sync');
@@ -68,15 +79,14 @@ class UserAnalyticsSyncJob {
       // Sync each user
       for (const user of users) {
         try {
-          console.log(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
+          logger.database(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
           
-          // For now, we'll use a simple approach - sync with all available materials
-          // In a real implementation, you'd need to link users to their materials
-          const result = await this.syncUserWithAllMaterials(user._id, startDate, endDate);
+          // New: Sync using userId-based aggregations (no material mapping)
+          const result = await this.syncUserByUserId(user._id.toString(), startDate, endDate);
           
           if (result.success) {
             successCount++;
-            console.log(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
+            logger.database(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
           } else {
             errorCount++;
             console.log(`❌ Failed to sync user ${user.firstName}: ${result.message}`);
@@ -90,14 +100,17 @@ class UserAnalyticsSyncJob {
       const endTime = new Date();
       const duration = (endTime - startTime) / 1000;
 
-      console.log(`🎉 UserAnalytics sync completed in ${duration.toFixed(2)}s`);
-      console.log(`   ✅ Success: ${successCount} users`);
-      console.log(`   ❌ Errors: ${errorCount} users`);
+      logger.database(`🎉 UserAnalytics sync completed in ${duration.toFixed(2)}s`);
+      logger.database(`   ✅ Success: ${successCount} users`);
+      logger.database(`   ❌ Errors: ${errorCount} users`);
       
       this.lastSync = endTime;
 
     } catch (error) {
       console.error('❌ Error in UserAnalyticsSyncJob:', error);
+    } finally {
+      // ✨ OPTIMIZATION: Always reset isSyncing flag to allow next execution
+      this.isSyncing = false;
     }
   }
 
@@ -536,6 +549,174 @@ class UserAnalyticsSyncJob {
         success: false,
         message: error.message
       };
+    }
+  }
+
+  // New: Sync a specific user by aggregating directly via userId
+  async syncUserByUserId(userId, startDate, endDate) {
+    try {
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const UserAnalytics = require('../models/userAnalytics');
+
+      // ✨ OPTIMIZATION: Use allowDiskUse to prevent memory crashes with large datasets
+      // Aggregate daily stats (user-scoped)
+      const [dailyFacet] = await DeviceDataHistoryV2.aggregate([
+        { $match: { 'dailyData.date': { $gte: startDate, $lte: endDate } } },
+        { $project: {
+            materialId: 1,
+            dailyData: {
+              $filter: { input: '$dailyData', cond: { $and: [ { $gte: ['$$this.date', startDate] }, { $lte: ['$$this.date', endDate] } ] } }
+            }
+          }
+        },
+        { $facet: {
+            adPerf: [
+              { $unwind: '$dailyData' },
+              { $unwind: '$dailyData.adPerformance' },
+              { $match: { 'dailyData.adPerformance.userId': userId } },
+              { $group: {
+                  _id: null,
+                  totalImpressions: { $sum: '$dailyData.adPerformance.impressions' },
+                  totalPlayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                  totalAdsPlayed: { $sum: '$dailyData.adPerformance.playCount' }
+                }
+              }
+            ],
+            deviceStats: [
+              { $unwind: '$dailyData' },
+              { $unwind: '$dailyData.adPerformance' },
+              { $match: { 'dailyData.adPerformance.userId': userId } },
+              { $group: {
+                  _id: '$materialId',
+                  impressions: { $sum: '$dailyData.adPerformance.impressions' },
+                  adsPlayed: { $sum: '$dailyData.adPerformance.playCount' },
+                  displayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                  lastActivity: { $max: '$dailyData.date' }
+                }
+              }
+            ],
+            qr: [
+              { $unwind: '$dailyData' },
+              { $unwind: { path: '$dailyData.qrScans', preserveNullAndEmptyArrays: true } },
+              { $match: { 'dailyData.qrScans.userId': userId } },
+              { $group: { _id: null, totalQRScans: { $sum: 1 } } }
+            ],
+           dailyPerf: [
+             { $unwind: '$dailyData' },
+             { $unwind: '$dailyData.adPerformance' },
+             { $match: { 'dailyData.adPerformance.userId': userId } },
+             { $group: {
+                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.date' } },
+                 impressions: { $sum: '$dailyData.adPerformance.impressions' },
+                 adsPlayed: { $sum: '$dailyData.adPerformance.playCount' },
+                 displayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                 completionRate: { $avg: '$dailyData.adPerformance.completionRate' }
+               }
+             },
+             { $sort: { _id: 1 } }
+           ],
+           dailyQR: [
+             { $unwind: '$dailyData' },
+             { $unwind: { path: '$dailyData.qrScans', preserveNullAndEmptyArrays: true } },
+             { $match: { 'dailyData.qrScans.userId': userId } },
+             { $group: {
+                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.qrScans.scanTimestamp' } },
+                 qrScans: { $sum: 1 }
+               }
+             },
+             { $sort: { _id: 1 } }
+           ]
+         }
+        }
+      ]).allowDiskUse(true); // ← CRITICAL: Prevents memory crashes by using disk for large datasets
+
+      const adPerf = dailyFacet?.adPerf?.[0] || { totalImpressions: 0, totalPlayTime: 0, totalAdsPlayed: 0 };
+      const totalQRScans = dailyFacet?.qr?.[0]?.totalQRScans || 0;
+      const deviceStats = dailyFacet?.deviceStats || [];
+
+      // Merge daily performance with daily QR into dailyStats
+      const dailyPerfMap = new Map((dailyFacet?.dailyPerf || []).map(d => [d._id, d]));
+      const dailyQRMap = new Map((dailyFacet?.dailyQR || []).map(d => [d._id, d.qrScans]));
+      const allDates = Array.from(new Set([ ...dailyPerfMap.keys(), ...dailyQRMap.keys() ])).sort();
+      const dailyStats = allDates.map(dateStr => {
+        const perf = dailyPerfMap.get(dateStr) || {};
+        return {
+          date: dateStr,
+          impressions: perf.impressions || 0,
+          adsPlayed: perf.adsPlayed || 0,
+          displayTime: perf.displayTime || 0,
+          qrScans: dailyQRMap.get(dateStr) || 0,
+          completionRate: perf.completionRate || 0
+        };
+      });
+
+      // Get ALL user's active paid ads (including SCHEDULED) for dropdown
+      const Ad = require('../models/Ad');
+      const allUserAds = await Ad.find({
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+      }).select('_id title');
+      
+      // Build ads array with ALL active paid ads (even those with no data yet)
+      const adsArray = allUserAds.map(ad => ({
+        adId: ad._id.toString(),
+        adTitle: ad.title,
+        totalMaterials: 0,
+        totalDevices: 0,
+        totalAdPlayTime: 0,
+        totalAdImpressions: 0,
+        totalQRScans: 0,
+        averageAdCompletionRate: 0,
+        qrScanConversionRate: 0,
+        lastUpdated: new Date().toISOString(),
+        materials: []
+      }));
+
+      // Upsert summary AND ads array into UserAnalytics
+      const summaryUpdate = {
+        $set: {
+          summary: {
+            totalAdImpressions: adPerf.totalImpressions || 0,
+            totalAdPlays: adPerf.totalAdsPlayed || 0,
+            totalAdPlayTime: adPerf.totalPlayTime || 0,
+            totalQRScans: totalQRScans || 0,
+            totalDevices: deviceStats.length
+          },
+          ads: adsArray,  // ← Now includes ALL active paid ads
+          totalAds: adsArray.length,
+          dailyStats: dailyStats,
+          lastUpdated: new Date(),
+          updatedAt: new Date(),
+          isActive: true
+        },
+        $setOnInsert: {
+          totalMaterials: 0,
+          averageAdCompletionRate: 0,
+          qrScanConversionRate: 0,
+          adPerformance: [],
+          errorLogs: []
+        }
+      };
+
+      await UserAnalytics.updateOne({ userId }, summaryUpdate, { upsert: true });
+
+      return {
+        success: true,
+        message: 'User analytics summary synced by userId',
+        data: {
+          userId,
+          totalAdImpressions: adPerf.totalImpressions || 0,
+          totalAdPlayTime: adPerf.totalPlayTime || 0,
+          totalAdPlays: adPerf.totalAdsPlayed || 0,
+          totalQRScans: totalQRScans || 0,
+          totalDevices: deviceStats.length
+        }
+      };
+    } catch (error) {
+      console.error('Error syncing user by userId:', error);
+      return { success: false, message: error.message };
     }
   }
 

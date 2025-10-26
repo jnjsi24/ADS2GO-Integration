@@ -43,6 +43,7 @@ export const ASSIGN_MATERIAL_TO_DRIVER = gql`
           contactNumber
           vehiclePlateNumber
         }
+        assignedDate
         mountedAt
         dismountedAt
       }
@@ -77,6 +78,10 @@ export const UPDATE_MATERIAL = gql`
       }
       mountedAt
       dismountedAt
+      materialCondition
+      photoComplianceStatus
+      lastInspectionDate
+      nextInspectionDue
       createdAt
       updatedAt
     }
@@ -103,6 +108,7 @@ export const UNASSIGN_MATERIAL_FROM_DRIVER = gql`
         vehicleType
         materialType
         driverId
+        assignedDate
         mountedAt
         dismountedAt
       }

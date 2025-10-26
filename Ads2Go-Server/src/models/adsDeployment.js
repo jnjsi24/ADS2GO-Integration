@@ -114,8 +114,8 @@ const AdsDeploymentSchema = new mongoose.Schema({
   },
   currentStatus: {
     type: String,
-    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED', 'PAID'],
-    default: 'SCHEDULED'
+    enum: ['RUNNING'], // Deployments are always RUNNING (empty slots filled with company ads)
+    default: 'RUNNING'
   },
   lastFrameUpdate: {
     type: Date,

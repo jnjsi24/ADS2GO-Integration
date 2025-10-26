@@ -276,7 +276,10 @@ const cleanGPSData = (locationHistory, options = {}) => {
     maxSpeed = 200
   } = options;
 
-  console.log(`🧹 [GPS Cleaner] Starting data cleaning with ${locationHistory.length} points`);
+  // Only log GPS cleaning start in verbose mode
+  if (process.env.VERBOSE_LOGS === 'true') {
+    console.log(`🧹 [GPS Cleaner] Starting data cleaning with ${locationHistory.length} points`);
+  }
 
   const cleanedData = [];
   let removedCount = 0;
@@ -294,7 +297,10 @@ const cleanGPSData = (locationHistory, options = {}) => {
     });
 
     if (!coordValidation.isValid) {
-      console.log(`❌ [GPS Cleaner] Removing invalid coordinates: [${lat}, ${lng}] - ${coordValidation.errors.join(', ')}`);
+      // Only log invalid coordinates in verbose mode
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`❌ [GPS Cleaner] Removing invalid coordinates: [${lat}, ${lng}] - ${coordValidation.errors.join(', ')}`);
+      }
       removedCount++;
       continue;
     }
@@ -307,7 +313,10 @@ const cleanGPSData = (locationHistory, options = {}) => {
     });
 
     if (!accuracyValidation.isValid) {
-      console.log(`❌ [GPS Cleaner] Removing poor accuracy: ${point.accuracy}m - ${accuracyValidation.message}`);
+      // Only log poor accuracy in verbose mode
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`❌ [GPS Cleaner] Removing poor accuracy: ${point.accuracy}m - ${accuracyValidation.message}`);
+      }
       removedCount++;
       continue;
     }
@@ -316,7 +325,10 @@ const cleanGPSData = (locationHistory, options = {}) => {
     if (removeDrift && i > 0) {
       const driftCheck = detectGPSDrift(point, locationHistory[i - 1], { maxSpeed });
       if (driftCheck.isDrift) {
-        console.log(`❌ [GPS Cleaner] Removing GPS drift: ${driftCheck.reason}`);
+        // Only log GPS drift in verbose mode
+        if (process.env.VERBOSE_LOGS === 'true') {
+          console.log(`❌ [GPS Cleaner] Removing GPS drift: ${driftCheck.reason}`);
+        }
         driftCount++;
         continue;
       }

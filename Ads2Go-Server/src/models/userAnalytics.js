@@ -257,13 +257,31 @@ const UserAnalyticsSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User',
     required: true,
-    unique: true,
-    index: true
+    unique: true // Unique constraint automatically creates an index
   },
   
   // Array of ads for this user
   ads: [AdAnalyticsSchema],
   
+  // Lean summary structure for fast dashboards
+  summary: {
+    totalAdImpressions: { type: Number, default: 0 },
+    totalAdPlays: { type: Number, default: 0 },
+    totalAdPlayTime: { type: Number, default: 0 },
+    totalQRScans: { type: Number, default: 0 },
+    totalDevices: { type: Number, default: 0 }
+  },
+
+  // Daily buckets (optional, populated by sync job)
+  dailyStats: [{
+    date: { type: String, required: true },
+    impressions: { type: Number, default: 0 },
+    adsPlayed: { type: Number, default: 0 },
+    displayTime: { type: Number, default: 0 },
+    qrScans: { type: Number, default: 0 },
+    completionRate: { type: Number, default: 0 }
+  }],
+
   // User-level aggregated analytics
   totalAds: { type: Number, default: 0 },
   totalMaterials: { type: Number, default: 0 },
@@ -337,7 +355,7 @@ UserAnalyticsSchema.methods.toString = function() {
 };
 
 // Indexes for efficient queries
-UserAnalyticsSchema.index({ userId: 1 });
+// Note: userId already has a unique index from schema definition, no need to index again
 UserAnalyticsSchema.index({ 'ads.adId': 1 });
 UserAnalyticsSchema.index({ 'ads.materials.materialId': 1 });
 UserAnalyticsSchema.index({ lastUpdated: -1 });

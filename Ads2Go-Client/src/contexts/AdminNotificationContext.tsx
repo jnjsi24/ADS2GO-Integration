@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../graphql/admin/queries/notificationQueries';
+import { GET_ADMIN_GENERAL_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../graphql/admin/queries/notificationQueries';
 import { GET_ADMIN_NOTIFICATION_PREFERENCES } from '../graphql/admin/queries/getAdminNotificationPreferences';
 import { useAdminAuth } from './AdminAuthContext';
 
@@ -58,9 +58,6 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle preferences data changes
   useEffect(() => {
     if (preferencesData?.getAdminNotificationPreferences) {
-      console.log('🔔 AdminNotificationContext: Preferences loaded:', preferencesData);
-      console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(preferencesData, null, 2));
-      console.log('🔔 AdminNotificationContext: Setting enableNotificationBadge to:', preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
       setEnableNotificationBadge(preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
     }
   }, [preferencesData]);
@@ -73,28 +70,22 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     }
   }, [preferencesError]);
 
-  // Fetch admin notifications
-  const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  // Fetch general admin notifications
+  const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     fetchPolicy: 'cache-and-network',
     skip: !isAuthenticated || !admin,
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle notifications data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (data) {
-      console.log('🔔 AdminNotificationContext: Query completed with data:', data);
-      console.log('🔔 AdminNotificationContext: Raw notifications data:', JSON.stringify(data, null, 2));
-      if (data?.getAdminNotifications) {
-        const notificationsArray = data.getAdminNotifications.notifications || [];
-        console.log('🔔 AdminNotificationContext: Notifications array:', notificationsArray);
-        console.log('🔔 AdminNotificationContext: Unread count from backend:', data.getAdminNotifications.unreadCount);
-        setNotifications(notificationsArray);
-        console.log('🔔 AdminNotificationContext: Set notifications:', notificationsArray);
-      } else {
-        console.log('🔔 AdminNotificationContext: No notifications found');
-        setNotifications([]);
-      }
+        if (data?.getAdminGeneralNotifications) {
+          const notificationsArray = data.getAdminGeneralNotifications.notifications || [];
+          setNotifications(notificationsArray);
+        } else {
+          setNotifications([]);
+        }
       setIsLoading(false);
     }
   }, [data]);
@@ -111,16 +102,14 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Fetch pending ads
   const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
     skip: !isAuthenticated || !admin,
-    pollInterval: 30000,
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle pending ads data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (pendingAdsData) {
-      console.log('🔔 AdminNotificationContext: Pending ads data:', pendingAdsData);
       if (pendingAdsData?.getPendingAds) {
         setPendingAds(pendingAdsData.getPendingAds);
-        console.log('🔔 AdminNotificationContext: Set pending ads:', pendingAdsData.getPendingAds);
       } else {
         setPendingAds([]);
       }
@@ -130,7 +119,12 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending ads errors with useEffect instead of onError
   useEffect(() => {
     if (pendingAdsError) {
-      console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
+      // Check if it's a timeout error - these are expected and non-critical
+      if (pendingAdsError.message?.includes('timed out') || pendingAdsError.message?.includes('timeout')) {
+        console.log('⏱️ AdminNotificationContext: Pending ads query timed out (non-critical, will retry)');
+      } else {
+        console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
+      }
       setPendingAds([]);
     }
   }, [pendingAdsError]);
@@ -138,16 +132,14 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Fetch pending materials
   const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError } = useQuery(GET_PENDING_MATERIALS, {
     skip: !isAuthenticated || !admin,
-    pollInterval: 30000,
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle pending materials data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (pendingMaterialsData) {
-      console.log('🔔 AdminNotificationContext: Pending materials data:', pendingMaterialsData);
       if (pendingMaterialsData?.getPendingMaterials) {
         setPendingMaterials(pendingMaterialsData.getPendingMaterials);
-        console.log('🔔 AdminNotificationContext: Set pending materials:', pendingMaterialsData.getPendingMaterials);
       } else {
         setPendingMaterials([]);
       }
@@ -157,7 +149,12 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending materials errors with useEffect instead of onError
   useEffect(() => {
     if (pendingMaterialsError) {
-      console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
+      // Check if it's a timeout error - these are expected and non-critical
+      if (pendingMaterialsError.message?.includes('timed out') || pendingMaterialsError.message?.includes('timeout')) {
+        console.log('⏱️ AdminNotificationContext: Pending materials query timed out (non-critical, will retry)');
+      } else {
+        console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
+      }
       setPendingMaterials([]);
     }
   }, [pendingMaterialsError]);
@@ -167,24 +164,10 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const totalPendingCount = unreadCount + pendingAds.length + pendingMaterials.length;
   const totalDisplayCount = enableNotificationBadge ? totalPendingCount : 0;
 
-  // Debug logging
-  console.log('🔔 AdminNotificationContext Debug:', {
-    notificationsCount: notifications.length,
-    unreadCount,
-    enableNotificationBadge,
-    displayBadgeCount,
-    pendingAdsCount: pendingAds.length,
-    pendingMaterialsCount: pendingMaterials.length,
-    totalPendingCount,
-    totalDisplayCount,
-    notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
-  });
 
   const refetchNotifications = async () => {
-    console.log('🔔 AdminNotificationContext: Manual refresh triggered');
     try {
       const result = await refetch();
-      console.log('🔔 AdminNotificationContext: Manual refresh result:', result);
     } catch (error) {
       console.error('🔔 AdminNotificationContext: Manual refresh error:', error);
     }

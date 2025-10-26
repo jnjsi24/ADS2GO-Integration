@@ -359,6 +359,16 @@ const faqResolver = {
         };
       }
     }
+  },
+
+  // Field resolvers to convert dates to ISO strings
+  FAQ: {
+    createdAt: (parent) => {
+      return parent.createdAt ? parent.createdAt.toISOString() : null;
+    },
+    updatedAt: (parent) => {
+      return parent.updatedAt ? parent.updatedAt.toISOString() : null;
+    }
   }
 };
 

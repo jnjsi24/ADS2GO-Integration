@@ -7,7 +7,7 @@ import Payment from "./Payment";
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Align Status type with backend PaymentStatus enum
-type Status = "PAID" | "PENDING" | "FAILED";
+type Status = "PAID" | "PENDING" | "FAILED" | null;
 
 interface PaymentItem {
   id: string;
@@ -43,6 +43,7 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
         totalPrice
         durationDays
         status
+        paymentStatus
         createdAt
         planId {
           title
@@ -67,9 +68,8 @@ const getInitials = (firstName?: string, lastName?: string) => {
 
 const statusFilterOptions = [
   { label: 'All Status', value: 'All Status' },
-  { label: 'Paid', value: 'PAID' },
   { label: 'Pending', value: 'PENDING' },
-  { label: 'Failed', value: 'FAILED' },
+  { label: 'Paid', value: 'PAID' },
 ];
 
 const PaymentHistory: React.FC = () => {
@@ -78,6 +78,7 @@ const PaymentHistory: React.FC = () => {
   const itemsPerPage = 9;
   const navigate = useNavigate();
   const { user } = useUserAuth();
+
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
@@ -90,10 +91,24 @@ const PaymentHistory: React.FC = () => {
     fetchPolicy: "network-only",
   });
 
+  // Handle errors using useEffect (Apollo v3.14 recommended approach)
+  useEffect(() => {
+    if (error) {
+      console.error('PaymentHistory - GraphQL Error:', error);
+      console.error('PaymentHistory - Error details:', {
+        message: error.message,
+        graphQLErrors: error.graphQLErrors,
+        networkError: error.networkError,
+        extraInfo: error.extraInfo
+      });
+    }
+  }, [error]);
+
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
   useEffect(() => {
     if (data) {
+      
       const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
         const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
         let plan: string;
@@ -113,7 +128,22 @@ const PaymentHistory: React.FC = () => {
           default:
             plan = `${durationDays} Days`;
         }
-        const status = mapStatus(payment?.paymentStatus);
+        // Determine the display status based on ad approval and payment status
+        let displayStatus: Status;
+        if (ad.status === 'RUNNING' && (payment?.paymentStatus === 'PAID' || ad.paymentStatus === 'PAID')) {
+          displayStatus = 'PAID';
+        } else if (ad.status === 'APPROVED' && (payment?.paymentStatus === 'PAID' || ad.paymentStatus === 'PAID')) {
+          displayStatus = 'PAID';
+        } else if (ad.status === 'APPROVED' && (payment?.paymentStatus === 'PENDING' || ad.paymentStatus === 'PENDING')) {
+          displayStatus = 'PENDING'; // Ad approved, payment pending
+        } else if (ad.status === 'PENDING') {
+          displayStatus = null; // Ad not yet approved, no payment status
+        } else if (payment?.paymentStatus === 'FAILED' || ad.paymentStatus === 'FAILED') {
+          displayStatus = 'FAILED';
+        } else {
+          displayStatus = null; // Default fallback for unapproved ads
+        }
+
         const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
         const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
 
@@ -123,7 +153,7 @@ const PaymentHistory: React.FC = () => {
           imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
           plan,
           amount,
-          status,
+          status: displayStatus,
           userName: "",
           companyName: "",
           bankNumber: "",
@@ -135,7 +165,7 @@ const PaymentHistory: React.FC = () => {
           adLengthSeconds: ad.adLengthSeconds || 0,
           totalPrice,
           receiptId: payment?.receiptId || "",
-          adStatus: ad.status || "PENDING", // Include ad approval status
+          adStatus: ad.status || "PENDING", // Include ad approval status (this is the actual status from database)
         };
       });
       setPayments(mappedPayments);
@@ -154,13 +184,24 @@ const PaymentHistory: React.FC = () => {
   };
 
   const filteredPayments = payments.filter((item) => {
+    // First filter: Only show PENDING and PAID ads (exclude null and FAILED)
+    if (item.status !== 'PENDING' && item.status !== 'PAID') {
+      return false;
+    }
+
     const matchesSearchTerm =
       item.productName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
       item.id.toString().includes(searchTerm.trim());
     const matchesPlan = selectedPlanFilter === 'All Plans' || item.plan === selectedPlanFilter;
-    const matchesStatus = selectedStatusFilter === 'All Status' || item.status === selectedStatusFilter;
+    
+    // Status filtering for PENDING and PAID only
+    let matchesStatus = true;
+    if (selectedStatusFilter !== 'All Status') {
+      matchesStatus = item.status === selectedStatusFilter;
+    }
 
-    return matchesSearchTerm && matchesStatus && matchesPlan;
+    const matches = matchesSearchTerm && matchesStatus && matchesPlan;
+    return matches;
   });
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -182,10 +223,8 @@ const PaymentHistory: React.FC = () => {
         return "bg-green-200 text-green-700";
       case "PENDING":
         return "bg-yellow-200 text-yellow-700";
-      case "FAILED":
-        return "bg-red-300 text-red-800";
       default:
-        return "";
+        return "bg-gray-200 text-gray-600";
     }
   };
 
@@ -208,6 +247,14 @@ const PaymentHistory: React.FC = () => {
   const handlePaymentSuccess = () => {
     refetch(); // Refresh payments after successful payment
     setIsModalOpen(false); // Close modal
+  };
+
+  // Helper function to convert PaymentItem to Payment component format
+  const convertToPaymentItem = (item: PaymentItem) => {
+    return {
+      ...item,
+      status: item.status as "PAID" | "PENDING" | "FAILED" // Cast to exclude null
+    };
   };
 
   // Calculate dynamic payment deadline (e.g., 7 days from ad creation)
@@ -236,31 +283,33 @@ const PaymentHistory: React.FC = () => {
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
   {/* Main Content */}
-  <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 pt-10 p-8">
+  <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:pt-10 lg:p-8">
     {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 pt-12 lg:pt-0">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Payment History</h1>
 
         {/* Search + Filters */}
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-2">
+        <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {/* Filter for Status */}
-            <div className="relative w-32">
+            <div className="relative w-full sm:w-36">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 hover:bg-white/80 transition-colors duration-200"
               >
-                {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All Status'}
+                <span className="truncate">
+                  {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All Status'}
+                </span>
                 <ChevronDown
                   size={16}
-                  className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  className={`transform transition-transform duration-200 flex-shrink-0 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
                 />
               </button>
               <AnimatePresence>
@@ -270,13 +319,15 @@ const PaymentHistory: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden border border-gray-200"
                   >
                     {statusFilterOptions.map((option) => (
                       <button
                         key={option.value}
                         onClick={() => handleStatusFilterChange(option.value)}
-                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        className={`block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                          selectedStatusFilter === option.value ? 'bg-blue-50 text-blue-700 font-medium' : ''
+                        }`}
                       >
                         {option.label}
                       </button>
@@ -289,11 +340,34 @@ const PaymentHistory: React.FC = () => {
         </div>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="col-span-full text-center text-gray-500 py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#3674B5]"></div>
+          <p className="mt-2">Loading payment history...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="col-span-full text-center text-red-500 py-8">
+          <p>Error loading payment history: {error.message}</p>
+          <button 
+            onClick={() => refetch()}
+            className="mt-2 px-4 py-2 bg-[#3674B5] text-white rounded hover:bg-[#3674B5]/80"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Payment Cards */}
-      <div className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-        {currentPayments.length > 0 ? (
+      {!loading && !error && (
+        <div className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+          {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
+              key={item.id || `${item.productName}-${item.totalPrice}`}
               className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >
@@ -351,6 +425,10 @@ const PaymentHistory: React.FC = () => {
                     <p className="text-sm text-gray-600 mt-1">
                       {item.status === "PAID"
                         ? "Transaction completed successfully. Your advertisements are now available for viewing."
+                        : item.adStatus === "APPROVED"
+                        ? "Ad approved! Awaiting payment confirmation. Your ad will be activated once the transaction is complete."
+                        : item.adStatus === "PENDING"
+                        ? "Ad pending approval. Payment will be available once your ad is approved by admin."
                         : "Awaiting payment confirmation. Your ad will be activated once the transaction is complete."}
                     </p>
                   </div>
@@ -365,7 +443,7 @@ const PaymentHistory: React.FC = () => {
                       }}
                       className="text-[#3674B5] hover:text-[#3674B5]/80 font-bold hover:underline text-xs px-4 py-2 transition-all duration-300 hover:underline-offset-4"
                     >
-                      View Details
+                      {item.status === 'PAID' ? 'View Details' : 'Make Payment'}
                     </button>
                   </div>
                 </div>
@@ -378,6 +456,7 @@ const PaymentHistory: React.FC = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Pagination */}
       <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
@@ -416,7 +495,7 @@ const PaymentHistory: React.FC = () => {
       {/* Payment modal */}
       {isModalOpen && selectedPayment && (
         <Payment
-          paymentItem={selectedPayment}
+          paymentItem={convertToPaymentItem(selectedPayment)}
           paymentType={selectedPaymentType}
           onClose={closeModal}
           onSuccess={handlePaymentSuccess} // Added to refresh UI after payment

@@ -142,6 +142,8 @@ const notificationTypeDefs = gql`
     getNotificationById(id: ID!): Notification
     getUnreadNotificationCount: Int!
     getAdminNotifications: AdminNotifications!
+    getDeviceNotifications: AdminNotifications!
+    getAdminGeneralNotifications: AdminNotifications!
     getPendingAds: [PendingAd!]!
     getPendingMaterials: [PendingMaterial!]!
     getAdminDashboardStats: AdminDashboardStats!

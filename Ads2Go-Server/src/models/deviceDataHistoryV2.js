@@ -108,7 +108,7 @@ const DailyDataSchema = new mongoose.Schema({
   // Hourly breakdown
   hourlyStats: [HourlyStatsSchema],
   
-  // Location data (limited to 4114 entries for 8 hours at 7s intervals)
+  // Location data (limited to 14400 entries for 8 hours at 2s intervals)
   locationHistory: [LocationPointSchema],
   
   // Ad performance
@@ -245,8 +245,7 @@ const DeviceDataHistoryV2Schema = new mongoose.Schema({
   materialId: { 
     type: String, 
     required: true,
-    unique: true,
-    index: true
+    unique: true // Unique constraint automatically creates an index, no need for 'index: true'
   },
   carGroupId: { 
     type: String, 
@@ -296,12 +295,20 @@ const DeviceDataHistoryV2Schema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-DeviceDataHistoryV2Schema.index({ materialId: 1 });
+// Note: materialId already has a unique index from schema definition, no need to index again
 DeviceDataHistoryV2Schema.index({ carGroupId: 1 });
 DeviceDataHistoryV2Schema.index({ updatedAt: -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1, materialId: 1 });
 DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite for search
+// Indexes to support userId-scoped analytics queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScans.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.userId': 1, 'dailyData.date': 1 });
+// ✅ NEW: Index for ad-specific analytics queries (CRITICAL for fast ad analytics)
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.adId': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScansByAd.adId': 1 });
+DeviceDataHistoryV2Schema.index({ materialId: 1, 'dailyData.adPlaybacks.adId': 1 }); // Compound for multi-material ad queries
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {
@@ -386,6 +393,19 @@ DeviceDataHistoryV2Schema.methods.addDailyData = function(dailyData) {
 
 DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
   if (this.dailyData && this.dailyData.length > 0) {
+    // ✅ FIXED: Calculate compliance rate based on days with 8+ hours
+    const compliantDays = this.dailyData.filter(day => {
+      // Check if day has hoursTracking with COMPLIANT status
+      if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+        return true;
+      }
+      // Fallback: check if totalHoursOnline >= 8
+      return (day.totalHoursOnline || 0) >= 8;
+    }).length;
+    
+    const totalDays = this.dailyData.length;
+    const compliancePercentage = totalDays > 0 ? (compliantDays / totalDays) * 100 : 0;
+    
     this.lifetimeTotals = {
       totalAdPlays: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlays || 0), 0),
       totalQRScans: this.dailyData.reduce((sum, day) => sum + (day.totalQRScans || 0), 0),
@@ -393,13 +413,57 @@ DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
       totalHoursOnline: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0),
       totalAdImpressions: this.dailyData.reduce((sum, day) => sum + (day.totalAdImpressions || 0), 0),
       totalAdPlayTime: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlayTime || 0), 0),
-      totalDays: this.dailyData.length,
-      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / this.dailyData.length,
-      complianceRate: this.dailyData.reduce((sum, day) => sum + (day.complianceData?.complianceRate || 0), 0) / this.dailyData.length
+      totalDays: totalDays,
+      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / totalDays,
+      complianceRate: Math.round(compliancePercentage * 100) / 100 // ✅ Fixed: % of days meeting 8-hour target
     };
   }
   
   return this;
 };
+
+// Post-save hook to trigger real-time salary updates when tracking data changes
+DeviceDataHistoryV2Schema.post('save', async function(doc) {
+  try {
+    // Only trigger salary updates for significant data changes
+    if (this.isModified('dailyData') || this.isModified('lifetimeTotals')) {
+      console.log(`💰 DeviceDataHistoryV2 data changed for ${this.materialId}, triggering salary update...`);
+      
+      // Import and trigger salary update (use setTimeout to avoid blocking the save operation)
+      setTimeout(async () => {
+        try {
+          const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
+          
+          // Get the latest daily data date
+          if (this.dailyData && this.dailyData.length > 0) {
+            const latestDailyData = this.dailyData.sort((a, b) => b.date - a.date)[0];
+            const dateStr = latestDailyData.date.toISOString().split('T')[0];
+            
+            await realTimeSalaryUpdateService.updateSalaryCalculations(this.materialId, dateStr);
+            console.log(`✅ Real-time salary update triggered for ${this.materialId} on ${dateStr}`);
+          }
+        } catch (error) {
+          console.error(`❌ Real-time salary update failed for ${this.materialId}:`, error.message);
+        }
+      }, 2000); // 2 second delay to ensure save is complete
+    }
+  } catch (error) {
+    console.error('❌ Error in DeviceDataHistoryV2 post-save hook:', error.message);
+  }
+});
+
+// ⚡ PERFORMANCE INDEXES - Critical for fast analytics queries
+// Note: 'dailyData.date' already indexed at line 302, removed duplicate
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1 }); // User filter
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.adId': 1 }); // Ad filter
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1 
+}); // Compound: Date + User (most common query)
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1,
+  'dailyData.adPerformance.adId': 1
+}); // Compound: Date + User + Ad (filtered query)
 
 module.exports = mongoose.model('DeviceDataHistoryV2', DeviceDataHistoryV2Schema);

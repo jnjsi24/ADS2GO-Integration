@@ -76,9 +76,15 @@ const AdSchema = new mongoose.Schema({
   // Approval & tracking
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'SCHEDULED', 'RUNNING', 'ENDED', 'CANCELLED'],
     default: 'PENDING',
     required: true
+  },
+  
+  // ✅ NEW: Slot reservation expiration (for unpaid ads)
+  reservationExpires: {
+    type: Date,
+    default: null
   },
   adStatus: {
     type: String,
@@ -87,8 +93,8 @@ const AdSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
-    default: 'PENDING'
+    enum: [null, 'PENDING', 'PAID', 'FAILED'],
+    default: null
   },
 
   impressions: { type: Number, default: 0 },
@@ -271,12 +277,35 @@ AdSchema.post('save', async function (doc) {
       let deploymentSuccess = true;
       const deploymentResults = [];
       
+      // ✅ ENHANCED: Validate device availability before deployment
+      const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+      
       for (const material of targetMaterials) {
         if (!material.driverId) {
           console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: No driver assigned`);
           deploymentSuccess = false;
+          deploymentResults.push({
+            materialId: material.materialId,
+            success: false,
+            error: 'No driver assigned'
+          });
           continue;
         }
+        
+        // ✅ NEW: Validate that material has a registered device
+        const deviceValidation = await validateMaterialHasDevice(material.materialId);
+        if (!deviceValidation.hasDevice) {
+          console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: ${deviceValidation.reason}`);
+          deploymentSuccess = false;
+          deploymentResults.push({
+            materialId: material.materialId,
+            success: false,
+            error: deviceValidation.reason
+          });
+          continue;
+        }
+        
+        console.log(`✅ Device validation passed for ${material.materialId}: ${deviceValidation.reason}`);
 
         // Determine deployment method based on material type
         if (material.materialType === 'HEADDRESS') {
@@ -370,5 +399,17 @@ AdSchema.post('save', async function (doc) {
     }
   }
 });
+
+// ⚡ CRITICAL PERFORMANCE INDEXES - Add indexes to prevent table scans
+// These indexes are ESSENTIAL for fast analytics queries
+AdSchema.index({ userId: 1 }); // User filter (most common)
+AdSchema.index({ status: 1 }); // Status filter
+AdSchema.index({ paymentStatus: 1 }); // Payment filter
+AdSchema.index({ adStatus: 1 }); // Ad status filter
+AdSchema.index({ userId: 1, paymentStatus: 1, status: 1 }); // Compound for analytics queries
+AdSchema.index({ 'targetDevices': 1 }); // Array index for material lookup
+AdSchema.index({ startTime: 1, endTime: 1 }); // Date range queries
+AdSchema.index({ createdAt: -1 }); // Sort by creation date
+AdSchema.index({ updatedAt: -1 }); // Sort by update date
 
 module.exports = mongoose.model('Ad', AdSchema);

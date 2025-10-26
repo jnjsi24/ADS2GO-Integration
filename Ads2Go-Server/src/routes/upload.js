@@ -6,6 +6,7 @@ const multer = require('multer');
 const { db, admin } = require('../firebase-admin');
 const { uploadToFirebase } = require('../utils/firebaseStorage');
 const { checkAdminMiddleware } = require('../middleware/auth');
+const { checkDriver } = require('../middleware/driverAuth');
 // Configure multer for memory storage and file size limits
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -16,7 +17,39 @@ const upload = multer({
 });
 
 // Use the proper authentication middleware
-const authenticate = checkAdminMiddleware;
+// Allow both admin and driver usage: prefer admin, fallback to driver
+const authenticate = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authorization header required'
+    });
+  }
+
+  // Try admin authentication first
+  try {
+    const jwt = require('jsonwebtoken');
+    const token = authHeader.replace('Bearer ', '');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.adminId) {
+      // Admin token
+      req.user = { id: decoded.adminId, role: 'ADMIN' };
+      return next();
+    } else if (decoded.driverId) {
+      // Driver token
+      req.user = { id: decoded.driverId, role: 'DRIVER' };
+      return next();
+    }
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid authentication token'
+    });
+  }
+};
 
 /**
  * POST /upload
@@ -212,6 +245,9 @@ router.post('/generate-url', authenticate, async (req, res) => {
       }
     });
 
+    const bucketName = storage.bucket().name;
+    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(filePath)}?alt=media`;
+
     return res.status(200).json({
       success: true,
       data: {
@@ -219,7 +255,8 @@ router.post('/generate-url', authenticate, async (req, res) => {
         filePath,
         fileName: sanitizedFileName,
         contentType,
-        expiresIn: '15m'
+        expiresIn: '15m',
+        publicUrl
       }
     });
 

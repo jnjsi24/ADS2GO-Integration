@@ -1,5 +1,6 @@
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+import { log } from '../utils/logger';
 
 export interface CompanyAd {
   id: string;
@@ -14,6 +15,11 @@ export interface CompanyAd {
   lastPlayed?: string;
   tags: string[];
   notes?: string;
+  // Scheduling fields
+  isScheduled: boolean;
+  startDate?: string;
+  endDate?: string;
+  scheduleType: 'IMMEDIATE' | 'SCHEDULED';
   createdAt: string;
   updatedAt: string;
 }
@@ -34,7 +40,7 @@ class CompanyAdService {
    */
   async fetchActiveCompanyAds(): Promise<CompanyAdResponse> {
     try {
-      console.log('🏢 Fetching active company ads...');
+      log.adPlayback('Fetching active company ads...');
       
       const response = await fetch(`${API_BASE_URL}/graphql`, {
         method: 'POST',
@@ -57,6 +63,10 @@ class CompanyAdService {
                 lastPlayed
                 tags
                 notes
+                isScheduled
+                startDate
+                endDate
+                scheduleType
                 createdAt
                 updatedAt
               }
@@ -170,6 +180,79 @@ class CompanyAdService {
       return this.cache;
     }
     return [];
+  }
+
+  /**
+   * Check if an ad should be active based on scheduling
+   */
+  private isAdCurrentlyActive(ad: CompanyAd): boolean {
+    const now = new Date();
+    
+    // If not scheduled, use the isActive field
+    if (!ad.isScheduled || ad.scheduleType === 'IMMEDIATE') {
+      return ad.isActive;
+    }
+    
+    // For scheduled ads, check date ranges
+    if (ad.scheduleType === 'SCHEDULED') {
+      const startDate = ad.startDate ? new Date(ad.startDate) : null;
+      const endDate = ad.endDate ? new Date(ad.endDate) : null;
+      
+      // If no dates set, use isActive
+      if (!startDate && !endDate) {
+        return ad.isActive;
+      }
+      
+      // Check if current time is within the scheduled range
+      const isAfterStart = !startDate || now >= startDate;
+      const isBeforeEnd = !endDate || now <= endDate;
+      
+      return isAfterStart && isBeforeEnd;
+    }
+    
+    
+    return ad.isActive;
+  }
+
+  /**
+   * Filter ads that are currently active based on scheduling
+   */
+  filterCurrentlyActiveAds(ads: CompanyAd[]): CompanyAd[] {
+    return ads.filter(ad => this.isAdCurrentlyActive(ad));
+  }
+
+  /**
+   * Select a weighted random company ad based on priority and scheduling
+   */
+  selectWeightedAd(ads: CompanyAd[]): CompanyAd | null {
+    if (ads.length === 0) return null;
+    
+    // First filter ads that are currently active based on scheduling
+    const activeAds = this.filterCurrentlyActiveAds(ads);
+    
+    if (activeAds.length === 0) {
+      console.log('📅 No company ads are currently active based on scheduling');
+      return null;
+    }
+    
+    // Calculate weights based on priority (minimum weight of 1)
+    const weights = activeAds.map(ad => Math.max(1, ad.priority));
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+    
+    // Generate random number
+    let random = Math.random() * totalWeight;
+    
+    // Select ad based on weight
+    for (let i = 0; i < activeAds.length; i++) {
+      random -= weights[i];
+      if (random <= 0) {
+        console.log(`🎯 Selected scheduled ad "${activeAds[i].title}" with priority ${activeAds[i].priority} (weight: ${weights[i]})`);
+        return activeAds[i];
+      }
+    }
+    
+    // Fallback to last ad
+    return activeAds[activeAds.length - 1];
   }
 
   /**

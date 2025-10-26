@@ -1,5 +1,6 @@
 const DeviceTracking = require('../models/deviceTracking');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+const logger = require('../utils/logger');
 
 class DailyArchiveJobV2 {
   constructor() {
@@ -13,7 +14,7 @@ class DailyArchiveJobV2 {
     }
 
     this.isRunning = true;
-    console.log('🔄 Starting daily archive job V2 (Array Structure)...');
+    logger.database('🔄 Starting daily archive job V2 (Array Structure)...');
 
     try {
       // Get today's date in Philippines timezone for archiving
@@ -25,18 +26,18 @@ class DailyArchiveJobV2 {
       const day = String(philippinesTime.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
       
-      console.log(`📅 Archiving data for date: ${dateStr} (Current day)`);
+      logger.database(`📅 Archiving data for date: ${dateStr} (Current day)`);
 
       // Get all device tracking records using flexible date matching
       const devices = await this.getDevicesForArchiving(philippinesTime);
 
-      console.log(`📊 Found ${devices.length} device records to archive`);
+      logger.database(`📊 Found ${devices.length} device records to archive`);
 
       for (const device of devices) {
         await this.archiveMaterialDataV2(device, dateStr);
       }
 
-      console.log('✅ Daily archive job V2 completed successfully');
+      logger.database('✅ Daily archive job V2 completed successfully');
 
     } catch (error) {
       console.error('❌ Daily archive job V2 failed:', error);
@@ -66,11 +67,11 @@ class DailyArchiveJobV2 {
       // Format 4: Current day at 4 PM UTC
       const currentDay4PM = new Date(Date.UTC(targetYear, targetMonth, targetDay, 16, 0, 0));
       
-      console.log(`🔍 Searching for devices with dates:`);
-      console.log(`   - Midnight Philippines: ${midnightPhilippines.toISOString()}`);
-      console.log(`   - Midnight UTC: ${midnightUTC.toISOString()}`);
-      console.log(`   - Previous day 4PM UTC: ${previousDay4PM.toISOString()}`);
-      console.log(`   - Current day 4PM UTC: ${currentDay4PM.toISOString()}`);
+      logger.database(`🔍 Searching for devices with dates:`);
+      logger.database(`   - Midnight Philippines: ${midnightPhilippines.toISOString()}`);
+      logger.database(`   - Midnight UTC: ${midnightUTC.toISOString()}`);
+      logger.database(`   - Previous day 4PM UTC: ${previousDay4PM.toISOString()}`);
+      logger.database(`   - Current day 4PM UTC: ${currentDay4PM.toISOString()}`);
       
       // Query for devices with any of these date formats
       const devices = await DeviceTracking.find({
@@ -89,11 +90,11 @@ class DailyArchiveJobV2 {
         ]
       });
       
-      console.log(`📊 Found ${devices.length} devices with flexible date matching`);
+      logger.database(`📊 Found ${devices.length} devices with flexible date matching`);
       
       // Log the dates found for debugging
       devices.forEach((device, index) => {
-        console.log(`   Device ${index + 1}: ${device.materialId} - Date: ${device.date?.toISOString()}`);
+        logger.database(`   Device ${index + 1}: ${device.materialId} - Date: ${device.date?.toISOString()}`);
       });
       
       return devices;
@@ -135,7 +136,7 @@ class DailyArchiveJobV2 {
         // Location data (keep last 960 entries, filter invalid entries)
         locationHistory: (device.locationHistory || [])
           .filter(loc => loc && loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2)
-          .slice(-4114), // 8 hours at 7s intervals
+          .slice(-14400), // 8 hours at 2s intervals
         
         // Ad performance (filter out entries without userId)
         adPerformance: (device.adPerformance || []).filter(perf => perf.userId),
@@ -186,7 +187,7 @@ class DailyArchiveJobV2 {
 
         if (existingDailyIndex >= 0) {
           // Update existing daily data
-          console.log(`🔄 Updating existing daily data for material ${device.materialId} on ${dateStr}`);
+          logger.database(`🔄 Updating existing daily data for material ${device.materialId} on ${dateStr}`);
           
           // Merge arrays to avoid duplicates
           const existingDaily = existingDocument.dailyData[existingDailyIndex];
@@ -217,7 +218,7 @@ class DailyArchiveJobV2 {
           
           try {
             await existingDocument.save();
-            console.log(`✅ Updated daily data for material ${device.materialId} on ${dateStr}`);
+            logger.database(`✅ Updated daily data for material ${device.materialId} on ${dateStr}`);
           } catch (saveError) {
             // If save fails due to validation errors, clean the existing data and retry
             if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
@@ -244,7 +245,7 @@ class DailyArchiveJobV2 {
               // Try to save again
               try {
                 await existingDocument.save();
-                console.log(`✅ Updated daily data for material ${device.materialId} on ${dateStr} (after deep cleaning)`);
+                logger.database(`✅ Updated daily data for material ${device.materialId} on ${dateStr} (after deep cleaning)`);
               } catch (retryError) {
                 console.error(`❌ Failed to save ${device.materialId} even after deep cleaning:`, retryError.message);
                 throw retryError;
@@ -632,8 +633,8 @@ class DailyArchiveJobV2 {
       }
     });
     
-    // Keep only the last 4114 entries (8 hours at 7s intervals)
-    return merged.slice(-4114);
+    // Keep only the last 14400 entries (8 hours at 2s intervals)
+    return merged.slice(-14400);
   }
 
   mergeHourlyStats(existing, newData) {

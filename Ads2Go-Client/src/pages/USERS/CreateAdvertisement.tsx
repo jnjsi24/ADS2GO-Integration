@@ -46,6 +46,8 @@ const CreateAdvertisement: React.FC = () => {
   const [mediaFileError, setMediaFileError] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [detectedVideoDuration, setDetectedVideoDuration] = useState<number | null>(null);
+  const [isDetectingDuration, setIsDetectingDuration] = useState(false);
 
 
   // Form data
@@ -94,10 +96,17 @@ const CreateAdvertisement: React.FC = () => {
 
   // Auto-calculate pricing when form data changes
   useEffect(() => {
-    if (formData.materialType && formData.vehicleType && formData.category) {
+    // ✅ Only calculate pricing if all required fields are valid
+    const allowedAdLengths = [20, 40, 60];
+    if (formData.materialType && 
+        formData.vehicleType && 
+        formData.category && 
+        allowedAdLengths.includes(formData.adLengthSeconds)) {
       calculatePricingAsync();
     }
   }, [formData.materialType, formData.vehicleType, formData.category, formData.durationDays, formData.adLengthSeconds, formData.numberOfDevices]);
+
+  // No re-validation needed in Step 1 - we auto-select the recommended length
 
   // Reset materialType when vehicleType changes to MOTORCYCLE or is cleared
   useEffect(() => {
@@ -170,7 +179,15 @@ const CreateAdvertisement: React.FC = () => {
       combo.category === formData.category &&
       combo.isActive
     );
-    return combination?.maxDevices || 1;
+    const theoreticalMax = combination?.maxDevices || 1;
+    
+    // ✅ Use the minimum of (theoretical max, actual available devices)
+    // This prevents users from selecting more devices than are actually available
+    if (pricingCalculation?.availableDevices !== undefined) {
+      return Math.min(theoreticalMax, pricingCalculation.availableDevices);
+    }
+    
+    return theoreticalMax;
   };
 
   // Get ad length limits
@@ -187,8 +204,71 @@ const CreateAdvertisement: React.FC = () => {
     };
   };
 
-  const handleInputChange = (field: keyof AdvertisementForm, value: string | number | File | null) => {
+  // Helper function to detect video duration from File
+  const detectVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        // ✅ Use Math.ceil to round up (more conservative, matches backend behavior better)
+        const duration = Math.ceil(video.duration);
+        console.log(`📹 Raw video duration: ${video.duration}s, Rounded: ${duration}s`);
+        resolve(duration);
+      };
+      
+      video.onerror = () => {
+        reject(new Error('Failed to load video metadata'));
+      };
+      
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
+  // Helper function to get recommended ad length based on video duration
+  // Match the backend validation tolerance of ±5 seconds
+  const getRecommendedAdLength = (videoDuration: number): number => {
+    // 20s slot accepts 15-25s, so recommend 20s for videos up to 25s
+    if (videoDuration <= 25) return 20;
+    // 40s slot accepts 35-45s, so recommend 40s for 26-45s
+    if (videoDuration <= 45) return 40;
+    // 60s slot accepts 55-65s, recommend 60s for anything 46s and above
+    return 60;
+  };
+
+  const handleInputChange = async (field: keyof AdvertisementForm, value: string | number | File | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // If uploading a video file, detect its duration
+    if (field === 'mediaFile' && value instanceof File && value.type.startsWith('video/')) {
+      setIsDetectingDuration(true);
+      setDetectedVideoDuration(null);
+      setMediaFileError('');
+      
+      try {
+        const duration = await detectVideoDuration(value);
+        setDetectedVideoDuration(duration);
+        console.log(`✅ Detected video duration: ${duration}s`);
+        
+        // ✅ NEW: Auto-select recommended ad length based on detected duration
+        const recommendedLength = getRecommendedAdLength(duration);
+        setFormData(prev => ({ ...prev, adLengthSeconds: recommendedLength }));
+        console.log(`✅ Auto-selected recommended ad length: ${recommendedLength}s for ${duration}s video`);
+        
+        // No validation in Step 1 - just detect and recommend
+      } catch (error) {
+        console.error('Failed to detect video duration:', error);
+        setMediaFileError('Failed to detect video duration. Please try a different file.');
+      } finally {
+        setIsDetectingDuration(false);
+      }
+    } else if (field === 'mediaFile' && !value) {
+      // Clear video duration when file is removed
+      setDetectedVideoDuration(null);
+      setMediaFileError('');
+    }
+    
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => {
@@ -243,7 +323,7 @@ const CreateAdvertisement: React.FC = () => {
 
   // Close calendar when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: Event) => {
       if (showCalendar) {
         const target = event.target as Element;
         if (!target.closest('.calendar-container')) {
@@ -268,6 +348,16 @@ const CreateAdvertisement: React.FC = () => {
       if (!formData.vehicleType) newErrors.vehicleType = 'Vehicle type is required';
       if (!formData.category) newErrors.category = 'Category is required';
       if (!formData.mediaFile) newErrors.mediaFile = 'Media file is required';
+      
+      // ✅ Block if still detecting video duration
+      if (isDetectingDuration) {
+        newErrors.mediaFile = 'Please wait while we detect your video duration...';
+      }
+      
+      // ✅ Block if there was an error detecting video duration
+      if (mediaFileError) {
+        newErrors.mediaFile = mediaFileError;
+      }
     } else if (step === 2) {
       if (!formData.startDate) {
         newErrors.startDate = 'Start date is required';
@@ -284,8 +374,12 @@ const CreateAdvertisement: React.FC = () => {
       // Validate ad length - only allow 20, 40, or 60 seconds
       const allowedAdLengths = [20, 40, 60];
       if (!allowedAdLengths.includes(formData.adLengthSeconds)) {
-        newErrors.adLengthSeconds = 'Ad length must be 20, 40, or 60 seconds';
+        newErrors.adLengthSeconds = 'Please select an ad length (20, 40, or 60 seconds)';
       }
+      // ✅ REMOVED: Frontend validation of video duration match
+      // The browser's video.duration is often inaccurate due to encoding/metadata issues
+      // Let the backend (ffprobe) do the accurate validation
+      
       // Validate duration - only allow 1-6 months (30-180 days)
       const allowedDurations = [30, 60, 90, 120, 150, 180];
       if (!allowedDurations.includes(formData.durationDays)) {
@@ -295,6 +389,12 @@ const CreateAdvertisement: React.FC = () => {
       const maxDevices = getMaxDevices();
       if (formData.numberOfDevices > maxDevices) {
         newErrors.numberOfDevices = `Maximum ${maxDevices} devices allowed`;
+      }
+      
+      // ✅ NEW: Check if enough devices are available
+      if (pricingCalculation?.availableDevices !== undefined && 
+          formData.numberOfDevices > pricingCalculation.availableDevices) {
+        newErrors.numberOfDevices = `Only ${pricingCalculation.availableDevices} device${pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available. Please reduce to ${pricingCalculation.availableDevices} or try a different date.`;
       }
     }
 
@@ -655,9 +755,27 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               required
             />
 
-            {formData.mediaFile && !mediaFileError && (
-              <p className="text-sm text-green-600 mt-2">
-                Selected: {formData.mediaFile.name}
+            {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
+              <div className="mt-2">
+                <p className="text-sm text-green-600">
+                  ✓ Selected: {formData.mediaFile.name}
+                </p>
+                {detectedVideoDuration !== null && (
+                  <>
+                    <p className="text-sm text-green-600">
+                      ✓ Video duration detected: ~{detectedVideoDuration}s
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: This is an estimate. Final validation will occur when creating the ad.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            
+            {isDetectingDuration && (
+              <p className="text-sm text-blue-600 mt-2 animate-pulse">
+                🎬 Detecting video duration...
               </p>
             )}
           </div>
@@ -934,9 +1052,76 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               </motion.div>
             )}
           </AnimatePresence>
+          {detectedVideoDuration !== null ? (
+            <>
+              {(() => {
+                const allowedAdLengths = [20, 40, 60];
+                // ✅ Only show validation if a valid ad length is selected
+                if (!allowedAdLengths.includes(formData.adLengthSeconds)) {
+                  const recommendedLength = getRecommendedAdLength(detectedVideoDuration);
+                  
+                  // Check if video is in a "gap" range (won't perfectly match any slot)
+                  const isInGap = (detectedVideoDuration >= 26 && detectedVideoDuration <= 34) || 
+                                  (detectedVideoDuration >= 46 && detectedVideoDuration <= 54);
+                  
+                  if (isInGap) {
+                    return (
+                      <div className="mt-1">
+                        <p className="text-sm text-blue-600 font-medium">
+                          ✨ Recommended: {recommendedLength} seconds (based on your ~{detectedVideoDuration}s video)
+                        </p>
+                        <p className="text-xs text-yellow-700 mt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
+                          ℹ️ Note: Frontend detection is approximate. Your video will be validated by the server when creating the ad.
+                          Accepted ranges: 20s slot (15-25s), 40s slot (35-45s), 60s slot (55-65s).
+                        </p>
+                      </div>
+                    );
+                  }
+                  
+                  return (
+                    <p className="text-sm text-blue-600 mt-1 font-medium">
+                      ✨ Recommended: {recommendedLength} seconds (based on your ~{detectedVideoDuration}s video)
+                    </p>
+                  );
+                }
+                
+                const tolerance = 5;
+                const minAllowed = formData.adLengthSeconds - tolerance;
+                const maxAllowed = formData.adLengthSeconds + tolerance;
+                const isMatch = detectedVideoDuration >= minAllowed && detectedVideoDuration <= maxAllowed;
+                const recommendedLength = getRecommendedAdLength(detectedVideoDuration);
+                
+                if (isMatch) {
+                  return (
+                    <div>
+                      <p className="text-sm text-green-600 mt-1 font-medium">
+                        ✓ Your ~{detectedVideoDuration}s video should fit the {formData.adLengthSeconds}s ad slot.
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Note: This is an estimate. Final validation will occur when creating the ad.
+                      </p>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        ℹ️ Your video (~{detectedVideoDuration}s) may not match the selected {formData.adLengthSeconds}s ad slot.
+                        Consider selecting <strong>{recommendedLength}s</strong> instead.
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        The server will validate your video when you create the ad (accepted range: {minAllowed}-{maxAllowed}s).
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
+            </>
+          ) : (
           <p className="text-sm text-gray-500 mt-1">
             Choose from: 20, 40, or 60 seconds
           </p>
+          )}
           {errors.adLengthSeconds && (
             <p className="text-sm text-red-600 mt-1">{errors.adLengthSeconds}</p>
           )}
@@ -960,9 +1145,45 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           className="w-full p-3 border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition bg-transparent [&::-webkit-outer-spin-button]:bg-transparent [&::-webkit-outer-spin-button]:text-black [&::-webkit-inner-spin-button]:bg-transparent [&::-webkit-inner-spin-button]:text-black [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
           required
         />
-        <p className="text-sm text-gray-500 mt-1">
-          Maximum: {getMaxDevices()} devices
-        </p>
+        <div className="flex items-center justify-between mt-1">
+          {pricingCalculation?.availableDevices !== undefined ? (
+            <p className="text-sm text-gray-500">
+              Maximum: {getMaxDevices()} device{getMaxDevices() === 1 ? '' : 's'} available
+              {(() => {
+                const combination = fieldCombinations.find((combo: any) => 
+                  combo.materialType === formData.materialType && 
+                  combo.vehicleType === formData.vehicleType && 
+                  combo.category === formData.category &&
+                  combo.isActive
+                );
+                const theoreticalMax = combination?.maxDevices || 1;
+                if (theoreticalMax > pricingCalculation.availableDevices) {
+                  return <span className="text-gray-400"> ({theoreticalMax} max per campaign)</span>;
+                }
+                return null;
+              })()}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500">
+              Maximum: {getMaxDevices()} devices
+            </p>
+          )}
+          {pricingCalculation?.availableDevices !== undefined && 
+           pricingCalculation.availableDevices < formData.numberOfDevices && (
+            <p className="text-sm font-medium text-red-600">
+              Only {pricingCalculation.availableDevices} available
+            </p>
+          )}
+        </div>
+        {pricingCalculation?.availableDevices !== undefined && 
+         pricingCalculation.availableDevices < formData.numberOfDevices && (
+          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">
+              ⚠️ Only <strong>{pricingCalculation.availableDevices}</strong> device{pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available with open slots. 
+              Please reduce the number of devices to {pricingCalculation.availableDevices} or try a different date.
+            </p>
+          </div>
+        )}
         {errors.numberOfDevices && (
           <p className="text-sm text-red-600 mt-1">{errors.numberOfDevices}</p>
         )}
@@ -1144,6 +1365,16 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <span className="font-medium">{pricingCalculation.numberOfDevices} device/s</span>
             </div>
             <div className="flex justify-between">
+              <span className="text-gray-600">Available now:</span>
+              <span className={`font-medium ${
+                pricingCalculation.availableDevices < pricingCalculation.numberOfDevices 
+                  ? 'text-red-600' 
+                  : 'text-green-600'
+              }`}>
+                {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-gray-600">Device play/day:</span>
               <span className="font-medium">{pricingCalculation.playsPerDayPerDevice}</span>
             </div>
@@ -1195,24 +1426,24 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
     {/* Content */}
-    <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
+    <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
       <button
         onClick={() => navigate('/advertisements')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-3"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-12 lg:pt-3"
       >
         <ChevronLeft className="w-5 h-5" />
-        Back to Advertisement
+        <span className="text-sm sm:text-base">Back to Advertisement</span>
       </button>
       <div>
-        <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="max-w-3xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900">Create Advertisement</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Create Advertisement</h2>
           </div>
         </div>
       </div>
       <div>
-        <div className="max-w-sm mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-sm mx-auto px-2 sm:px-4 py-4">
+          <div className="flex items-center justify-between overflow-x-auto">
             {steps.map((step, index) => {
               const StepIcon = step.icon;
               const isActive = currentStep === step.number;
@@ -1261,18 +1492,19 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-3xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
         <form onSubmit={handleSubmit}>
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
-          <div className="flex justify-between mt-8">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8">
             <button
               type="button"
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
               disabled={currentStep === 1}
-              className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
             >
+              <ChevronLeft className="w-5 h-5" />
               Previous
             </button>
             {currentStep < 3 ? (
@@ -1287,7 +1519,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   button.style.setProperty('--x', `${x}px`);
                   button.style.setProperty('--y', `${y}px`);
                 }}
-                className="relative flex items-center gap-2 mr-7 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
+                className="relative flex items-center justify-center gap-2 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] order-1 sm:order-2 w-full sm:w-auto"
               >
                 {/* Shiny Hover Effect */}
                 <span
@@ -1301,7 +1533,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 <ChevronRight className="w-5 h-5 relative z-10" />
               </button>
             ) : (
-              <div className="flex flex-col items-end space-y-2">
+              <div className="flex flex-col items-stretch sm:items-end space-y-2 w-full sm:w-auto order-1 sm:order-2">
                 
                 <button
                   type="submit"
@@ -1314,7 +1546,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     button.style.setProperty('--x', `${x}px`);
                     button.style.setProperty('--y', `${y}px`);
                   }}
-                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full sm:w-auto"
                 >
                   {/* Shiny Hover Effect */}
                   <span

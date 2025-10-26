@@ -96,13 +96,11 @@ export const AdminAuthProvider: React.FC<{
     
     // Prevent multiple initializations
     if (hasInitializedRef.current) {
-      console.log('🔄 AdminAuthContext: Already initialized, skipping...');
       return;
     }
     
     // If we already have an admin and are not loading, skip initialization
     if (admin && isInitialized && !isLoading) {
-      console.log('🔄 AdminAuthContext: Admin already authenticated, skipping initialization...');
       hasInitializedRef.current = true; // Mark as initialized to prevent future runs
       return;
     }
@@ -124,9 +122,7 @@ export const AdminAuthProvider: React.FC<{
       }
 
       try {
-        console.log('🔍 AdminAuthContext: Decoding token:', token.substring(0, 50) + '...');
         const decoded = jwtDecode<any>(token);
-        console.log('🔍 AdminAuthContext: Decoded token:', decoded);
         
         if (!decoded?.email || !['ADMIN', 'SUPERADMIN'].includes(decoded?.role)) {
           console.error('❌ AdminAuthContext: Invalid token - email or role mismatch:', { email: decoded?.email, role: decoded?.role });
@@ -138,7 +134,6 @@ export const AdminAuthProvider: React.FC<{
 
         // Fetch admin details from backend based on role
         if (decoded.role === 'ADMIN') {
-          console.log('🔍 AdminAuthContext: Fetching admin details for role:', decoded.role);
           
           // Double-check that the token is still valid
           const currentToken = localStorage.getItem('adminToken');
@@ -148,7 +143,6 @@ export const AdminAuthProvider: React.FC<{
           }
           
           const { data } = await fetchAdminDetailsRef.current();
-          console.log('🔍 AdminAuthContext: Admin details response:', data);
           freshAdminRaw = data?.getOwnAdminDetails;
           
           if (!freshAdminRaw) {
@@ -170,7 +164,6 @@ export const AdminAuthProvider: React.FC<{
             profilePicture: freshAdminRaw.profilePicture,
           };
         } else if (decoded.role === 'SUPERADMIN') {
-          console.log('🔍 AdminAuthContext: Fetching superadmin details for role:', decoded.role);
           
           // Double-check that the token is still valid
           const currentToken = localStorage.getItem('adminToken');
@@ -180,7 +173,6 @@ export const AdminAuthProvider: React.FC<{
           }
           
           const { data } = await fetchSuperAdminDetailsRef.current();
-          console.log('🔍 AdminAuthContext: Superadmin details response:', data);
           freshAdminRaw = data?.getOwnSuperAdminDetails;
           
           if (!freshAdminRaw) {
@@ -205,8 +197,6 @@ export const AdminAuthProvider: React.FC<{
         } else {
           throw new Error('Invalid admin role');
         }
-
-        console.log('✅ AdminAuthContext: Setting admin state:', freshAdmin);
         setAdminWithDebug(freshAdmin);
         setAdminEmail(freshAdmin.email);
         setIsLoading(false);
@@ -314,7 +304,6 @@ export const AdminAuthProvider: React.FC<{
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'SuperAdmin login failed';
-      console.log('SuperAdmin-only login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {
@@ -365,8 +354,6 @@ export const AdminAuthProvider: React.FC<{
           contactNumber: adminRaw.contactNumber,
           profilePicture: adminRaw.profilePicture,
         };
-
-        console.log('✅ AdminAuthContext: Admin-only login successful, setting admin:', adminUser);
         setAdminWithDebug(adminUser);
         setAdminEmail(adminUser.email);
         hasInitializedRef.current = true; // Mark as initialized to prevent re-running
@@ -391,7 +378,6 @@ export const AdminAuthProvider: React.FC<{
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'Admin login failed';
-      console.log('Admin-only login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {

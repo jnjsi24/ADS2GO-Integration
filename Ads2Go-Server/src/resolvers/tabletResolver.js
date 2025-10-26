@@ -159,6 +159,22 @@ module.exports = {
           throw new Error(`Slot ${slotNumber} is already occupied by device ${existingTablet.deviceId}`);
         }
         
+        // ✅ MASTER-SLAVE VALIDATION: Slot 1 must be registered before Slot 2
+        // Slot 1 is the master, Slot 2 is the slave - enforce strict ordering
+        if (slotNumber === 2) {
+          const slot1 = tablet.tablets.find(t => t.tabletNumber === 1);
+          
+          // Check if Slot 1 exists and has a registered device
+          if (!slot1 || !slot1.deviceId || slot1.status === 'OFFLINE') {
+            console.log(`🚫 [GraphQL Registration Blocked] Cannot register Slot 2 - Slot 1 must be registered first`);
+            console.log(`   Slot 1 status: ${slot1 ? (slot1.deviceId ? slot1.status : 'Not registered') : 'Not configured'}`);
+            
+            throw new Error('Cannot register Slot 2 before Slot 1. Slot 1 (Master) must be registered and online before Slot 2 (Slave) can be registered.');
+          }
+          
+          console.log(`✅ [GraphQL Registration] Slot 1 is registered (${slot1.deviceId}) - allowing Slot 2 registration`);
+        }
+        
         // Update the tablet slot
         const tabletIndex = tablet.tablets.findIndex(t => t.tabletNumber === slotNumber);
         if (tabletIndex === -1) {
@@ -179,11 +195,33 @@ module.exports = {
         // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
         try {
           const Material = require('../models/Material');
+          const MaterialUsageHistory = require('../models/MaterialUsageHistory');
           const material = await Material.findOne({ materialId: materialId });
           if (material && !material.mountedAt) {
-            material.mountedAt = new Date();
+            const mountedDate = new Date();
+            material.mountedAt = mountedDate;
             await material.save();
             console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected via GraphQL`);
+
+            // Also update usage history if there's an active driver
+            if (material.driverId) {
+              try {
+                const usageHistory = await MaterialUsageHistory.findOne({
+                  materialId: material._id,
+                  driverId: material.driverId,
+                  isActive: true
+                });
+                
+                if (usageHistory) {
+                  usageHistory.mountedAt = mountedDate;
+                  await usageHistory.save();
+                  console.log(`✅ Auto-synced mountedAt date to usage history for material ${materialId}, driver ${material.driverId}`);
+                }
+              } catch (usageError) {
+                console.error('Error syncing mountedAt to usage history:', usageError);
+                // Don't fail the main operation
+              }
+            }
           }
         } catch (mountError) {
           console.error('Error auto-setting mountedAt date:', mountError);

@@ -75,8 +75,8 @@ const About: React.FC = () => {
     <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
     {/* Main Content */}
-    <div className="relative min-h-screen bg-transparent pl-64 pr-5">
-      <main className="mx-auto p-6 space-y-16 max-w-7xl" aria-live="polite">
+    <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 py-6 lg:py-0">
+      <main className="mx-auto p-4 sm:p-6 space-y-10 sm:space-y-16 max-w-7xl pt-16 lg:pt-0" aria-live="polite">
         {/* Hero Section */}
         <section className="relative overflow-hidden">
           <div className="relative px-8 py-16">

@@ -61,7 +61,7 @@ interface Material {
   createdAt: string;
   updatedAt: string;
   // Material condition and inspection fields
-  materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
+  materialCondition?: 'GOOD' | 'FADED' | 'DAMAGED' | 'REMOVED';
   inspectionPhotos?: InspectionPhoto[];
   photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
   lastInspectionDate?: string;
@@ -126,6 +126,7 @@ const Materials: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Used' | 'Available'>('All');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('Newest First');
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -276,7 +277,7 @@ const Materials: React.FC = () => {
   // Tablet query hook
   const { data: tabletData, loading: tabletLoading, error: tabletError, refetch: refetchTabletData } = useQuery(GET_TABLETS_BY_MATERIAL, {
     variables: { materialId: selectedTabletMaterialId || '' },
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    pollInterval: 30000, // ✅ OPTIMIZATION: Refresh every 30 seconds (increased from 5s) - reduces queries by 84%
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -307,7 +308,7 @@ const Materials: React.FC = () => {
       materialId: selectedTabletMaterialId || '', 
       slotNumber: selectedTabletSlotNumber || 1 
     },
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    pollInterval: 30000, // ✅ OPTIMIZATION: Refresh every 30 seconds (increased from 5s) - reduces queries by 84%
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -445,14 +446,24 @@ const Materials: React.FC = () => {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }
     },
-    onCompleted: () => {
+    onCompleted: async () => {
       addToast({
         type: 'success',
         title: 'Success!',
         message: 'Material updated successfully.',
         duration: 4000
       });
-      refetch();
+      
+      // Refetch and update the selected material details with fresh data
+      const result = await refetch();
+      if (selectedMaterialDetails && result.data) {
+        const updatedMaterial = result.data.getAllMaterials.find(
+          (m: Material) => m.id === selectedMaterialDetails.id
+        );
+        if (updatedMaterial) {
+          setSelectedMaterialDetails(updatedMaterial);
+        }
+      }
     },
     onError: (error) => {
       addToast({
@@ -470,7 +481,7 @@ const Materials: React.FC = () => {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }
     },
-    onCompleted: (data) => {
+    onCompleted: async (data) => {
       if (data.assignMaterialToDriver.success) {
         addToast({
           type: 'success',
@@ -480,7 +491,17 @@ const Materials: React.FC = () => {
         });
         setShowAssignModal(false);
         setSelectedMaterialForAssign(null);
-        refetch();
+        
+        // Refetch and update the selected material details with fresh data
+        const result = await refetch();
+        if (selectedMaterialDetails && result.data) {
+          const updatedMaterial = result.data.getAllMaterials.find(
+            (m: Material) => m.id === selectedMaterialDetails.id
+          );
+          if (updatedMaterial) {
+            setSelectedMaterialDetails(updatedMaterial);
+          }
+        }
       } else {
         addToast({
           type: 'error',
@@ -506,7 +527,7 @@ const Materials: React.FC = () => {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }
     },
-    onCompleted: (data) => {
+    onCompleted: async (data) => {
       if (data.unassignMaterialFromDriver.success) {
         addToast({
           type: 'success',
@@ -517,7 +538,17 @@ const Materials: React.FC = () => {
         setShowRemoveModal(false);
         setMaterialToRemove(null);
         setDismountReason('');
-        refetch();
+        
+        // Refetch and update the selected material details with fresh data
+        const result = await refetch();
+        if (selectedMaterialDetails && result.data) {
+          const updatedMaterial = result.data.getAllMaterials.find(
+            (m: Material) => m.id === selectedMaterialDetails.id
+          );
+          if (updatedMaterial) {
+            setSelectedMaterialDetails(updatedMaterial);
+          }
+        }
       } else {
         addToast({
           type: 'error',
@@ -630,7 +661,13 @@ const Materials: React.FC = () => {
     return material.driverId ? 'Used' : 'Available';
   };
 
-  // Filter materials
+  // Helper function to extract numeric part from materialId
+  const extractNumber = (materialId: string): number => {
+    const match = materialId.match(/\d+$/);
+    return match ? parseInt(match[0], 10) : 0;
+  };
+
+  // Filter and sort materials
   const filtered = materials.filter((material) => {
     const typeMatch = selectedType === 'All' || material.materialType === selectedType;
     const searchMatch =
@@ -645,6 +682,19 @@ const Materials: React.FC = () => {
     const statusMatch = statusFilter === 'All' || status === statusFilter;
     
     return typeMatch && searchMatch && statusMatch;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'ID: Low to High':
+        return extractNumber(a.materialId) - extractNumber(b.materialId);
+      case 'ID: High to Low':
+        return extractNumber(b.materialId) - extractNumber(a.materialId);
+      default:
+        return 0;
+    }
   });
 
   const handleMaterialSelect = (id: string) => {
@@ -922,6 +972,8 @@ const Materials: React.FC = () => {
           onTypeChange={setSelectedType}
           statusFilter={statusFilter}
           onStatusChange={setStatusFilter}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
           onCreateClick={() => setShowCreateModal(true)}
         />
 

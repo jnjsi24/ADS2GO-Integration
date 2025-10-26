@@ -5,7 +5,10 @@ const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config({ path: '.env.development' });
+require('dotenv').config();
+
+// Import centralized logger
+const logger = require('./utils/logger');
 
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
@@ -35,6 +38,7 @@ const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const driverReportTypeDefs = require('./schema/driverReportSchema');
+const driverSalaryTypeDefs = require('./schema/driverSalarySchema');
 const faqTypeDefs = require('./schema/faqSchema');
 const companyAdTypeDefs = require('./schema/companyAdSchema');
 
@@ -56,6 +60,7 @@ const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const driverReportResolvers = require('./resolvers/driverReportResolver');
+const driverSalaryResolvers = require('./resolvers/driverSalaryResolver');
 const faqResolvers = require('./resolvers/faqResolver');
 const companyAdResolvers = require('./resolvers/companyAdResolver');
 
@@ -79,6 +84,9 @@ const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
 const newsletterRoutes = require('./routes/newsletter');
 const cleanupRoutes = require('./routes/cleanup');
+const deviceHoursNotificationRoutes = require('./routes/deviceHoursNotification');
+const deviceOfflineNotificationRoutes = require('./routes/deviceOfflineNotification');
+const diagnosticDeviceHoursRoutes = require('./routes/diagnosticDeviceHours');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -91,26 +99,31 @@ if (!process.env.MONGODB_URI) {
 }
 
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
+  serverSelectionTimeoutMS: 30000, // Increased from 10000 to 30000
+  socketTimeoutMS: 75000, // Increased from 45000 to 75000
+  maxPoolSize: 10, // Maximum number of connections in the pool
+  minPoolSize: 2, // Minimum number of connections to maintain
+  maxIdleTimeMS: 30000, // Close idle connections after 30 seconds
+  retryWrites: true,
+  retryReads: true,
 })
-  .then(() => console.log('\n💾 MongoDB: Connected to Atlas'))
+  .then(() => logger.info('\n💾 MongoDB: Connected to Atlas'))
   .catch(err => {
     console.error('\n❌ MongoDB connection error:', err);
     process.exit(1);
   });
 
 // ✅ Initialize Email Service
-console.log('\n📧 Initializing Email Service...');
+logger.info('\n📧 Initializing Email Service...');
 EmailService.initializeTransporter();
 EmailService.verifyConfiguration()
   .then(isConfigured => {
     if (isConfigured) {
-      console.log('✅ Email Service: Ready and configured');
+      logger.info('✅ Email Service: Ready and configured');
     } else {
-      console.log('⚠️  Email Service: Configuration issues detected');
-      console.log('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
-      console.log('   Run: node verify-gmail-setup.js to test email configuration');
+      logger.warn('⚠️  Email Service: Configuration issues detected');
+      logger.warn('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
+      logger.warn('   Run: node verify-gmail-setup.js to test email configuration');
     }
   })
   .catch(err => {
@@ -138,6 +151,7 @@ const server = new ApolloServer({
       notificationTypeDefs,
       userReportTypeDefs,
       driverReportTypeDefs,
+      driverSalaryTypeDefs,
       faqTypeDefs,
       companyAdTypeDefs,
     ];
@@ -170,6 +184,7 @@ const server = new ApolloServer({
     notificationResolvers,
     userReportResolvers,
     driverReportResolvers,
+    driverSalaryResolvers,
     faqResolvers,
     companyAdResolvers,
   ];
@@ -191,7 +206,8 @@ async function startServer() {
 
       // In development, allow all origins for easier debugging
       if (process.env.NODE_ENV === 'development') {
-        console.log(`🔓 Development mode: Allowing origin ${origin}`);
+        // Only log CORS in verbose mode to reduce spam
+        logger.verbose(`🔓 Development mode: Allowing origin ${origin}`);
         return callback(null, true);
       }
 
@@ -237,8 +253,8 @@ async function startServer() {
         console.log(`✅ CORS allowed origin: ${origin} (isRenderApp: ${isRenderApp}, isRailwayApp: ${isRailwayApp}, isLocalNetwork: ${isLocalNetwork}, inAllowedList: ${allowedOrigins.has(origin)})`);
         callback(null, true);
       } else {
-        console.log(`🚫 CORS blocked origin: ${origin}`);
-        console.log(`📋 Allowed origins:`, Array.from(allowedOrigins));
+        logger.warn(`🚫 CORS blocked origin: ${origin}`);
+        logger.debug(`📋 Allowed origins:`, Array.from(allowedOrigins));
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -289,6 +305,12 @@ app.use('/cron-test', require('./routes/cronTest'));
 app.use('/updateTracking', require('./routes/updateTracking'));
 app.use('/api/deviceDataHistoryV2', require('./routes/deviceDataHistoryV2'));
 app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
+app.use('/api/adAnalytics', require('./routes/adAnalytics'));
+app.use('/api/device-hours', deviceHoursNotificationRoutes);
+app.use('/api/device-offline', deviceOfflineNotificationRoutes);
+app.use('/api/diagnostic', diagnosticDeviceHoursRoutes);
+app.use('/api/cleanup-notifications', require('./routes/cleanupNotifications'));
+app.use('/api/admin', require('./routes/createIndexes'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -355,6 +377,10 @@ app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
     cronJobs.start();
     console.log('📅 Cron jobs started for daily data archiving');
   });
+  
+  // Start scheduled ad service
+  const scheduledAdService = require('./services/scheduledAdService');
+  scheduledAdService.start();
   
   // Handle server shutdown gracefully
   process.on('SIGTERM', () => {

@@ -8,14 +8,16 @@ export const GOOGLE_OAUTH_CONFIG = {
   includeGrantedScopes: true
 };
 
-// Debug: Log OAuth configuration
-console.log('🔍 OAuth Config:', {
-  clientId: GOOGLE_OAUTH_CONFIG.clientId || 'EMPTY',
-  redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
-  hasClientSecret: !!process.env.REACT_APP_GOOGLE_CLIENT_SECRET,
-  clientSecretValue: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || 'NOT_FOUND',
-  allEnvKeys: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
-});
+// Debug: Log OAuth configuration (only in verbose mode)
+if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_OAUTH === 'true') {
+  console.log('🔍 OAuth Config:', {
+    clientId: GOOGLE_OAUTH_CONFIG.clientId || 'EMPTY',
+    redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
+    hasClientSecret: !!process.env.REACT_APP_GOOGLE_CLIENT_SECRET,
+    clientSecretValue: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || 'NOT_FOUND',
+    allEnvKeys: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
+  });
+}
 
 // Google OAuth URLs
 export const GOOGLE_OAUTH_URLS = {

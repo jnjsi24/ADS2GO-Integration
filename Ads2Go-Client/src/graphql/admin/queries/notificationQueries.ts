@@ -23,6 +23,29 @@ export const GET_ADMIN_NOTIFICATIONS = gql`
   }
 `;
 
+export const GET_ADMIN_GENERAL_NOTIFICATIONS = gql`
+  query GetAdminGeneralNotifications {
+    getAdminGeneralNotifications {
+      notifications {
+        id
+        title
+        message
+        type
+        category
+        priority
+        read
+        readAt
+        adId
+        adTitle
+        data
+        createdAt
+        updatedAt
+      }
+      unreadCount
+    }
+  }
+`;
+
 export const MARK_NOTIFICATION_READ = gql`
   mutation MarkNotificationRead($notificationId: ID!) {
     markNotificationRead(notificationId: $notificationId) {

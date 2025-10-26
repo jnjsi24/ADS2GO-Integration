@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gql } from 'graphql-request';
 import { request } from 'graphql-request';
@@ -116,7 +117,8 @@ export default function PhotoSubmission() {
   const [refreshing, setRefreshing] = useState(false);
   const [driverId, setDriverId] = useState<string | null>(null);
   const [photoUploads, setPhotoUploads] = useState<Map<string, PhotoUploadState>>(new Map());
-  const [isPhotoDay, setIsPhotoDay] = useState(false);
+  const [isPhotoDay, setIsPhotoDay] = useState(false); // kept for UI gating, now driven by due dates
+  const [nextPhotoDay, setNextPhotoDay] = useState<string>("");
 
   useEffect(() => {
     loadDriverData();
@@ -124,14 +126,11 @@ export default function PhotoSubmission() {
   }, []);
 
   const checkPhotoDay = () => {
+    // This function now sets a fallback banner only; actual enablement is per-material using nextPhotoDue
     const today = new Date();
-    const dayOfMonth = today.getDate();
-    
-    // Photo day is the 1st of every month
-    const isFirstOfMonth = dayOfMonth === 1;
-    setIsPhotoDay(isFirstOfMonth);
-    
-    console.log(`📅 Photo day check: Day ${dayOfMonth}, isFirstOfMonth: ${isFirstOfMonth}`);
+    const formatted = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    setIsPhotoDay(false); // default false; materials will drive availability
+    setNextPhotoDay(formatted);
   };
 
   const loadDriverData = async () => {
@@ -141,14 +140,14 @@ export default function PhotoSubmission() {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
-        router.replace('/(auth)/login');
+        router.replace('/auth/login');
         return;
       }
 
       const driverInfo = await AsyncStorage.getItem('driverInfo');
       if (!driverInfo) {
         Alert.alert('Error', 'Driver information not found. Please login again.');
-        router.replace('/(auth)/login');
+        router.replace('/auth/login');
         return;
       }
 
@@ -166,26 +165,61 @@ export default function PhotoSubmission() {
       if (response.getDriverMaterials.success) {
         setMaterials(response.getDriverMaterials.materials);
         
-        // Check if any materials need photos (newly mounted or monthly due)
-        const materialsNeedingPhotos = response.getDriverMaterials.materials.filter((material: Material) => {
-          const mountedDate = new Date(material.mountedAt);
+        // Determine next upcoming due date and whether any material is due now
           const today = new Date();
-          
-          // Check if mounted today (same day)
-          const isNewlyMounted = mountedDate.toDateString() === today.toDateString();
-          const isMonthlyDue = isPhotoDay && !hasCurrentMonthPhoto(material);
-          
-          console.log(`📸 Material ${material.materialId}: mounted today: ${isNewlyMounted}, isMonthlyDue: ${isMonthlyDue}`);
-          
-          return isNewlyMounted || isMonthlyDue;
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const currentMonth = today.toISOString().slice(0,7); // YYYY-MM
+        let anyDue = false;
+        let earliestDue: Date | null = null;
+        
+        // Checking photo submission status
+        
+        response.getDriverMaterials.materials.forEach((material: Material) => {
+          const dueStr = material.materialTracking?.nextPhotoDue;
+          console.log('🔍 Driver app received data:', {
+            materialId: material.materialId,
+            nextPhotoDue: dueStr,
+            mountedAt: material.mountedAt,
+            materialTracking: material.materialTracking
+          });
+          let due: Date | null = null;
+          if (dueStr) {
+            const d = new Date(dueStr);
+            if (!isNaN(d.getTime())) due = d;
+          } else if (material.mountedAt) {
+            // Derive first due as 1 month after mount if server hasn't computed yet
+            const m = new Date(material.mountedAt);
+            if (!isNaN(m.getTime())) { m.setMonth(m.getMonth() + 1); due = m; }
+          }
+          if (due) {
+            if (!earliestDue || due < earliestDue) earliestDue = due;
+            const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            const hasCurrent = hasCurrentMonthPhoto(material);
+            const isDue = todayStart >= dueStart;
+            const needsPhoto = isDue && !hasCurrent;
+            
+            console.log('📸 Material analysis:', {
+              materialId: material.materialId,
+              dueDate: due.toISOString(),
+              isDue,
+              hasCurrentPhoto: hasCurrent,
+              needsPhoto,
+              monthlyPhotos: material.materialTracking?.monthlyPhotos
+            });
+            
+            if (needsPhoto) anyDue = true;
+          }
         });
 
-        console.log(`📸 Materials needing photos: ${materialsNeedingPhotos.length}`);
-
-        // Show photo upload UI if it's photo day OR if there are newly mounted materials
-        if (isPhotoDay || materialsNeedingPhotos.length > 0) {
-          setIsPhotoDay(true);
-          console.log(`📸 Photo upload UI enabled: isPhotoDay=${isPhotoDay}, newMaterials=${materialsNeedingPhotos.length}`);
+        setIsPhotoDay(anyDue);
+        // Set next photo day if available - show actual date
+        if (earliestDue) {
+          const formattedDate = earliestDue.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+          setNextPhotoDay(formattedDate);
         }
       }
     } catch (error) {
@@ -208,7 +242,29 @@ export default function PhotoSubmission() {
   };
 
   const needsPhoto = (material: Material) => {
-    return isNewlyMounted(material) || (isPhotoDay && !hasCurrentMonthPhoto(material));
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Allow upload if due date reached or same-day new mount
+    const dueStr = material.materialTracking?.nextPhotoDue;
+    let dueOk = false;
+    if (dueStr) {
+      const d = new Date(dueStr);
+      if (!isNaN(d.getTime())) {
+        const dueStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (todayStart >= dueStart) dueOk = true;
+      }
+    } else if (material.mountedAt) {
+      const m = new Date(material.mountedAt);
+      if (!isNaN(m.getTime())) { m.setMonth(m.getMonth() + 1); const dueStart = new Date(m.getFullYear(), m.getMonth(), m.getDate()); if (todayStart >= dueStart) dueOk = true; }
+    }
+    return isNewlyMounted(material) || (dueOk && !hasCurrentMonthPhoto(material));
+  };
+
+  const hasPendingPhoto = (material: Material) => {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    return material.materialTracking?.monthlyPhotos?.some(photo => 
+      photo.month === currentMonth && photo.status === 'PENDING'
+    );
   };
 
   const pickImage = async (materialId: string) => {
@@ -261,14 +317,57 @@ export default function PhotoSubmission() {
 
       const token = await AsyncStorage.getItem('token');
       const currentMonth = new Date().toISOString().slice(0, 7);
+      // Upload each selected photo to Firebase via signed URL
+      const uploadedUrls: string[] = [];
+      for (const uri of uploadState.photos) {
+        const fileName = uri.split('/').pop() || `photo_${Date.now()}.jpg`;
+        const contentType = 'image/jpeg';
+        // Fetch the local file URI and obtain a Blob for upload (avoids deprecated APIs)
+        const localRes = await fetch(uri);
+        const blob = await localRes.blob();
 
-      // TODO: Upload photos to Firebase Storage first, then get URLs
-      // For now, using placeholder URLs
-      const photoUrls = uploadState.photos; // In real implementation, these would be Firebase URLs
+        // Request signed URL
+        const res = await fetch(`${API_CONFIG.BASE_URL}/upload/generate-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId: (await AsyncStorage.getItem('driverId')) || 'unknown',
+            fileName,
+            contentType,
+            folder: 'drivers/monthly-compliance',
+            metadata: { purpose: 'monthlyCompliance' }
+          })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Failed to get upload URL');
+        const { signedUrl, publicUrl } = json.data;
+
+        // PUT the file to signed URL with required metadata headers
+        const putRes = await fetch(signedUrl, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': contentType,
+            'x-goog-meta-original-filename': fileName,
+            'x-goog-meta-purpose': 'monthlyCompliance',
+            'x-goog-meta-uploaded-by': (await AsyncStorage.getItem('driverId')) || 'unknown'
+          },
+          body: blob as any
+        });
+        if (!putRes.ok) {
+          const errorText = await putRes.text();
+          console.error('Upload failed:', putRes.status, errorText);
+          throw new Error(`Failed to upload to storage: ${putRes.status} ${errorText}`);
+        }
+
+        uploadedUrls.push(publicUrl);
+      }
 
       const response = await request(getAPIUrl(), UPLOAD_MONTHLY_PHOTO, {
         materialId,
-        photoUrls,
+        photoUrls: uploadedUrls,
         month: currentMonth,
         description: uploadState.description
       }, {
@@ -276,7 +375,15 @@ export default function PhotoSubmission() {
       }) as any;
 
       if (response.uploadMonthlyPhoto.success) {
-        Alert.alert('Success', 'Photos uploaded successfully!');
+        Alert.alert('Success', 'Photos uploaded successfully!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to main app after successful upload
+              router.replace('/tabs/dashboard');
+            }
+          }
+        ]);
         
         // Clear the upload state
         setPhotoUploads(prev => {
@@ -326,10 +433,10 @@ export default function PhotoSubmission() {
           <Ionicons name="camera-outline" size={64} color="#CCCCCC" />
           <Text style={styles.notPhotoDayTitle}>No Photos Needed</Text>
           <Text style={styles.notPhotoDayText}>
-            Photo submissions are only available on the 1st of each month or for newly mounted materials (same day).
+            Photo submissions are available when your next inspection due date arrives.
           </Text>
           <Text style={styles.nextPhotoDayText}>
-            Next photo day: 1st of next month
+            Next photo day: {nextPhotoDay}
           </Text>
         </View>
       </View>
@@ -338,9 +445,18 @@ export default function PhotoSubmission() {
 
   if (loading) {
     return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Photo Submission</Text>
+          <View style={styles.headerRight} />
+        </View>
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
         <Text style={styles.loadingText}>Loading materials...</Text>
+        </View>
       </View>
     );
   }
@@ -382,6 +498,7 @@ export default function PhotoSubmission() {
             const uploadState = photoUploads.get(material.id);
             const needsPhotoUpload = needsPhoto(material);
             const hasCurrentPhoto = hasCurrentMonthPhoto(material);
+            const hasPendingPhotoForCurrentMonth = hasPendingPhoto(material);
             const isNew = isNewlyMounted(material);
 
             return (
@@ -402,7 +519,12 @@ export default function PhotoSubmission() {
                         <Text style={styles.photoNeededBadgeText}>PHOTO NEEDED</Text>
                       </View>
                     )}
-                    {hasCurrentPhoto && (
+                    {hasPendingPhotoForCurrentMonth && (
+                      <View style={styles.photoPendingBadge}>
+                        <Text style={styles.photoPendingBadgeText}>PENDING</Text>
+                      </View>
+                    )}
+                    {hasCurrentPhoto && !hasPendingPhotoForCurrentMonth && (
                       <View style={styles.photoUploadedBadge}>
                         <Text style={styles.photoUploadedBadgeText}>UPLOADED</Text>
                       </View>
@@ -412,7 +534,7 @@ export default function PhotoSubmission() {
 
                 <Text style={styles.materialDescription}>{material.description}</Text>
 
-                {needsPhotoUpload && (
+                {needsPhotoUpload && !hasPendingPhotoForCurrentMonth && (
                   <View style={styles.photoUploadSection}>
                     <Text style={styles.photoUploadTitle}>Upload Photos</Text>
                     
@@ -453,6 +575,13 @@ export default function PhotoSubmission() {
                         </TouchableOpacity>
                       )}
                     </View>
+                  </View>
+                )}
+
+                {hasPendingPhotoForCurrentMonth && (
+                  <View style={styles.photoPendingSection}>
+                    <Ionicons name="time-outline" size={20} color="#FF9800" />
+                    <Text style={styles.photoPendingText}>Photo uploaded and pending admin approval</Text>
                   </View>
                 )}
 
@@ -639,6 +768,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
+  photoPendingBadge: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  photoPendingBadgeText: {
+    fontSize: 10,
+    color: 'white',
+    fontWeight: '600',
+  },
   photoUploadSection: {
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
@@ -713,6 +853,20 @@ const styles = StyleSheet.create({
   photoStatusText: {
     fontSize: 14,
     color: '#4CAF50',
+    fontWeight: '500',
+  },
+  photoPendingSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    gap: 8,
+  },
+  photoPendingText: {
+    fontSize: 14,
+    color: '#FF9800',
     fontWeight: '500',
   },
 });

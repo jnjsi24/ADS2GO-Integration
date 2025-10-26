@@ -6,6 +6,11 @@ const companyAdTypeDefs = gql`
     IMAGE
   }
 
+  enum ScheduleType {
+    IMMEDIATE
+    SCHEDULED
+  }
+
   type CompanyAd {
     id: ID!
     title: String!
@@ -21,6 +26,11 @@ const companyAdTypeDefs = gql`
     updatedBy: User
     tags: [String!]!
     notes: String
+    # Scheduling fields
+    isScheduled: Boolean!
+    startDate: String
+    endDate: String
+    scheduleType: ScheduleType!
     createdAt: String!
     updatedAt: String!
   }
@@ -35,6 +45,11 @@ const companyAdTypeDefs = gql`
     priority: Int
     tags: [String!]
     notes: String
+    # Scheduling fields
+    isScheduled: Boolean
+    startDate: String
+    endDate: String
+    scheduleType: ScheduleType
   }
 
   input UpdateCompanyAdInput {
@@ -47,6 +62,11 @@ const companyAdTypeDefs = gql`
     priority: Int
     tags: [String!]
     notes: String
+    # Scheduling fields
+    isScheduled: Boolean
+    startDate: String
+    endDate: String
+    scheduleType: ScheduleType
   }
 
   type Query {

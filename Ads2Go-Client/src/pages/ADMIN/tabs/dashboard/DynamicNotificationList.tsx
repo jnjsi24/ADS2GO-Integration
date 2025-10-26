@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, ArrowUpRight, RefreshCw, CheckSquare, Square, AlertTriangle, DollarSign, Users, FileText } from 'lucide-react';
 import { motion, type Transition } from 'framer-motion';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ } from '../../../../graphql/admin/queries';
+import { GET_ADMIN_GENERAL_NOTIFICATIONS, MARK_NOTIFICATION_READ } from '../../../../graphql/admin/queries';
 
 interface Notification {
   id: string;
@@ -61,8 +61,8 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
 
-  // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  // Fetch general admin notifications (excluding device-specific notifications)
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     pollInterval: 30000,
   });
 
@@ -120,7 +120,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
     }
   };
 
-  const notifications: Notification[] = notificationsData?.getAdminNotifications?.notifications || [];
+  const notifications: Notification[] = notificationsData?.getAdminGeneralNotifications?.notifications || [];
 
   const filteredNotifications = notifications.filter(notification => {
     if (selectedFilter === 'unread') return !notification.read;
@@ -171,11 +171,11 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
     <div className="space-y-6">
       {/* Notifications List */}
       <motion.div
-        className="bg-white dark:bg-neutral-900 p-3 rounded-xl w-full space-y-3 shadow-md"
+        className="bg-white dark:bg-neutral-900 p-3 rounded-xl w-full h-full space-y-3 shadow-md flex flex-col"
         initial="collapsed"
         whileHover="expanded"
       >
-        <div>
+        <div className="flex-1 overflow-hidden">
           {filteredNotifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -185,12 +185,12 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
             filteredNotifications.slice(0, 3).map((notification, i) => (
               <motion.div
                 key={notification.id}
-                className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-4 py-2 shadow-sm hover:shadow-lg transition-shadow duration-200 relative"
+                className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-4 py-2 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-16"
                 variants={getCardVariants(i)}
                 transition={transition}
                 style={{ zIndex: filteredNotifications.length - i }}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between h-full">
                   <div className="flex items-start gap-3">
                     {isSelectMode && (
                       <button
@@ -244,7 +244,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
                 Notifications
               </motion.span>
               <motion.a
-                href="/admin/ads"
+                href="/admin/notifications"
                 className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
                 variants={viewAllTextVariants}
                 transition={textSwitchTransition}

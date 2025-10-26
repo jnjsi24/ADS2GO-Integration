@@ -3,15 +3,16 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Scr
 import * as Location from "expo-location";
 import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router/build/imperative-api";
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
 import deviceStatusService from '../../services/deviceStatusService';
 import offlineQueueService from '../../services/offlineQueueService';
 import AdPlayer from '../../components/AdPlayer';
-import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
+import { configureCleanLogging } from '../../utils/loggerConfig';
 
 export default function HomeScreen() {
   const { status: deviceStatus } = useDeviceStatus();
@@ -25,8 +26,15 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state (for lockdown feature)
+  const [is8HourLocked, setIs8HourLocked] = useState(false); // Track 8-hour/rest period lock state
+  const [lockMessage, setLockMessage] = useState<string>(''); // Store lock message to display
+  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state
+  const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
+    // Configure clean logging for better console output
+    configureCleanLogging();
     initializeApp();
     
     // Cleanup function to stop tracking when component unmounts
@@ -44,6 +52,11 @@ export default function HomeScreen() {
       
       // Cleanup device status service
       deviceStatusService.cleanup();
+      
+      // Unlock orientation on cleanup
+      ScreenOrientation.unlockAsync().catch((error) => {
+        console.error('❌ [Orientation] Error during cleanup unlock:', error);
+      });
     };
   }, []);
 
@@ -77,8 +90,111 @@ export default function HomeScreen() {
     }
   };
 
+  const check8HourLock = async () => {
+    try {
+      console.log('🔍 [Lock Check] Checking for 8-hour completion lock and mandatory rest period...');
+      
+      // Check current time FIRST (mandatory rest period check)
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // 🚨 MANDATORY REST PERIOD: 12:00 AM - 7:59 AM (ALL drivers must rest)
+      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      
+      if (isMandatoryRestPeriod) {
+        console.log(`🌙 [Lock Check] MANDATORY REST PERIOD - Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`);
+        console.log('🔒 [Lock Check] Ad player is LOCKED during rest hours (12:00 AM - 8:00 AM)');
+        
+        // Check if driver completed 8 hours to determine message
+        const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
+        
+        if (completionDataStr) {
+          // Driver completed 8 hours
+          const completionData = JSON.parse(completionDataStr);
+          return {
+            isLocked: true,
+            message: `🔒 Ad Player Locked\n\nYou completed your 8-hour requirement!\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.`
+          };
+        } else {
+          // Driver did NOT complete 8 hours
+          return {
+            isLocked: true,
+            message: `🌙 Mandatory Rest Period\n\nAll drivers must rest between 12:00 AM - 8:00 AM.\n\nYour progress from yesterday has been reset.\n\nYou can start a new 8-hour session when the ad player unlocks at 8:00 AM.\n\nGood night! 😴`
+          };
+        }
+      }
+      
+      // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
+      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Outside rest period`);
+      
+      // Get 8-hour completion data from AsyncStorage
+      const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
+      
+      if (!completionDataStr) {
+        console.log('✅ [Lock Check] No 8-hour completion data found - app is unlocked');
+        console.log('💡 [Lock Check] Driver can work to complete their 8-hour requirement');
+        return { isLocked: false, message: '' };
+      }
+      
+      const completionData = JSON.parse(completionDataStr);
+      console.log('📋 [Lock Check] 8-hour completion data found:', completionData);
+      
+      // Check if completion was today (already completed today's requirement)
+      const completedAt = new Date(completionData.completedAt);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const completedDate = new Date(completedAt.getFullYear(), completedAt.getMonth(), completedAt.getDate());
+      
+      // If completed today, keep the app locked (can't work more than 8 hours per day)
+      if (completedDate.getTime() === today.getTime()) {
+        console.log(`🔒 [Lock Check] Already completed 8 hours today at ${completedAt.toLocaleTimeString()}`);
+        console.log('⏸️ [Lock Check] App remains locked - maximum 8 hours per day reached');
+        
+        return {
+          isLocked: true,
+          message: `✅ Daily Requirement Complete\n\nYou already completed your 8-hour requirement today!\n\nCompleted at: ${completedAt.toLocaleTimeString()}\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nYou've reached the maximum 8 hours per day.\n\nThe ad player will unlock tomorrow at 8:00 AM for a new session.`
+        };
+      }
+      
+      // Completion was from a previous day - clear old data and unlock
+      console.log('✅ [Lock Check] Completion was from a previous day - clearing old data');
+      await AsyncStorage.removeItem('8hourCompletion');
+      console.log('🆕 [Lock Check] App is unlocked for new 8-hour session');
+      return { isLocked: false, message: '' };
+      
+    } catch (error) {
+      console.error('❌ [Lock Check] Error checking lock status:', error);
+      // On error, check time at minimum for safety
+      const currentHour = new Date().getHours();
+      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      
+      if (isMandatoryRestPeriod) {
+        console.log('⚠️ [Lock Check] Error occurred, but enforcing rest period lock for safety');
+        return { 
+          isLocked: true,
+          message: '🔒 Ad Player Locked\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.'
+        };
+      }
+      
+      console.log('⚠️ [Lock Check] Error occurred outside rest period - defaulting to unlocked');
+      return { isLocked: false, message: '' };
+    }
+  };
+
   const initializeApp = async () => {
     try {
+      // ✅ Check for 8-hour completion lock and mandatory rest period
+      const lockCheck = await check8HourLock();
+      if (lockCheck.isLocked) {
+        setIs8HourLocked(true);
+        setLockMessage(lockCheck.message || '');
+        setLoading(false);
+        return; // Exit early, app is locked
+      }
+      
+      // Clear lock state if not locked
+      setIs8HourLocked(false);
+      setLockMessage('');
+      
       // Get location
       let currentLocation = null;
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -179,18 +295,14 @@ export default function HomeScreen() {
         const randomAd = ads[Math.floor(Math.random() * ads.length)];
         const viewTime = Math.random() * randomAd.duration; // Random view time
 
-        // Track ad playback
-        await tabletRegistrationService.trackAdPlayback(
-          randomAd.id,
-          randomAd.title,
-          randomAd.duration,
-          viewTime
-        );
+        // ❌ REMOVED: trackAdPlayback() - method removed from service
+        // Ad tracking now handled automatically by AdPlayer component via /deviceTracking/ad-playback
+        // This simulation is no longer needed as AdPlayer tracks real ad plays
 
         // Update driver activity
         await tabletRegistrationService.updateDriverActivity(true);
 
-        console.log(`Ad tracked: ${randomAd.title} (${viewTime.toFixed(1)}s viewed)`);
+        console.log(`Ad simulation: ${randomAd.title} (${viewTime.toFixed(1)}s viewed) - tracking handled by AdPlayer`);
       } catch (error) {
         console.error('Error in ad tracking simulation:', error);
       }
@@ -378,6 +490,70 @@ export default function HomeScreen() {
     router.push('/registration');
   };
 
+  // Handle orientation changes for lock functionality
+  const lockToLandscape = async () => {
+    try {
+      // Store current orientation
+      const currentOrientation = await ScreenOrientation.getOrientationAsync();
+      setOriginalOrientation(currentOrientation);
+      
+      // Force landscape orientation - use specific landscape lock instead of general LANDSCAPE
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
+      console.log('🔒 [Orientation] Locked to landscape mode');
+    } catch (error) {
+      console.error('❌ [Orientation] Error locking to landscape:', error);
+      // Fallback: try the other landscape orientation
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+        console.log('🔒 [Orientation] Fallback: Locked to landscape right mode');
+      } catch (fallbackError) {
+        console.error('❌ [Orientation] Fallback also failed:', fallbackError);
+        // If both fail, just unlock to prevent the error
+        await ScreenOrientation.unlockAsync();
+      }
+    }
+  };
+
+  const unlockOrientation = async () => {
+    try {
+      // Restore original orientation or unlock completely
+      if (originalOrientation) {
+        // Convert Orientation to OrientationLock
+        let orientationLock: ScreenOrientation.OrientationLock;
+        switch (originalOrientation) {
+          case ScreenOrientation.Orientation.PORTRAIT_UP:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
+            break;
+          case ScreenOrientation.Orientation.PORTRAIT_DOWN:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_DOWN;
+            break;
+          case ScreenOrientation.Orientation.LANDSCAPE_LEFT:
+            orientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_LEFT;
+            break;
+          case ScreenOrientation.Orientation.LANDSCAPE_RIGHT:
+            orientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT;
+            break;
+          default:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
+        }
+        await ScreenOrientation.lockAsync(orientationLock);
+        console.log('🔓 [Orientation] Restored to original orientation');
+      } else {
+        await ScreenOrientation.unlockAsync();
+        console.log('🔓 [Orientation] Unlocked orientation');
+      }
+    } catch (error) {
+      console.error('❌ [Orientation] Error unlocking orientation:', error);
+      // Fallback: try to unlock completely if restoring fails
+      try {
+        await ScreenOrientation.unlockAsync();
+        console.log('🔓 [Orientation] Fallback: Unlocked orientation completely');
+      } catch (unlockError) {
+        console.error('❌ [Orientation] Fallback unlock also failed:', unlockError);
+      }
+    }
+  };
+
   // Toggle between video-only and full interface mode
   const toggleInterfaceMode = () => {
     setShowFullInterface(prev => !prev);
@@ -441,6 +617,35 @@ export default function HomeScreen() {
     );
   }
 
+  // ✅ If app is locked due to 8-hour completion or mandatory rest period, show lock screen
+  if (is8HourLocked) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.lockedContainer}>
+          <Text style={styles.lockedIcon}>🔒</Text>
+          <Text style={styles.lockedTitle}>Ad Player Locked</Text>
+          <Text style={styles.lockedMessage}>{lockMessage}</Text>
+          <View style={styles.lockedTimeContainer}>
+            <Text style={styles.lockedTimeLabel}>Current Time:</Text>
+            <Text style={styles.lockedTimeValue}>
+              {new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+              })}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.lockedRefreshButton}
+            onPress={handleRefreshStatus}
+          >
+            <Text style={styles.lockedRefreshButtonText}>🔄 Check Again</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   // If not registered, show registration prompt
   if (!registrationData) {
     return (
@@ -463,14 +668,25 @@ export default function HomeScreen() {
   }
 
   // If not showing full interface, show only the video player
-  if (!showFullInterface) {
+  if (!showFullInterface || isFullscreen) {
     return (
-      <View style={styles.videoOnlyContainer}>
+      <View style={[styles.videoOnlyContainer, isFullscreen && styles.fullscreenContainer]}>
         {registrationData ? (
           <AdPlayer
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
             isOffline={isSimulatingOffline}
+            isLocked={isLocked}
+            onLockStateChange={async (locked) => {
+              setIsLocked(locked);
+              if (locked) {
+                setIsFullscreen(true); // Go fullscreen when locked
+                await lockToLandscape(); // Force landscape orientation
+              } else {
+                setIsFullscreen(false); // Exit fullscreen when unlocked
+                await unlockOrientation(); // Restore orientation
+              }
+            }}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -497,12 +713,36 @@ export default function HomeScreen() {
         >
           <Text style={styles.showInterfaceText}>⚙️ Settings</Text>
         </TouchableOpacity>
+
+        {/* Lock indicator for video mode - subtle overlay */}
+        {isLocked && (
+          <View style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 8,
+            zIndex: 1000,
+          }}>
+            <Text style={{
+              color: '#ff4444',
+              fontSize: 16,
+              fontWeight: 'bold',
+            }}>
+              🔒 LOCKED
+            </Text>
+          </View>
+        )}
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      {!isFullscreen && (
+        <ScrollView contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Advertisement Player</Text>
@@ -635,6 +875,17 @@ export default function HomeScreen() {
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
             isOffline={isSimulatingOffline}
+            isLocked={isLocked}
+            onLockStateChange={async (locked) => {
+              setIsLocked(locked);
+              if (locked) {
+                setIsFullscreen(true); // Go fullscreen when locked
+                await lockToLandscape(); // Force landscape orientation
+              } else {
+                setIsFullscreen(false); // Exit fullscreen when unlocked
+                await unlockOrientation(); // Restore orientation
+              }
+            }}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -689,7 +940,52 @@ export default function HomeScreen() {
            <Text style={styles.actionButtonText}>🚨 Emergency Unregister</Text>
          </TouchableOpacity>
        </View>
-    </ScrollView>
+        </ScrollView>
+      )}
+
+      {/* Fullscreen AdPlayer when locked */}
+      {isFullscreen && registrationData && (
+        <AdPlayer
+          materialId={registrationData.materialId}
+          slotNumber={registrationData.slotNumber}
+          isOffline={isSimulatingOffline}
+          isLocked={isLocked}
+          onLockStateChange={(locked) => {
+            setIsLocked(locked);
+            if (locked) {
+              setIsFullscreen(true);
+            } else {
+              setIsFullscreen(false);
+            }
+          }}
+          onAdError={(error) => {
+            console.log('Ad Player Error:', error);
+          }}
+        />
+      )}
+
+      {/* Lock indicator for fullscreen mode */}
+      {isLocked && isFullscreen && (
+        <View style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 8,
+          zIndex: 1000,
+        }}>
+          <Text style={{
+            color: '#ff4444',
+            fontSize: 16,
+            fontWeight: 'bold',
+          }}>
+            🔒 LOCKED
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -731,6 +1027,71 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
+  },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f8f9fa',
+  },
+  lockedIcon: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  lockedTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  lockedMessage: {
+    fontSize: 16,
+    color: '#2c3e50',
+    textAlign: 'center',
+    lineHeight: 26,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  lockedTimeContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  lockedTimeLabel: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 8,
+  },
+  lockedTimeValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#3498db',
+  },
+  lockedRefreshButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  lockedRefreshButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   registerButton: {
     backgroundColor: '#3498db',
@@ -784,6 +1145,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
     position: 'relative',
+  },
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    elevation: 9999,
   },
   showInterfaceButton: {
     position: 'absolute',

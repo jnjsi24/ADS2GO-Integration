@@ -1,70 +1,26 @@
-//adsPlan.js
-
-
 const mongoose = require('mongoose');
 
-const toUpper = v => (typeof v === 'string' ? v.toUpperCase() : v);
+const AdsPlanSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  description: { type: String, default: '', trim: true },
 
-const adsPlanSchema = new mongoose.Schema({
-  name: { type: String, required: true }, // Plan name (e.g., "Motorcycle • LCD • 1 device • 20 sec • 1-month")
-  
-  durationDays: { type: Number, required: true }, // Plan length in days
-  
-  category: { 
-    type: String, 
-    enum: ['DIGITAL', 'NON-DIGITAL'], 
-    required: true, 
-    set: toUpper   // auto-uppercase input
-  }, 
-  
-  materialType: { 
-    type: String, 
-    required: true, 
-    set: toUpper   // e.g. "lcd" -> "LCD", "headdress" -> "HEADDRESS"
-  }, 
-  
-  vehicleType: { 
-    type: String, 
-    required: true, 
-    set: toUpper   // e.g. "motorcycle" -> "MOTORCYCLE", "car" -> "CAR"
-  }, 
-  
-  numberOfDevices: { type: Number, required: true }, 
-  adLengthSeconds: { type: Number, required: true }, 
-  playsPerDayPerDevice: { type: Number, required: true, default: 160 }, // Fixed at 160 plays per device per day
-  
-  totalPlaysPerDay: { type: Number, required: true }, 
-  pricePerPlay: { type: Number, required: true, default: 1 }, // ₱1 per play
-  dailyRevenue: { type: Number, required: true }, 
-  totalPrice: { type: Number, required: true }, // Total price in Philippine Pesos
-  
-  description: { type: String, required: true }, 
+  // What is being advertised
+  category: { type: String, enum: ['DIGITAL', 'NON_DIGITAL'], required: true, default: 'DIGITAL' },
+  materialType: { type: String, enum: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'], required: true, default: 'HEADDRESS' },
+  vehicleType: { type: String, enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'], required: true, default: 'CAR' },
 
-  // Materials assigned to this plan
-  materials: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Material',
-    required: true 
-  }],
+  // Durations and pricing
+  durationDays: { type: Number, required: true, default: 31 },
+  adLengthSeconds: { type: Number, required: true, default: 20 },
+  playsPerDayPerDevice: { type: Number, required: true, default: 100 },
+  numberOfDevices: { type: Number, required: true, default: 1 },
+  pricePerPlay: { type: Number, required: true, default: 1 },
+  totalPrice: { type: Number, required: true, default: 0 },
 
-  // Status and scheduling
-  status: { 
-    type: String, 
-    enum: ['PENDING', 'RUNNING', 'ENDED'], 
-    default: 'PENDING',
-    set: toUpper   // ensures status always uppercase
-  }, 
-  startDate: { type: Date }, 
-  endDate: { type: Date }, 
-  
+  // Materials attached to the plan (optional)
+  materials: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Material' }],
+
+  isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
-// Virtual field: Calculate how long the ad has been running (in days)
-adsPlanSchema.virtual('currentDurationDays').get(function () {
-  if (!this.startDate) return 0;
-  const end = this.endDate || new Date();
-  const diffTime = Math.abs(end - this.startDate);
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-});
-
-module.exports = mongoose.model('AdsPlan', adsPlanSchema);
+module.exports = mongoose.model('AdsPlan', AdsPlanSchema);

@@ -11,7 +11,9 @@ import {
   HelpCircle,
   Bell,
   Info,
-  User
+  User,
+  Menu,
+  X
 } from 'lucide-react';
 
 const SideNavbar: React.FC = () => {
@@ -20,6 +22,7 @@ const SideNavbar: React.FC = () => {
   const { displayBadgeCount } = useNotifications();
   const navigate = useNavigate();
   const [isDropupOpen, setIsDropupOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropupRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = useCallback(async () => {
@@ -70,6 +73,7 @@ const SideNavbar: React.FC = () => {
     <li className="relative group">
       <Link
         to={link.path}
+        onClick={() => setIsMobileMenuOpen(false)}
         className={`
           nav-link relative flex items-center px-4 py-2 overflow-hidden transition-all duration-300 ease-out
         `}
@@ -105,6 +109,24 @@ const SideNavbar: React.FC = () => {
   
 
 
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isMobileMenuOpen && !target.closest('.mobile-menu') && !target.closest('.hamburger-button')) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMobileMenuOpen]);
+
   // Only show navbar for authenticated users
   if (!user || user.role !== 'USER') {
     return null;
@@ -135,14 +157,31 @@ const SideNavbar: React.FC = () => {
           }
         `
       }} />
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Hamburger Button */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="hamburger-button fixed top-4 left-4 z-[1100] p-2 rounded-lg bg-white shadow-lg lg:hidden hover:bg-gray-100 transition-colors"
+        aria-label="Toggle menu"
+      >
+        {isMobileMenuOpen ? <X size={24} className="text-gray-800" /> : <Menu size={24} className="text-gray-800" />}
+      </button>
       
-      {/* Static navbar with smooth animations */}
+      {/* Static navbar with smooth animations - Desktop */}
       <div 
-        className="h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out
-                  shadow-xl"
+        className={`mobile-menu h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out shadow-xl bg-white
+                  ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{
           willChange: 'auto',
-          transform: 'translateZ(0)',
+          transform: isMobileMenuOpen ? 'translateZ(0)' : undefined,
           backfaceVisibility: 'hidden',
           top: 0,
           left: 0,
@@ -161,7 +200,6 @@ const SideNavbar: React.FC = () => {
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => {
             const isActive = window.location.pathname === link.path;
-            console.log(`Nav item ${link.label}: path=${link.path}, current=${window.location.pathname}, isActive=${isActive}`);
             return (
               <NavigationItem
                 key={link.label}
@@ -247,6 +285,7 @@ const SideNavbar: React.FC = () => {
               onClick={() => {
                 navigate('/account');
                 closeDropup();
+                setIsMobileMenuOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-white/30 transition-colors"
             >
@@ -258,6 +297,7 @@ const SideNavbar: React.FC = () => {
               onClick={() => {
                 navigate('/settings');
                 closeDropup();
+                setIsMobileMenuOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-white/30 transition-colors"
             >
@@ -271,6 +311,7 @@ const SideNavbar: React.FC = () => {
               onClick={() => {
                 handleLogout();
                 closeDropup();
+                setIsMobileMenuOpen(false);
               }}
               className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:text-red-400 transition-colors"
             >

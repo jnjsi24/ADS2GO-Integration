@@ -2,6 +2,10 @@ const cron = require('node-cron');
 const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
 const hoursUpdateService = require('../services/hoursUpdateService');
 const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
+const driverSalaryJob = require('./driverSalaryJob');
+const deviceHoursNotificationService = require('../services/deviceHoursNotificationService');
+const adSchedulingJob = require('./adSchedulingJob');
+const logger = require('../utils/logger');
 
 class CronJobs {
   constructor() {
@@ -24,12 +28,18 @@ class CronJobs {
     // Start the user analytics sync job (every 3 minutes)
     userAnalyticsSyncJob.start();
 
+    // Start the driver salary job (monthly generation and daily updates)
+    driverSalaryJob.start();
+
+    // Start the ad scheduling job (hourly checks for scheduled ads and expired reservations)
+    adSchedulingJob.start();
+
     // Frequent archive job - runs every 3 minutes to capture real-time updates
     const frequentArchiveTask = cron.schedule('*/3 * * * *', async () => {
-      console.log('⏰ Frequent archive job triggered (every 3 minutes)');
+      logger.database('⏰ Frequent archive job triggered (every 3 minutes)');
       try {
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Frequent archive job completed successfully');
+        logger.database('✅ Frequent archive job completed successfully');
       } catch (error) {
         console.error('❌ Frequent archive job failed:', error);
       }
@@ -43,7 +53,7 @@ class CronJobs {
       console.log('⏰ Hourly archive job triggered');
       try {
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Hourly archive job completed successfully');
+        logger.database('✅ Hourly archive job completed successfully');
       } catch (error) {
         console.error('❌ Hourly archive job failed:', error);
       }
@@ -58,7 +68,7 @@ class CronJobs {
       try {
         // Archive the current day's data before reset
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Daily archive job (V2) completed successfully');
+        logger.database('✅ Daily archive job (V2) completed successfully');
       } catch (error) {
         console.error('❌ Daily archive job (V2) failed:', error);
       }
@@ -72,6 +82,8 @@ class CronJobs {
       console.log('🔄 Daily reset job triggered at midnight (Philippines time)');
       try {
         await this.resetAllDeviceTracking();
+        // Reset daily notification tracking
+        deviceHoursNotificationService.resetDailyTracking();
         console.log('✅ Daily reset job completed successfully');
       } catch (error) {
         console.error('❌ Daily reset job failed:', error);
@@ -87,27 +99,9 @@ class CronJobs {
       try {
         // Archive the fresh reset data for the new day
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Daily fresh data archive job completed successfully');
+        logger.database('✅ Daily fresh data archive job completed successfully');
       } catch (error) {
         console.error('❌ Daily fresh data archive job failed:', error);
-      }
-    }, {
-      scheduled: true,
-      timezone: 'Asia/Manila'
-    });
-
-    // Daily job to create missing DeviceTracking records - runs every day at 2 AM
-    const createMissingDeviceTrackingTask = cron.schedule('0 2 * * *', async () => {
-      console.log('⏰ Daily missing DeviceTracking creation job triggered');
-      try {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-        
-        await execAsync('node scripts/create-missing-device-tracking.js');
-        console.log('✅ Missing DeviceTracking creation job completed');
-      } catch (error) {
-        console.error('❌ Error in missing DeviceTracking creation job:', error);
       }
     }, {
       scheduled: true,
@@ -119,7 +113,6 @@ class CronJobs {
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
     this.jobs.set('dailyFreshArchive', dailyFreshArchiveTask);
-    this.jobs.set('createMissingDeviceTracking', createMissingDeviceTrackingTask);
 
     // Hourly cleanup job - runs every hour to clean up old data
     const hourlyCleanupTask = cron.schedule('0 * * * *', async () => {
@@ -149,7 +142,71 @@ class CronJobs {
       timezone: 'UTC'
     });
 
+    // 8-hour milestone check job - runs every 30 minutes to check for 8-hour achievements
+    const eightHourCheckTask = cron.schedule('*/30 * * * *', async () => {
+      console.log('🎯 8-hour milestone check job triggered');
+      try {
+        await deviceHoursNotificationService.checkAllDevicesFor8HourMilestone();
+        console.log('✅ 8-hour milestone check completed');
+      } catch (error) {
+        console.error('❌ 8-hour milestone check job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     this.jobs.set('onlineHours', onlineHoursTask);
+    this.jobs.set('eightHourCheck', eightHourCheckTask);
+
+    // Daily driver compliance reminder - runs every day at 10:00 AM PH time
+    const complianceReminderTask = cron.schedule('0 10 * * *', async () => {
+      try {
+        const DeviceCompliance = require('../models/deviceCompliance');
+        const Driver = require('../models/Driver');
+        const DriverNotificationService = require('../services/notifications/DriverNotificationService');
+        const now = new Date();
+        const phNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+        const tomorrow = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 1);
+        const dayAfter = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 2);
+
+        // Find materials whose nextInspectionDue is tomorrow (within [tomorrow, dayAfter))
+        const dueSoon = await DeviceCompliance.find({
+          nextInspectionDue: { $gte: tomorrow, $lt: dayAfter }
+        }).lean();
+
+        for (const dc of dueSoon) {
+          // dc.driverId may be ObjectId or null; look up by material to find current driver if needed
+          let driver = null;
+          if (dc.driverId) {
+            driver = await Driver.findById(dc.driverId);
+          } else {
+            const Material = require('../models/Material');
+            const mat = await Material.findById(dc.materialId);
+            if (mat?.driverId) driver = await Driver.findOne({ driverId: mat.driverId });
+          }
+          if (!driver) continue;
+
+          try {
+            await DriverNotificationService.sendGenericNotification(
+              driver._id,
+              'Monthly Photo Due Tomorrow',
+              'Your monthly inspection photo is due tomorrow. Please prepare to upload your compliance photo.',
+              { type: 'COMPLIANCE_DUE_SOON', materialId: String(dc.materialId), nextInspectionDue: dc.nextInspectionDue }
+            );
+          } catch (notifyErr) {
+            console.error('❌ Error sending driver compliance reminder:', notifyErr);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Compliance reminder job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    this.jobs.set('complianceReminder', complianceReminderTask);
 
     // Start all cron jobs
     this.jobs.forEach((job, name) => {
@@ -160,6 +217,10 @@ class CronJobs {
     // Start the hours update service
     hoursUpdateService.start();
     console.log('✅ Started hours update service');
+
+    // Start the driver salary job
+    driverSalaryJob.start();
+    console.log('✅ Started driver salary job');
 
     this.isRunning = true;
     console.log('🎉 All cron jobs started successfully');
@@ -179,6 +240,12 @@ class CronJobs {
 
     // Stop the user analytics sync job
     userAnalyticsSyncJob.stop();
+
+    // Stop the ad scheduling job
+    adSchedulingJob.stop();
+
+    // Stop the driver salary job
+    driverSalaryJob.stop();
 
     this.jobs.forEach((job, name) => {
       job.stop();
@@ -263,17 +330,21 @@ class CronJobs {
       
       // Find all DeviceTracking records
       const devices = await DeviceTracking.find({});
-      console.log(`📱 Found ${devices.length} DeviceTracking records to reset`);
+      logger.database(`📱 Found ${devices.length} DeviceTracking records to reset`);
       
       let resetCount = 0;
       
       for (const device of devices) {
         try {
+          // ✅ Preserve completedAt from yesterday for 8 AM lock enforcement
+          const previousCompletedAt = device.currentSession?.completedAt;
+          
           // Reset the daily session for the new day
           device.currentSession = {
             date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate()),
             startTime: new Date(),
             endTime: null,
+            completedAt: previousCompletedAt, // ✅ Preserve for 8 AM lock (12 AM - 7:59 AM)
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             isActive: true,
@@ -307,8 +378,8 @@ class CronJobs {
             displayIssues: 0
           };
           
-          // Update lastSeen to now
-          device.lastSeen = new Date();
+          // ✅ DON'T reset lastSeen - preserve actual last online time for admin tracking
+          // lastSeen will only update when device is actually online and sending data
           
           // Update the date to today
           device.date = todayStr;

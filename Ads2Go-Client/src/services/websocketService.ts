@@ -25,26 +25,37 @@ class WebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    console.log('🔧 WebSocket Service Configuration:', {
-      envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
-      finalUrl: actualServerUrl,
-      usingFallback: !serverUrl,
-      reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
-    });
+    // WebSocket configuration logging (only in verbose mode)
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+      console.log('🔧 WebSocket Service Configuration:', {
+        envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
+        finalUrl: actualServerUrl,
+        usingFallback: !serverUrl,
+        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
+      });
+    }
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-    // Cache bust to force reload
-    const cacheBust = Date.now();
+    // Removed cache busting to prevent constant reconnections
     // Use playback endpoint with admin=true for general admin connections
-    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}`;
+    return `${protocol}//${host}/ws/playback?admin=true`;
   }
 
   private connect(): void {
     try {
-      this.socket = new WebSocket(this.getWebSocketUrl());
+      // Skip WebSocket connection in development if server is not available
+      if (process.env.NODE_ENV === 'development' && this.reconnectAttempts > 5) {
+        console.log('WebSocket: Skipping connection attempts in development mode');
+        return;
+      }
+      
+      const wsUrl = this.getWebSocketUrl();
+      console.log(`🔌 [WebSocket] Attempting to connect to: ${wsUrl}`);
+      
+      this.socket = new WebSocket(wsUrl);
       this.setupEventListeners();
     } catch (error) {
-      console.error('WebSocket connection error:', error);
+      console.error('❌ [WebSocket] Connection error:', error);
       this.handleReconnect();
     }
   }
@@ -53,7 +64,7 @@ class WebSocketService {
     if (!this.socket) return;
 
     this.socket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('✅ [WebSocket] Connected successfully');
       this.isConnected = true;
       this.reconnectAttempts = 0;
       this.emit('connect', {});
@@ -69,28 +80,38 @@ class WebSocketService {
     };
 
     this.socket.onclose = () => {
-      console.log('WebSocket disconnected');
+      if (this.reconnectAttempts === 0) {
+        console.log('WebSocket disconnected');
+      }
       this.isConnected = false;
       this.emit('disconnect', {});
       this.handleReconnect();
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      // Only log error on first attempt to avoid spam
+      if (this.reconnectAttempts === 0) {
+        console.warn('❌ [WebSocket] Connection failed, will retry...');
+        console.warn('Error details:', error);
+        console.warn('Target URL:', this.getWebSocketUrl());
+      }
       this.emit('error', error);
     };
   }
 
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
+      console.warn('WebSocket: Max reconnection attempts reached, giving up');
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
     
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    // Only log reconnection attempts every 3rd attempt to reduce spam
+    if (this.reconnectAttempts % 3 === 1) {
+      console.log(`WebSocket: Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    }
     
     setTimeout(() => {
       if (!this.isConnected) {

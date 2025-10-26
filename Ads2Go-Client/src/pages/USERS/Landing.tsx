@@ -9,11 +9,9 @@ import PricingModal from '../../components/modals/PricingModal';
 import TermsOfServiceModal from '../../components/modals/TermsOfServiceModal';
 import PrivacyPolicyModal from '../../components/modals/PrivacyPolicyModal';
 import LegalModal from '../../components/modals/LegalModal';
-import BlogModal from '../../components/modals/BlogModal';
 import StatusModal from '../../components/modals/StatusModal';
 
 import LogoLoop from "../../components/LogoLoop";
-import ScrollingTestimonials from '../../components/ScrollingTestimonials';
 import HamburgerMenuOverlay from '../../components/HamburgerMenuOverlay';
 
 // Import newsletter service
@@ -538,7 +536,7 @@ export default function Home() {
         ref={(el) => (sectionRefs.current[5] = el)}
         className="section-hidden section-delay-6"
       >
-        <ScrollingTestimonials />
+        {/* Testimonials section removed - no real data available */}
       </section>
 
       <section

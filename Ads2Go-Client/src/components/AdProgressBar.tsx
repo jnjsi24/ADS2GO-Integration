@@ -41,16 +41,6 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
     if (realTimeData && realTimeData.state !== 'buffering' && realTimeData.state !== 'loading') {
       setLastKnownProgress(realTimeData.progress);
     }
-    
-    // Debug logging
-    if (realTimeData) {
-      console.log('🎬 [AdProgressBar] Real-time data received:', {
-        currentTime: realTimeData.currentTime,
-        progress: realTimeData.progress,
-        state: realTimeData.state,
-        lastKnownProgress: lastKnownProgress
-      });
-    }
   }, [realTimeData, lastKnownProgress]);
 
   // Use real-time current time if available, but ALWAYS show 0 during buffering/loading
@@ -147,17 +137,6 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
           ? 0 // Always show 0% during buffering/loading
           : Math.min(realTimeData.progress, 99.9)) // Cap at 99.9% to prevent premature completion
       : (adDuration > 0 ? Math.min((currentTime / adDuration) * 100, 99.9) : 0);
-    
-    // Debug logging for progress calculation
-    if (realTimeData) {
-      console.log(`🎬 [AdProgressBar] Progress calculation:`, {
-        state: realTimeData.state,
-        progress: realTimeData.progress,
-        currentTime: realTimeData.currentTime,
-        calculatedProgress: result,
-        isBuffering: realTimeData.state === 'buffering' || realTimeData.state === 'loading'
-      });
-    }
     
     return result;
   }, [realTimeData, currentTime, adDuration]);

@@ -25,6 +25,15 @@ export interface ScreenData {
   statusText?: string; // Explicit slot statuses (e.g., "SLOT 1: OFFLINE | SLOT 2: OFFLINE")
   slot1Status?: string; // Individual slot 1 status
   slot2Status?: string; // Individual slot 2 status
+  slot1DeviceId?: string; // Actual device ID for slot 1
+  slot2DeviceId?: string; // Actual device ID for slot 2
+  slotStatus?: any; // Original slot status data
+  driverInfo?: {
+    driverId: string;
+    driverName: string;
+    vehiclePlateNumber: string;
+  } | null;
+  masterDeviceId?: string; // Device ID that handles analytics tracking
   screenMetrics?: {
     isDisplaying: boolean;
     brightness: number;

@@ -4,6 +4,7 @@ const Ad = require('../models/Ad');
 const Material = require('../models/Material');
 const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
+const CompanyAd = require('../models/CompanyAd'); // ✅ For company ad filler
 // QRScanTracking removed - QR scans are now handled directly in analytics collection
 
 // GET /ads/deployments - Get all deployments (for debugging) - MUST COME FIRST
@@ -258,20 +259,79 @@ router.get('/qr-scans/stats', async (req, res) => {
 
       console.log(`Found ${allActiveAds.length} active ads for material ${materialId}, slot ${requestedSlotNumber}`);
       
+      // ✅ COMPANY AD FILLER SYSTEM: Fill remaining slots with company ads (up to 5 total)
+      const MAX_SLOTS = 5;
+      const slotsToFill = MAX_SLOTS - allActiveAds.length;
+      
+      if (slotsToFill > 0) {
+        console.log(`📦 [CompanyAdFiller] Need to fill ${slotsToFill} empty slots with company ads`);
+        
+        try {
+          // Fetch active company ads using the model's static method
+          const companyAds = await CompanyAd.getCurrentlyActiveAds();
+          
+          if (companyAds && companyAds.length > 0) {
+            console.log(`📦 [CompanyAdFiller] Found ${companyAds.length} active company ads available`);
+            
+            // Select company ads with weighted priority
+            const selectedCompanyAds = [];
+            for (let i = 0; i < slotsToFill; i++) {
+              // Use the weighted selection method from CompanyAd model
+              const companyAd = await CompanyAd.getRandomScheduledAd();
+              
+              if (companyAd) {
+                selectedCompanyAds.push({
+                  adId: companyAd._id.toString(),
+                  adDeploymentId: null, // Company ads don't have deployments
+                  slotNumber: requestedSlotNumber,
+                  startTime: null,
+                  endTime: null,
+                  status: 'RUNNING',
+                  mediaFile: companyAd.mediaFile,
+                  adTitle: companyAd.title,
+                  adDescription: companyAd.description || '',
+                  website: null, // Company ads don't have advertiser websites
+                  duration: companyAd.duration,
+                  createdAt: companyAd.createdAt,
+                  updatedAt: companyAd.updatedAt,
+                  isCompanyAd: true // ✅ Flag to identify company ads
+                });
+              }
+            }
+            
+            // Add company ads to the rotation
+            allActiveAds.push(...selectedCompanyAds);
+            console.log(`✅ [CompanyAdFiller] Added ${selectedCompanyAds.length} company ads. Total ads in rotation: ${allActiveAds.length}`);
+          } else {
+            console.log(`⚠️ [CompanyAdFiller] No active company ads available to fill ${slotsToFill} empty slots`);
+          }
+        } catch (error) {
+          console.error('❌ [CompanyAdFiller] Error fetching company ads:', error);
+          // Continue without company ads if there's an error
+        }
+      } else {
+        console.log(`✅ [Rotation] All ${MAX_SLOTS} slots filled with user ads`);
+      }
+      
       // Debug: Log the first ad to see if website field is included
       if (allActiveAds.length > 0) {
         console.log('First ad data:', {
           adId: allActiveAds[0].adId,
           adTitle: allActiveAds[0].adTitle,
           website: allActiveAds[0].website,
-          hasWebsite: !!allActiveAds[0].website
+          hasWebsite: !!allActiveAds[0].website,
+          isCompanyAd: allActiveAds[0].isCompanyAd || false
         });
       }
+      
+      console.log(`🎬 [Final Rotation] Returning ${allActiveAds.length} ads:`, 
+        allActiveAds.map((ad, i) => `${i + 1}. ${ad.isCompanyAd ? '🏢' : '👤'} ${ad.adTitle}`).join(', ')
+      );
 
       res.json({
         success: true,
         ads: allActiveAds,
-        message: `Found ${allActiveAds.length} ads`
+        message: `Found ${allActiveAds.length} ads (${allActiveAds.filter(a => !a.isCompanyAd).length} user, ${allActiveAds.filter(a => a.isCompanyAd).length} company)`
       });
 
     } catch (error) {
@@ -495,23 +555,59 @@ router.post('/qr-scan', async (req, res) => {
         });
       }
       
-      // Add QR scan to deviceTracking
-      deviceTracking.qrScans.push(qrScanData);
-      deviceTracking.totalQRScans += 1;
+      // ✅ MASTER-SLAVE: Determine if this is the master slot before incrementing totals
+      let isMasterSlot = false;
       
-      // Update QR scans by ad
-      const existingAdScan = deviceTracking.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
-      if (existingAdScan) {
-        existingAdScan.scanCount += 1;
-        existingAdScan.lastScanned = new Date();
+      if (deviceTracking.slots && deviceTracking.slots.length > 0) {
+        const slot1 = deviceTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
+        const slot2 = deviceTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
+        
+        // Get online status from DeviceStatusManager
+        const deviceStatusService = require('../services/deviceStatusService');
+        const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+        const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+        
+        if (slot1Online && slotNumber === 1) {
+          isMasterSlot = true;
+          console.log(`👑 [QRScan /ads] Slot 1 is master - counting analytics`);
+        } else if (!slot1Online && slot2Online && slotNumber === 2) {
+          isMasterSlot = true;
+          console.log(`👑 [QRScan /ads] Slot 2 is master (failover) - counting analytics`);
+        } else {
+          console.log(`💤 [QRScan /ads] Slot ${slotNumber} is slave - NOT counting in totals`);
+        }
       } else {
-        deviceTracking.qrScansByAd.push({
-          adId: qrScanData.adId,
-          adTitle: qrScanData.adTitle,
-          scanCount: 1,
-          lastScanned: new Date(),
-          firstScanned: new Date()
-        });
+        // Fallback: if no slot info, accept all data
+        isMasterSlot = true;
+        console.log(`⚠️ [QRScan /ads] No slot info, accepting all data (fallback)`);
+      }
+      
+      // Add QR scan to deviceTracking (always store with slotNumber)
+      deviceTracking.qrScans.push(qrScanData);
+      
+      // ✅ Only increment totals if this is the master slot
+      if (isMasterSlot) {
+        deviceTracking.totalQRScans += 1;
+        console.log(`✅ [QRScan /ads] Master slot - incremented totals`);
+      } else {
+        console.log(`💤 [QRScan /ads] Slave slot - skipped incrementing totals`);
+      }
+      
+      // ✅ Update QR scans by ad (only for master slot)
+      if (isMasterSlot) {
+        const existingAdScan = deviceTracking.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+        if (existingAdScan) {
+          existingAdScan.scanCount += 1;
+          existingAdScan.lastScanned = new Date();
+        } else {
+          deviceTracking.qrScansByAd.push({
+            adId: qrScanData.adId,
+            adTitle: qrScanData.adTitle,
+            scanCount: 1,
+            lastScanned: new Date(),
+            firstScanned: new Date()
+          });
+        }
       }
       
       await deviceTracking.save();
@@ -667,6 +763,67 @@ router.get('/qr-redirect', async (req, res) => {
   } catch (error) {
     console.error('❌ Error in QR redirect:', error);
     res.redirect(302, 'https://ads2go.app');
+  }
+});
+
+// GET /ads/:adId/devices - Get devices that have a specific ad deployed
+router.get('/:adId/devices', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    
+    console.log(`🔍 Fetching devices for ad: ${adId}`);
+    
+    // Find all devices that have this ad in their deployedAds array
+    const DeviceTracking = require('../models/deviceTracking');
+    const devices = await DeviceTracking.find({
+      'deployedAds.adId': adId
+    }).lean();
+    
+    console.log(`📱 Found ${devices.length} devices with ad ${adId}`);
+    
+    // Transform the data to include device info and current status
+    const deviceStatusService = require('../services/deviceStatusService');
+    
+    const deviceList = devices.map(device => {
+      const deviceStatus = deviceStatusService.getDeviceStatus(device.materialId);
+      const isOnline = deviceStatus?.isOnline || device.isOnline || false;
+      const lastSeen = deviceStatus?.lastSeen || device.lastSeen;
+      
+      // Find the specific ad deployment info
+      const adDeployment = device.deployedAds.find(ad => ad.adId === adId);
+      
+      return {
+        deviceId: device.materialId,
+        materialId: device.materialId,
+        isOnline,
+        lastSeen,
+        currentLocation: device.currentLocation,
+        totalDistance: device.totalDistanceToday || 0,
+        currentHours: device.currentHours || 0,
+        adDeployment: adDeployment ? {
+          slotNumber: adDeployment.slotNumber,
+          status: adDeployment.status,
+          startTime: adDeployment.startTime,
+          endTime: adDeployment.endTime
+        } : null,
+        deviceInfo: device.deviceInfo || {}
+      };
+    });
+    
+    res.json({
+      success: true,
+      devices: deviceList,
+      totalDevices: deviceList.length,
+      onlineDevices: deviceList.filter(d => d.isOnline).length
+    });
+    
+  } catch (error) {
+    console.error('Error fetching devices for ad:', error);
+    res.status(500).json({
+      success: false,
+      devices: [],
+      message: 'Internal server error'
+    });
   }
 });
 

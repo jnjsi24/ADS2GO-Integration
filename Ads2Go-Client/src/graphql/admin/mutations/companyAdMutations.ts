@@ -11,10 +11,6 @@ export const CREATE_COMPANY_AD = gql`
       duration
       isActive
       priority
-      playCount
-      lastPlayed
-      tags
-      notes
       createdBy {
         id
         firstName
@@ -38,10 +34,6 @@ export const UPDATE_COMPANY_AD = gql`
       duration
       isActive
       priority
-      playCount
-      lastPlayed
-      tags
-      notes
       updatedBy {
         id
         firstName

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { useSearchParams } from 'react-router-dom';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
 import { GET_ALL_DRIVER_REPORTS } from '../../graphql/admin/queries/driverReports';
@@ -46,6 +47,7 @@ type ReportSource = 'users' | 'drivers';
 
 const Reports: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
+  const [searchParams] = useSearchParams();
   const [isMobile, setIsMobile] = useState(false);
   const [reportSource, setReportSource] = useState<ReportSource>('users');
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,6 +55,8 @@ const Reports: React.FC = () => {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('All Types');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
   const [expandedRow, setExpandedRow] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -66,10 +70,28 @@ const Reports: React.FC = () => {
   const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
   const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'OTHER'];
+  const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Read URL parameter to set the correct tab and filter
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const status = searchParams.get('status');
+    
+    if (tab === 'driver') {
+      setReportSource('drivers');
+    } else if (tab === 'user') {
+      setReportSource('users');
+    }
+    
+    // Set status filter if specified in URL
+    if (status === 'pending') {
+      setSelectedStatusFilter('Pending');
+    }
+  }, [searchParams]);
 
   // Fetch user reports
   const { data: userData, loading: userLoading, error: userError } = useQuery(GET_ALL_USER_REPORTS, {
@@ -137,6 +159,19 @@ const Reports: React.FC = () => {
       report.reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
     
     return matchesSearch && matchesStatus && matchesType;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Alphabetical (A-Z)':
+        return a.title.localeCompare(b.title);
+      case 'Alphabetical (Z-A)':
+        return b.title.localeCompare(a.title);
+      default:
+        return 0;
+    }
   }) || [];
 
   // Pagination logic
@@ -202,10 +237,14 @@ const Reports: React.FC = () => {
       await updateReport({
         variables: {
           id: selectedReport.id,
-          status: updateData.status,
-          adminNotes: updateData.adminNotes
+          input: {
+            status: updateData.status,
+            adminNotes: updateData.adminNotes
+          }
         },
-        refetchQueries: [{ query: GET_ALL_USER_REPORTS }],
+        refetchQueries: [
+          { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
+        ],
       });
       setIsUpdateModalOpen(false);
       setSelectedReport(null);
@@ -221,14 +260,17 @@ const Reports: React.FC = () => {
           updateReport({
             variables: {
               id,
-              status
-            }
+              input: {
+                status
+              }
+            },
+            refetchQueries: [
+              { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
+            ],
           })
         )
       );
       setSelectedReports([]);
-      // Refetch data to update UI
-      // You might want to use Apollo Client's cache update instead
     } catch (error) {
       console.error('Error bulk updating reports:', error);
     }
@@ -267,11 +309,23 @@ const Reports: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   // Show loading state while authentication is being checked
@@ -422,6 +476,39 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
+              <div className="relative w-full sm:w-36">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{sortBy}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {sortByOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
@@ -467,9 +554,7 @@ const Reports: React.FC = () => {
       )}
 
       {/* Table Header */}
-      {loading ? (
-        <AdminLoader />
-      ) : error ? (
+      {error ? (
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredReports.length === 0 ? (
         <div className="text-center py-10 text-gray-500">
@@ -670,9 +755,17 @@ const Reports: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gray-600" />
-                  <strong className="text-sm font-medium text-gray-700">User Email</strong>
+                  <strong className="text-sm font-medium text-gray-700">
+                    {reportSource === 'users' ? 'User Email' : 'Driver Email'}
+                  </strong>
                 </div>
-                <p className="mt-1 font-semibold text-black">{selectedReport.user.email}</p>
+                <p className="mt-1 font-semibold text-black">
+                  {reportSource === 'users' && selectedReport.user
+                    ? selectedReport.user.email
+                    : reportSource === 'drivers' && selectedReport.driver
+                    ? selectedReport.driver.email
+                    : 'N/A'}
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-2">

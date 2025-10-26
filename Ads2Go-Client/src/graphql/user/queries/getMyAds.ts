@@ -10,6 +10,7 @@ export const GET_MY_ADS = gql`
       mediaFile
       adType
       status
+      paymentStatus
       vehicleType
       createdAt
       price

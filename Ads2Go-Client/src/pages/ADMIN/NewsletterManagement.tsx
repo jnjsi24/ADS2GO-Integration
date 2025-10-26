@@ -31,6 +31,8 @@ const NewsletterManagement: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<string>('All Subscribers');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,6 +45,8 @@ const NewsletterManagement: React.FC = () => {
     'Non-User Subscribers',
     'Unsubscribed'
   ];
+
+  const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredSubscribers.length / itemsPerPage);
@@ -174,7 +178,7 @@ const NewsletterManagement: React.FC = () => {
     }
   };
 
-  const applyFilter = (filter: string, subscribersData: Subscriber[], search: string) => {
+  const applyFilter = (filter: string, subscribersData: Subscriber[], search: string, sort: string = sortBy) => {
     let filtered = subscribersData;
     switch (filter) {
       case 'Active Subscribers':
@@ -203,6 +207,23 @@ const NewsletterManagement: React.FC = () => {
         sub.email.toLowerCase().includes(search.toLowerCase())
       );
     }
+    
+    // Apply sorting
+    filtered = filtered.sort((a, b) => {
+      switch (sort) {
+        case 'Newest First':
+          return new Date(b.subscribedAt).getTime() - new Date(a.subscribedAt).getTime();
+        case 'Oldest First':
+          return new Date(a.subscribedAt).getTime() - new Date(b.subscribedAt).getTime();
+        case 'Alphabetical (A-Z)':
+          return a.email.localeCompare(b.email);
+        case 'Alphabetical (Z-A)':
+          return b.email.localeCompare(a.email);
+        default:
+          return 0;
+      }
+    });
+    
     setFilteredSubscribers(filtered);
   };
 
@@ -214,7 +235,13 @@ const NewsletterManagement: React.FC = () => {
 
   const handleSearchChange = (term: string) => {
     setSearchTerm(term);
-    applyFilter(selectedFilter, subscribers, term);
+    applyFilter(selectedFilter, subscribers, term, sortBy);
+  };
+
+  const handleSortChange = (sort: string) => {
+    setSortBy(sort);
+    applyFilter(selectedFilter, subscribers, searchTerm, sort);
+    setShowSortDropdown(false);
   };
 
   const handleUnsubscribe = async (email: string) => {
@@ -383,6 +410,36 @@ const NewsletterManagement: React.FC = () => {
                           className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                         >
                           {filter}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
+                >
+                  {sortBy}
+                  <ChevronDown size={16} className={`transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {sortByOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => handleSortChange(option)}
+                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {option}
                         </button>
                       ))}
                     </motion.div>

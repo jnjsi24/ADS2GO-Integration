@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useLocation } from 'react-router-dom';
 import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail, CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
-import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageDrivers';
+import { GET_ALL_DRIVERS, GET_DRIVER_USAGE_HISTORY } from '../../graphql/admin/queries/manageDrivers';
+import { GET_ALL_MATERIALS } from '../../graphql/admin/queries/materials';
+import { GET_DRIVER_MATERIALS } from '../../graphql/admin/queries/driverMaterials';
+import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin/mutations/compliance';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -137,6 +141,7 @@ const DocumentImage: React.FC<{
 };
 
 const statusFilterOptions = ['All Status', 'Active', 'Pending', 'Rejected'];
+const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 const monthOptions = [
   'All Months', 'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -152,6 +157,7 @@ const generateYearOptions = () => {
 const yearOptions = generateYearOptions();
 
 const ManageDrivers: React.FC = () => {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
@@ -159,6 +165,8 @@ const ManageDrivers: React.FC = () => {
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('All Months');
   const [selectedYear, setSelectedYear] = useState('All Years');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -191,6 +199,15 @@ const ManageDrivers: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Check URL parameters for status filter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const statusParam = urlParams.get('status');
+    if (statusParam === 'pending') {
+      setSelectedStatusFilter('Pending');
+    }
+  }, [location.search]);
+
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
     id: string;
@@ -215,6 +232,23 @@ const ManageDrivers: React.FC = () => {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
+  const { data: driverMaterialsData, refetch: refetchDriverMaterials } = useQuery(GET_DRIVER_MATERIALS, {
+    variables: { driverId: selectedDriverDetails?.driverId || '' },
+    skip: !selectedDriverDetails?.driverId,
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  // Fetch all materials to compute live availability counts by type for the selected driver's vehicle
+  const { data: materialsInventoryData } = useQuery(GET_ALL_MATERIALS, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const { data: driverUsageData, refetch: refetchDriverUsage } = useQuery(GET_DRIVER_USAGE_HISTORY, {
+    variables: { driverId: selectedDriverDetails?.driverId || '' },
+    skip: !selectedDriverDetails?.driverId,
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
   const [approveDriver] = useMutation(APPROVE_DRIVER, {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
@@ -224,6 +258,13 @@ const ManageDrivers: React.FC = () => {
   });
 
   const [deleteDriver] = useMutation(DELETE_DRIVER, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const [approveMonthlyPhoto] = useMutation(APPROVE_MONTHLY_PHOTO, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+  const [rejectMonthlyPhoto] = useMutation(REJECT_MONTHLY_PHOTO, {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
@@ -246,6 +287,23 @@ const ManageDrivers: React.FC = () => {
       matchesDate = matchesMonth && matchesYear;
     }
     return matchesSearch && matchesStatus && matchesDate;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Alphabetical (A-Z)':
+        const aName = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bName = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return aName.localeCompare(bName);
+      case 'Alphabetical (Z-A)':
+        const aNameZA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bNameZA = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return bNameZA.localeCompare(aNameZA);
+      default:
+        return 0;
+    }
   });
 
   const handleApprove = async (driverId: string) => {
@@ -293,6 +351,13 @@ const ManageDrivers: React.FC = () => {
         type: 'error', title: 'Approval Failed', message: error.message || 'Failed to approve driver', duration: 6000
       });
     }
+  };
+
+  // Open approval modal to choose material types and see availability
+  const openApprovalWithMaterialSelection = (driver: Driver) => {
+    setSelectedDriverDetails(driver);
+    setSelectedMaterials([]);
+    setShowMaterialModal(true);
   };
 
   const handleReject = (driverId: string) => {
@@ -401,6 +466,11 @@ const ManageDrivers: React.FC = () => {
     setCurrentImageIndex(0);
     setShowDetailsModal(true);
     setTimeout(() => setIsModalOpen(true), 10);
+    // Load driver materials & compliance
+    setTimeout(() => {
+      refetchDriverMaterials && refetchDriverMaterials();
+      refetchDriverUsage && refetchDriverUsage();
+    }, 0);
     if (driver.accountStatus === 'REJECTED') {
       setShowRejectionNotification(true);
     }
@@ -592,6 +662,36 @@ const ManageDrivers: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
+            <div className="relative flex-1 sm:flex-none sm:w-36">
+              <button
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{sortBy}</span>
+                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {showSortDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {sortByOptions.map(option => (
+                      <button
+                        key={option}
+                        onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
@@ -682,7 +782,7 @@ const ManageDrivers: React.FC = () => {
                       {driver.accountStatus === 'PENDING' && (
                         <>
                           <button
-                            onClick={(e) => { e.stopPropagation(); handleApprove(driver.driverId); }}
+                            onClick={(e) => { e.stopPropagation(); openApprovalWithMaterialSelection(driver); }}
                             className="flex items-center bg-green-200 text-green-700 px-3 py-1 rounded border border-green-200 hover:bg-green-50"
                           >
                             <Check size={14} className="mr-1" />
@@ -741,7 +841,7 @@ const ManageDrivers: React.FC = () => {
                       {driver.accountStatus === 'PENDING' && (
                         <>
                           <button
-                            onClick={() => handleApprove(driver.driverId)}
+                            onClick={() => openApprovalWithMaterialSelection(driver)}
                             className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                           >
                             <Check className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300" size={16} />
@@ -793,19 +893,34 @@ const ManageDrivers: React.FC = () => {
             </div>
             <p className="text-sm text-gray-600 mb-3">Choose one or more materials to approve for this driver. If you leave it empty, the current server default will be used.</p>
             <div className="grid grid-cols-1 gap-2 mb-4">
-              {['CAR_TOP', 'CAR_BODY', 'TRICYCLE_REAR', 'BICYCLE_FRAME', 'MOTORCYCLE_SIDE', 'OTHER'].map(m => (
-                <label key={m} className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={selectedMaterials.includes(m)}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setSelectedMaterials(prev => checked ? [...prev, m] : prev.filter(x => x !== m));
-                    }}
-                  />
-                  <span>{m.replace('_', ' ')}</span>
-                </label>
-              ))}
+              {(() => {
+                // Derive available material types and counts for this driver's vehicle type
+                const allMats = materialsInventoryData?.getAllMaterials || [];
+                const vehicleType = selectedDriverDetails?.vehicleType;
+                const filtered = vehicleType ? allMats.filter((m: any) => m.vehicleType === vehicleType && !m.driverId) : [];
+                const counts: Record<string, number> = {};
+                filtered.forEach((m: any) => { counts[m.materialType] = (counts[m.materialType] || 0) + 1; });
+                const types = Object.keys(counts).sort();
+                if (types.length === 0) {
+                  return <p className="text-sm text-red-600">No available materials for this driver’s vehicle type.</p>;
+                }
+                return types.map((mType) => (
+                  <label key={mType} className="flex items-center justify-between text-sm px-3 py-2 border rounded-md">
+                    <span className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedMaterials.includes(mType)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setSelectedMaterials(prev => checked ? [...prev, mType] : prev.filter(x => x !== mType));
+                        }}
+                      />
+                      <span className="font-medium">{mType}</span>
+                    </span>
+                    <span className="text-xs text-gray-600">{counts[mType]} available</span>
+                  </label>
+                ));
+              })()}
             </div>
             <div className="flex gap-3 justify-end">
               <button
@@ -913,23 +1028,25 @@ const ManageDrivers: React.FC = () => {
                     <div className={`${isMobile ? "mb-2" : "mb-4"}`}>
                       <p className="text-xs sm:text-sm text-gray-500">Assigned Date</p>
                       <p className="text-gray-900 font-bold text-sm sm:text-base">
-                        {selectedDriverDetails.material?.assignedDate
-                          ? new Date(
-                              selectedDriverDetails.material.assignedDate
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })
-                          : selectedDriverDetails.material?.mountedAt
-                          ? new Date(
-                              selectedDriverDetails.material.mountedAt
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            })
-                          : "N/A"}
+                        {(() => {
+                          const materials = driverMaterialsData?.getDriverMaterials?.materials || [];
+                          if (!materials.length) return "N/A";
+                          const targetMaterialId = selectedDriverDetails?.material?.materialId || "";
+                          const m = targetMaterialId
+                            ? (materials.find((x: any) => x.materialId === targetMaterialId) || materials[0])
+                            : materials[0];
+                          const dateStr = m?.assignedDate || m?.mountedAt;
+                          return dateStr
+                            ? new Date(dateStr).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                            : "N/A";
+                        })()}
+                      </p>
+                    </div>
+
+                    <div className={`${isMobile ? "mb-2" : "mb-4"}`}>
+                      <p className="text-xs sm:text-sm text-gray-500">Driver Created</p>
+                      <p className="text-gray-900 font-bold text-sm sm:text-base">
+                        {formatDate(selectedDriverDetails.createdAt)}
                       </p>
                     </div>
 
@@ -976,6 +1093,155 @@ const ManageDrivers: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Material History */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-3">Material History</h3>
+                {(() => {
+                  const history = driverUsageData?.getDriverUsageHistory?.usageHistory || [];
+                  if (!history.length) return <p className="text-sm text-gray-500">No material history found for this driver.</p>;
+                  return (
+                    <div className="space-y-2">
+                      {history.map((h: any) => (
+                        <div key={h.id} className="border rounded p-3 bg-gray-50 text-sm">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full bg-gray-200">{h.materialStringId || h.materialId}</span>
+                            {h.isActive ? (
+                              <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-gray-200">ENDED</span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-700">
+                            <div>
+                              Assigned: {h.assignedAt ? new Date(h.assignedAt).toLocaleString() : 'N/A'}
+                              {h.unassignedAt && <span> → {new Date(h.unassignedAt).toLocaleString()}</span>}
+                            </div>
+                            <div>
+                              Mounted: {h.mountedAt ? new Date(h.mountedAt).toLocaleString() : 'N/A'}
+                              {h.dismountedAt && <span> • Dismounted: {new Date(h.dismountedAt).toLocaleString()}</span>}
+                            </div>
+                            {/* Reason removed per request */}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Monthly Compliance */}
+              <div className="mt-8">
+                <h3 className="text-lg font-bold mb-3">Monthly Compliance</h3>
+                {(() => {
+                  const materials = driverMaterialsData?.getDriverMaterials?.materials || [];
+                  if (!materials.length) {
+                    return <p className="text-sm text-gray-500">No assigned materials found for this driver.</p>;
+                  }
+                  // Prefer the driver's assigned materialId if available
+                  const targetMaterialId = selectedDriverDetails?.material?.materialId || '';
+                  const material = targetMaterialId ? (materials.find((m: any) => m.materialId === targetMaterialId) || materials[0]) : materials[0];
+                  const tracking = material.materialTracking;
+                  const photos = tracking?.monthlyPhotos || [];
+                  // Derive last/next dates if backend fields are missing
+                  const derivedLast = (() => {
+                    if (tracking?.lastPhotoUpload) return new Date(tracking.lastPhotoUpload);
+                    if (!photos.length) return null;
+                    const latest = photos
+                      .map((p: any) => (p.uploadedAt ? new Date(p.uploadedAt).getTime() : 0))
+                      .reduce((a: number, b: number) => Math.max(a, b), 0);
+                    return latest ? new Date(latest) : null;
+                  })();
+                  const derivedNext = (() => {
+                    if (tracking?.nextPhotoDue) return new Date(tracking.nextPhotoDue);
+                    // If no last upload yet, schedule first due 1 month after assigned/mounted
+                    if (!derivedLast) {
+                      const base = material.assignedDate || material.mountedAt;
+                      if (base) {
+                        const d = new Date(base);
+                        if (!isNaN(d.getTime())) {
+                          d.setMonth(d.getMonth() + 1);
+                          return d;
+                        }
+                      }
+                      return null;
+                    }
+                    const d = new Date(derivedLast);
+                    d.setMonth(d.getMonth() + 1);
+                    return d;
+                  })();
+                  return (
+                    <div className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex flex-wrap items-center gap-4 mb-3 text-sm">
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200">Material: {material.materialId}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200">Status: {tracking?.photoComplianceStatus || 'PENDING'}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200">Last: {derivedLast ? derivedLast.toLocaleDateString() : 'N/A'}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200">Next Due: {derivedNext ? derivedNext.toLocaleDateString() : 'N/A'}</span>
+                      </div>
+                      {photos.length === 0 ? (
+                        <p className="text-sm text-gray-500">No monthly photos uploaded yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {photos.map((p: any, idx: number) => (
+                            <div key={`${p.month}-${idx}`} className="bg-white border rounded p-3">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-semibold">{p.month}</span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === 'APPROVED' ? 'bg-green-100 text-green-700' : p.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>
+                                  <span className="text-xs text-gray-500">{p.uploadedAt ? new Date(p.uploadedAt).toLocaleString() : ''}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                                    onClick={async () => {
+                                      try {
+                                        // Prompt for condition status when approving
+                                        const condition = window.prompt('Set material condition for this inspection (EXCELLENT, GOOD, FAIR, POOR, DAMAGED):', 'GOOD') || undefined;
+                                        const res = await approveMonthlyPhoto({ variables: { materialId: material.id, month: p.month, adminNotes: '', condition } });
+                                        if (res.data?.approveMonthlyPhoto?.success) {
+                                          addToast({ type: 'success', title: 'Approved', message: 'Photo approved', duration: 3000 });
+                                          refetchDriverMaterials && refetchDriverMaterials();
+                                        } else {
+                                          addToast({ type: 'error', title: 'Failed', message: res.data?.approveMonthlyPhoto?.message || 'Approve failed' });
+                                        }
+                                      } catch (e: any) {
+                                        addToast({ type: 'error', title: 'Failed', message: e.message || 'Approve failed' });
+                                      }
+                                    }}
+                                  >Approve</button>
+                                  <button
+                                    className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await rejectMonthlyPhoto({ variables: { materialId: material.id, month: p.month, adminNotes: '' } });
+                                        if (res.data?.rejectMonthlyPhoto?.success) {
+                                          addToast({ type: 'success', title: 'Rejected', message: 'Photo rejected', duration: 3000 });
+                                          refetchDriverMaterials && refetchDriverMaterials();
+                                        } else {
+                                          addToast({ type: 'error', title: 'Failed', message: res.data?.rejectMonthlyPhoto?.message || 'Reject failed' });
+                                        }
+                                      } catch (e: any) {
+                                        addToast({ type: 'error', title: 'Failed', message: e.message || 'Reject failed' });
+                                      }
+                                    }}
+                                  >Reject</button>
+                                </div>
+                              </div>
+                              {Array.isArray(p.photoUrls) && p.photoUrls.length > 0 && (
+                                <div className="mt-2 flex gap-2 flex-wrap">
+                                  {p.photoUrls.map((u: string, i: number) => (
+                                    <img key={i} src={u} alt={`photo-${i}`} className="w-24 h-24 object-cover rounded border" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-image.png'; }} />
+                                  ))}
+                                </div>
+                              )}
+                              {p.adminNotes && <p className="text-xs text-gray-500 mt-1">Notes: {p.adminNotes}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <h3 className="text-lg font-bold mb-3 text-center">Documents & Photos</h3>

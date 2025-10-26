@@ -1,22 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PlayCircle, 
-  Pause, 
-  Play, 
-  Square, 
-  Tablet, 
-  Users, 
   Clock, 
-  Activity, 
-  CalendarPlus, 
-  CalendarMinus, 
+  Activity,
   Settings 
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import {
   GET_ALL_DEPLOYMENTS,
   GET_ACTIVE_DEPLOYMENTS,
-  UPDATE_DEPLOYMENT_STATUS,
   UPDATE_LCD_SLOT_STATUS,
   REMOVE_ADS_FROM_LCD,
   type AdDeployment,
@@ -51,16 +43,6 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   });
 
   // Deployment mutations
-  const [updateDeploymentStatus] = useMutation(UPDATE_DEPLOYMENT_STATUS, {
-    onCompleted: () => {
-      refetchDeployments();
-    },
-    onError: (error) => {
-      console.error('Error updating deployment:', error);
-      alert(`Error updating deployment: ${error.message}`);
-    }
-  });
-
   const [updateLCDSlotStatus] = useMutation(UPDATE_LCD_SLOT_STATUS, {
     onCompleted: () => {
       refetchDeployments();
@@ -82,19 +64,6 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   });
 
   // Handler functions
-  const handleDeploymentAction = async (deploymentId: string, action: string) => {
-    try {
-      await updateDeploymentStatus({
-        variables: {
-          id: deploymentId,
-          status: action.toUpperCase()
-        }
-      });
-    } catch (error) {
-      console.error('Error updating deployment:', error);
-    }
-  };
-
   const handleLCDSlotAction = async (materialId: string, adId: string, action: string) => {
     try {
       await updateLCDSlotStatus({
@@ -111,7 +80,12 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
   // Filter deployments
   const filteredDeployments = deploymentsData?.getAllDeployments?.filter((deployment: AdDeployment) => {
-    return parentFilter === 'all' || deployment.currentStatus === parentFilter;
+    // Show all deployments if filter is 'all', 'All Status', or undefined
+    if (!parentFilter || parentFilter === 'all' || parentFilter.toLowerCase() === 'all status') {
+      return true;
+    }
+    // Otherwise match the status (case-insensitive)
+    return deployment.currentStatus?.toLowerCase() === parentFilter.toLowerCase();
   }) || [];
 
 
@@ -130,41 +104,99 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
   return (
     <div>
-      <div className="flex justify-end items-center mb-6 gap-2">
-        <button className="py-3 bg-green-500 text-xs text-white rounded-lg w-32 hover:bg-green-600 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
-          Deploy Ad
-        </button>
-        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-lg w-32 hover:bg-[#1B5087] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">            
-          Bulk Actions
-        </button>
-      </div>
-
-
       {/* Deployment Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg">
-          <p className="text-3xl text-center font-bold text-black">
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-3xl text-center font-bold text-blue-600">
             {deploymentsData?.getAllDeployments?.length || 0}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Total Deployments</h3>
+          <h3 className="text-sm text-center font-medium text-gray-500">Total Devices</h3>
+          <p className="text-xs text-center text-gray-400 mt-1">with deployments</p>
         </div>
-        <div className="bg-white p-4 rounded-lg">
+        <div className="bg-white p-4 rounded-lg shadow">
           <p className="text-3xl text-center font-bold text-green-600">
-            {activeDeploymentsData?.getActiveDeployments?.length || 0}
-          </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Active Deployments</h3>
-        </div>
-        <div className="bg-white p-4 rounded-lg">
-          <p className="text-3xl text-center font-bold text-blue-500">
-            {deploymentsData?.getAllDeployments?.filter((d: AdDeployment) => d.currentStatus === 'RUNNING').length || 0}
+            {(() => {
+              const now = new Date();
+              // Count UNIQUE ads that are ACTUALLY PLAYING based on dates
+              const uniqueAdIds = new Set<string>();
+              deploymentsData?.getAllDeployments?.forEach((d: AdDeployment) => {
+                d.lcdSlots?.forEach(s => {
+                  // Ad is "running" if:
+                  // 1. Ad exists and is PAID
+                  // 2. Current date is >= start date
+                  // 3. Current date is <= end date
+                  if (s.ad && s.ad.paymentStatus === 'PAID') {
+                    const startTime = s.startTime ? new Date(s.startTime) : null;
+                    const endTime = s.endTime ? new Date(s.endTime) : null;
+                    
+                    // Check if ad is currently playing (within date range)
+                    if (startTime && endTime && startTime <= now && now <= endTime) {
+                      uniqueAdIds.add(s.adId);
+                    }
+                  }
+                });
+              });
+              return uniqueAdIds.size;
+            })()}
           </p>
           <h3 className="text-sm text-center font-medium text-gray-500">Running Ads</h3>
+          <p className="text-xs text-center text-gray-400 mt-1">actively playing</p>
         </div>
-        <div className="bg-white p-4 rounded-lg">
-          <p className="text-3xl text-center font-bold text-yellow-500">
-            {deploymentsData?.getAllDeployments?.filter((d: AdDeployment) => d.currentStatus === 'SCHEDULED').length || 0}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-3xl text-center font-bold text-purple-600">
+            {(() => {
+              const now = new Date();
+              // Count UNIQUE ads that are PAID but haven't started yet (start date in future)
+              const uniqueScheduledAdIds = new Set<string>();
+              deploymentsData?.getAllDeployments?.forEach((d: AdDeployment) => {
+                d.lcdSlots?.forEach(s => {
+                  // Ad is "scheduled" if:
+                  // 1. Ad exists and is PAID
+                  // 2. Start date is in the FUTURE (not yet started)
+                  if (s.ad && s.ad.paymentStatus === 'PAID') {
+                    const startTime = s.startTime ? new Date(s.startTime) : null;
+                    
+                    // Check if ad hasn't started yet
+                    if (startTime && startTime > now) {
+                      uniqueScheduledAdIds.add(s.adId);
+                    }
+                  }
+                });
+              });
+              return uniqueScheduledAdIds.size;
+            })()}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Scheduled</h3>
+          <h3 className="text-sm text-center font-medium text-gray-500">Scheduled Ads</h3>
+          <p className="text-xs text-center text-gray-400 mt-1">waiting to start</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-3xl text-center font-bold text-gray-600">
+            {(() => {
+              // Total slots = number of devices × 5 slots per device
+              const totalDevices = deploymentsData?.getAllDeployments?.length || 0;
+              return totalDevices * 5;
+            })()}
+          </p>
+          <h3 className="text-sm text-center font-medium text-gray-500">Total Slots</h3>
+          <p className="text-xs text-center text-gray-400 mt-1">all device slots</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <p className="text-3xl text-center font-bold text-orange-600">
+            {(() => {
+              // Calculate available slots: (devices × 5 slots) - paid ads
+              const totalDevices = deploymentsData?.getAllDeployments?.length || 0;
+              const totalPossibleSlots = totalDevices * 5;
+              const paidAdsCount = deploymentsData?.getAllDeployments?.reduce((total: number, d: AdDeployment) => {
+                const paidSlots = d.lcdSlots?.filter(s => 
+                  s.ad && s.ad.paymentStatus === 'PAID'
+                ).length || 0;
+                return total + paidSlots;
+              }, 0) || 0;
+              return totalPossibleSlots - paidAdsCount;
+            })()}
+          </p>
+          <h3 className="text-sm text-center font-medium text-gray-500">Available Slots</h3>
+          <p className="text-xs text-center text-gray-400 mt-1">remaining capacity</p>
         </div>
       </div>
 
@@ -176,213 +208,253 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       ) : (
         <div className="space-y-4">
           {filteredDeployments.map((deployment: AdDeployment) => (
-            <div key={deployment.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm">
-              {/* Header with ID and Status */}
+            <div key={deployment.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+              {/* Header with Material ID and Status */}
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-800">
-                      {deployment.ad?.title || ''}
+                    <h3 className="text-xl font-bold text-blue-700">
+                      {deployment.materialId || 'Unknown Device'}
                     </h3>
-                    <span
-                      className={`px-3 py-1 text-xs font-medium rounded-full ${
-                        deployment.currentStatus === 'RUNNING'
-                          ? 'bg-green-200 text-green-800'
-                          : deployment.currentStatus === 'SCHEDULED'
-                          ? 'bg-yellow-200 text-yellow-800'
-                          : deployment.currentStatus === 'COMPLETED'
-                          ? 'bg-blue-200 text-blue-800'
-                          : deployment.currentStatus === 'PAUSED'
-                          ? 'bg-orange-200 text-orange-800'
-                          : 'bg-gray-200 text-gray-800'
-                      }`}
-                    >
-                      {deployment.currentStatus}
+                    {/* Deployment status - show RUNNING (finished ads are removed from slots) */}
+                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-200 text-green-800">
+                      RUNNING
                     </span>
                   </div>
                   
                   {/* Deployment ID */}
-                  <div className="text-sm text-gray-600 mb-2">
-                    <span className="font-medium">Deployment ID:</span> {deployment.adDeploymentId || deployment.id}
+                  <div className="text-sm text-gray-600 mb-1">
+                    <span className="font-medium">Deployment ID:</span> <span className="font-mono text-xs">{deployment.adDeploymentId || deployment.id}</span>
                   </div>
-                </div>
-                
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDeploymentAction(deployment.id, 'pause')}
-                    className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                    title="Pause"
-                  >
-                    <Pause className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeploymentAction(deployment.id, 'running')}
-                    className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    title="Resume"
-                  >
-                    <Play className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeploymentAction(deployment.id, 'cancelled')}
-                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Cancel"
-                  >
-                    <Square className="w-4 h-4" />
-                  </button>
+                  
+                  {/* Driver ID */}
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Driver:</span> <span className="font-mono text-xs">{deployment.driverId || 'Not assigned'}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Deployment Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                {/* Material ID */}
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Tablet className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-medium text-gray-700">Material ID</span>
+              {/* Deployment Metadata */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs">
+                <div className="bg-blue-50 p-2 rounded border border-blue-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Clock className="w-3 h-3 text-blue-600" />
+                    <span className="font-medium text-blue-700">Created</span>
                   </div>
-                  <p className="text-sm text-gray-900 font-mono">{deployment.materialId}</p>
+                  <p className="text-blue-900 font-medium">
+                    {(() => {
+                      try {
+                        if (!deployment.createdAt) return 'N/A';
+                        const date = new Date(deployment.createdAt);
+                        if (isNaN(date.getTime())) return 'N/A';
+                        return date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        });
+                      } catch {
+                        return 'N/A';
+                      }
+                    })()}
+                  </p>
                 </div>
 
-                {/* Driver ID */}
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Users className="w-4 h-4 text-green-500" />
-                    <span className="text-sm font-medium text-gray-700">Driver ID</span>
+                <div className="bg-orange-50 p-2 rounded border border-orange-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Activity className="w-3 h-3 text-orange-600" />
+                    <span className="font-medium text-orange-700">Last Updated</span>
                   </div>
-                  <p className="text-sm text-gray-900 font-mono">{deployment.driverId}</p>
+                  <p className="text-orange-900 font-medium">
+                    {(() => {
+                      try {
+                        if (!deployment.updatedAt) return 'N/A';
+                        const date = new Date(deployment.updatedAt);
+                        if (isNaN(date.getTime())) return 'N/A';
+                        return date.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric'
+                        });
+                      } catch {
+                        return 'N/A';
+                      }
+                    })()}
+                  </p>
                 </div>
 
-                {/* Created Date */}
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock className="w-4 h-4 text-purple-500" />
-                    <span className="text-sm font-medium text-gray-700">Created</span>
+                <div className="bg-purple-50 p-2 rounded border border-purple-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Settings className="w-3 h-3 text-purple-600" />
+                    <span className="font-medium text-purple-700">Total Slots</span>
                   </div>
-                        <p className="text-sm text-gray-900">
-                          {deployment.createdAt ? new Date(deployment.createdAt).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : 'N/A'}
-                        </p>
+                  <p className="text-purple-900 font-bold text-base">
+                    {deployment.lcdSlots?.length || 0}
+                  </p>
+                  <p className="text-purple-600 text-xs">ad slots used</p>
                 </div>
 
-                {/* Updated Date */}
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Activity className="w-4 h-4 text-orange-500" />
-                    <span className="text-sm font-medium text-gray-700">Last Updated</span>
+                <div className="bg-green-50 p-2 rounded border border-green-200">
+                  <div className="flex items-center gap-1 mb-1">
+                    <PlayCircle className="w-3 h-3 text-green-600" />
+                    <span className="font-medium text-green-700">Running Slots</span>
                   </div>
-                        <p className="text-sm text-gray-900">
-                          {deployment.updatedAt ? new Date(deployment.updatedAt).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          }) : 'N/A'}
-                        </p>
+                  <p className="text-green-900 font-bold text-base">
+                    {deployment.lcdSlots?.filter(s => s.status === 'RUNNING').length || 0}
+                  </p>
+                  <p className="text-green-600 text-xs">actively playing</p>
                 </div>
-
-                {/* Start Time */}
-                {deployment.startTime && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CalendarPlus className="w-4 h-4 text-green-500" />
-                      <span className="text-sm font-medium text-gray-700">Start Time</span>
-                    </div>
-                          <p className="text-sm text-gray-900">
-                            {new Date(deployment.startTime).toLocaleString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                  </div>
-                )}
-
-                {/* End Time */}
-                {deployment.endTime && (
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CalendarMinus className="w-4 h-4 text-red-500" />
-                      <span className="text-sm font-medium text-gray-700">End Time</span>
-                    </div>
-                          <p className="text-sm text-gray-900">
-                            {new Date(deployment.endTime).toLocaleString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                  </div>
-                )}
               </div>
               
-              {/* LCD Slots Section */}
+              {/* Ad Slots Section */}
               {deployment.lcdSlots && deployment.lcdSlots.length > 0 && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Settings className="w-4 h-4 text-gray-600" />
-                    <h4 className="text-sm font-medium text-gray-700">LCD Slots ({deployment.lcdSlots.length})</h4>
+                    <h4 className="text-sm font-medium text-gray-700">Ad Slots ({deployment.lcdSlots.length})</h4>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {deployment.lcdSlots.map((slot: LCDSlot, index: number) => (
                       <div key={slot.id || index} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-800">Slot {slot.slotNumber}</span>
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded ${
-                              slot.status === 'RUNNING'
-                                ? 'bg-green-100 text-green-700'
-                                : slot.status === 'SCHEDULED'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : slot.status === 'COMPLETED'
-                                ? 'bg-blue-100 text-blue-700'
-                                : slot.status === 'PAUSED'
-                                ? 'bg-orange-100 text-orange-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {slot.status}
-                          </span>
+                          <div className="flex gap-1 flex-wrap justify-end">
+                            {/* Show RUNNING badge if ad is currently playing */}
+                            {(() => {
+                              const now = new Date();
+                              const startTime = slot.startTime ? new Date(slot.startTime) : null;
+                              const endTime = slot.endTime ? new Date(slot.endTime) : null;
+                              const isRunning = startTime && endTime && startTime <= now && now <= endTime;
+                              
+                              if (isRunning) {
+                                return (
+                                  <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 text-green-700">
+                                    RUNNING
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            {/* Show SCHEDULED badge if ad was scheduled (has future or past scheduled start date) */}
+                            {slot.status === 'SCHEDULED' && (
+                              <span className="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-700">
+                                SCHEDULED
+                              </span>
+                            )}
+                            
+                            {/* Show ENDED badge if ad is completed */}
+                            {(() => {
+                              const now = new Date();
+                              const endTime = slot.endTime ? new Date(slot.endTime) : null;
+                              const isEnded = endTime && now > endTime;
+                              
+                              if (isEnded || slot.status === 'COMPLETED' || slot.status === 'ENDED') {
+                                return (
+                                  <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-700">
+                                    ENDED
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            {/* Show other statuses */}
+                            {slot.status === 'PAUSED' && (
+                              <span className="px-2 py-1 text-xs font-medium rounded bg-orange-100 text-orange-700">
+                                PAUSED
+                              </span>
+                            )}
+                            
+                            {slot.status === 'REMOVED' && (
+                              <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 text-red-700">
+                                REMOVED
+                              </span>
+                            )}
+                            
+                            {slot.status === 'CANCELLED' && (
+                              <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                                CANCELLED
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {slot.ad?.title && (
-                          <p className="text-xs text-gray-600 truncate" title={slot.ad.title}>
+                          <p className="text-xs font-medium text-gray-700 truncate mb-2" title={slot.ad.title}>
                             {slot.ad.title}
                           </p>
                         )}
-                              {slot.deployedAt && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Deployed: {new Date(slot.deployedAt).toLocaleString('en-US', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
-                              )}
+                        
+                        {/* Deployment Date */}
+                        {slot.deployedAt && (() => {
+                          try {
+                            const date = new Date(slot.deployedAt);
+                            if (isNaN(date.getTime())) return null;
+                            return (
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <span className="font-medium">Deployed:</span>
+                                {date.toLocaleString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            );
+                          } catch {
+                            return null;
+                          }
+                        })()}
+                        
+                        {/* Start Date */}
+                        {slot.startTime && (() => {
+                          try {
+                            const date = new Date(slot.startTime);
+                            if (isNaN(date.getTime())) return null;
+                            return (
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <span className="font-medium">Start Date:</span>
+                                {date.toLocaleString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            );
+                          } catch {
+                            return null;
+                          }
+                        })()}
+                        
+                        {/* End Date */}
+                        {slot.endTime && (() => {
+                          try {
+                            const date = new Date(slot.endTime);
+                            if (isNaN(date.getTime())) return null;
+                            return (
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <span className="font-medium">End Date:</span>
+                                {date.toLocaleString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            );
+                          } catch {
+                            return null;
+                          }
+                        })()}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Additional Info */}
-              <div className="mt-4 pt-3 border-t border-gray-200">
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>Version: {deployment.__v ?? 0}</span>
-                  <span>ID: {deployment.id}</span>
-                </div>
-              </div>
             </div>
           ))}
         </div>

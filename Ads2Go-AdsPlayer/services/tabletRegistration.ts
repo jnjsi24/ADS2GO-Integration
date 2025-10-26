@@ -6,6 +6,7 @@ import playbackWebSocketService from './playbackWebSocketService';
 import offlineQueueService from './offlineQueueService';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
+import { log } from '../utils/logger';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -113,7 +114,7 @@ const getAPIBaseURL = () => {
   // Check environment variables first
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.API_URL;
   if (envUrl) {
-    console.log('🔧 Using environment API URL:', envUrl);
+    log.deviceTracking('Using environment API URL', { url: envUrl });
     return envUrl;
   }
 
@@ -123,13 +124,13 @@ const getAPIBaseURL = () => {
   
   if (serverIp && serverPort) {
     const serverUrl = `http://${serverIp}:${serverPort}`;
-    console.log('🔧 Using constructed server URL:', serverUrl);
+    log.deviceTracking('Using constructed server URL', { url: serverUrl });
     return serverUrl;
   }
 
   // Fallback to local server
   const fallbackUrl = 'http://192.168.1.7:5000';
-  console.log('🔧 Using fallback local server URL:', fallbackUrl);
+  log.deviceTracking('Using fallback local server URL', { url: fallbackUrl });
   return fallbackUrl;
 };
 
@@ -143,6 +144,8 @@ export class TabletRegistrationService {
   private isSimulatingOffline = false;
   private appStateListener: any = null;
   private isReregistering = false; // Prevent concurrent re-registration attempts
+  private lastServerVerification: number = 0; // Track last server verification time
+  private serverVerificationInterval: number = 60000; // Verify with server only once per minute
   
   // Speed violation tracking
   private currentSpeedLimit: number = 50; // Default urban speed limit
@@ -174,17 +177,20 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.material && result.material.materialId) {
-          console.log('Converted ObjectId to materialId:', objectId, '→', result.material.materialId);
-          return result.material.materialId;
-        }
+      if (result.success && result.material && result.material.materialId) {
+        log.deviceTracking('Converted ObjectId to materialId', { 
+          objectId, 
+          materialId: result.material.materialId 
+        });
+        return result.material.materialId;
+      }
       }
     } catch (error) {
-      console.error('Error converting ObjectId to materialId:', error);
+      log.error('Error converting ObjectId to materialId', { error, objectId });
     }
 
     // If conversion fails, return the original ObjectId but log a warning
-    console.warn('⚠️  Could not convert ObjectId to materialId format. Using ObjectId as fallback.');
+    log.warning('Could not convert ObjectId to materialId format. Using ObjectId as fallback.', { objectId });
     return objectId;
   }
 
@@ -243,23 +249,23 @@ export class TabletRegistrationService {
     try {
       // First check if registration was explicitly cleared
       const wasCleared = await AsyncStorage.getItem('registration_cleared');
-      console.log('🔍 Checking registration cleared flag in checkRegistrationStatus:', wasCleared);
+      log.deviceTracking('Checking registration cleared flag', { wasCleared });
       
       // If registration was cleared, don't check anything - respect the cleared state
       if (wasCleared) {
-        console.log('Registration was explicitly cleared, returning false');
+        log.deviceTracking('Registration was explicitly cleared, returning false');
         return false;
       }
       
       // Check if we have existing registration data
       const registrationData = await AsyncStorage.getItem('tabletRegistration');
       if (!registrationData) {
-        console.log('🔍 No registration data found, returning false');
+        log.deviceTracking('No registration data found, returning false');
         return false;
       }
 
       this.registration = JSON.parse(registrationData);
-      console.log('🔍 Found local registration data:', {
+      log.deviceTracking('Found local registration data', {
         deviceId: this.registration?.deviceId,
         materialId: this.registration?.materialId,
         slotNumber: this.registration?.slotNumber,
@@ -268,15 +274,36 @@ export class TabletRegistrationService {
 
       // If no device ID or material ID, it's not a valid registration
       if (!this.registration?.deviceId || !this.registration?.materialId) {
-        console.log('❌ Invalid registration data - missing deviceId or materialId');
+        log.error('Invalid registration data - missing deviceId or materialId');
         return false;
+      }
+
+      // ⚡ OPTIMIZATION: Only verify with server once per minute to avoid blocking ad player
+      // This prevents the ad player from waiting for server response on every mount
+      const now = Date.now();
+      const timeSinceLastVerification = now - this.lastServerVerification;
+      const shouldVerifyWithServer = timeSinceLastVerification > this.serverVerificationInterval;
+      
+      if (!shouldVerifyWithServer) {
+        log.deviceTracking(`Skipping server verification (last checked ${(timeSinceLastVerification / 1000).toFixed(0)}s ago), using cached registration`);
+        return this.registration?.isRegistered || false;
       }
 
       // IMPORTANT: Verify with server that this tablet is still registered
       // This handles the case where admin unregistered the tablet from the dashboard
       try {
-        console.log('🔄 Verifying registration with server...');
-        const response = await fetch(`${API_BASE_URL}/tablet/configuration/${this.registration.materialId}`);
+        log.deviceTracking('Verifying registration with server (cached verification expired)');
+        this.lastServerVerification = now; // Update timestamp before making request
+        
+        // Create abort controller with timeout (React Native compatible)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(`${API_BASE_URL}/tablet/configuration/${this.registration.materialId}`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
         
         if (response.ok) {
           const config = await response.json();
@@ -305,7 +332,7 @@ export class TabletRegistrationService {
                 return false;
               }
               
-              console.log('✅ Server confirmed registration is still valid');
+              log.deviceTracking('✅ Server confirmed registration is still valid');
               return this.registration.isRegistered || false;
             } else {
               console.log('❌ Slot not found on server');
@@ -323,7 +350,12 @@ export class TabletRegistrationService {
           return this.registration?.isRegistered || false;
         }
       } catch (error) {
-        console.error('❌ Error verifying registration with server:', error);
+        // Check for abort/timeout error (when controller.abort() is called)
+        if ((error as Error).name === 'AbortError') {
+          console.log('⏱️ Server verification timed out (5s), using cached local registration');
+        } else {
+          console.error('❌ Error verifying registration with server:', error);
+        }
         // If server check fails, trust local data for now
         return this.registration?.isRegistered || false;
       }
@@ -353,7 +385,7 @@ export class TabletRegistrationService {
       const registrationData = await AsyncStorage.getItem('tabletRegistration');
       if (registrationData) {
         this.registration = JSON.parse(registrationData);
-        console.log('📝 Loaded registration data from storage (cached for future use)');
+        log.deviceTracking('Loaded registration data from storage (cached for future use)');
         return this.registration;
       }
       
@@ -406,6 +438,9 @@ export class TabletRegistrationService {
         
         // Clear the "cleared" flag since we now have a valid registration
         await AsyncStorage.removeItem('registration_cleared');
+        
+        // Reset server verification cache to force immediate verification on next check
+        this.lastServerVerification = Date.now();
         
         // Update WebSocket service with new device info
         await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId, registration.slotNumber);
@@ -522,14 +557,24 @@ export class TabletRegistrationService {
   async updateLocationTracking(lat: number, lng: number, speed: number = 0, heading: number = 0, accuracy: number = 0): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.log('Device not registered - skipping location tracking');
+        log.deviceTracking('Device not registered - skipping location tracking');
         return false;
       }
 
       // Skip if GPS is still initializing (coordinates are [0,0])
       if (lat === 0 && lng === 0) {
-        console.log('⏳ GPS still initializing - skipping location update (coordinates are [0,0])');
+        log.deviceTracking('GPS still initializing - skipping location update (coordinates are [0,0])');
         return false;
+      }
+
+      // Log GPS data for debugging (occasionally)
+      if (Math.random() < 0.05) { // 5% of updates
+        console.log(`📍 [GPS] Slot ${this.registration.slotNumber} Location:`, {
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          speed: speed ? `${(speed * 3.6).toFixed(1)} km/h` : '0 km/h',
+          accuracy: `${accuracy.toFixed(0)}m`
+        });
       }
 
       // Validate speed value - ensure it's non-negative
@@ -537,7 +582,7 @@ export class TabletRegistrationService {
 
       // Validate that we have proper registration data
       if (!this.registration.materialId || this.registration.materialId.startsWith('TABLET-')) {
-        console.log('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
+        log.deviceTracking('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
         return false;
       }
 
@@ -560,7 +605,7 @@ export class TabletRegistrationService {
 
       // Only log location updates occasionally to reduce noise
       if (Math.random() < 0.1) { // Log ~10% of location updates
-        console.log('Updating location tracking:', locationUpdate);
+        log.deviceTracking('Updating location tracking', locationUpdate);
       }
 
       // Queue location data (will send immediately if online, queue if offline)
@@ -574,11 +619,14 @@ export class TabletRegistrationService {
 
       // If simulating offline, don't send to server
       if (this.simulatingOffline) {
-        console.log('📦 [Location] Queued location data (offline mode)');
+        log.deviceTracking('Queued location data (offline mode)');
         return true;
       }
 
-      console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
+      // Only log API URL occasionally to reduce noise
+      if (Math.random() < 0.05) { // Log ~5% of API calls
+        log.deviceTracking('API URL', { url: `${API_BASE_URL}/deviceTracking/location-update` });
+      }
 
       // Send to device tracking endpoint (unified location tracking)
       try {
@@ -611,7 +659,7 @@ export class TabletRegistrationService {
         const result = await deviceTrackingResponse.json();
         
         if (result.success) {
-          console.log('✅ Location tracking updated successfully');
+          log.deviceTracking('Location tracking updated successfully');
           return true;
         } else {
           console.error('❌ Location tracking failed:', result.message);
@@ -664,7 +712,7 @@ export class TabletRegistrationService {
 
   async startLocationTracking(): Promise<void> {
     if (this.isTracking) {
-      console.log('Location tracking already started');
+      log.deviceTracking('Location tracking already started');
       return;
     }
 
@@ -707,7 +755,7 @@ export class TabletRegistrationService {
 
       this.isTracking = true;
 
-      // Start periodic location updates (every 7 seconds)
+      // Start periodic location updates (every 2 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
           // Skip location updates if simulating offline
@@ -718,7 +766,7 @@ export class TabletRegistrationService {
 
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
-            timeInterval: 7000,
+            timeInterval: 2000,
             distanceInterval: 5, // Update every 5 meters
           });
 
@@ -734,13 +782,16 @@ export class TabletRegistrationService {
             accuracy || 0
           );
 
-          console.log('Location updated:', { latitude, longitude, speed, heading, accuracy });
+          // Only log location updates occasionally to reduce noise
+          if (Math.random() < 0.1) { // Log ~10% of location updates
+            log.deviceTracking('Location updated', { latitude, longitude, speed, heading, accuracy });
+          }
         } catch (error) {
           console.error('Error updating location:', error);
         }
-      }, 7000); // Update every 7 seconds
+      }, 2000); // Update every 2 seconds
 
-      console.log('Location tracking started');
+      log.deviceTracking('Location tracking started');
     } catch (error) {
       console.error('Error starting location tracking:', error);
       this.isTracking = false;
@@ -754,7 +805,7 @@ export class TabletRegistrationService {
     }
     
     this.isTracking = false;
-    console.log('Location tracking stopped');
+    log.deviceTracking('Location tracking stopped');
     
     // Update server that we're no longer tracking
     if (this.registration) {
@@ -823,19 +874,25 @@ export class TabletRegistrationService {
           // Check time restrictions
           if (zone.timeRestrictions) {
             if (currentHour >= zone.timeRestrictions.start && currentHour <= zone.timeRestrictions.end) {
-              console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name} - School hours)`);
+              // Only log speed limits occasionally to reduce noise
+              if (Math.random() < 0.1) { // Log ~10% of speed limit detections
+                log.deviceTracking(`Speed limit: ${zone.speedLimit} km/h (${zone.name})`);
+              }
               return zone.speedLimit;
             }
           }
           
-          console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name})`);
+          // Only log speed limits occasionally to reduce noise
+          if (Math.random() < 0.1) { // Log ~10% of speed limit detections
+            log.deviceTracking(`Speed limit: ${zone.speedLimit} km/h (${zone.name})`);
+          }
           return zone.speedLimit;
         }
       }
       
       // Default speed limit based on location
       const defaultLimit = this.getDefaultSpeedLimit(lat, lng);
-      console.log(`🚦 Default speed limit: ${defaultLimit} km/h`);
+      log.deviceTracking(`Default speed limit: ${defaultLimit} km/h`);
       return defaultLimit;
       
     } catch (error) {
@@ -1005,8 +1062,9 @@ export class TabletRegistrationService {
       this.appStateListener = null;
     }
     
-    // Clear registration data
+    // Clear registration data and reset server verification cache
     this.registration = null;
+    this.lastServerVerification = 0; // Force server verification on next check
     
     try {
       // Set a flag to indicate registration was explicitly cleared FIRST
@@ -1310,42 +1368,8 @@ export class TabletRegistrationService {
     }
   }
 
-  // Track ad playback
-  async trackAdPlayback(adId: string, adTitle: string, adDuration: number, viewTime: number = 0): Promise<boolean> {
-    try {
-      const registrationData = await this.getRegistrationData();
-      if (!registrationData) {
-        console.error('No registration data found');
-        return false;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/screenTracking/trackAd`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deviceId: registrationData.deviceId,
-          adId,
-          adTitle,
-          adDuration,
-          viewTime
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Ad playback tracked successfully:', result);
-        return true;
-      } else {
-        console.error('Failed to track ad playback:', response.status, response.statusText);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error tracking ad playback:', error);
-      return false;
-    }
-  }
+  // ❌ REMOVED: trackAdPlayback() - was causing duplicate tracking
+  // Ad tracking now handled directly in AdPlayer via /deviceTracking/ad-playback endpoint
 
   // End ad playback
   async endAdPlayback(): Promise<boolean> {
@@ -1368,7 +1392,7 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Ad playback ended successfully:', result);
+        log.adAnalytics('Ad playback ended successfully', result);
         return true;
       } else {
         console.error('Failed to end ad playback:', response.status, response.statusText);
@@ -1402,7 +1426,7 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Driver activity updated successfully:', result);
+        log.adAnalytics('Driver activity updated successfully', result);
         return true;
       } else {
         console.error('Failed to update driver activity:', response.status, response.statusText);

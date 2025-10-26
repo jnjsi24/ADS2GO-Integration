@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log } from '../utils/logger';
 
 interface AdDetails {
   adId: string;
@@ -10,6 +11,16 @@ interface AdDetails {
   isCompanyAd: boolean;
   adIndex: number;
   totalAds: number;
+}
+
+interface GPSData {
+  lat: number;
+  lng: number;
+  speed: number;      // meters per second
+  heading: number;    // degrees (0-360)
+  accuracy: number;   // meters
+  altitude?: number;  // meters
+  timestamp: string;  // ISO string
 }
 
 interface PlaybackUpdate {
@@ -29,6 +40,7 @@ interface PlaybackUpdate {
   hasJustFinished?: boolean;
   adDetails?: AdDetails;
   startTime?: string;
+  gpsData?: GPSData;  // NEW: Real-time GPS data
 }
 
 class PlaybackWebSocketService {
@@ -45,8 +57,13 @@ class PlaybackWebSocketService {
   private onSlotSync: ((message: any) => void) | null = null;
   private onPauseAll: ((message: any) => void) | null = null;
   private onResumeAll: ((message: any) => void) | null = null;
+  private onStopAll: ((message: any) => void) | null = null;
+  private onDisplayData: ((message: any) => void) | null = null;
   private onLockdown: ((message: any) => void) | null = null;
   private onUnlock: ((message: any) => void) | null = null;
+  private onFullscreen: ((message: any) => void) | null = null;
+  private onExitFullscreen: ((message: any) => void) | null = null;
+  private onStop8Hours: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
 
@@ -71,7 +88,7 @@ class PlaybackWebSocketService {
         this.deviceId = data.deviceId;
         this.materialId = data.materialId;
         this.slotNumber = data.slotNumber;
-        console.log('🔌 [WebSocket] Loaded device info:', { deviceId: this.deviceId, materialId: this.materialId, slotNumber: this.slotNumber });
+        log.deviceTracking('Loaded device info', { deviceId: this.deviceId, materialId: this.materialId, slotNumber: this.slotNumber });
       } else {
         console.log('🔌 [WebSocket] No registration data found, device not registered');
         this.deviceId = null;
@@ -122,11 +139,11 @@ class PlaybackWebSocketService {
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}&slotNumber=${this.slotNumber}`;
       
-      console.log('🔌 [WebSocket] Using server URL:', apiUrl);
-      console.log('🔌 [WebSocket] WebSocket URL:', wsUrl);
+      log.deviceTracking('WebSocket server URL', { url: apiUrl });
+      log.deviceTracking('WebSocket URL', { url: wsUrl });
       // Only log connection attempts if not in reconnection mode
       if (this.reconnectAttempts === 0) {
-        console.log('🔌 [WebSocket] Connecting to playback server...');
+        log.deviceTracking('Connecting to playback server...');
       }
 
       this.ws = new WebSocket(wsUrl);
@@ -147,8 +164,11 @@ class PlaybackWebSocketService {
           const message = JSON.parse(event.data);
           if (message.type === 'pong') {
             console.log('🔌 [WebSocket] Received pong');
+          } else if (message.type === 'stop8Hours') {
+            console.log('🛑 [WebSocket] Received 8-hour completion STOP command:', message);
+            this.handleStop8Hours(message);
           } else if (message.type === 'slotSync') {
-            console.log('🔄 [WebSocket] Received slot sync message:', message);
+            console.log('🔄 [WebSocket] Received slot sync command:', message);
             this.handleSlotSync(message);
           } else if (message.type === 'stateRequest') {
             console.log('🔄 [WebSocket] Received state request:', message);
@@ -162,12 +182,24 @@ class PlaybackWebSocketService {
           } else if (message.type === 'resumeAll') {
             console.log('▶️ [WebSocket] Received resume all command:', message);
             this.handleResumeAll(message);
+          } else if (message.type === 'stopAll') {
+            console.log('⏹️ [WebSocket] Received stop all command:', message);
+            this.handleStopAll(message);
+          } else if (message.type === 'displayData') {
+            console.log('📺 [WebSocket] Received display data for duplication:', message);
+            this.handleDisplayData(message);
           } else if (message.type === 'lockdown') {
             console.log('🔒 [WebSocket] Received lockdown command:', message);
             this.handleLockdown(message);
           } else if (message.type === 'unlock') {
             console.log('🔓 [WebSocket] Received unlock command:', message);
             this.handleUnlock(message);
+          } else if (message.type === 'fullscreen') {
+            console.log('🖥️ [WebSocket] Received fullscreen command:', message);
+            this.handleFullscreen(message);
+          } else if (message.type === 'exit-fullscreen') {
+            console.log('🖥️ [WebSocket] Received exit fullscreen command:', message);
+            this.handleExitFullscreen(message);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -310,7 +342,8 @@ class PlaybackWebSocketService {
         currentTime: this.currentPlaybackData.currentTime!,
         duration: this.currentPlaybackData.duration!,
         progress: this.currentPlaybackData.progress!,
-        startTime: this.currentPlaybackData.startTime
+        startTime: this.currentPlaybackData.startTime,
+        gpsData: this.currentPlaybackData.gpsData  // Include GPS data if available
       };
 
       this.ws.send(JSON.stringify(update));
@@ -332,17 +365,14 @@ class PlaybackWebSocketService {
           isCompanyAd: update.adDetails?.isCompanyAd || false
         });
       } else {
-        console.log(`🎬 [WebSocket] Sent detailed state update:`, {
-          deviceId: update.deviceId,
-          adTitle: update.adTitle,
-          state: update.state,
-          progress: `${update.progress.toFixed(1)}%`,
-          currentTime: `${update.currentTime.toFixed(1)}s`,
-          adIndex: update.adDetails?.adIndex || 'N/A',
-          totalAds: update.adDetails?.totalAds || 'N/A',
-          isCompanyAd: update.adDetails?.isCompanyAd || false,
-          mediaFile: update.adDetails?.mediaFile || 'N/A'
-        });
+        // Only log WebSocket updates occasionally to reduce noise
+        if (Math.random() < 0.05) { // Log ~5% of WebSocket updates
+          log.deviceTracking(`WebSocket state update`, {
+            adTitle: update.adTitle,
+            state: update.state,
+            progress: `${update.progress.toFixed(1)}%`
+          });
+        }
       }
     } catch (error) {
       console.error('Error sending playback update:', error);
@@ -380,12 +410,6 @@ class PlaybackWebSocketService {
   }
 
   // Handle slot synchronization messages
-  private handleSlotSync(message: any) {
-    // This will be called by the AdPlayer component to handle synchronization
-    if (this.onSlotSync) {
-      this.onSlotSync(message);
-    }
-  }
 
   // Handle state request messages
   private handleStateRequest(message: any) {
@@ -451,6 +475,69 @@ class PlaybackWebSocketService {
     }
   }
 
+  // Handle stop all command from server
+  private handleStopAll(message: any) {
+    try {
+      console.log('⏹️ [WebSocket] Handling stop all command:', message);
+      
+      // Emit stop event to the AdPlayer component
+      if (this.onStopAll) {
+        this.onStopAll(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling stop all command:', error);
+    }
+  }
+
+  // Handle slot synchronization command from server
+  private handleSlotSync(message: any) {
+    try {
+      console.log('🔄 [WebSocket] Handling slot sync command:', message);
+      
+      // Emit slot sync event to the AdPlayer component
+      if (this.onSlotSync) {
+        this.onSlotSync(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling slot sync command:', error);
+    }
+  }
+
+  // Handle display data for duplication
+  private handleDisplayData(message: any) {
+    try {
+      console.log('📺 [WebSocket] Handling display data for duplication:', message);
+      
+      // Emit display data event to the AdPlayer component
+      if (this.onDisplayData) {
+        this.onDisplayData(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling display data:', error);
+    }
+  }
+
+  // Send display data to other slots for duplication
+  sendDisplayData(displayData: any) {
+    try {
+      if (this.ws && this.ws.readyState === 1) {
+        const message = {
+          type: 'displayData',
+          timestamp: new Date().toISOString(),
+          data: displayData,
+          deviceId: this.deviceId,
+          materialId: this.materialId,
+          slotNumber: this.slotNumber
+        };
+        
+        this.ws.send(JSON.stringify(message));
+        console.log('📺 [WebSocket] Sent display data to other slots:', displayData);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error sending display data:', error);
+    }
+  }
+
   // Handle lockdown command from server
   private handleLockdown(message: any) {
     try {
@@ -476,6 +563,64 @@ class PlaybackWebSocketService {
       }
     } catch (error) {
       console.error('❌ [WebSocket] Error handling unlock command:', error);
+    }
+  }
+
+  // Handle fullscreen command from server
+  private handleFullscreen(message: any) {
+    try {
+      console.log('🖥️ [WebSocket] Handling fullscreen command:', message);
+      
+      // Emit fullscreen event to the AdPlayer component
+      if (this.onFullscreen) {
+        this.onFullscreen(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling fullscreen command:', error);
+    }
+  }
+
+  // Handle exit fullscreen command from server
+  private handleExitFullscreen(message: any) {
+    try {
+      console.log('🖥️ [WebSocket] Handling exit fullscreen command:', message);
+      
+      // Emit exit fullscreen event to the AdPlayer component
+      if (this.onExitFullscreen) {
+        this.onExitFullscreen(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling exit fullscreen command:', error);
+    }
+  }
+
+  // Handle 8-hour completion stop command from server
+  private handleStop8Hours(message: any) {
+    try {
+      console.log('🛑 [WebSocket] Handling 8-hour completion STOP command:', message);
+      console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
+      console.log(`🔒 Ad player will be locked until ${message.unlockTime}`);
+      
+      // Emit stop8Hours event to trigger shutdown sequence
+      if (this.onStop8Hours) {
+        this.onStop8Hours(message);
+      }
+      
+      // Also save the completion data to AsyncStorage for lock check on next launch
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      AsyncStorage.setItem('8hourCompletion', JSON.stringify({
+        completedAt: message.completedAt,
+        totalHours: message.totalHours,
+        unlockTime: message.unlockTime,
+        deviceId: message.deviceId
+      })).catch((error: any) => {
+        console.error('❌ Error saving 8-hour completion data:', error);
+      });
+      
+      // Disconnect WebSocket (server will close it anyway)
+      this.disconnect();
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling 8-hour stop command:', error);
     }
   }
 
@@ -552,12 +697,39 @@ class PlaybackWebSocketService {
     this.onResumeAll = callback;
   }
 
+  // Set callback for stop all handling
+  setStopAllCallback(callback: (message: any) => void) {
+    this.onStopAll = callback;
+  }
+
+  // Set callback for slot sync handling
+  setSlotSyncCallback(callback: (message: any) => void) {
+    this.onSlotSync = callback;
+  }
+
+  // Set callback for display data handling
+  setDisplayDataCallback(callback: (message: any) => void) {
+    this.onDisplayData = callback;
+  }
+
   setLockdownCallback(callback: (message: any) => void) {
     this.onLockdown = callback;
   }
 
   setUnlockCallback(callback: (message: any) => void) {
     this.onUnlock = callback;
+  }
+
+  setFullscreenCallback(callback: (message: any) => void) {
+    this.onFullscreen = callback;
+  }
+
+  setExitFullscreenCallback(callback: (message: any) => void) {
+    this.onExitFullscreen = callback;
+  }
+
+  setStop8HoursCallback(callback: (message: any) => void) {
+    this.onStop8Hours = callback;
   }
 
   isWebSocketConnected(): boolean {

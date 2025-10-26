@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Driver = require('../models/Driver');
 const { JWT_SECRET } = require('./auth'); // reuse same secret
+const logger = require('../utils/logger');
 
 // ✅ Get driver info from token
 const getDriverFromToken = async (token) => {
@@ -15,12 +16,13 @@ const getDriverFromToken = async (token) => {
     try {
       decoded = jwt.verify(token, JWT_SECRET);
     } catch (err) {
-      console.error('❌ Driver Auth Error: jwt.verify failed:', err.message);
+      logger.error('❌ Driver Auth Error: jwt.verify failed:', err.message);
       return null;
     }
     
     if (!decoded.driverId) {
-      console.error('❌ Driver Auth Error: No driverId in token');
+      // Only log this error in verbose mode to reduce spam
+      logger.verbose('❌ Driver Auth Error: No driverId in token');
       return null;
     }
 
@@ -38,13 +40,13 @@ const getDriverFromToken = async (token) => {
     }
 
     if (!driver) {
-      console.error('❌ Driver Auth Error: Driver not found in database:', decoded.driverId);
+      logger.error('❌ Driver Auth Error: Driver not found in database:', decoded.driverId);
       return null;
     }
 
     // Check token version
     if (driver.tokenVersion !== decoded.tokenVersion) {
-      console.error('❌ Driver Auth Error: tokenVersion mismatch', {
+      logger.error('❌ Driver Auth Error: tokenVersion mismatch', {
         driverId: driver.driverId,
         driverTokenVersion: driver.tokenVersion,
         tokenVersion: decoded.tokenVersion
@@ -82,7 +84,8 @@ const driverMiddleware = async ({ req }) => {
   if (driver) {
     console.log('✅ Driver authenticated:', driver.driverId, driver.accountStatus);
   } else if (token) {
-    console.warn('⚠️  Driver token provided but authentication failed');
+    // Only log this warning in verbose mode to reduce spam
+    logger.verbose('⚠️  Driver token provided but authentication failed');
   }
   
   return { driver }; // can be null if not authenticated

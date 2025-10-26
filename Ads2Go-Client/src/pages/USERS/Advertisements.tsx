@@ -4,6 +4,7 @@ import { Search, ChevronDown, Plus, ChevronLeft, ChevronRight } from 'lucide-rea
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { useMyAdsStatic } from '../../hooks/useMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  paymentStatus?: string | null;
   createdAt: string;
   startTime: string;
   endTime: string;
@@ -84,7 +86,9 @@ const Advertisements: React.FC = () => {
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
-  const { data, loading, error } = useQuery(GET_MY_ADS);
+  
+  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed)
+  const { data, loading, error } = useMyAdsStatic();
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
   });
@@ -109,6 +113,8 @@ const Advertisements: React.FC = () => {
   });
   
   const ads: Ad[] = data?.getMyAds || [];
+  
+  // Debug payment status
   
   const formatDate = (dateValue: string | number) => {
     if (!dateValue) return 'N/A';
@@ -376,20 +382,20 @@ const Advertisements: React.FC = () => {
         }}
       ></div>
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
-      <div className="relative min-h-screen bg-transparent pl-64 pr-5 flex flex-col">
+      <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 flex flex-col">
         <div className="bg-transparent w-full flex-1 flex flex-col">
-          <div className="flex justify-between items-center mb-6 pt-10">
-            <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex gap-1">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-16 lg:pt-10 gap-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Advertisements</h1>
+            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
                 <input
                   type="text"
-                  className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
+                  className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
                   placeholder="Search Advertisements"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <div className="relative w-32">
+                <div className="relative w-full sm:w-32">
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                     className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
@@ -422,10 +428,10 @@ const Advertisements: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex justify-end mb-6">
+          <div className="flex justify-start lg:justify-end mb-6">
             <button
               onClick={() => navigate('/create-advertisement')}
-              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
+              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-full sm:w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
               onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
                 const button = e.currentTarget;
                 const rect = button.getBoundingClientRect();
@@ -525,6 +531,21 @@ const Advertisements: React.FC = () => {
 
                     {/* Bottom section (sticky at bottom) */}
                     <div className="mt-auto pt-4">
+                      {/* Proceed to Pay Badge - Only show for APPROVED ads with PENDING payment */}
+                      {ad.status === "APPROVED" && ad.paymentStatus === "PENDING" && (
+                        <div className="mb-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/ad-details/${ad.id}`);
+                            }}
+                            className="inline-block px-2 py-1 text-xs font-semibold bg-orange-200 text-orange-800 rounded shadow-sm hover:bg-orange-300 transition-colors duration-200 cursor-pointer"
+                          >
+                            💳 Proceed to Pay
+                          </button>
+                        </div>
+                      )}
+                      
                       <div className="text-sm text-[#1B5087] font-medium">
                         {ad.startTime && ad.endTime ? (
                           formatDateRange(ad.startTime, ad.endTime)
@@ -562,6 +583,7 @@ const Advertisements: React.FC = () => {
                     >
                       {formatStatus(ad.status)}
                     </span>
+                    
                     {ad.status === "REJECTED" && ad.reasonForReject && (
                       <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
                         {ad.reasonForReject}

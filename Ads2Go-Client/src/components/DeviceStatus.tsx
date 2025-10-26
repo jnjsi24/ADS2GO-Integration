@@ -35,6 +35,9 @@ const DeviceStatus: React.FC<DeviceStatusProps> = ({ className = '' }) => {
     );
   }
 
+  const onlineDevices = devices.filter(d => d.isOnline);
+  const totalDevices = devices.length;
+
   return (
     <div className={`${className} bg-white rounded-lg shadow overflow-hidden`}>
       <div className="px-4 py-3 border-b border-gray-200">
@@ -42,41 +45,52 @@ const DeviceStatus: React.FC<DeviceStatusProps> = ({ className = '' }) => {
         <p className="text-sm text-gray-500">Real-time device connection status</p>
       </div>
       
-      <div className="divide-y divide-gray-200">
-        {devices.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            No devices connected
+      <div className="p-4">
+        <div className="grid grid-cols-1 gap-4">
+          {/* Total Devices Card */}
+          <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div className="flex justify-center mb-2">
+              <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div className="text-2xl font-bold text-gray-900 mb-1">{totalDevices}</div>
+            <div className="text-sm text-gray-600">Total Devices</div>
           </div>
-        ) : (
-          devices.map((device) => (
-            <div key={device.deviceId} className="p-4 hover:bg-gray-50">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center">
-                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(device.isOnline)} mr-2`}></div>
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {device.materialId || device.deviceId}
-                    </p>
+
+          {/* Online Devices Card */}
+          <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+            <div className="flex justify-center mb-2">
+              <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div className="text-2xl font-bold text-green-600 mb-1">{onlineDevices.length}</div>
+            <div className="text-sm text-gray-600">Online Devices</div>
+          </div>
+
+          {/* Online Device List - Only show if there are online devices */}
+          {onlineDevices.length > 0 && (
+            <div className="bg-white p-4 rounded-lg border border-gray-200">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Online Device IDs</h4>
+              <div className="space-y-2">
+                {onlineDevices.map((device) => (
+                  <div key={device.deviceId} className="flex items-center justify-between py-2 px-3 bg-green-50 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {device.deviceId}
+                      </span>
+                    </div>
+                    <span className="text-xs text-green-600 font-medium">
+                      Online
+                    </span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate">
-                    {device.deviceId}
-                  </p>
-                </div>
-                <div className="ml-4 flex-shrink-0">
-                  <p className={`text-xs ${device.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
-                    {device.isOnline ? 'Online' : `Last seen ${getLastSeenText(device.lastSeen)}`}
-                  </p>
-                </div>
+                ))}
               </div>
             </div>
-          ))
-        )}
-      </div>
-      
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 text-right">
-        <p className="text-xs text-gray-500">
-          {devices.filter(d => d.isOnline).length} of {devices.length} devices online
-        </p>
+          )}
+        </div>
       </div>
     </div>
   );
