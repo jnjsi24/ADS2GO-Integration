@@ -281,69 +281,68 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
   }, 0);
 
   return (
-    <div className={`bg-white rounded-lg shadow-lg p-6 ${className}`}>
+    <div className={`${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Real-Time Ad Metrics</h3>
-          <p className="text-sm text-gray-500">
-            Last updated: {lastUpdate.toLocaleTimeString()}
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-500' : 
-            connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-          }`}></div>
-          <span className="text-sm text-gray-600">
-            {connectionStatus === 'connected' ? 'Live' : 
-             connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
-          </span>
-        </div>
-      </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {/* Total Ads */}
-        <div className="bg-blue-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Ads</p>
-              <p className="text-2xl font-bold text-blue-900">{totalAds}</p>
-              <p className="text-xs text-blue-500">All ad campaigns</p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
+              border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+            >
+              <Monitor className="w-5 h-5 text-blue-700 drop-shadow-sm" />
             </div>
-            <Monitor className="w-8 h-8 text-blue-500" />
+            <p className="text-sm text-black/70 font-medium ml-1">Total Ads</p>
           </div>
+
+          {/* Row 2: Value + Subtitle */}
+          <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+          {totalAds}
+          </p>
         </div>
 
         {/* Online Ads */}
-        <div className="bg-green-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-green-600">Online Ads</p>
-              <p className="text-2xl font-bold text-green-900">{onlineAds}</p>
-              <p className="text-xs text-green-500">Currently active</p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+              border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+            >
+              <Activity className="w-5 h-5 text-green-700 drop-shadow-sm" />
             </div>
-            <Activity className="w-8 h-8 text-green-500" />
+            <p className="text-sm text-black/70 font-medium ml-1">Online Ads</p>
           </div>
+
+          {/* Row 2: Value + Subtitle */}
+          <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+            {onlineAds}
+          </p>
         </div>
 
         {/* Total Ad Played */}
-        <div className="bg-purple-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-600">Total Ad Played</p>
-              <p className="text-2xl font-bold text-purple-900">{totalAdPlayed.toLocaleString()}</p>
-              <p className="text-xs text-purple-500">Total plays today</p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 
+              border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+            >
+              <PlayCircle className="w-5 h-5 text-purple-700 drop-shadow-sm" />
             </div>
-            <PlayCircle className="w-8 h-8 text-purple-500" />
+            <p className="text-sm text-black/70 font-medium ml-1">Total Ad Played</p>
           </div>
-        </div>
-      </div>
 
-      {/* Additional Info */}
-      <div className="mt-4 text-xs text-gray-500 text-center">
-        Data updates automatically via WebSocket connection
+          {/* Row 2: Value + Subtitle */}
+          <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+            {totalAdPlayed.toLocaleString()}
+          </p>
+        </div>
+
       </div>
     </div>
   );

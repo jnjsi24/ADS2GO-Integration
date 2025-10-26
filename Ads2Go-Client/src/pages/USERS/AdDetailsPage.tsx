@@ -802,16 +802,8 @@ const AdDetailsPage: React.FC = () => {
   
   // Show loading state
   if (loading && !ad) {
-    return (
-      <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-black/90">Loading ad details...</p>
-        </div>
-      </div>
-    );
   }
-  
+    
   // Show error state
   if (error) {
     return (
@@ -836,13 +828,24 @@ const AdDetailsPage: React.FC = () => {
 
   if (!ad) {
     return (
-      <div className="flex-1 ml-60 p-6  h-screen flex items-center justify-center">
-        <div className="text-center text-black/90">
+      <div className="relative flex-1 pl-60 p-6 h-screen flex items-center justify-center overflow-hidden">
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-fixed blur-xl brightness-90"
+          style={{
+            backgroundImage: "url('/image/bg.jpg')",
+          }}
+        ></div>
+  
+        {/* Overlay Content */}
+        <div className="relative z-10 text-center text-black/90 backdrop-blur-md">
           <h1 className="text-3xl font-bold mb-4">Ad Not Found</h1>
-          <p className="mb-6">The advertisement you are looking for does not exist.</p>
+          <p className="mb-6 text-sm text-black/70 md:text-base">
+            The advertisement you are looking for does not exist.
+          </p>
           <button
             onClick={() => navigate('/advertisements')}
-            className="py-3 bg-[#3674B5] text-black rounded-lg hover:bg-[#578FCA] transition-colors flex items-center justify-center mx-auto"
+            className="text-black rounded-lg transition-colors flex items-center justify-center mx-auto"
           >
             <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
           </button>
@@ -850,7 +853,7 @@ const AdDetailsPage: React.FC = () => {
       </div>
     );
   }
-
+  
   // Function to generate mock profit data based on selected period
   const getChartData = () => {
     const baseProfit = ad.price * 0.7; // Assume profit is 70% of the price for demonstration
