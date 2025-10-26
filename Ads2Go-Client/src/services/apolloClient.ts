@@ -46,7 +46,7 @@ const httpLink = createHttpLink({
   fetch: (uri, options) => {
     return fetch(uri, {
       ...options,
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(60000), // 60 second timeout (increased for analytics queries)
     });
   }
 });

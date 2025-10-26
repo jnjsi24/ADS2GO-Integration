@@ -159,6 +159,22 @@ module.exports = {
           throw new Error(`Slot ${slotNumber} is already occupied by device ${existingTablet.deviceId}`);
         }
         
+        // ✅ MASTER-SLAVE VALIDATION: Slot 1 must be registered before Slot 2
+        // Slot 1 is the master, Slot 2 is the slave - enforce strict ordering
+        if (slotNumber === 2) {
+          const slot1 = tablet.tablets.find(t => t.tabletNumber === 1);
+          
+          // Check if Slot 1 exists and has a registered device
+          if (!slot1 || !slot1.deviceId || slot1.status === 'OFFLINE') {
+            console.log(`🚫 [GraphQL Registration Blocked] Cannot register Slot 2 - Slot 1 must be registered first`);
+            console.log(`   Slot 1 status: ${slot1 ? (slot1.deviceId ? slot1.status : 'Not registered') : 'Not configured'}`);
+            
+            throw new Error('Cannot register Slot 2 before Slot 1. Slot 1 (Master) must be registered and online before Slot 2 (Slave) can be registered.');
+          }
+          
+          console.log(`✅ [GraphQL Registration] Slot 1 is registered (${slot1.deviceId}) - allowing Slot 2 registration`);
+        }
+        
         // Update the tablet slot
         const tabletIndex = tablet.tablets.findIndex(t => t.tabletNumber === slotNumber);
         if (tabletIndex === -1) {

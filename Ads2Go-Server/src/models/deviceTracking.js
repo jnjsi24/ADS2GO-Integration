@@ -910,12 +910,23 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         lat, lng
       );
       
-      // Only add distance if movement is significant (more than 10 meters)
-      // This filters out GPS noise when device is stationary
+      // ✅ IMPROVED FILTERING: Check GPS accuracy to prevent false distance from GPS drift
+      const currentAccuracy = accuracy || 0;
+      const previousAccuracy = prevLocation.accuracy || 0;
+      const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
+      
+      // Only add distance if:
+      // 1. Movement is significant (more than 10 meters) - filters stationary GPS noise
+      // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
       if (distance > 0.01) { // 0.01 km = 10 meters
-        distanceAdded = distance;
-        this.totalDistanceTraveled += distance;
-        console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+        // Check if both current and previous GPS readings are accurate enough
+        if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
+          distanceAdded = distance;
+          this.totalDistanceTraveled += distance;
+          console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (accuracy: curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m, total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+        } else {
+          console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
+        }
       } else {
         console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
       }
@@ -942,7 +953,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       $push: {
         locationHistory: {
           $each: [newLocation],
-          $slice: -4114 // Keep only last 4114 entries (8 hours at 7s intervals)
+          $slice: -14400 // Keep only last 14400 entries (8 hours at 2s intervals)
         }
       }
     },

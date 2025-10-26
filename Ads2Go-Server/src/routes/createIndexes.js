@@ -27,8 +27,8 @@ router.get('/create-indexes', async (req, res) => {
       errors: []
     };
     
-    // Get the collection
-    const collection = mongoose.connection.collection('devicedatahistoryv2s');
+    // Get the collection - use the model's collection name directly
+    const collection = DeviceDataHistoryV2.collection;
     
     // Check existing indexes
     console.log('🔍 Checking existing indexes...');
@@ -112,6 +112,78 @@ router.get('/create-indexes', async (req, res) => {
       }
     }
     
+    // 4. ✅ NEW: Ad-specific analytics index (CRITICAL for fast user analytics)
+    console.log('4️⃣  Creating adPlaybacks.adId index for ad analytics...');
+    const startTime4 = Date.now();
+    try {
+      await collection.createIndex(
+        { 'dailyData.adPlaybacks.adId': 1 },
+        {
+          background: true,
+          name: 'adPlaybacks_adId_analytics'
+        }
+      );
+      const duration = Date.now() - startTime4;
+      console.log(`   ✅ Created in ${duration}ms`);
+      results.indexes.push({ name: 'adPlaybacks_adId_analytics', duration, status: 'created' });
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        console.log('   ℹ️  Index already exists');
+        results.indexes.push({ name: 'adPlaybacks_adId_analytics', status: 'exists' });
+      } else {
+        console.error('   ❌ Error:', error.message);
+        results.errors.push({ index: 'adPlaybacks_adId_analytics', error: error.message });
+      }
+    }
+    
+    // 5. ✅ NEW: QR scans by ad index
+    console.log('5️⃣  Creating qrScansByAd.adId index...');
+    const startTime5 = Date.now();
+    try {
+      await collection.createIndex(
+        { 'dailyData.qrScansByAd.adId': 1 },
+        {
+          background: true,
+          name: 'qrScansByAd_adId_analytics'
+        }
+      );
+      const duration = Date.now() - startTime5;
+      console.log(`   ✅ Created in ${duration}ms`);
+      results.indexes.push({ name: 'qrScansByAd_adId_analytics', duration, status: 'created' });
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        console.log('   ℹ️  Index already exists');
+        results.indexes.push({ name: 'qrScansByAd_adId_analytics', status: 'exists' });
+      } else {
+        console.error('   ❌ Error:', error.message);
+        results.errors.push({ index: 'qrScansByAd_adId_analytics', error: error.message });
+      }
+    }
+    
+    // 6. ✅ NEW: Compound index for multi-material ad queries
+    console.log('6️⃣  Creating materialId + adId compound index...');
+    const startTime6 = Date.now();
+    try {
+      await collection.createIndex(
+        { materialId: 1, 'dailyData.adPlaybacks.adId': 1 },
+        {
+          background: true,
+          name: 'materialId_adId_compound'
+        }
+      );
+      const duration = Date.now() - startTime6;
+      console.log(`   ✅ Created in ${duration}ms`);
+      results.indexes.push({ name: 'materialId_adId_compound', duration, status: 'created' });
+    } catch (error) {
+      if (error.message.includes('already exists')) {
+        console.log('   ℹ️  Index already exists');
+        results.indexes.push({ name: 'materialId_adId_compound', status: 'exists' });
+      } else {
+        console.error('   ❌ Error:', error.message);
+        results.errors.push({ index: 'materialId_adId_compound', error: error.message });
+      }
+    }
+    
     // Get final index list
     const finalIndexes = await collection.indexes();
     results.finalIndexes = finalIndexes.map(i => ({ name: i.name, key: i.key }));
@@ -125,9 +197,10 @@ router.get('/create-indexes', async (req, res) => {
     results.performance = {
       testQueryDuration: queryDuration,
       expectedImprovement: {
-        before: '10-23 seconds per query',
+        before: '10-30 seconds per query',
         after: '< 1 second per query',
-        totalEndpoint: '24s → 3-5s'
+        totalEndpoint: '27s → 1-3s',
+        adAnalytics: '26s → 1-2s (with ad-specific indexes)'
       }
     };
     

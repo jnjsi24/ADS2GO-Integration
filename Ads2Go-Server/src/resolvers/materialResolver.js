@@ -568,20 +568,19 @@ const materialResolvers = {
       } 
       // Handle mounting (when mountedAt is set)
       if (input.mountedAt !== undefined) {
-        // VALIDATION: Only allow setting mountedAt if device is connected
+        // VALIDATION: Only allow setting mountedAt if device has been registered
         if (input.mountedAt) {
-          // Check if there's a connected device for this material
-          const DeviceTracking = require('../models/deviceTracking');
-          const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+          // Check if there's a registered device for this material
+          const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+          const deviceValidation = await validateMaterialHasDevice(material.materialId);
           
-          if (!deviceTracking || !deviceTracking.isOnline) {
-            throw new Error('Cannot set mounted date: No connected device found. Please connect the physical device first via QR code.');
+          if (!deviceValidation.hasDevice) {
+            throw new Error(`Cannot set mounted date: ${deviceValidation.reason}. Please register the physical device first via QR code.`);
           }
           
-          // Check if any slot is online
-          const hasOnlineSlot = deviceTracking.slots.some(slot => slot.isOnline);
-          if (!hasOnlineSlot) {
-            throw new Error('Cannot set mounted date: No online slots found. Please ensure the device is connected and online.');
+          console.log(`✅ Material ${material.materialId} has registered device(s), allowing mounted date to be set`);
+          if (deviceValidation.details) {
+            console.log(`   Device info:`, JSON.stringify(deviceValidation.details.registeredDevices, null, 2));
           }
         }
         

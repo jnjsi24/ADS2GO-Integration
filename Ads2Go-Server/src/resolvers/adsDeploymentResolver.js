@@ -852,36 +852,25 @@ const adsDeploymentResolvers = {
   LCDSlot: {
     ad: async (parent) => {
       // If the ad field is already populated and has an id, return it
-      if (parent.ad && parent.ad.id) {
-        return parent.ad;
+      if (parent.ad && parent.ad._id) {
+        return parent.ad; // Return the fully populated ad object
       }
       
       // If adId exists, try to fetch the ad
       if (parent.adId) {
         try {
-          const ad = await Ad.findById(parent.adId);
+          const ad = await Ad.findById(parent.adId).populate('planId');
           if (ad) {
-            return {
-              id: ad._id.toString(),
-              title: ad.title || 'Unknown Ad',
-              description: ad.description || '',
-              adFormat: ad.adFormat || '',
-              mediaFile: ad.mediaFile || ''
-            };
+            // Return the full ad object with all fields
+            return ad;
           }
         } catch (error) {
           console.error('Error fetching ad for LCDSlot:', error);
         }
       }
       
-      // Return default ad object if nothing else works
-      return {
-        id: '',
-        title: 'Unknown Ad',
-        description: '',
-        adFormat: '',
-        mediaFile: ''
-      };
+      // Return null if ad doesn't exist (GraphQL schema allows this)
+      return null;
     }
   }
 };

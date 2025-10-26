@@ -408,13 +408,7 @@ class AdsPanelServiceV4 {
     return response;
   }
 
-  async trackAdPlayback(deviceId: string, adId: string, adTitle: string, adDuration: number, viewTime?: number): Promise<{ success: boolean; message: string }> {
-    const response = await this.makeRequest('/screenTracking/trackAd', {
-      method: 'POST',
-      body: JSON.stringify({ deviceId, adId, adTitle, adDuration, viewTime }),
-    });
-    return response;
-  }
+  // ❌ REMOVED: trackAdPlayback() - no UI trigger, handled by AdPlayer directly via /deviceTracking/ad-playback
 
   async endAdPlayback(deviceId: string): Promise<{ success: boolean; message: string }> {
     const response = await this.makeRequest('/screenTracking/endAd', {

@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_USER_ANALYTICS = gql`
-  query GetUserAnalytics($startDate: String, $endDate: String, $period: String) {
-    getUserAnalytics(startDate: $startDate, endDate: $endDate, period: $period) {
+  query GetUserAnalytics($startDate: String, $endDate: String, $period: String, $adId: String) {
+    getUserAnalytics(startDate: $startDate, endDate: $endDate, period: $period, adId: $adId) {
       summary {
         totalAdImpressions
         totalAdsPlayed

@@ -4,6 +4,7 @@ import { Search, ChevronDown, Plus, ChevronLeft, ChevronRight } from 'lucide-rea
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { useMyAdsStatic } from '../../hooks/useMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -85,7 +86,9 @@ const Advertisements: React.FC = () => {
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
-  const { data, loading, error } = useQuery(GET_MY_ADS);
+  
+  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed)
+  const { data, loading, error } = useMyAdsStatic();
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
   });

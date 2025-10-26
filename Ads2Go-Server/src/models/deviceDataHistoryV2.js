@@ -108,7 +108,7 @@ const DailyDataSchema = new mongoose.Schema({
   // Hourly breakdown
   hourlyStats: [HourlyStatsSchema],
   
-  // Location data (limited to 4114 entries for 8 hours at 7s intervals)
+  // Location data (limited to 14400 entries for 8 hours at 2s intervals)
   locationHistory: [LocationPointSchema],
   
   // Ad performance
@@ -306,6 +306,10 @@ DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite 
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1, 'dailyData.date': 1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.qrScans.userId': 1, 'dailyData.date': 1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.userId': 1, 'dailyData.date': 1 });
+// ✅ NEW: Index for ad-specific analytics queries (CRITICAL for fast ad analytics)
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.adId': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScansByAd.adId': 1 });
+DeviceDataHistoryV2Schema.index({ materialId: 1, 'dailyData.adPlaybacks.adId': 1 }); // Compound for multi-material ad queries
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {
@@ -448,5 +452,19 @@ DeviceDataHistoryV2Schema.post('save', async function(doc) {
     console.error('❌ Error in DeviceDataHistoryV2 post-save hook:', error.message);
   }
 });
+
+// ⚡ PERFORMANCE INDEXES - Critical for fast analytics queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1 }); // Date range queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1 }); // User filter
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.adId': 1 }); // Ad filter
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1 
+}); // Compound: Date + User (most common query)
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1,
+  'dailyData.adPerformance.adId': 1
+}); // Compound: Date + User + Ad (filtered query)
 
 module.exports = mongoose.model('DeviceDataHistoryV2', DeviceDataHistoryV2Schema);

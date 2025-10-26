@@ -84,11 +84,7 @@ const ManageAds: React.FC = () => {
     const id = Math.random().toString(36).substr(2, 9);
     const newToast = { ...toast, id };
     setToasts(prev => [...prev, newToast]);
-    
-    // Auto remove toast after duration (default 5 seconds)
-    setTimeout(() => {
-      removeToast(id);
-    }, toast.duration || 5000);
+    // Note: Toast removal is handled by ToastNotification component's timer
   };
 
   const removeToast = (id: string) => {

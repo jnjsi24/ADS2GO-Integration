@@ -1,6 +1,7 @@
 const Material = require('../models/Material');
 const MaterialAvailability = require('../models/MaterialAvailability');
 const Ad = require('../models/Ad');
+const { validateMaterialHasDevice } = require('./materialDeviceValidator');
 
 // Helper function for smart material selection
 const getMaterialsSortedByAvailability = async (materialType, vehicleType, category, startTime = null, endTime = null) => {
@@ -40,21 +41,26 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
         continue;
       }
       
-      // 4. Check if device has been connected (has DeviceTracking record)
+      // 4. ✅ ENHANCED: Check if device has been connected AND is actively registered
       try {
-        const DeviceTracking = require('../models/deviceTracking');
-        const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+        const deviceValidation = await validateMaterialHasDevice(material.materialId);
         
-        if (!deviceTracking) {
-          console.log(`❌ Material ${material.materialId} excluded: No connected device (no DeviceTracking record)`);
+        if (!deviceValidation.hasDevice) {
+          console.log(`❌ Material ${material.materialId} excluded: ${deviceValidation.reason}`);
+          if (deviceValidation.details) {
+            console.log(`   Details:`, JSON.stringify(deviceValidation.details, null, 2));
+          }
           continue;
         }
         
-        // Device is available if it has been connected before, regardless of current online status
+        // Device is available if it has been connected and has active registration
         // The device can be temporarily offline but still eligible for ads
-        console.log(`✅ Material ${material.materialId} included: Device connected (online: ${deviceTracking.isOnline}, slots: ${deviceTracking.slots.length})`);
+        console.log(`✅ Material ${material.materialId} included: ${deviceValidation.reason}`);
+        if (deviceValidation.details) {
+          console.log(`   Device info:`, JSON.stringify(deviceValidation.details.registeredDevices, null, 2));
+        }
       } catch (deviceError) {
-        console.log(`❌ Material ${material.materialId} excluded: Error checking device status - ${deviceError.message}`);
+        console.log(`❌ Material ${material.materialId} excluded: Error validating device - ${deviceError.message}`);
         continue;
       }
       
@@ -130,25 +136,44 @@ const syncMaterialSlots = async () => {
         availability = new MaterialAvailability({ materialId: material._id, totalSlots: 5 });
       }
 
+      // ✅ Only count PAID ads with status RUNNING or SCHEDULED
+      // REJECTED, CANCELLED, ENDED, or UNPAID ads should NOT occupy slots
       const runningAds = await Ad.find({
         materialId: material._id,
-        status: 'RUNNING',
+        status: { $in: ['RUNNING', 'SCHEDULED'] },
+        paymentStatus: 'PAID', // ✅ Must be PAID to occupy a slot
         adStatus: 'ACTIVE',
         endTime: { $gt: new Date() } // Ensure ad is still active
       }).sort({ createdAt: 1 }); // Sort to assign slots consistently
 
+      // Separate RUNNING and SCHEDULED ads
       availability.currentAds = [];
+      availability.scheduledAds = [];
       let slotNumber = 1;
+      
       for (const ad of runningAds) {
-        availability.currentAds.push({
-          adId: ad._id,
-          startTime: ad.startTime,
-          endTime: ad.endTime,
-          slotNumber: slotNumber++
-        });
+        if (ad.status === 'RUNNING') {
+          availability.currentAds.push({
+            adId: ad._id,
+            startTime: ad.startTime,
+            endTime: ad.endTime,
+            slotNumber: slotNumber++
+          });
+        } else if (ad.status === 'SCHEDULED') {
+          availability.scheduledAds.push({
+            adId: ad._id,
+            startTime: ad.startTime,
+            endTime: ad.endTime,
+            slotNumber: slotNumber++,
+            reservedAt: ad.createdAt,
+            reservationExpires: null // Paid ads never expire
+          });
+        }
       }
 
-      availability.occupiedSlots = availability.currentAds.length;
+      // ✅ Company ads are NOT counted - they're just fillers at runtime
+      // Only PAID user ads (RUNNING or SCHEDULED) count towards occupiedSlots
+      availability.occupiedSlots = availability.currentAds.length + availability.scheduledAds.length;
       availability.availableSlots = availability.totalSlots - availability.occupiedSlots;
       availability.updateAvailabilityDates(); // Update nextAvailableDate and allSlotsFreeDate
       await availability.save();

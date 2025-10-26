@@ -8,6 +8,7 @@ import DynamicNotificationList from "./tabs/dashboard/DynamicNotificationList";
 import DeviceNotificationList from "./tabs/dashboard/DeviceNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
 import SubtleLoader from "../../components/SubtleLoader";
+import { screenComplianceService } from '../../services/screenComplianceService';
 import { Monitor, PlayCircle, Users, Car, FileText, ArrowUpRight } from "lucide-react";
 import { motion, Transition } from "framer-motion";
 // Import ScreenStatus interface from ScreenTracking for consistency
@@ -194,41 +195,24 @@ const Dashboard = () => {
       setScreenLoading(true);
       setScreenError(null);
       
-      // Use compliance endpoint for consistent data with ScreenTracking page
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      
-      // ⚡ OPTIMIZATION: Skip geocoding on initial load for faster response
+      // ✅ PHASE 2 OPTIMIZATION: Use shared compliance service with caching
+      // Skip geocoding on initial load for faster response
       const skipGeocoding = isInitialLoad || !hasInitiallyLoaded;
-      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}${skipGeocoding ? '&skipGeocoding=true' : ''}`;
-      
-      console.log('🔍 [AdminDashboard] Fetching screen data from compliance endpoint:', complianceUrl);
       console.log(`📍 [AdminDashboard] Skip geocoding: ${skipGeocoding ? 'YES' : 'NO'} (isInitialLoad: ${isInitialLoad}, hasInitiallyLoaded: ${hasInitiallyLoaded})`);
       
       const startTime = Date.now();
-      const response = await fetch(complianceUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const complianceData = await screenComplianceService.getCompliance(null, skipGeocoding);
       const fetchDuration = Date.now() - startTime;
       
       console.log(`⏱️ [AdminDashboard] Compliance response received after ${fetchDuration}ms (${(fetchDuration / 1000).toFixed(2)}s)`);
+      console.log('✅ [AdminDashboard] Compliance data received:', complianceData);
       
-      if (response.ok) {
-        const complianceData = await response.json();
-        console.log('✅ [AdminDashboard] Compliance data received:', complianceData);
-        
-        if (complianceData.success && complianceData.data?.screens) {
-          setScreens(complianceData.data.screens);
-          console.log('📊 [AdminDashboard] Screens loaded:', complianceData.data.screens.length);
-        } else {
-          console.error('❌ [AdminDashboard] Invalid compliance data format:', complianceData);
-          setScreenError("Invalid data format received");
-        }
+      if (complianceData.success && complianceData.data?.screens) {
+        setScreens(complianceData.data.screens);
+        console.log('📊 [AdminDashboard] Screens loaded:', complianceData.data.screens.length);
       } else {
-        const errorData = await response.json();
-        console.error('❌ [AdminDashboard] API Error:', errorData);
-        setScreenError("Failed to load screen data");
+        console.error('❌ [AdminDashboard] Invalid compliance data format:', complianceData);
+        setScreenError("Invalid data format received");
       }
     } catch (error) {
       console.error("❌ [AdminDashboard] Error fetching screen data:", error);

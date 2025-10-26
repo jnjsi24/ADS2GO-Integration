@@ -26,7 +26,9 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
-  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state (for lockdown feature)
+  const [is8HourLocked, setIs8HourLocked] = useState(false); // Track 8-hour/rest period lock state
+  const [lockMessage, setLockMessage] = useState<string>(''); // Store lock message to display
   const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state
   const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
@@ -90,76 +92,108 @@ export default function HomeScreen() {
 
   const check8HourLock = async () => {
     try {
-      console.log('🔍 [Lock Check] Checking for 8-hour completion lock...');
+      console.log('🔍 [Lock Check] Checking for 8-hour completion lock and mandatory rest period...');
+      
+      // Check current time FIRST (mandatory rest period check)
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // 🚨 MANDATORY REST PERIOD: 12:00 AM - 7:59 AM (ALL drivers must rest)
+      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      
+      if (isMandatoryRestPeriod) {
+        console.log(`🌙 [Lock Check] MANDATORY REST PERIOD - Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`);
+        console.log('🔒 [Lock Check] Ad player is LOCKED during rest hours (12:00 AM - 8:00 AM)');
+        
+        // Check if driver completed 8 hours to determine message
+        const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
+        
+        if (completionDataStr) {
+          // Driver completed 8 hours
+          const completionData = JSON.parse(completionDataStr);
+          return {
+            isLocked: true,
+            message: `🔒 Ad Player Locked\n\nYou completed your 8-hour requirement!\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.`
+          };
+        } else {
+          // Driver did NOT complete 8 hours
+          return {
+            isLocked: true,
+            message: `🌙 Mandatory Rest Period\n\nAll drivers must rest between 12:00 AM - 8:00 AM.\n\nYour progress from yesterday has been reset.\n\nYou can start a new 8-hour session when the ad player unlocks at 8:00 AM.\n\nGood night! 😴`
+          };
+        }
+      }
+      
+      // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
+      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Outside rest period`);
       
       // Get 8-hour completion data from AsyncStorage
       const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
       
       if (!completionDataStr) {
-        console.log('✅ [Lock Check] No completion data found, app is unlocked');
-        return { isLocked: false };
+        console.log('✅ [Lock Check] No 8-hour completion data found - app is unlocked');
+        console.log('💡 [Lock Check] Driver can work to complete their 8-hour requirement');
+        return { isLocked: false, message: '' };
       }
       
       const completionData = JSON.parse(completionDataStr);
-      console.log('📋 [Lock Check] Completion data found:', completionData);
+      console.log('📋 [Lock Check] 8-hour completion data found:', completionData);
       
-      // Check current time
-      const now = new Date();
-      const currentHour = now.getHours();
-      
-      // Check if current time is between 12 AM and 8 AM
-      const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
-      
-      if (!isBeforeEightAM) {
-        console.log(`✅ [Lock Check] Current time is ${currentHour}:00, after 8 AM - app is unlocked`);
-        // Clear the completion data since it's past 8 AM
-        await AsyncStorage.removeItem('8hourCompletion');
-        return { isLocked: false };
-      }
-      
-      // Check if completion was yesterday or today
+      // Check if completion was today (already completed today's requirement)
       const completedAt = new Date(completionData.completedAt);
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const completedDate = new Date(completedAt.getFullYear(), completedAt.getMonth(), completedAt.getDate());
       
-      // If completed today or yesterday, and it's before 8 AM, lock the app
-      const wasCompletedBeforeToday = completedDate.getTime() < today.getTime();
-      const wasCompletedToday = completedDate.getTime() === today.getTime();
-      
-      if (wasCompletedBeforeToday || wasCompletedToday) {
-        console.log(`🔒 [Lock Check] App is LOCKED until 8:00 AM (completed at ${completedAt.toISOString()})`);
+      // If completed today, keep the app locked (can't work more than 8 hours per day)
+      if (completedDate.getTime() === today.getTime()) {
+        console.log(`🔒 [Lock Check] Already completed 8 hours today at ${completedAt.toLocaleTimeString()}`);
+        console.log('⏸️ [Lock Check] App remains locked - maximum 8 hours per day reached');
         
-        // Show lock alert
-        Alert.alert(
-          '🔒 Ad Player Locked',
-          `You completed your 8-hour requirement on ${completedAt.toLocaleDateString()}.\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nThe ad player is locked until 8:00 AM.\n\nPlease try again after 8:00 AM.`,
-          [{ text: 'OK' }],
-          { cancelable: false }
-        );
-        
-        return { isLocked: true };
+        return {
+          isLocked: true,
+          message: `✅ Daily Requirement Complete\n\nYou already completed your 8-hour requirement today!\n\nCompleted at: ${completedAt.toLocaleTimeString()}\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nYou've reached the maximum 8 hours per day.\n\nThe ad player will unlock tomorrow at 8:00 AM for a new session.`
+        };
       }
       
-      console.log('✅ [Lock Check] Completion was from an older date, app is unlocked');
-      // Clear old completion data
+      // Completion was from a previous day - clear old data and unlock
+      console.log('✅ [Lock Check] Completion was from a previous day - clearing old data');
       await AsyncStorage.removeItem('8hourCompletion');
-      return { isLocked: false };
+      console.log('🆕 [Lock Check] App is unlocked for new 8-hour session');
+      return { isLocked: false, message: '' };
       
     } catch (error) {
-      console.error('❌ [Lock Check] Error checking 8-hour lock:', error);
-      // On error, don't lock the app
-      return { isLocked: false };
+      console.error('❌ [Lock Check] Error checking lock status:', error);
+      // On error, check time at minimum for safety
+      const currentHour = new Date().getHours();
+      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      
+      if (isMandatoryRestPeriod) {
+        console.log('⚠️ [Lock Check] Error occurred, but enforcing rest period lock for safety');
+        return { 
+          isLocked: true,
+          message: '🔒 Ad Player Locked\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.'
+        };
+      }
+      
+      console.log('⚠️ [Lock Check] Error occurred outside rest period - defaulting to unlocked');
+      return { isLocked: false, message: '' };
     }
   };
 
   const initializeApp = async () => {
     try {
-      // ✅ NEW: Check for 8-hour completion lock
+      // ✅ Check for 8-hour completion lock and mandatory rest period
       const lockCheck = await check8HourLock();
       if (lockCheck.isLocked) {
+        setIs8HourLocked(true);
+        setLockMessage(lockCheck.message || '');
         setLoading(false);
         return; // Exit early, app is locked
       }
+      
+      // Clear lock state if not locked
+      setIs8HourLocked(false);
+      setLockMessage('');
       
       // Get location
       let currentLocation = null;
@@ -261,18 +295,14 @@ export default function HomeScreen() {
         const randomAd = ads[Math.floor(Math.random() * ads.length)];
         const viewTime = Math.random() * randomAd.duration; // Random view time
 
-        // Track ad playback
-        await tabletRegistrationService.trackAdPlayback(
-          randomAd.id,
-          randomAd.title,
-          randomAd.duration,
-          viewTime
-        );
+        // ❌ REMOVED: trackAdPlayback() - method removed from service
+        // Ad tracking now handled automatically by AdPlayer component via /deviceTracking/ad-playback
+        // This simulation is no longer needed as AdPlayer tracks real ad plays
 
         // Update driver activity
         await tabletRegistrationService.updateDriverActivity(true);
 
-        console.log(`Ad tracked: ${randomAd.title} (${viewTime.toFixed(1)}s viewed)`);
+        console.log(`Ad simulation: ${randomAd.title} (${viewTime.toFixed(1)}s viewed) - tracking handled by AdPlayer`);
       } catch (error) {
         console.error('Error in ad tracking simulation:', error);
       }
@@ -583,6 +613,35 @@ export default function HomeScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={styles.loadingText}>Initializing tablet...</Text>
+      </View>
+    );
+  }
+
+  // ✅ If app is locked due to 8-hour completion or mandatory rest period, show lock screen
+  if (is8HourLocked) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.lockedContainer}>
+          <Text style={styles.lockedIcon}>🔒</Text>
+          <Text style={styles.lockedTitle}>Ad Player Locked</Text>
+          <Text style={styles.lockedMessage}>{lockMessage}</Text>
+          <View style={styles.lockedTimeContainer}>
+            <Text style={styles.lockedTimeLabel}>Current Time:</Text>
+            <Text style={styles.lockedTimeValue}>
+              {new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true 
+              })}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.lockedRefreshButton}
+            onPress={handleRefreshStatus}
+          >
+            <Text style={styles.lockedRefreshButtonText}>🔄 Check Again</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -968,6 +1027,71 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
+  },
+  lockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f8f9fa',
+  },
+  lockedIcon: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  lockedTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#e74c3c',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  lockedMessage: {
+    fontSize: 16,
+    color: '#2c3e50',
+    textAlign: 'center',
+    lineHeight: 26,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  lockedTimeContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  lockedTimeLabel: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    marginBottom: 8,
+  },
+  lockedTimeValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#3498db',
+  },
+  lockedRefreshButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  lockedRefreshButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   registerButton: {
     backgroundColor: '#3498db',

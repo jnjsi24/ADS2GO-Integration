@@ -19,6 +19,8 @@ import { adsPanelService } from '../../services/adsPanelService';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import { useApolloClient } from '@apollo/client';
 import { createGraphQLService } from '../../services/graphQLService';
+// Note: screenComplianceService available for future optimization
+// import { screenComplianceService } from '../../services/screenComplianceService';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
@@ -248,12 +250,7 @@ const AdminAdsControl: React.FC = () => {
               currentAd: s.screenMetrics?.currentAd
             })));
             
-            // Log current ad information for debugging
-            processedScreens.forEach((screen: any) => {
-              if (screen.screenMetrics?.currentAd) {
-                console.log(`🎬 Initial load - Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
-              }
-            });
+            // Initial load complete - current ad info available in screenMetrics
           } else {
             console.warn('⚠️ Unexpected compliance data format:', complianceData);
             setScreens([]);
@@ -363,12 +360,7 @@ const AdminAdsControl: React.FC = () => {
               const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(processedScreens);
               if (hasChanged) {
                 console.log('📊 Screen data updated via auto-refresh with real-time status');
-                // Log current ad information for debugging
-                processedScreens.forEach((screen: any) => {
-                  if (screen.screenMetrics?.currentAd) {
-                    console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
-                  }
-                });
+                // Auto-refresh complete - screen data updated
               }
               return processedScreens;
             });
@@ -448,14 +440,11 @@ const AdminAdsControl: React.FC = () => {
             // Check if the device ID matches either slot1 or slot2 device ID
             const isMatchingDevice = screen.slot1DeviceId === update.deviceId || screen.slot2DeviceId === update.deviceId;
             if (isMatchingDevice) {
-              console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} with playback data:`, {
-                currentTime: update.currentTime,
-                progress: update.progress,
-                state: update.state,
-                timestamp: update.timestamp
-              });
-              
-              const updatedScreen: ScreenData = {
+              // ✅ FIXED: Check if this is a new ad or an update to the current ad
+          const existingCurrentAd = screen.screenMetrics?.currentAd;
+          const isNewAd = !existingCurrentAd || existingCurrentAd.adId !== update.adId;
+          
+          const updatedScreen: ScreenData = {
                 ...screen,
                 screenMetrics: {
                   isDisplaying: screen.screenMetrics?.isDisplaying ?? true,
@@ -471,7 +460,10 @@ const AdminAdsControl: React.FC = () => {
                     adId: update.adId || '',
                     adTitle: update.adTitle || '',
                     adDuration: update.duration || 0,
-                    startTime: update.timestamp || new Date().toISOString(),
+                    // ✅ FIXED: Only update startTime if this is a new ad or if backend provides it
+                    startTime: isNewAd 
+                      ? (update.startTime || update.timestamp || new Date().toISOString())
+                      : (existingCurrentAd.startTime || update.startTime || update.timestamp || new Date().toISOString()),
                     currentTime: update.currentTime || 0,
                     state: update.state || 'playing',
                     progress: update.progress || 0
@@ -847,9 +839,7 @@ const AdminAdsControl: React.FC = () => {
               case 'end-session':
                 result = await apiService.endScreenSession(actualDeviceId);
                 break;
-              case 'track-ad':
-                result = await apiService.trackAdPlayback(actualDeviceId, value.adId, value.adTitle, value.adDuration);
-                break;
+              // ❌ REMOVED: 'track-ad' - no UI trigger, handled by AdPlayer directly
               case 'end-ad':
                 result = await apiService.endAdPlayback(actualDeviceId);
                 break;

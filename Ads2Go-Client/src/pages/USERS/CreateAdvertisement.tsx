@@ -179,7 +179,15 @@ const CreateAdvertisement: React.FC = () => {
       combo.category === formData.category &&
       combo.isActive
     );
-    return combination?.maxDevices || 1;
+    const theoreticalMax = combination?.maxDevices || 1;
+    
+    // ✅ Use the minimum of (theoretical max, actual available devices)
+    // This prevents users from selecting more devices than are actually available
+    if (pricingCalculation?.availableDevices !== undefined) {
+      return Math.min(theoreticalMax, pricingCalculation.availableDevices);
+    }
+    
+    return theoreticalMax;
   };
 
   // Get ad length limits
@@ -1138,16 +1146,32 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           required
         />
         <div className="flex items-center justify-between mt-1">
-          <p className="text-sm text-gray-500">
-          Maximum: {getMaxDevices()} devices
-        </p>
-          {pricingCalculation?.availableDevices !== undefined && (
-            <p className={`text-sm font-medium ${
-              pricingCalculation.availableDevices < formData.numberOfDevices 
-                ? 'text-red-600' 
-                : 'text-green-600'
-            }`}>
-              {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'} available now
+          {pricingCalculation?.availableDevices !== undefined ? (
+            <p className="text-sm text-gray-500">
+              Maximum: {getMaxDevices()} device{getMaxDevices() === 1 ? '' : 's'} available
+              {(() => {
+                const combination = fieldCombinations.find((combo: any) => 
+                  combo.materialType === formData.materialType && 
+                  combo.vehicleType === formData.vehicleType && 
+                  combo.category === formData.category &&
+                  combo.isActive
+                );
+                const theoreticalMax = combination?.maxDevices || 1;
+                if (theoreticalMax > pricingCalculation.availableDevices) {
+                  return <span className="text-gray-400"> ({theoreticalMax} max per campaign)</span>;
+                }
+                return null;
+              })()}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500">
+              Maximum: {getMaxDevices()} devices
+            </p>
+          )}
+          {pricingCalculation?.availableDevices !== undefined && 
+           pricingCalculation.availableDevices < formData.numberOfDevices && (
+            <p className="text-sm font-medium text-red-600">
+              Only {pricingCalculation.availableDevices} available
             </p>
           )}
         </div>

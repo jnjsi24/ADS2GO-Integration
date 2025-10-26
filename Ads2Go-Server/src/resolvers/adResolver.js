@@ -165,8 +165,24 @@ const adResolvers = {
         console.error('❌ Smart material selection failed, falling back to plan materials:', error.message);
         // Fallback to plan's materials if smart selection fails
         if (plan.materials && plan.materials.length > 0) {
-          selectedMaterial = plan.materials[0];
-          console.log(`⚠️ Fallback to plan material: ${selectedMaterial.materialId}`);
+          // ✅ ENHANCED: Validate that fallback material has a registered device
+          const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+          
+          for (const material of plan.materials) {
+            const deviceValidation = await validateMaterialHasDevice(material.materialId);
+            
+            if (deviceValidation.hasDevice) {
+              selectedMaterial = material;
+              console.log(`✅ Fallback to plan material with device: ${selectedMaterial.materialId}`);
+              break;
+            } else {
+              console.log(`⚠️ Skipping plan material ${material.materialId}: ${deviceValidation.reason}`);
+            }
+          }
+          
+          if (!selectedMaterial) {
+            throw new Error('No plan materials have registered devices available for ad deployment');
+          }
         } else {
           throw new Error('No materials assigned to this plan');
         }

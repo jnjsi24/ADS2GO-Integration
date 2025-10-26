@@ -636,7 +636,31 @@ class UserAnalyticsSyncJob {
         };
       });
 
-      // Upsert summary into UserAnalytics (lean summary only)
+      // Get ALL user's active paid ads (including SCHEDULED) for dropdown
+      const Ad = require('../models/Ad');
+      const allUserAds = await Ad.find({
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+      }).select('_id title');
+      
+      // Build ads array with ALL active paid ads (even those with no data yet)
+      const adsArray = allUserAds.map(ad => ({
+        adId: ad._id.toString(),
+        adTitle: ad.title,
+        totalMaterials: 0,
+        totalDevices: 0,
+        totalAdPlayTime: 0,
+        totalAdImpressions: 0,
+        totalQRScans: 0,
+        averageAdCompletionRate: 0,
+        qrScanConversionRate: 0,
+        lastUpdated: new Date().toISOString(),
+        materials: []
+      }));
+
+      // Upsert summary AND ads array into UserAnalytics
       const summaryUpdate = {
         $set: {
           summary: {
@@ -646,14 +670,14 @@ class UserAnalyticsSyncJob {
             totalQRScans: totalQRScans || 0,
             totalDevices: deviceStats.length
           },
+          ads: adsArray,  // ← Now includes ALL active paid ads
+          totalAds: adsArray.length,
           dailyStats: dailyStats,
           lastUpdated: new Date(),
           updatedAt: new Date(),
           isActive: true
         },
         $setOnInsert: {
-          ads: [],
-          totalAds: 0,
           totalMaterials: 0,
           averageAdCompletionRate: 0,
           qrScanConversionRate: 0,

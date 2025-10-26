@@ -7,7 +7,8 @@ interface PlaybackUpdate {
   currentTime?: number;
   duration?: number;
   progress?: number;
-  timestamp?: string;
+  startTime?: string; // ✅ FIXED: Real ad start time (not message timestamp)
+  timestamp?: string; // Message timestamp (when update was sent)
   isOnline?: boolean;
   lastSeen?: string;
   devices?: any[];
@@ -95,18 +96,12 @@ class PlaybackWebSocketService {
         return;
       }
       
-      // Only log connection attempts in verbose mode
-      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-        console.log('🔌 [Admin WebSocket] Connecting to:', wsUrl);
-      }
+      console.log('🔌 [Admin WebSocket] Connecting to:', wsUrl);
 
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        // Only log successful connections in verbose mode
-        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-          console.log('🔌 [Admin WebSocket] Connected successfully to:', wsUrl);
-        }
+        console.log('✅ [Admin WebSocket] Connected successfully to:', wsUrl);
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.clearReconnectInterval();
@@ -236,7 +231,9 @@ class PlaybackWebSocketService {
       this.ws.onerror = (error) => {
         // Only log error details on first attempt to avoid spam
         if (this.reconnectAttempts === 0) {
-          console.warn('🔌 [Admin WebSocket] Connection failed, will retry...');
+          console.warn('❌ [Admin WebSocket] Connection failed, will retry...');
+          console.warn('Error details:', error);
+          console.warn('Target URL:', wsUrl);
         }
         this.isConnected = false;
       };

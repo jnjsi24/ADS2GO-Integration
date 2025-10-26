@@ -4,15 +4,19 @@
 const { gql } = require('graphql-tag');
 
 const adsDeploymentTypeDefs = gql`
-  # Deployment Status Enum
+  # Deployment Status Enum - Deployments are always RUNNING (empty slots filled with company ads)
   enum DeploymentStatus {
+    RUNNING
+  }
+
+  # Slot Status Enum - Individual ad slots can have different statuses
+  enum SlotStatus {
     SCHEDULED
     RUNNING
     COMPLETED
     PAUSED
     CANCELLED
     REMOVED
-    PAID
   }
 
   # LCD Slot type for array storage
@@ -20,7 +24,7 @@ const adsDeploymentTypeDefs = gql`
     id: ID!
     adId: ID!
     slotNumber: Int!
-    status: DeploymentStatus!
+    status: SlotStatus!
     startTime: String
     endTime: String
     deployedAt: String
