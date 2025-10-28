@@ -143,8 +143,12 @@ const DeviceNotificationList: React.FC<DeviceNotificationListProps> = ({ maxNoti
         return <Wifi className="w-5 h-5 text-green-500" />;
       case 'DEVICE_OFFLINE':
         return <WifiOff className="w-5 h-5 text-red-500" />;
+      case 'DEVICE_MILESTONE':
+        return <Target className="w-5 h-5 text-blue-500" />;
       case 'MILESTONE_ACHIEVED':
         return <Target className="w-5 h-5 text-blue-500" />;
+      case 'DAILY_COMPLIANCE_MISSED':
+        return <Clock className="w-5 h-5 text-orange-600" />;
       case 'DEVICE_ERROR':
         return <AlertTriangle className="w-5 h-5 text-orange-500" />;
       case 'DEVICE_SYNC':

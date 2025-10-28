@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const GPSValidation = require('../utils/gpsValidation');
+const { getUTCMidnight, isSameDay } = require('../utils/dateUtils');
+const { setStartTimeIfNeeded: helperSetStartTime, syncDeviceDates, validateHours, syncHoursFromSession } = require('./deviceTrackingHelpers');
 //for data history
 // Location Point Schema for real-time data
 const LocationPointSchema = new mongoose.Schema({
@@ -115,6 +117,9 @@ const SlotSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now 
   },
+  unregisteredAt: { 
+    type: Date 
+  }, // ✅ FIX: Track when slot was unregistered
   deviceInfo: DeviceInfoSchema,
   // Basic slot status
   isDisplaying: { type: Boolean, default: false },
@@ -333,32 +338,46 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
   const now = new Date();
   const startTime = new Date(this.currentSession.startTime);
   
+  // ✅ FIX: Check for sentinel value (far future date = device hasn't come online yet)
+  // If startTime is > 1 year in the future, it's a sentinel value meaning "not started yet"
+  const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
+  if (startTime > oneYearFromNow) {
+    return 0; // Device hasn't come online yet today
+  }
+  
   // Get device timezone from current location
   const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
   
-  // Check if this is a new day in device timezone - if so, return 0 hours (fresh start)
+  // ✅ CRITICAL FIX: Check if this is a new day FIRST (before checking online status)
+  // This prevents returning stale hours from yesterday when device is offline
+  // Safety check: if session date is missing, assume new day and return 0
+  if (!this.currentSession.date) {
+    return 0;
+  }
+  
   const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
   const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(this.currentSession.date, deviceTimezone);
   
-  // If it's a new day in device timezone, return 0 hours (fresh start)
+  // If it's a new day in device timezone, return 0 hours (fresh start) - regardless of online status
   if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
     return 0;
   }
   
-  // Enhanced session management for offline/online transitions
-  let totalHours = this.currentSession.totalHoursOnline || 0;
-  
-  if (this.isOnline) {
-    // Device is online - calculate hours since last update
-    const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
-    const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
-    
-    // Only add reasonable increments (less than 1 hour to prevent bugs)
-    if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
-      totalHours += hoursSinceLastUpdate;
-    }
+  // ✅ FIX: If device is offline, return only the accumulated hours (don't calculate real-time)
+  // BUT only if it's the same day (checked above)
+  if (!this.isOnline) {
+    return Math.round((this.currentSession.totalHoursOnline || 0) * 100) / 100;
   }
-  // If offline, return the last recorded hours (don't reset)
+  
+  // Device is online - calculate hours since last update
+  let totalHours = this.currentSession.totalHoursOnline || 0;
+  const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
+  const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
+  
+  // Only add reasonable increments (less than 1 hour to prevent bugs)
+  if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
+    totalHours += hoursSinceLastUpdate;
+  }
   
   // Cap at 8 hours max per day
   totalHours = Math.min(8, Math.max(0, totalHours));
@@ -474,9 +493,11 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
       };
       
       // Reset current session for new day
+      // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
+      // This prevents counting hours from midnight when devices are offline
       recentCar.currentSession = {
         date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: new Date(),
+        startTime: null,  // Will be set when device comes online
         endTime: null,
         totalHoursOnline: 0,
         totalDistanceTraveled: 0,
@@ -486,10 +507,11 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
         locationHistory: []
       };
       
-      // Set online status for the current device
-      recentCar.isOnline = true;
+      // ✅ FIX: Set online status to false at midnight - devices will report online when they actually connect
+      // This prevents counting hours from midnight when devices are offline
+      recentCar.isOnline = false;
       recentCar.slots.forEach(slot => {
-        slot.isOnline = slot.deviceId === deviceId;
+        slot.isOnline = false; // Reset all slots to offline - they will report online when connected
         slot.lastSeen = new Date();
       });
       
@@ -574,9 +596,11 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       };
       
       // Reset current session for new day
+      // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
+      // This prevents counting hours from midnight when devices are offline
       recentCar.currentSession = {
         date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: new Date(),
+        startTime: null,  // Will be set when device comes online
         endTime: null,
         totalHoursOnline: 0,
         totalDistanceTraveled: 0,
@@ -632,8 +656,14 @@ DeviceTrackingSchema.methods.updateSlot = async function(slotNumber, updateData)
   }
   
   // Update car-level online status
+  const wasOffline = !this.isOnline;
   this.isOnline = this.slots.some(slot => slot.isOnline);
   this.lastSeen = new Date();
+  
+  // ✅ FIX: Use centralized startTime setting logic
+  if (wasOffline && this.isOnline) {
+    helperSetStartTime(this);
+  }
   
   // Retry logic for version conflicts
   let retries = 3;
@@ -859,37 +889,31 @@ DeviceTrackingSchema.methods.saveWithRetry = function(maxRetries = 3) {
 
 // Instance methods
 DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', timestamp = null) {
-  // Enhanced GPS validation using new validation utility
-  const coordValidation = GPSValidation.validateCoordinates(lat, lng);
-  if (!coordValidation.isValid) {
-    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS coordinates [${lat}, ${lng}] - ${coordValidation.errors.join(', ')}`);
-    return Promise.resolve(this);
-  }
-
-  const accuracyValidation = GPSValidation.validateAccuracy(accuracy);
-  if (!accuracyValidation.isValid) {
-    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS accuracy (${accuracy}m) - ${accuracyValidation.message}`);
-    return Promise.resolve(this);
-  }
-
-  const speedValidation = GPSValidation.validateSpeed(speed);
-  if (!speedValidation.isValid) {
-    console.log(`📍 [updateLocation] ${this.materialId}: Invalid speed (${speed} km/h) - ${speedValidation.message}`);
-    return Promise.resolve(this);
+  // ✅ FIX: Use centralized master validation
+  const validation = GPSValidation.validateLocation(lat, lng, accuracy, speed, heading);
+  
+  if (!validation.isValid) {
+    const error = new Error(`Invalid GPS data: ${validation.errors.join(', ')}`);
+    error.name = 'GPSValidationError';
+    error.details = validation;
+    throw error; // ✅ Fail loudly instead of silently
   }
 
   // Log warnings if any
-  if (coordValidation.warnings.length > 0) {
-    console.log(`📍 [updateLocation] ${this.materialId}: GPS warnings - ${coordValidation.warnings.join(', ')}`);
+  if (validation.warnings.length > 0) {
+    console.log(`📍 [updateLocation] ${this.materialId}: GPS warnings - ${validation.warnings.join(', ')}`);
   }
+  
+  // ✅ Use sanitized values
+  const sanitized = validation.sanitized;
   
   const newLocation = {
     type: 'Point',
-    coordinates: [lng, lat],
-    timestamp: timestamp || new Date(), // Use provided timestamp or current time
-    speed: Math.max(0, speed || 0), // Ensure non-negative speed
-    heading: Math.max(0, Math.min(360, heading || 0)), // Clamp heading to 0-360
-    accuracy: Math.max(0, accuracy || 0), // Ensure non-negative accuracy
+    coordinates: [sanitized.lng, sanitized.lat], // ✅ Use sanitized
+    timestamp: timestamp || new Date(),
+    speed: sanitized.speed,
+    heading: sanitized.heading,
+    accuracy: sanitized.accuracy,
     address: address || ''
   };
   
@@ -914,11 +938,13 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       const currentAccuracy = accuracy || 0;
       const previousAccuracy = prevLocation.accuracy || 0;
       const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
+      const MIN_MOVEMENT_THRESHOLD = 0.02; // 0.02 km = 20 meters - filters stationary GPS drift
       
       // Only add distance if:
-      // 1. Movement is significant (more than 10 meters) - filters stationary GPS noise
+      // 1. Movement is significant (more than 20 meters) - filters stationary GPS noise and drift
       // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
-      if (distance > 0.01) { // 0.01 km = 10 meters
+      // NOTE: Increased from 10m to 20m to eliminate ~3km of stationary GPS drift
+      if (distance > MIN_MOVEMENT_THRESHOLD) {
         // Check if both current and previous GPS readings are accurate enough
         if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
           distanceAdded = distance;
@@ -928,7 +954,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
           console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
         }
       } else {
-        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise/drift`);
       }
     } else {
       console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
@@ -1188,70 +1214,93 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
   if (isOnline) {
     this.networkStatus.isOnline = true;
     this.networkStatus.lastSeen = new Date();
+    
+    // ✅ Set session startTime when device comes online for the first time today
+    // Check if startTime is sentinel value (far future) or not set
+    if (this.currentSession) {
+      const now = new Date();
+      const startTime = new Date(this.currentSession.startTime);
+      const oneYearFromNow = new Date(now.getTime() + (365 * 24 * 60 * 60 * 1000));
+      
+      // If startTime is in far future (sentinel) or not set, set it to now
+      if (!this.currentSession.startTime || startTime > oneYearFromNow) {
+        this.currentSession.startTime = now;
+        this.currentSession.lastOnlineUpdate = now;
+        console.log(`⏰ [setOnlineStatus] ${this.materialId}: Starting session at ${now.toISOString()}`);
+      }
+    }
   }
   
   return this.save();
 };
 
-// Method to reset daily session (from ScreenTracking)
+// ✅ FIX: Centralized reset method using helpers
 DeviceTrackingSchema.methods.resetDailySession = function() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split('T')[0];
+  const { needsDailyReset } = require('./deviceTrackingHelpers');
   
-  // Check if we need to reset (new day)
-  const sessionDate = new Date(this.currentSession?.date);
-  if (sessionDate) {
-    sessionDate.setHours(0, 0, 0, 0);
-    if (sessionDate.getTime() !== today.getTime()) {
-      // Reset for new day
-      this.date = today; // Update the main date field
-      
-      this.currentSession = {
-        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: new Date(),
-        endTime: null,
-        totalHoursOnline: 0,
-        totalDistanceTraveled: 0,
-        isActive: true,
-        targetHours: 8,
-        complianceStatus: 'PENDING',
-        locationHistory: []
-      };
-      
-      // Reset daily counters
-      this.totalAdPlays = 0;
-      this.totalQRScans = 0;
-      this.totalDistanceTraveled = 0;
-      this.totalHoursOnline = 0;
-      this.totalAdImpressions = 0;
-      this.totalAdPlayTime = 0;
-      
-      // Clear daily data arrays
-      this.adPlaybacks = [];
-      this.qrScans = [];
-      this.locationHistory = [];
-      this.hourlyStats = [];
-      this.adPerformance = [];
-      this.qrScansByAd = [];
-      
-      // Reset current ad
-      this.currentAd = null;
-      
-      // Reset compliance data
-      this.complianceData = {
-        offlineIncidents: 0,
-        displayIssues: 0
-      };
-      
-      // Also reset the current location to prevent invalid distance calculations
-      this.currentLocation = null;
-      
-      return true; // Session was reset
-    }
+  // Check if reset is needed
+  if (!needsDailyReset(this)) {
+    return false; // No reset needed
   }
   
-  return false; // No reset needed
+  // Reset for new day
+  const today = getUTCMidnight();
+  const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value
+  
+  // ✅ Use centralized date sync
+  syncDeviceDates(this, today);
+  
+  // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
+  // This prevents counting hours from midnight when devices are offline
+  this.currentSession = {
+    date: today,
+    startTime: farFuture,  // Sentinel: will be set when device comes online
+    endTime: null,
+    totalHoursOnline: 0,
+    totalDistanceTraveled: 0,
+    isActive: true,
+    targetHours: 8,
+    complianceStatus: 'PENDING',
+    locationHistory: []
+  };
+  
+  // Reset daily counters
+  this.totalAdPlays = 0;
+  this.totalQRScans = 0;
+  this.totalDistanceTraveled = 0;
+  this.totalHoursOnline = 0;
+  this.totalAdImpressions = 0;
+  this.totalAdPlayTime = 0;
+  
+  // Clear daily data arrays
+  this.adPlaybacks = [];
+  this.qrScans = [];
+  this.locationHistory = [];
+  this.hourlyStats = [];
+  this.adPerformance = [];
+  this.qrScansByAd = [];
+  
+  // Reset current ad
+  this.currentAd = null;
+  
+  // Reset compliance data
+  this.complianceData = {
+    offlineIncidents: 0,
+    displayIssues: 0
+  };
+  
+  // Also reset the current location to prevent invalid distance calculations
+  this.currentLocation = null;
+  
+  // Reset online status
+  this.isOnline = false;
+  if (this.slots && this.slots.length > 0) {
+    this.slots.forEach(slot => {
+      slot.isOnline = false;
+    });
+  }
+  
+  return true; // Session was reset
 };
 
 // Method to start daily session (from ScreenTracking)

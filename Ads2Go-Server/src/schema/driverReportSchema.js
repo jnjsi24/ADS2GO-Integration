@@ -9,6 +9,7 @@ const typeDefs = gql`
     VEHICLE_ISSUE
     MATERIAL_ISSUE
     APP_ISSUE
+    REQUEST_ACCOUNT_CLOSURE
     OTHER
   }
 
@@ -30,6 +31,8 @@ const typeDefs = gql`
     status: DriverReportStatus!
     attachments: [String!]
     adminNotes: String
+    adminNotesUpdatedAt: String
+    adminNotesBy: AdminInfo
     createdAt: String!
     updatedAt: String!
     resolvedAt: String

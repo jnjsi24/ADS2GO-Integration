@@ -694,7 +694,9 @@ const ManageAds: React.FC = () => {
             </div>
 
             {/* Table */}
-            {filteredAds.length === 0 ? (
+            {loading ? (
+              <AdminLoader />
+            ) : filteredAds.length === 0 ? (
               <div className="text-center py-10 text-gray-600">
                 {searchTerm !== 'all' ? 'No ads match your search criteria' : 'No ads found'}
               </div>

@@ -627,12 +627,22 @@ class PlaybackWebSocketService {
   // Request synchronization with other slots
   requestSync() {
     if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
-      // Only request sync if we have current playback data and are actually playing
-      if (!this.currentPlaybackData || !this.currentPlaybackData.adId || 
-          this.currentPlaybackData.state === 'loading' || 
-          this.currentPlaybackData.state === 'buffering') {
-        console.log('🔄 [WebSocket] Skipping sync request - no ads currently playing or still loading');
-        return;
+      // ✅ FIXED: Allow Slot 2 to request sync even without playback data (for initial sync)
+      // Slot 1 (master) should only sync if it has playback data
+      // Slot 2 (slave) should ALWAYS be able to request sync to catch up with master
+      const isSlot2 = this.slotNumber === 2;
+      
+      if (!isSlot2) {
+        // Slot 1 (master): Only request sync if we have current playback data and are actually playing
+        if (!this.currentPlaybackData || !this.currentPlaybackData.adId || 
+            this.currentPlaybackData.state === 'loading' || 
+            this.currentPlaybackData.state === 'buffering') {
+          console.log('🔄 [WebSocket] Skipping sync request - no ads currently playing or still loading');
+          return;
+        }
+      } else {
+        // Slot 2 (slave): Always allow sync request - this is for initial sync when connecting late
+        console.log('🔄 [WebSocket] Slot 2 requesting initial sync with master (Slot 1)');
       }
 
       const syncRequest = {

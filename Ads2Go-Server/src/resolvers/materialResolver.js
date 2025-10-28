@@ -8,6 +8,7 @@ const MaterialAvailability = require('../models/MaterialAvailability');
 const AdsPlan = require('../models/AdsPlan');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const allowedMaterialsByVehicle = {
   CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
@@ -875,6 +876,17 @@ const materialResolvers = {
         console.log(`✅ Synced existing mountedAt date to usage history for material ${availableMaterial.materialId}, driver ${driver.driverId}: ${usageEntry.mountedAt}`);
       }
 
+      // Send notification to admins about material assignment
+      try {
+        await NotificationService.sendMaterialAssignedNotification(
+          availableMaterial._id,
+          driver._id
+        );
+      } catch (notifError) {
+        console.error('Error sending material assigned notification:', notifError);
+        // Don't fail the assignment if notification fails
+      }
+
       return {
         success: true,
         message: 'Material assigned successfully',
@@ -935,6 +947,17 @@ const materialResolvers = {
       driver.installedMaterialType = null;
       await driver.save();
 
+      // Send notification to admins about material unassignment
+      try {
+        await NotificationService.sendMaterialUnassignedNotification(
+          material._id,
+          driver._id
+        );
+      } catch (notifError) {
+        console.error('Error sending material unassigned notification:', notifError);
+        // Don't fail the unassignment if notification fails
+      }
+
       return {
         success: true,
         message: 'Material unassigned successfully',
@@ -985,6 +1008,23 @@ const materialResolvers = {
         await deviceCompliance.addMonthlyPhoto(month, photoUrls, driver?.driverId || user?.id);
 
         console.log(`✅ Monthly photo uploaded for material ${material.materialId}, month: ${month}`);
+
+        // Send notification to admins about photo upload (only if uploaded by driver)
+        if (driver) {
+          try {
+            const driverDetails = await Driver.findOne({ driverId: driver.driverId });
+            if (driverDetails) {
+              await NotificationService.sendMaterialPhotosUploadedNotification(
+                material._id,
+                driverDetails._id,
+                Array.isArray(photoUrls) ? photoUrls.length : 1
+              );
+            }
+          } catch (notifError) {
+            console.error('Error sending material photos uploaded notification:', notifError);
+            // Don't fail the upload if notification fails
+          }
+        }
 
         return {
           success: true,

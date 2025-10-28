@@ -165,6 +165,39 @@ export default function Login() {
       
       const loginResponse: LoginResponse = result.data;
 
+      // Check if email needs verification (even if login failed)
+      if (!loginResponse.loginDriver?.success && 
+          loginResponse.loginDriver?.driver && 
+          !loginResponse.loginDriver.driver.isEmailVerified) {
+        // Email needs verification - redirect to OTP page
+        Alert.alert(
+          'Email Verification Required',
+          'Please verify your email to continue. A verification code has been sent to your email.',
+          [
+            {
+              text: 'Verify Now',
+              onPress: () => {
+                router.push({
+                  pathname: '/auth/emailVerification',
+                  params: {
+                    email: loginResponse.loginDriver.driver?.email || formState.email,
+                    driverId: loginResponse.loginDriver.driver?.driverId || 
+                             loginResponse.loginDriver.driver?.id || '',
+                    firstName: loginResponse.loginDriver.driver?.firstName || '',
+                    token: loginResponse.loginDriver.token || '', // Use temporary token from server
+                  } as Record<string, string>,
+                });
+              },
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            }
+          ]
+        );
+        return;
+      }
+
       if (loginResponse.loginDriver?.success && loginResponse.loginDriver.token) {
         // Sign in using our auth context which will handle token storage
         await signIn(loginResponse.loginDriver.token);
@@ -184,28 +217,8 @@ export default function Login() {
           }
         }
 
-        // Check if the account needs email verification (but not pending status)
-        const needsEmailVerification = !loginResponse.loginDriver.driver?.isEmailVerified;
-
-        if (needsEmailVerification && loginResponse.loginDriver.driver) {
-          // Navigate to verification screen if email needs verification
-          const navParams = {
-            email: loginResponse.loginDriver.driver.email || "",
-            driverId: loginResponse.loginDriver.driver.driverId || 
-                     loginResponse.loginDriver.driver.id || "",
-            firstName: loginResponse.loginDriver.driver.firstName || "",
-            token: loginResponse.loginDriver.token,
-          };
-        
-          // Type assertion to handle Expo Router's navigation params
-          router.push({
-            pathname: "/auth/verificationProgress",
-            params: navParams as Record<string, string>,
-          });
-        } else {
-          // Navigate to dashboard if no verification needed
-          router.replace("/tabs/dashboard");
-        }
+        // Navigate to dashboard (email should already be verified at this point)
+        router.replace("/tabs/dashboard");
       } else {
         // Show error message if login failed
         setFormState(prev => ({

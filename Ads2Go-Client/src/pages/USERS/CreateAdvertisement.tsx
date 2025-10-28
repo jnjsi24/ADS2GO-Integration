@@ -212,8 +212,8 @@ const CreateAdvertisement: React.FC = () => {
       
       video.onloadedmetadata = () => {
         window.URL.revokeObjectURL(video.src);
-        // ✅ Use Math.ceil to round up (more conservative, matches backend behavior better)
-        const duration = Math.ceil(video.duration);
+        // ✅ Use Math.round for accurate rounding (20.1s → 20s, 20.6s → 21s)
+        const duration = Math.round(video.duration);
         console.log(`📹 Raw video duration: ${video.duration}s, Rounded: ${duration}s`);
         resolve(duration);
       };
@@ -227,14 +227,14 @@ const CreateAdvertisement: React.FC = () => {
   };
 
   // Helper function to get recommended ad length based on video duration
-  // Match the backend validation tolerance of ±5 seconds
+  // Match the NEW backend validation logic:
+  // - 20s ad length: accepts videos 1-20 seconds
+  // - 40s ad length: accepts videos 21-40 seconds
+  // - 60s ad length: accepts videos 41-60 seconds
   const getRecommendedAdLength = (videoDuration: number): number => {
-    // 20s slot accepts 15-25s, so recommend 20s for videos up to 25s
-    if (videoDuration <= 25) return 20;
-    // 40s slot accepts 35-45s, so recommend 40s for 26-45s
-    if (videoDuration <= 45) return 40;
-    // 60s slot accepts 55-65s, recommend 60s for anything 46s and above
-    return 60;
+    if (videoDuration <= 20) return 20;  // 1-20s → 20s ad
+    if (videoDuration <= 40) return 40;  // 21-40s → 40s ad
+    return 60;                            // 41-60s → 60s ad
   };
 
   const handleInputChange = async (field: keyof AdvertisementForm, value: string | number | File | null) => {

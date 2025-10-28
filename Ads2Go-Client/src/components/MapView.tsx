@@ -37,33 +37,44 @@ const MapView: React.FC<MapViewProps> = ({
   ...rest
 }) => {
   const mapRef = useRef<L.Map | null>(null);
-  const mapInitialized = useRef(false);
   const [isClient, setIsClient] = React.useState(false);
+  const [mapKey, setMapKey] = React.useState(0);
 
-  // Handle map initialization
-  const handleMapCreated = useCallback((map: L.Map) => {
-    if (!mapInitialized.current) {
-      mapRef.current = map;
-      mapInitialized.current = true;
-      if (onMapLoad) onMapLoad(map);
-    }
-  }, [onMapLoad]);
+  // Set client-side rendering
+  useEffect(() => {
+    setIsClient(true);
+    // Force remount when client-side
+    setMapKey(prev => prev + 1);
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        mapInitialized.current = false;
+        try {
+          // Stop any ongoing animations before removing
+          mapRef.current.stop();
+          // Remove map properly
+          setTimeout(() => {
+            if (mapRef.current) {
+              mapRef.current.remove();
+              mapRef.current = null;
+            }
+          }, 0);
+        } catch (error) {
+          console.warn('Map cleanup error:', error);
+        }
       }
     };
   }, []);
 
-  // Set client-side rendering
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  // Handle map ready
+  const handleMapReady = useCallback(() => {
+    const map = (mapRef.current as any)?.contextValue?.map;
+    if (map && onMapLoad) {
+      onMapLoad(map);
+    }
+  }, [onMapLoad]);
 
   if (!isClient) {
     return <div style={style} className={className} />;
@@ -72,10 +83,11 @@ const MapView: React.FC<MapViewProps> = ({
   return (
     <div style={style} className={className}>
       <MapContainer 
+        key={mapKey}
         center={center} 
         zoom={zoom} 
         style={{ height: '100%', width: '100%' }}
-        ref={handleMapCreated}
+        whenReady={handleMapReady}
         {...rest}
       >
         <TileLayer

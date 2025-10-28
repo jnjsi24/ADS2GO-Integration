@@ -6,6 +6,7 @@ const { JWT_SECRET } = require('../middleware/auth');
 const { validateUserInput, checkPasswordStrength } = require('../utils/validations');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 1 * 60 * 60 * 1000; // 1 hour
@@ -53,7 +54,8 @@ const resolvers = {
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view users');
       }
-      return await User.find({});
+      // Only return non-archived users
+      return await User.find({ isArchived: { $ne: true } });
     },
 
     getAdminNotificationPreferences: async (_, __, { admin }) => {
@@ -100,6 +102,17 @@ const resolvers = {
       });
 
       await newAdmin.save();
+
+      // Send notification to other admins about new admin creation
+      try {
+        await NotificationService.sendNewAdminCreatedNotification(
+          newAdmin._id,
+          admin.id || admin._id
+        );
+      } catch (notifError) {
+        console.error('Error sending new admin created notification:', notifError);
+        // Don't fail the creation if notification fails
+      }
 
       return {
         success: true,
@@ -350,7 +363,26 @@ const resolvers = {
         };
       }
       
-      await User.findByIdAndDelete(id);
+      // Check if already archived
+      if (user.isArchived) {
+        return {
+          success: false,
+          message: 'User is already archived'
+        };
+      }
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      user.isArchived = true;
+      user.archivedAt = now;
+      user.scheduledDeletionDate = deletionDate;
+      
+      await user.save();
+      
+      console.log(`✅ User ${user.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
       
       return {
         success: true,

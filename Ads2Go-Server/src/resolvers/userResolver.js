@@ -117,6 +117,83 @@ const resolvers = {
         throw new Error('Failed to fetch ad details');
       }
     },
+
+    getUserMaterialsWithLocation: async (_, __, { user }) => {
+      checkAuth(user);
+      try {
+        console.log('📍 getUserMaterialsWithLocation called for user:', user.id);
+        
+        const UserAnalyticsService = require('../services/userAnalyticsService');
+        const result = await UserAnalyticsService.getActiveTotalMaterials(user.id);
+        
+        if (!result.success) {
+          console.log('⚠️ No materials found for user:', user.id);
+          return {
+            success: true,
+            message: result.message || 'No materials found',
+            totalMaterials: 0,
+            activeMaterials: 0,
+            materials: []
+          };
+        }
+        
+        console.log(`✅ Found ${result.materials.length} materials for user ${user.id}`);
+        
+        return {
+          success: true,
+          message: 'Materials retrieved successfully',
+          totalMaterials: result.totalMaterials,
+          activeMaterials: result.activeMaterials,
+          materials: result.materials.map(material => {
+            // Helper function to validate location
+            const hasValidLocation = (loc) => {
+              return loc && 
+                     typeof loc.lat === 'number' && 
+                     typeof loc.lng === 'number' && 
+                     !isNaN(loc.lat) && 
+                     !isNaN(loc.lng) &&
+                     loc.lat !== 0 && 
+                     loc.lng !== 0 &&
+                     loc.lat >= -90 && 
+                     loc.lat <= 90 &&
+                     loc.lng >= -180 && 
+                     loc.lng <= 180;
+            };
+
+            const location = material.currentStatus?.currentLocation;
+            
+            return {
+              materialId: material.materialId,
+              materialName: `${material.materialType || 'Material'} - ${material.materialId}`,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              category: material.category,
+              isOnline: material.currentStatus?.isOnline || false,
+              lastSeen: material.currentStatus?.lastSeen,
+              currentLocation: hasValidLocation(location) ? {
+                lat: location.lat,
+                lng: location.lng,
+                timestamp: location.timestamp,
+                speed: location.speed,
+                heading: location.heading,
+                accuracy: location.accuracy,
+                address: location.address
+              } : null,
+              totalAdPlays: material.currentStatus?.totalAdPlays || 0,
+              totalQRScans: material.currentStatus?.totalQRScans || 0,
+              totalAdPlayTime: material.currentStatus?.totalAdPlayTime || 0,
+              totalAdImpressions: material.currentStatus?.totalAdImpressions || 0,
+              carGroupId: material.currentStatus?.carGroupId,
+              screenType: material.currentStatus?.screenType,
+              ads: material.ads || []
+            };
+          })
+        };
+      } catch (error) {
+        console.error('❌ Error fetching user materials with location:', error);
+        throw new Error('Failed to fetch materials with location');
+      }
+    },
   },
 
   Mutation: {
@@ -279,6 +356,11 @@ const resolvers = {
 
       const user = await User.findOne({ email });
       if (!user || user.role !== 'USER') throw new Error('No user found with this email');
+
+      // Check if user is archived (scheduled for deletion)
+      if (user.isArchived) {
+        throw new Error('This account has been deleted and is no longer accessible');
+      }
 
       if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
@@ -499,6 +581,56 @@ const resolvers = {
       checkAuth(user);
       await User.findByIdAndUpdate(user.id, { $inc: { tokenVersion: 1 } });
       return true;
+    },
+
+    deleteOwnAccount: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const userRecord = await User.findById(user.id);
+        
+        if (!userRecord) {
+          return {
+            success: false,
+            message: 'User not found'
+          };
+        }
+        
+        // Check if already archived
+        if (userRecord.isArchived) {
+          return {
+            success: false,
+            message: 'Account is already scheduled for deletion'
+          };
+        }
+        
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+        
+        userRecord.isArchived = true;
+        userRecord.archivedAt = now;
+        userRecord.scheduledDeletionDate = deletionDate;
+        
+        // Increment token version to invalidate all existing sessions
+        userRecord.tokenVersion += 1;
+        
+        await userRecord.save();
+        
+        console.log(`✅ User ${userRecord.email} deleted their own account. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        
+        return {
+          success: true,
+          message: 'Your account has been scheduled for deletion in 30 days. You have been logged out.'
+        };
+      } catch (error) {
+        console.error('Error deleting own account:', error);
+        return {
+          success: false,
+          message: 'Failed to delete account: ' + error.message
+        };
+      }
     },
 
     requestPasswordReset: async (_, { email }) => {

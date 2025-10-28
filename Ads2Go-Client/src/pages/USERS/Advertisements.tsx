@@ -59,6 +59,7 @@ type Ad = {
 };
 
 const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'Running'];
+const sortByOptions = ['Newest First', 'Oldest First', 'Start Date (Newest)', 'End Date (Soonest)', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
@@ -69,8 +70,10 @@ const Advertisements: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
   const [dateFilter, setDateFilter] = useState('');
   const [showCreateAdPopup, setShowCreateAdPopup] = useState(false);
   const [formData, setFormData] = useState({
@@ -279,6 +282,27 @@ const Advertisements: React.FC = () => {
     const matchesStatus = selectedStatusFilter === 'All Status' || ad.status.toLowerCase() === selectedStatusFilter.toLowerCase();
     
     return matchesSearch && matchesStatus && matchesPlan;
+  }).sort((a: Ad, b: Ad) => {
+    switch (selectedSortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Start Date (Newest)':
+        const aStart = a.startTime ? new Date(a.startTime).getTime() : 0;
+        const bStart = b.startTime ? new Date(b.startTime).getTime() : 0;
+        return bStart - aStart;
+      case 'End Date (Soonest)':
+        const aEnd = a.endTime ? new Date(a.endTime).getTime() : Infinity;
+        const bEnd = b.endTime ? new Date(b.endTime).getTime() : Infinity;
+        return aEnd - bEnd;
+      case 'Alphabetical (A-Z)':
+        return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+      case 'Alphabetical (Z-A)':
+        return b.title.toLowerCase().localeCompare(a.title.toLowerCase());
+      default:
+        return 0;
+    }
   });
 
   const currentAds = filteredAds.slice(indexOfFirstItem, indexOfLastItem);
@@ -419,6 +443,39 @@ const Advertisements: React.FC = () => {
                             className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                           >
                             {status}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <div className="relative w-full sm:w-48">
+                  <button
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                    <span className="truncate">{selectedSortBy}</span>
+                    <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                  </button>
+                  <AnimatePresence>
+                    {showSortDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                      >
+                        {sortByOptions.map((sortOption) => (
+                          <button
+                            key={sortOption}
+                            onClick={() => {
+                              setSelectedSortBy(sortOption);
+                              setShowSortDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {sortOption}
                           </button>
                         ))}
                       </motion.div>

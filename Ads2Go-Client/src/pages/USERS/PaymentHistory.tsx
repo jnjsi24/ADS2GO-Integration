@@ -28,6 +28,7 @@ interface PaymentItem {
   totalPrice: string;
   receiptId?: string;
   adStatus?: string; // Ad approval status (PENDING, APPROVED, etc.)
+  createdAt?: string; // Ad creation date
 }
 
 const GET_USER_ADS_WITH_PAYMENTS = gql`
@@ -72,6 +73,8 @@ const statusFilterOptions = [
   { label: 'Paid', value: 'PAID' },
 ];
 
+const sortByOptions = ['Newest First', 'Oldest First', 'Amount (High to Low)', 'Amount (Low to High)', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
+
 const PaymentHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,8 +84,10 @@ const PaymentHistory: React.FC = () => {
 
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
   const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPaymentType, setSelectedPaymentType] = useState("");
@@ -166,6 +171,7 @@ const PaymentHistory: React.FC = () => {
           totalPrice,
           receiptId: payment?.receiptId || "",
           adStatus: ad.status || "PENDING", // Include ad approval status (this is the actual status from database)
+          createdAt: ad.createdAt,
         };
       });
       setPayments(mappedPayments);
@@ -202,6 +208,27 @@ const PaymentHistory: React.FC = () => {
 
     const matches = matchesSearchTerm && matchesStatus && matchesPlan;
     return matches;
+  }).sort((a, b) => {
+    switch (selectedSortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+      case 'Amount (High to Low)':
+        const amountA = parseFloat(a.amount.replace('$', ''));
+        const amountB = parseFloat(b.amount.replace('$', ''));
+        return amountB - amountA;
+      case 'Amount (Low to High)':
+        const amountA2 = parseFloat(a.amount.replace('$', ''));
+        const amountB2 = parseFloat(b.amount.replace('$', ''));
+        return amountA2 - amountB2;
+      case 'Alphabetical (A-Z)':
+        return a.productName.toLowerCase().localeCompare(b.productName.toLowerCase());
+      case 'Alphabetical (Z-A)':
+        return b.productName.toLowerCase().localeCompare(a.productName.toLowerCase());
+      default:
+        return 0;
+    }
   });
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -330,6 +357,45 @@ const PaymentHistory: React.FC = () => {
                         }`}
                       >
                         {option.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {/* Sort By Filter */}
+            <div className="relative w-full sm:w-48">
+              <button
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 hover:bg-white/80 transition-colors duration-200"
+              >
+                <span className="truncate">{selectedSortBy}</span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                />
+              </button>
+              <AnimatePresence>
+                {showSortDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto border border-gray-200"
+                  >
+                    {sortByOptions.map((sortOption) => (
+                      <button
+                        key={sortOption}
+                        onClick={() => {
+                          setSelectedSortBy(sortOption);
+                          setShowSortDropdown(false);
+                        }}
+                        className={`block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                          selectedSortBy === sortOption ? 'bg-blue-50 text-blue-700 font-medium' : ''
+                        }`}
+                      >
+                        {sortOption}
                       </button>
                     ))}
                   </motion.div>

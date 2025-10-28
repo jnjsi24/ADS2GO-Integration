@@ -9,6 +9,7 @@ const adTypeDefs = gql`
     RUNNING
     ENDED
     CANCELLED
+    ARCHIVED
   }
 
   enum AdType {
@@ -53,6 +54,10 @@ const adTypeDefs = gql`
     category: String
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input CreateAdInput {

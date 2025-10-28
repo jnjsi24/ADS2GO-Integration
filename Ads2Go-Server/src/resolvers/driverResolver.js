@@ -97,6 +97,7 @@ async function assignMaterialToDriver(driver) {
   try {
     // Assign material to driver
     materialToAssign.driverId = driver.driverId;
+    materialToAssign.assignedDate = new Date(); // ✅ Set assignedDate when material is assigned
     materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     await materialToAssign.save({ session });
 
@@ -167,7 +168,8 @@ Upload: GraphQLUpload,
     },
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
-      return Driver.find({})
+      // Filter out archived drivers (30-day deferred deletion)
+      return Driver.find({ isArchived: { $ne: true } })
         .select('+createdAt +updatedAt +lastLogin +dateJoined +approvalDate')
         .populate({
           path: 'material',
@@ -419,6 +421,16 @@ createDriver: async (_, { input }) => {
 
         if (!driver) return { success: false, message: 'Driver not found', token: null, driver: null };
 
+        // ✅ Check if driver is archived (scheduled for deletion)
+        if (driver.isArchived) {
+          return { 
+            success: false, 
+            message: 'This account has been deleted and is no longer accessible', 
+            token: null, 
+            driver: null 
+          };
+        }
+
         // Account lock check
         if (driver.accountLocked && driver.lockUntil && driver.lockUntil > new Date()) {
           return { success: false, message: 'Account temporarily locked. Try again later.', token: null, driver: null };
@@ -429,7 +441,31 @@ createDriver: async (_, { input }) => {
           await driver.save();
         }
 
-        if (!driver.isEmailVerified) return { success: false, message: 'Please verify your email before logging in', token: null, driver: null };
+        // Return driver data even when email is not verified so mobile app can redirect to OTP page
+        if (!driver.isEmailVerified) {
+          // Generate a temporary token for email verification purposes
+          const tempToken = jwt.sign(
+            { driverId: driver.driverId, email: driver.email, isTemp: true },
+            JWT_SECRET,
+            { expiresIn: '1h' } // Short-lived token just for verification
+          );
+          
+          return { 
+            success: false, 
+            message: 'Please verify your email before logging in', 
+            token: tempToken, 
+            driver: {
+              id: driver._id.toString(),
+              driverId: driver.driverId,
+              firstName: driver.firstName,
+              lastName: driver.lastName,
+              email: driver.email,
+              accountStatus: driver.accountStatus,
+              isEmailVerified: driver.isEmailVerified
+            },
+            needsEmailVerification: true
+          };
+        }
         
         // Provide specific messages for different account statuses
         if (driver.accountStatus !== 'ACTIVE') {
@@ -663,6 +699,7 @@ createDriver: async (_, { input }) => {
     // Assign the first available material first to ensure it's available
     const materialToAssign = availableMaterials[0];
     materialToAssign.driverId = driver.driverId;
+    materialToAssign.assignedDate = new Date(); // ✅ Set assignedDate on FIRST assignment (driver approval)
     materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     materialToAssign.dismountedAt = null;
     await materialToAssign.save();
@@ -870,23 +907,43 @@ createDriver: async (_, { input }) => {
           };
         }
 
-        // Unassign any materials first
-        await Material.updateMany(
-          { driverId: driver.driverId }, 
-          { $set: { driverId: null } }
-        );
+        // Check if already archived
+        if (driver.isArchived) {
+          return {
+            success: false,
+            message: 'Driver is already archived'
+          };
+        }
+
+        console.log(`🗑️ Archiving driver: ${driverId} (${driver.fullName}) - 30-day deferred deletion`);
+
+        // ✅ ARCHIVE INSTEAD OF DELETE (30-day deferred deletion like Facebook)
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+        driver.isArchived = true;
+        driver.archivedAt = now;
+        driver.scheduledDeletionDate = deletionDate;
+        driver.tokenVersion += 1; // Invalidate all sessions
         
-        await driver.deleteOne();
+        await driver.save();
+
+        console.log(`✅ Driver ${driverId} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        console.log(`📌 Material assignments preserved - will be cleaned up after 30 days`);
+
+        // ✅ DON'T unassign materials yet - keep them during grace period
+        // Materials will be unassigned by cron job after 30 days
 
         return { 
           success: true, 
-          message: "Driver deleted successfully" 
+          message: "Driver archived successfully. Scheduled for deletion in 30 days." 
         };
       } catch (error) {
         console.error('deleteDriver error:', error);
         return {
           success: false,
-          message: error.message || 'Failed to delete driver'
+          message: error.message || 'Failed to archive driver'
         };
       }
     },

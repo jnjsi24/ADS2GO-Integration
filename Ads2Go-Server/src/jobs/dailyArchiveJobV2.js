@@ -37,6 +37,15 @@ class DailyArchiveJobV2 {
         await this.archiveMaterialDataV2(device, dateStr);
       }
 
+      // ✅ ADD VALIDATION
+      const validationResult = await this.validateArchive(dateStr);
+      
+      logger.database(`📊 Archive validation: ${validationResult.archivedMaterials}/${validationResult.totalMaterials} materials archived`);
+      
+      if (validationResult.missingArchives > 0) {
+        logger.database(`⚠️ ${validationResult.missingArchives} materials had missing archives (auto-recovered)`);
+      }
+
       logger.database('✅ Daily archive job V2 completed successfully');
 
     } catch (error) {
@@ -47,65 +56,37 @@ class DailyArchiveJobV2 {
     }
   }
 
-  // New method to handle flexible date matching for archiving
+  // ✅ FIX: Simplified date matching using single UTC midnight format
   async getDevicesForArchiving(philippinesTime) {
     try {
-      // Create multiple date formats to match different DeviceTracking record formats
-      const targetYear = philippinesTime.getFullYear();
-      const targetMonth = philippinesTime.getMonth();
-      const targetDay = philippinesTime.getDate();
+      const { getUTCMidnight } = require('../utils/dateUtils');
       
-      // Format 1: Midnight Philippines time (original format)
-      const midnightPhilippines = new Date(targetYear, targetMonth, targetDay);
+      // ✅ SINGLE FORMAT: UTC midnight Date object
+      const targetDate = getUTCMidnight(philippinesTime);
       
-      // Format 2: Midnight UTC (common format)
-      const midnightUTC = new Date(Date.UTC(targetYear, targetMonth, targetDay));
+      logger.database(`🔍 Searching for devices with date: ${targetDate.toISOString()}`);
       
-      // Format 3: Previous day at 4 PM UTC (to catch records created with different timezone handling)
-      const previousDay4PM = new Date(Date.UTC(targetYear, targetMonth, targetDay - 1, 16, 0, 0));
-      
-      // Format 4: Current day at 4 PM UTC
-      const currentDay4PM = new Date(Date.UTC(targetYear, targetMonth, targetDay, 16, 0, 0));
-      
-      logger.database(`🔍 Searching for devices with dates:`);
-      logger.database(`   - Midnight Philippines: ${midnightPhilippines.toISOString()}`);
-      logger.database(`   - Midnight UTC: ${midnightUTC.toISOString()}`);
-      logger.database(`   - Previous day 4PM UTC: ${previousDay4PM.toISOString()}`);
-      logger.database(`   - Current day 4PM UTC: ${currentDay4PM.toISOString()}`);
-      
-      // Query for devices with any of these date formats
+      // Simple query - exact match on UTC midnight
       const devices = await DeviceTracking.find({
-        $or: [
-          { date: midnightPhilippines },
-          { date: midnightUTC },
-          { date: previousDay4PM },
-          { date: currentDay4PM },
-          // Also search for records within the last 2 days to catch any missed records
-          { 
-            date: { 
-              $gte: new Date(Date.UTC(targetYear, targetMonth, targetDay - 2, 0, 0, 0)),
-              $lte: new Date(Date.UTC(targetYear, targetMonth, targetDay + 1, 23, 59, 59))
-            }
-          }
-        ]
+        date: targetDate
       });
       
-      logger.database(`📊 Found ${devices.length} devices with flexible date matching`);
+      logger.database(`📊 Found ${devices.length} devices for archiving`);
       
-      // Log the dates found for debugging
-      devices.forEach((device, index) => {
-        logger.database(`   Device ${index + 1}: ${device.materialId} - Date: ${device.date?.toISOString()}`);
-      });
+      if (devices.length === 0) {
+        // ⚠️ WARNING: No devices found - possible issue
+        console.warn(`⚠️ WARNING: No devices found for ${targetDate.toISOString().split('T')[0]}`);
+        console.warn(`   This might indicate:`);
+        console.warn(`   1. No devices were online today`);
+        console.warn(`   2. Daily reset hasn't run yet`);
+        console.warn(`   3. Date format mismatch (run migration script if needed)`);
+      }
       
       return devices;
       
     } catch (error) {
       console.error('❌ Error getting devices for archiving:', error);
-      // Fallback to original method if flexible matching fails
-      console.log('🔄 Falling back to original date matching method');
-      return await DeviceTracking.find({
-        date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate())
-      });
+      throw error;
     }
   }
 
@@ -807,6 +788,83 @@ class DailyArchiveJobV2 {
       throw error;
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  // ✅ NEW: Validate archive completeness
+  async validateArchive(dateStr) {
+    console.log(`🔍 Validating archive for ${dateStr}...`);
+    
+    const targetDate = new Date(dateStr);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    // Get all registered materials
+    const Material = require('../models/Material');
+    const registeredMaterials = await Material.find({ status: 'ACTIVE' });
+    
+    // Check which materials have archived data
+    const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+    const archivedMaterials = await DeviceDataHistoryV2.find({
+      'dailyData.date': targetDate
+    }).select('materialId');
+    
+    const archivedMaterialIds = new Set(archivedMaterials.map(m => m.materialId));
+    const missingArchives = [];
+    
+    for (const material of registeredMaterials) {
+      if (!archivedMaterialIds.has(material.materialId)) {
+        // Check if device was online that day
+        const deviceTracking = await DeviceTracking.findOne({
+          materialId: material.materialId,
+          date: targetDate
+        });
+        
+        if (deviceTracking && deviceTracking.totalHoursOnline > 0) {
+          missingArchives.push({
+            materialId: material.materialId,
+            hoursOnline: deviceTracking.totalHoursOnline,
+            reason: 'Device was online but not archived'
+          });
+        }
+      }
+    }
+    
+    if (missingArchives.length > 0) {
+      console.error(`❌ Archive validation FAILED: ${missingArchives.length} materials missing`);
+      console.error(JSON.stringify(missingArchives, null, 2));
+      
+      // Auto-recover missed archives
+      await this.recoverMissedArchives(missingArchives, dateStr);
+    } else {
+      console.log(`✅ Archive validation PASSED: All active materials archived`);
+    }
+    
+    return {
+      totalMaterials: registeredMaterials.length,
+      archivedMaterials: archivedMaterials.length,
+      missingArchives: missingArchives.length,
+      details: missingArchives
+    };
+  }
+
+  // ✅ NEW: Recover missed archives
+  async recoverMissedArchives(missingArchives, dateStr) {
+    console.log(`🔄 Recovering ${missingArchives.length} missed archives...`);
+    
+    for (const missing of missingArchives) {
+      try {
+        const device = await DeviceTracking.findOne({
+          materialId: missing.materialId,
+          date: new Date(dateStr)
+        });
+        
+        if (device) {
+          await this.archiveMaterialDataV2(device, dateStr);
+          console.log(`✅ Recovered archive for ${missing.materialId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to recover ${missing.materialId}:`, error);
+      }
     }
   }
 

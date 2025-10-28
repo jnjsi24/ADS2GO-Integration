@@ -115,6 +115,11 @@ const CompanyAdsManagement: React.FC = () => {
   const [deleteCompanyAd] = useMutation(DELETE_COMPANY_AD);
   const [toggleStatus] = useMutation(TOGGLE_COMPANY_AD_STATUS);
 
+  // Processing states for double-click prevention
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
   const companyAds: CompanyAd[] = data?.getAllCompanyAds || [];
 
   const statusFilterOptions = ['All Status', 'Active', 'Inactive', 'Scheduled'];
@@ -240,8 +245,15 @@ const CompanyAdsManagement: React.FC = () => {
       return;
     }
 
+    // Prevent multiple clicks
+    if (isSubmitting) {
+      return;
+    }
+
     // Clear errors if validation passes
     setValidationErrors({});
+    
+    setIsSubmitting(true);
     
     try {
       if (selectedAd) {
@@ -279,28 +291,48 @@ const CompanyAdsManagement: React.FC = () => {
       refetch();
     } catch (error) {
       console.error('Error saving company ad:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Handle delete
   const handleDelete = async (id: string) => {
+    // Prevent multiple clicks
+    if (isDeleting) {
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this company ad?')) {
+      setIsDeleting(true);
+      
       try {
         await deleteCompanyAd({ variables: { id } });
         refetch();
       } catch (error) {
         console.error('Error deleting company ad:', error);
+      } finally {
+        setIsDeleting(false);
       }
     }
   };
 
   // Handle status toggle
   const handleToggleStatus = async (id: string) => {
+    // Prevent multiple clicks on the same ad
+    if (togglingId === id) {
+      return;
+    }
+    
+    setTogglingId(id);
+    
     try {
       await toggleStatus({ variables: { id } });
       refetch();
     } catch (error) {
       console.error('Error toggling status:', error);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -550,10 +582,17 @@ const CompanyAdsManagement: React.FC = () => {
                 <div className="flex items-center space-x-1">
                   <button
                     onClick={() => handleToggleStatus(ad.id)}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title={ad.isActive ? 'Deactivate' : 'Activate'}
+                    disabled={togglingId === ad.id}
+                    className={`p-1 rounded transition-colors ${
+                      togglingId === ad.id
+                        ? 'cursor-not-allowed opacity-50'
+                        : 'hover:bg-gray-100'
+                    }`}
+                    title={togglingId === ad.id ? 'Processing...' : (ad.isActive ? 'Deactivate' : 'Activate')}
                   >
-                    {ad.isActive ? (
+                    {togglingId === ad.id ? (
+                      <div className="w-4 h-4 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                    ) : ad.isActive ? (
                       <Pause className="h-4 w-4 text-orange-600" />
                     ) : (
                       <Play className="h-4 w-4 text-green-600" />
@@ -568,10 +607,19 @@ const CompanyAdsManagement: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleDelete(ad.id)}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="Delete"
+                    disabled={isDeleting}
+                    className={`p-1 rounded transition-colors ${
+                      isDeleting
+                        ? 'cursor-not-allowed opacity-50'
+                        : 'hover:bg-gray-100'
+                    }`}
+                    title={isDeleting ? 'Processing...' : 'Delete'}
                   >
-                    <Trash2 className="h-4 w-4 text-red-600" />
+                    {isDeleting ? (
+                      <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full" />
+                    ) : (
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -600,6 +648,17 @@ const CompanyAdsManagement: React.FC = () => {
                   }`}>
                     {ad.priority >= 8 ? 'High' : ad.priority >= 5 ? 'Medium' : 'Low'}
                   </p>
+                </div>
+              </div>
+
+              {/* Creation Date */}
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <div className="flex items-center space-x-2 text-xs text-gray-500">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="font-medium">Created:</span>
+                  <span>{formatDate(ad.createdAt)}</span>
                 </div>
               </div>
 
@@ -1100,15 +1159,24 @@ const CompanyAdsManagement: React.FC = () => {
                     setShowEditModal(false);
                     setSelectedAd(null);
                   }}
-                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                  disabled={isSubmitting}
+                  className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${
+                    isSubmitting
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-[#3674B5] hover:bg-[#578FCA]'
+                  }`}
                 >
-                  {selectedAd ? 'Update Ad' : 'Create Ad'}
+                  {isSubmitting && (
+                    <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                  )}
+                  {isSubmitting ? 'Processing...' : (selectedAd ? 'Update Ad' : 'Create Ad')}
                 </button>
               </div>
             </form>

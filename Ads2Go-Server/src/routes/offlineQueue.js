@@ -35,10 +35,48 @@ router.post('/device-status', async (req, res) => {
   }
 });
 
+// ✅ FIX: In-memory deduplication for queued location data
+const processedTimestamps = new Map(); // materialId -> Set of timestamps
+
+// Helper to clean old timestamps (keep last 1 hour)
+function cleanOldTimestamps(materialId, currentTimestamp) {
+  const timestamps = processedTimestamps.get(materialId);
+  if (!timestamps) return;
+  
+  const oneHourAgo = currentTimestamp - (60 * 60 * 1000);
+  
+  for (const ts of timestamps) {
+    if (ts < oneHourAgo) {
+      timestamps.delete(ts);
+    }
+  }
+}
+
 // Handle queued location data
 router.post('/location-data', async (req, res) => {
   try {
     const { lat, lng, speed, heading, accuracy, isOffline, queuedTimestamp, deviceId, materialId, deviceSlot } = req.body;
+    
+    // ✅ CHECK IF ALREADY PROCESSED
+    if (queuedTimestamp && materialId) {
+      if (processedTimestamps.has(materialId)) {
+        const timestamps = processedTimestamps.get(materialId);
+        if (timestamps.has(queuedTimestamp)) {
+          console.log(`⏭️ [OfflineQueue] Duplicate timestamp ${queuedTimestamp} for ${materialId}, skipping`);
+          return res.json({
+            success: true,
+            message: 'Duplicate timestamp, already processed',
+            skipped: true
+          });
+        }
+        timestamps.add(queuedTimestamp);
+      } else {
+        processedTimestamps.set(materialId, new Set([queuedTimestamp]));
+      }
+      
+      // Clean old timestamps
+      cleanOldTimestamps(materialId, queuedTimestamp);
+    }
     
     console.log('📦 [OfflineQueue] Received queued location data:', {
       lat,

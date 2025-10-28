@@ -232,6 +232,19 @@ router.get('/qr-scans/stats', async (req, res) => {
               slot.endTime >= currentTime && 
               slot.adId) {
             
+            // ✅ SKIP ARCHIVED ADS (30-day deferred deletion)
+            // When an ad is archived, devices skip it and show company ads instead
+            if (slot.adId.status === 'ARCHIVED' || slot.adId.isArchived === true) {
+              console.log('Skipping archived ad in slot:', {
+                slotNumber: slot.slotNumber,
+                adId: slot.adId._id,
+                adTitle: slot.adId.title,
+                status: slot.adId.status,
+                isArchived: slot.adId.isArchived
+              });
+              return; // Skip this ad, will be filled with company ad
+            }
+            
             console.log('Found active ad in slot:', {
               slotNumber: slot.slotNumber,
               adId: slot.adId._id,

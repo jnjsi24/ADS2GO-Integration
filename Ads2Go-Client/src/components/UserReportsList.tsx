@@ -11,6 +11,7 @@ interface UserReport {
   status: string;
   attachments: string[];
   adminNotes?: string;
+  adminNotesUpdatedAt?: string;
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
@@ -310,8 +311,14 @@ const UserReportsList: React.FC = () => {
                   {/* Admin Notes */}
                   {report.adminNotes && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-sm font-medium text-blue-800 mb-1">Admin Response:</p>
-                      <p className="text-sm text-blue-700">{report.adminNotes}</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-medium text-blue-800">Admin Response:</p>
+                        {report.adminNotesUpdatedAt && (
+                          <p className="text-xs text-blue-600">{formatDate(report.adminNotesUpdatedAt)}</p>
+                        )}
+                      </div>
+                      <p className="text-sm text-blue-700 mb-2">{report.adminNotes}</p>
+                      <p className="text-xs text-blue-600 italic">Response by: Admin</p>
                     </div>
                   )}
                 </div>

@@ -2,6 +2,7 @@ const CompanyAd = require('../models/CompanyAd');
 const User = require('../models/User');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const companyAdResolvers = {
   Query: {
@@ -76,9 +77,22 @@ const companyAdResolvers = {
 
         await companyAd.save();
         
-        return await CompanyAd.findById(companyAd._id)
+        const populatedAd = await CompanyAd.findById(companyAd._id)
           .populate('createdBy', 'firstName lastName email')
           .populate('updatedBy', 'firstName lastName email');
+        
+        // Send notification to admins about new company ad
+        try {
+          await NotificationService.sendCompanyAdCreatedNotification(
+            companyAd._id,
+            user.id
+          );
+        } catch (notifError) {
+          console.error('Error sending company ad created notification:', notifError);
+          // Don't fail the creation if notification fails
+        }
+        
+        return populatedAd;
       } catch (error) {
         console.error('Error creating company ad:', error);
         throw new Error('Failed to create company ad: ' + error.message);

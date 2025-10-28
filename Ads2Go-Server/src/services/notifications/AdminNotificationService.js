@@ -368,6 +368,465 @@ class AdminNotificationService extends BaseNotificationService {
       throw error;
     }
   }
+
+  /**
+   * Send new driver report notification to admins
+   */
+  static async sendNewDriverReportNotification(driverId, reportId, reportType, title) {
+    try {
+      const Driver = require('../../models/Driver');
+      const Admin = require('../../models/Admin');
+      
+      const driver = await Driver.findById(driverId);
+      if (!driver) throw new Error('Driver not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📋 New Driver Report',
+          `New ${reportType.replace('_', ' ').toLowerCase()} report "${title}" submitted by ${driver.firstName} ${driver.lastName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'NEW_DRIVER_REPORT',
+            priority: 'MEDIUM',
+            reportId: reportId,
+            reportType: reportType,
+            reportTitle: title,
+            data: { 
+              submitterName: `${driver.firstName} ${driver.lastName}`,
+              submitterEmail: driver.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending new driver report notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send admin responded to report notification to admins
+   */
+  static async sendAdminRespondedToReportNotification(adminId, reportId, reportType, reportTitle, reporterName) {
+    try {
+      const Admin = require('../../models/Admin');
+      
+      const respondingAdmin = await Admin.findById(adminId);
+      if (!respondingAdmin) throw new Error('Admin not found');
+
+      // Get all active admins EXCEPT the one who responded
+      const admins = await Admin.find({ isActive: true, _id: { $ne: adminId } });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '💬 Admin Responded to Report',
+          `${respondingAdmin.firstName} ${respondingAdmin.lastName} added notes to ${reportType.toLowerCase()} report "${reportTitle}" from ${reporterName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'ADMIN_RESPONDED_TO_REPORT',
+            priority: 'LOW',
+            reportId: reportId,
+            data: { 
+              respondingAdminName: `${respondingAdmin.firstName} ${respondingAdmin.lastName}`,
+              reportType: reportType,
+              reportTitle: reportTitle,
+              reporterName: reporterName
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending admin responded to report notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send ad campaign started notification to admins
+   */
+  static async sendAdCampaignStartedNotification(adId) {
+    try {
+      const Ad = require('../../models/Ad');
+      const Admin = require('../../models/Admin');
+      
+      const ad = await Ad.findById(adId).populate('userId');
+      if (!ad) throw new Error('Ad not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '🚀 Ad Campaign Started',
+          `Ad campaign "${ad.title}" by ${ad.userId.firstName} ${ad.userId.lastName} has started running`,
+          'SUCCESS',
+          {
+            userRole: 'ADMIN',
+            category: 'AD_CAMPAIGN_STARTED',
+            priority: 'LOW',
+            adId: ad._id,
+            adTitle: ad.title,
+            data: { 
+              userName: `${ad.userId.firstName} ${ad.userId.lastName}`,
+              startDate: ad.startDate
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending ad campaign started notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send ad campaign ended notification to admins
+   */
+  static async sendAdCampaignEndedNotification(adId) {
+    try {
+      const Ad = require('../../models/Ad');
+      const Admin = require('../../models/Admin');
+      
+      const ad = await Ad.findById(adId).populate('userId');
+      if (!ad) throw new Error('Ad not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '🏁 Ad Campaign Ended',
+          `Ad campaign "${ad.title}" by ${ad.userId.firstName} ${ad.userId.lastName} has completed`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'AD_CAMPAIGN_ENDED',
+            priority: 'LOW',
+            adId: ad._id,
+            adTitle: ad.title,
+            data: { 
+              userName: `${ad.userId.firstName} ${ad.userId.lastName}`,
+              endDate: ad.endDate
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending ad campaign ended notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send material assigned to driver notification to admins
+   */
+  static async sendMaterialAssignedNotification(materialId, driverId) {
+    try {
+      const Material = require('../../models/Material');
+      const Driver = require('../../models/Driver');
+      const Admin = require('../../models/Admin');
+      
+      const material = await Material.findById(materialId);
+      const driver = await Driver.findById(driverId);
+      
+      if (!material) throw new Error('Material not found');
+      if (!driver) throw new Error('Driver not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '🔗 Material Assigned',
+          `Material "${material.materialId}" assigned to driver ${driver.firstName} ${driver.lastName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'MATERIAL_ASSIGNED',
+            priority: 'LOW',
+            data: { 
+              materialId: material.materialId,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              driverEmail: driver.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending material assigned notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send material unassigned from driver notification to admins
+   */
+  static async sendMaterialUnassignedNotification(materialId, driverId) {
+    try {
+      const Material = require('../../models/Material');
+      const Driver = require('../../models/Driver');
+      const Admin = require('../../models/Admin');
+      
+      const material = await Material.findById(materialId);
+      const driver = await Driver.findById(driverId);
+      
+      if (!material) throw new Error('Material not found');
+      if (!driver) throw new Error('Driver not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '🔓 Material Unassigned',
+          `Material "${material.materialId}" unassigned from driver ${driver.firstName} ${driver.lastName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'MATERIAL_UNASSIGNED',
+            priority: 'LOW',
+            data: { 
+              materialId: material.materialId,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              driverEmail: driver.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending material unassigned notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send material photos uploaded notification to admins
+   */
+  static async sendMaterialPhotosUploadedNotification(materialId, driverId, photoCount) {
+    try {
+      const Material = require('../../models/Material');
+      const Driver = require('../../models/Driver');
+      const Admin = require('../../models/Admin');
+      
+      const material = await Material.findById(materialId);
+      const driver = await Driver.findById(driverId);
+      
+      if (!material) throw new Error('Material not found');
+      if (!driver) throw new Error('Driver not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📸 Material Photos Uploaded',
+          `Driver ${driver.firstName} ${driver.lastName} uploaded ${photoCount} compliance photo(s) for material "${material.materialId}"`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'MATERIAL_PHOTOS_UPLOADED',
+            priority: 'MEDIUM',
+            data: { 
+              materialId: material.materialId,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              driverEmail: driver.email,
+              photoCount: photoCount
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending material photos uploaded notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send company ad created notification to admins
+   */
+  static async sendCompanyAdCreatedNotification(companyAdId, creatorAdminId) {
+    try {
+      const CompanyAd = require('../../models/CompanyAd');
+      const Admin = require('../../models/Admin');
+      
+      const companyAd = await CompanyAd.findById(companyAdId);
+      const creatorAdmin = await Admin.findById(creatorAdminId);
+      
+      if (!companyAd) throw new Error('Company ad not found');
+      if (!creatorAdmin) throw new Error('Creator admin not found');
+
+      // Get all active admins EXCEPT the one who created it
+      const admins = await Admin.find({ isActive: true, _id: { $ne: creatorAdminId } });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '🎬 Company Ad Created',
+          `${creatorAdmin.firstName} ${creatorAdmin.lastName} created company ad "${companyAd.title}"`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'COMPANY_AD_CREATED',
+            priority: 'LOW',
+            data: { 
+              companyAdTitle: companyAd.title,
+              companyAdFormat: companyAd.format,
+              creatorName: `${creatorAdmin.firstName} ${creatorAdmin.lastName}`,
+              creatorEmail: creatorAdmin.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending company ad created notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send newsletter sent notification to admins
+   */
+  static async sendNewsletterSentNotification(newsletterId, senderAdminId, recipientCount) {
+    try {
+      const Newsletter = require('../../models/Newsletter');
+      const Admin = require('../../models/Admin');
+      
+      const newsletter = await Newsletter.findById(newsletterId);
+      const senderAdmin = await Admin.findById(senderAdminId);
+      
+      if (!newsletter) throw new Error('Newsletter not found');
+      if (!senderAdmin) throw new Error('Sender admin not found');
+
+      // Get all active admins EXCEPT the one who sent it
+      const admins = await Admin.find({ isActive: true, _id: { $ne: senderAdminId } });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📧 Newsletter Sent',
+          `${senderAdmin.firstName} ${senderAdmin.lastName} sent newsletter "${newsletter.subject}" to ${recipientCount} recipients`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'NEWSLETTER_SENT',
+            priority: 'LOW',
+            data: { 
+              newsletterSubject: newsletter.subject,
+              recipientCount: recipientCount,
+              recipientType: newsletter.recipientType,
+              senderName: `${senderAdmin.firstName} ${senderAdmin.lastName}`,
+              senderEmail: senderAdmin.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending newsletter sent notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send new admin created notification to admins (sent to existing admins when a new admin joins)
+   */
+  static async sendNewAdminCreatedNotification(newAdminId, creatorAdminId) {
+    try {
+      const Admin = require('../../models/Admin');
+      
+      const newAdmin = await Admin.findById(newAdminId);
+      const creatorAdmin = await Admin.findById(creatorAdminId);
+      
+      if (!newAdmin) throw new Error('New admin not found');
+      if (!creatorAdmin) throw new Error('Creator admin not found');
+
+      // Get all active admins EXCEPT the new one and the creator
+      const admins = await Admin.find({ 
+        isActive: true, 
+        _id: { $nin: [newAdminId, creatorAdminId] } 
+      });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '👤 New Admin Created',
+          `${creatorAdmin.firstName} ${creatorAdmin.lastName} created new admin account for ${newAdmin.firstName} ${newAdmin.lastName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'NEW_ADMIN_CREATED',
+            priority: 'MEDIUM',
+            data: { 
+              newAdminName: `${newAdmin.firstName} ${newAdmin.lastName}`,
+              newAdminEmail: newAdmin.email,
+              creatorName: `${creatorAdmin.firstName} ${creatorAdmin.lastName}`,
+              creatorEmail: creatorAdmin.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending new admin created notification:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = AdminNotificationService;

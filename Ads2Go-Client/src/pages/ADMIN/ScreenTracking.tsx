@@ -585,10 +585,8 @@ const ScreenTracking: React.FC = () => {
     });
   }, []);
 
-  // Helper function to update device location in real-time
-  const updateDeviceLocation = useCallback((deviceId: string, locationData: any) => {
-    console.log('📍 [ScreenTracking] Updating device location:', { deviceId, locationData });
-    
+  // ✅ FIX: Helper function to update device location with timestamp validation
+  const updateDeviceLocation = useCallback((deviceId: string, locationData: any, source: 'websocket' | 'polling' | 'legacy' = 'websocket') => {
     if (!locationData || !locationData.lat || !locationData.lng) {
       console.warn('Invalid location data received:', locationData);
       return;
@@ -602,7 +600,39 @@ const ScreenTracking: React.FC = () => {
                                 screen.slot2DeviceId === deviceId;
         
         if (isMatchingDevice) {
-          console.log(`📍 [ScreenTracking] Updating location for screen ${screen.materialId} (device: ${deviceId})`);
+          // ✅ TIMESTAMP VALIDATION: Only accept newer locations
+          const newTimestamp = new Date(locationData.timestamp || new Date()).getTime();
+          const currentTimestamp = screen.currentLocation?.timestamp 
+            ? new Date(screen.currentLocation.timestamp).getTime() 
+            : 0;
+          
+          if (newTimestamp <= currentTimestamp) {
+            console.log(`📍 [ScreenTracking] Ignoring stale location for ${deviceId}:`, {
+              newTimestamp: new Date(newTimestamp).toISOString(),
+              currentTimestamp: new Date(currentTimestamp).toISOString(),
+              diff: ((newTimestamp - currentTimestamp) / 1000) + 's'
+            });
+            return screen; // Keep existing location
+          }
+          
+          // ✅ PREFER WEBSOCKET: If current is from WebSocket and new is from polling, require newer
+          const isCurrentFromWebSocket = screen.currentLocation?.source === 'websocket';
+          const isNewFromPolling = source === 'polling';
+          
+          if (isCurrentFromWebSocket && isNewFromPolling) {
+            const timeDiff = newTimestamp - currentTimestamp;
+            if (timeDiff < 5000) {
+              console.log(`📍 [ScreenTracking] Ignoring polling update, WebSocket is more recent`);
+              return screen;
+            }
+          }
+          
+          console.log(`📍 [ScreenTracking] Accepting newer location for ${screen.materialId}:`, {
+            source,
+            lat: locationData.lat.toFixed(6),
+            lng: locationData.lng.toFixed(6),
+            timestamp: new Date(newTimestamp).toISOString()
+          });
           
           const updatedScreen = {
             ...screen,
@@ -613,11 +643,11 @@ const ScreenTracking: React.FC = () => {
               heading: locationData.heading || 0,
               accuracy: locationData.accuracy || 0,
               address: locationData.address || screen.currentLocation?.address || 'Location not available',
-              timestamp: locationData.timestamp || new Date().toISOString()
+              timestamp: new Date(newTimestamp).toISOString(),
+              source: source // Track source
             },
-            // Update online status if provided
             isOnline: locationData.isOnline !== undefined ? locationData.isOnline : screen.isOnline,
-            lastSeen: locationData.timestamp || screen.lastSeen
+            lastSeen: new Date(newTimestamp).toISOString()
           };
           
           return updatedScreen;
@@ -955,7 +985,7 @@ const ScreenTracking: React.FC = () => {
             >
               <div className="flex items-center space-x-2">
                 <Clock className="w-4 h-4" />
-                <span>Historical Routes</span>
+                <span>Route Map</span>
               </div>
             </button>
           </div>

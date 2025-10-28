@@ -110,6 +110,46 @@ class NotificationService {
     return await AdminNotificationService.sendNewUserReportNotification(userId, reportId, reportType, title);
   }
 
+  static async sendNewDriverReportNotification(driverId, reportId, reportType, title) {
+    return await AdminNotificationService.sendNewDriverReportNotification(driverId, reportId, reportType, title);
+  }
+
+  static async sendAdminRespondedToReportNotification(adminId, reportId, reportType, reportTitle, reporterName) {
+    return await AdminNotificationService.sendAdminRespondedToReportNotification(adminId, reportId, reportType, reportTitle, reporterName);
+  }
+
+  static async sendAdCampaignStartedNotification(adId) {
+    return await AdminNotificationService.sendAdCampaignStartedNotification(adId);
+  }
+
+  static async sendAdCampaignEndedNotification(adId) {
+    return await AdminNotificationService.sendAdCampaignEndedNotification(adId);
+  }
+
+  static async sendMaterialAssignedNotification(materialId, driverId) {
+    return await AdminNotificationService.sendMaterialAssignedNotification(materialId, driverId);
+  }
+
+  static async sendMaterialUnassignedNotification(materialId, driverId) {
+    return await AdminNotificationService.sendMaterialUnassignedNotification(materialId, driverId);
+  }
+
+  static async sendMaterialPhotosUploadedNotification(materialId, driverId, photoCount) {
+    return await AdminNotificationService.sendMaterialPhotosUploadedNotification(materialId, driverId, photoCount);
+  }
+
+  static async sendCompanyAdCreatedNotification(companyAdId, creatorAdminId) {
+    return await AdminNotificationService.sendCompanyAdCreatedNotification(companyAdId, creatorAdminId);
+  }
+
+  static async sendNewsletterSentNotification(newsletterId, senderAdminId, recipientCount) {
+    return await AdminNotificationService.sendNewsletterSentNotification(newsletterId, senderAdminId, recipientCount);
+  }
+
+  static async sendNewAdminCreatedNotification(newAdminId, creatorAdminId) {
+    return await AdminNotificationService.sendNewAdminCreatedNotification(newAdminId, creatorAdminId);
+  }
+
   // ==================== SUPERADMIN NOTIFICATIONS ====================
 
   static async sendCriticalSystemIssueNotification(issue, description) {

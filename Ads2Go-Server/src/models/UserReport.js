@@ -47,6 +47,15 @@ const userReportSchema = new mongoose.Schema({
     trim: true,
     maxlength: 1000
   },
+  adminNotesUpdatedAt: {
+    type: Date,
+    default: null
+  },
+  adminNotesBy: {
+    adminId: String,
+    adminName: String,
+    adminEmail: String
+  },
   resolvedAt: {
     type: Date
   }

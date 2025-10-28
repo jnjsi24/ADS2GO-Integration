@@ -79,7 +79,7 @@ class PlaybackWebSocketService {
   private isManuallyDisconnected: boolean = false;
 
   constructor() {
-    console.log('🔌 [PlaybackWebSocketService] Service initialized');
+    // Service initialized silently
   }
 
   /**
@@ -91,12 +91,21 @@ class PlaybackWebSocketService {
       return;
     }
 
+    // Prevent connection attempts if no server is configured
+    if (!API_CONFIG.BASE_URL || API_CONFIG.BASE_URL === 'null') {
+      console.log('⚠️ [PlaybackWebSocketService] No server configured, skipping connection');
+      return;
+    }
+
     this.isConnecting = true;
     this.isManuallyDisconnected = false;
 
     try {
       const wsUrl = API_CONFIG.BASE_URL.replace(/^http/, 'ws') + '/ws';
-      console.log('🔌 [PlaybackWebSocketService] Connecting to:', wsUrl);
+      // Only log in dev mode to reduce console noise
+      if (__DEV__ && this.reconnectAttempts === 0) {
+        console.log('🔌 [PlaybackWebSocketService] Connecting to:', wsUrl);
+      }
       
       this.ws = new WebSocket(wsUrl);
 
@@ -140,12 +149,18 @@ class PlaybackWebSocketService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('❌ [PlaybackWebSocketService] WebSocket error:', error);
+        // Only log error in development mode, not the full error object
+        if (__DEV__) {
+          console.log('⚠️ [PlaybackWebSocketService] Connection failed (server may be offline)');
+        }
         this.isConnecting = false;
       };
 
       this.ws.onclose = () => {
-        console.log('🔌 [PlaybackWebSocketService] Disconnected');
+        // Only log on first disconnect to reduce noise
+        if (__DEV__ && this.reconnectAttempts === 0) {
+          console.log('🔌 [PlaybackWebSocketService] Disconnected');
+        }
         this.isConnecting = false;
         this.stopHeartbeat();
         
@@ -163,7 +178,10 @@ class PlaybackWebSocketService {
         }
       };
     } catch (error) {
-      console.error('❌ [PlaybackWebSocketService] Connection error:', error);
+      // Only log in dev mode
+      if (__DEV__) {
+        console.log('⚠️ [PlaybackWebSocketService] Connection failed');
+      }
       this.isConnecting = false;
       this.scheduleReconnect();
     }
@@ -194,7 +212,10 @@ class PlaybackWebSocketService {
    */
   subscribe(callback: UpdateCallback): () => void {
     this.subscribers.add(callback);
-    console.log(`🔌 [PlaybackWebSocketService] Subscriber added (total: ${this.subscribers.size})`);
+    // Only log in dev mode
+    if (__DEV__ && this.subscribers.size === 1) {
+      console.log('🔌 [PlaybackWebSocketService] WebSocket subscriber connected');
+    }
 
     // Auto-connect if not connected
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -204,10 +225,12 @@ class PlaybackWebSocketService {
     // Return unsubscribe function
     return () => {
       this.subscribers.delete(callback);
-      console.log(`🔌 [PlaybackWebSocketService] Subscriber removed (remaining: ${this.subscribers.size})`);
       
       // Disconnect if no more subscribers
       if (this.subscribers.size === 0) {
+        if (__DEV__) {
+          console.log('🔌 [PlaybackWebSocketService] No subscribers, disconnecting');
+        }
         this.disconnect();
       }
     };
@@ -247,14 +270,20 @@ class PlaybackWebSocketService {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('❌ [PlaybackWebSocketService] Max reconnect attempts reached');
+      // Only log in dev mode and only once
+      if (__DEV__) {
+        console.log('⚠️ [PlaybackWebSocketService] Unable to connect to server (will retry when route tab is opened)');
+      }
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
-    console.log(`🔄 [PlaybackWebSocketService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    // Only log first reconnect attempt to reduce noise
+    if (__DEV__ && this.reconnectAttempts === 1) {
+      console.log(`🔄 [PlaybackWebSocketService] Will retry connection...`);
+    }
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

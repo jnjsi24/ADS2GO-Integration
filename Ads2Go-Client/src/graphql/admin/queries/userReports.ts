@@ -13,6 +13,12 @@ export const GET_ALL_USER_REPORTS = gql`
         status
         attachments
         adminNotes
+        adminNotesUpdatedAt
+        adminNotesBy {
+          adminId
+          adminName
+          adminEmail
+        }
         createdAt
         updatedAt
         resolvedAt
@@ -38,6 +44,12 @@ export const GET_USER_REPORT_BY_ID_ADMIN = gql`
     status
     attachments
       adminNotes
+      adminNotesUpdatedAt
+      adminNotesBy {
+        adminId
+        adminName
+        adminEmail
+      }
       createdAt
       updatedAt
       resolvedAt

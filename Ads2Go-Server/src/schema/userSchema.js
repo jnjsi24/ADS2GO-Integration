@@ -25,6 +25,9 @@ const typeDefs = gql`
     updatedAt: String!
     ads: [Ad!]
     notificationPreferences: UserNotificationPreferences!
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type AuthPayload {
@@ -137,6 +140,51 @@ const typeDefs = gql`
     qrScans: Int!
   }
 
+  type MaterialLocation {
+    lat: Float
+    lng: Float
+    timestamp: String
+    speed: Float
+    heading: Float
+    accuracy: Float
+    address: String
+  }
+
+  type UserMaterialWithLocation {
+    materialId: String!
+    materialName: String
+    materialType: String
+    vehicleType: String
+    category: String
+    isOnline: Boolean!
+    lastSeen: String
+    currentLocation: MaterialLocation
+    totalAdPlays: Int
+    totalQRScans: Int
+    totalAdPlayTime: Float
+    totalAdImpressions: Int
+    carGroupId: String
+    screenType: String
+    ads: [UserMaterialAd!]
+  }
+
+  type UserMaterialAd {
+    adId: String!
+    adTitle: String!
+    adType: String
+    adFormat: String
+    status: String
+    adStatus: String
+  }
+
+  type UserMaterialsWithLocationResponse {
+    success: Boolean!
+    message: String
+    totalMaterials: Int!
+    activeMaterials: Int!
+    materials: [UserMaterialWithLocation!]!
+  }
+
   type UserAnalytics {
     summary: UserAnalyticsSummary!
     adPerformance: [UserAdPerformance!]!
@@ -246,6 +294,7 @@ const typeDefs = gql`
     getUserAdDetails(adId: String!): UserAdDetails
     getUserNotificationPreferences: UserNotificationPreferences!
     getQueuedEmailStats: QueuedEmailStats!
+    getUserMaterialsWithLocation: UserMaterialsWithLocationResponse!
   }
 
   # Mutations
@@ -259,6 +308,7 @@ const typeDefs = gql`
 
     # User management
     updateUser(input: UpdateUserInput!): UserUpdateResponse!
+    deleteOwnAccount: ResponseMessage!
 
     # Email verification
     verifyEmail(code: String!): VerificationResponse

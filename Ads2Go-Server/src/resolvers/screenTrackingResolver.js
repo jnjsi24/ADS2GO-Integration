@@ -151,17 +151,17 @@ const resolvers = {
 
               individualScreens.push({
                 deviceId: device.deviceId,
-                displayId: `${screen.materialId}-SLOT-${device.slotNumber || (index + 1)}`, // Unique identifier for frontend
-                materialId: screen.materialId,
-                screenType: screen.screenType,
-                carGroupId: screen.carGroupId,
-                slotNumber: device.slotNumber,
-                isOnline: isActuallyOnline,
-                currentLocation: locationData,
-                lastSeen: device.lastSeen,
-                currentHours: device.totalHoursOnline || 0,
-                hoursRemaining: Math.max(0, 8 - (device.totalHoursOnline || 0)), // 8 hours target
-                totalDistanceToday: device.totalDistanceTraveled || 0,
+              displayId: `${screen.materialId}-SLOT-${device.slotNumber || (index + 1)}`, // Unique identifier for frontend
+              materialId: screen.materialId,
+              screenType: screen.screenType,
+              carGroupId: screen.carGroupId,
+              slotNumber: device.slotNumber,
+              isOnline: isActuallyOnline,
+              currentLocation: locationData,
+              lastSeen: device.lastSeen,
+              currentHours: device.currentHoursToday || 0, // ✅ FIX: Use currentHoursToday virtual (today's hours) instead of totalHoursOnline (lifetime)
+              hoursRemaining: Math.max(0, 8 - (device.currentHoursToday || 0)), // 8 hours target
+              totalDistanceToday: device.totalDistanceTraveled || 0,
                 displayStatus: displayStatus,
                 screenMetrics: {
                   isDisplaying: screen.screenMetrics?.isDisplaying || false,
@@ -172,7 +172,7 @@ const resolvers = {
                   currentAd: screen.screenMetrics?.currentAd || null,
                   dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
                   adPerformance: screen.screenMetrics?.adPerformance || [],
-                  displayHours: device.totalHoursOnline || 0,
+                  displayHours: device.currentHoursToday || 0, // ✅ FIX: Use currentHoursToday (today's hours)
                   lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
                 }
               });

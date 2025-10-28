@@ -155,6 +155,20 @@ const DriverSchema = new mongoose.Schema(
       orCrPictureURL: String, // Added to match GraphQL schema
       preferredMaterialType: [String], // Added to match GraphQL schema
       reason: String // Added to match GraphQL schema
+    },
+
+    // Soft delete / Archive fields (30-day deferred deletion like Facebook)
+    isArchived: {
+      type: Boolean,
+      default: false
+    },
+    archivedAt: {
+      type: Date,
+      default: null
+    },
+    scheduledDeletionDate: {
+      type: Date,
+      default: null
     }
   },
   {
@@ -244,6 +258,8 @@ DriverSchema.index({ email: 1 }, { unique: true });
 DriverSchema.index({ driverId: 1 }, { unique: true });
 DriverSchema.index({ accountStatus: 1, reviewStatus: 1 });
 DriverSchema.index({ vehiclePlateNumber: 1 });
+DriverSchema.index({ isArchived: 1 }); // Archive filter for queries
+DriverSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 const Driver = mongoose.models.Driver || mongoose.model('Driver', DriverSchema);
 module.exports = Driver;

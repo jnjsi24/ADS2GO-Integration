@@ -73,6 +73,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [currentGPS, setCurrentGPS] = useState<any>(null); // Store current GPS data
   const [masterConnected, setMasterConnected] = useState(false); // Track if master (Slot 1) is connected
   const [lastMasterUpdate, setLastMasterUpdate] = useState<Date | null>(null); // Track last update from master
+  const [hasReceivedInitialSync, setHasReceivedInitialSync] = useState(false); // Track if Slot 2 has received first sync
+  const [lastSyncPosition, setLastSyncPosition] = useState<number | null>(null); // Track last synced position for drift detection
+  const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now()); // Track when last sync occurred
+  const [wasBuffering, setWasBuffering] = useState(false); // Track previous buffering state
+  const [currentVideoPosition, setCurrentVideoPosition] = useState<number>(0); // Track current video position for drift detection
+  const positionDriftCheckInterval = useRef<NodeJS.Timeout | null>(null); // Interval for periodic drift checks
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -195,6 +201,24 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           }, 5000); // Wait 5 seconds before first sync request
         }
       });
+      
+      // ✅ NEW: Start periodic position drift check for Slot 2 (slave)
+      // This detects and corrects position drift caused by buffering
+      // The main drift detection happens in handleDisplayData when display data arrives
+      // This periodic check is a backup safety net
+      if (slotNumber === 2) {
+        positionDriftCheckInterval.current = setInterval(() => {
+          // Request sync periodically (every 10 seconds) as a safety net
+          // This ensures we stay in sync even if display data drift detection misses something
+          const timeSinceLastSync = (Date.now() - lastSyncTime) / 1000;
+          
+          // Request sync every 10 seconds as a preventive measure
+          if (timeSinceLastSync > 10) {
+            console.log(`📺 [Slave Periodic Sync] Requesting periodic sync (last sync ${timeSinceLastSync.toFixed(1)}s ago)`);
+            playbackWebSocketService.requestSync();
+          }
+        }, 10000); // Check every 10 seconds as safety net
+      }
     }
 
     return () => {
@@ -204,8 +228,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setResumeAllCallback(() => {});
       playbackWebSocketService.setStopAllCallback(() => {});
       playbackWebSocketService.stopPeriodicSync();
+      
+      // Clear position drift check interval
+      if (positionDriftCheckInterval.current) {
+        clearInterval(positionDriftCheckInterval.current);
+        positionDriftCheckInterval.current = null;
+      }
     };
-  }, [isRegistered]);
+  }, [isRegistered, slotNumber, lastSyncPosition, currentVideoPosition, lastSyncTime]);
 
   // Execute perfect synchronization
   const executePerfectSync = (message: any) => {
@@ -614,21 +644,39 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Apply display data to mirror the master
       if (data) {
         const adChanged = data.adIndex !== undefined && data.adIndex !== currentAdIndex;
+        const isInitialSync = !hasReceivedInitialSync; // First sync from master
         
-        // Log only on ad changes or pause state changes
-        if (adChanged || (data.isPaused !== undefined && data.isPaused !== isPaused)) {
+        // Log only on ad changes, pause state changes, or initial sync
+        if (adChanged || isInitialSync || (data.isPaused !== undefined && data.isPaused !== isPaused)) {
           console.log('📺 [AdPlayer] Mirroring master:', {
             adIndex: data.adIndex,
             currentTime: data.currentTime?.toFixed(1),
             isPaused: data.isPaused,
-            adChanged
+            adChanged,
+            isInitialSync
           });
         }
         
-        // ✅ ONLY sync position when ad changes (not every 100ms)
-        if (adChanged) {
-          console.log(`📺 [Slave Sync] Switching to ad ${data.adIndex} and syncing to position ${data.currentTime?.toFixed(1)}s`);
+        // ✅ FIXED: Always sync on initial connection OR when ad changes OR when position drift detected
+        // This ensures Slot 2 properly syncs when connecting late to Slot 1 and corrects drift from buffering
+        const positionDrift = data.currentTime !== undefined && currentVideoPosition !== undefined 
+          ? Math.abs(data.currentTime - currentVideoPosition) 
+          : 0;
+        const shouldSyncPosition = adChanged || isInitialSync || positionDrift > 1.5; // Sync if drift > 1.5 seconds
+        
+        if (shouldSyncPosition) {
+          if (isInitialSync) {
+            console.log(`📺 [Slave Initial Sync] First sync from master - syncing to ad ${data.adIndex} at position ${data.currentTime?.toFixed(1)}s`);
+            setHasReceivedInitialSync(true);
+          } else if (positionDrift > 1.5) {
+            console.log(`📺 [Slave Drift Correction] Position drift detected (${positionDrift.toFixed(1)}s) - syncing to master position ${data.currentTime?.toFixed(1)}s`);
+          } else {
+            console.log(`📺 [Slave Sync] Switching to ad ${data.adIndex} and syncing to position ${data.currentTime?.toFixed(1)}s`);
+          }
+          
           setCurrentAdIndex(data.adIndex);
+          setLastSyncPosition(data.currentTime);
+          setLastSyncTime(Date.now());
           
           // ⏳ Wait for slave video to finish buffering before syncing position
           if (data.currentTime !== undefined && videoRef.current) {
@@ -645,6 +693,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                     // Video is ready! Now sync position
                     console.log(`✅ [Slave Sync] Video buffered and ready (took ${attempts * 100}ms), syncing to ${data.currentTime?.toFixed(1)}s`);
                     await videoRef.current?.setPositionAsync(data.currentTime * 1000);
+                    setCurrentVideoPosition(data.currentTime); // Update tracked position
                     
                     // Ensure video starts playing
                     if (!data.isPaused) {
@@ -670,6 +719,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 console.warn(`⚠️ [Slave Sync] Buffering timeout after ${maxAttempts * 100}ms, syncing anyway`);
                 try {
                   await videoRef.current?.setPositionAsync(data.currentTime * 1000);
+                  setCurrentVideoPosition(data.currentTime);
                 } catch (err) {
                   // Ignore
                 }
@@ -2228,11 +2278,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             if (status.isLoaded) {
               setIsPlaying(status.isPlaying || false);
               
+              // Track current video position for drift detection (both master and slave)
+              if (status.positionMillis !== undefined) {
+                setCurrentVideoPosition(status.positionMillis / 1000);
+              }
+              
               // If this is the master device, broadcast display data to other slots for duplication
               if (isMaster) {
                 const displayData = {
                   currentTime: status.positionMillis / 1000, // Convert to seconds
                   isPaused: !status.isPlaying,
+                  isBuffering: status.isBuffering || false, // ✅ NEW: Include buffering state
                   adIndex: currentAdIndex,
                   timestamp: new Date().toISOString(),
                   // ✨ NEW: Include ad details for admin monitoring
@@ -2245,6 +2301,22 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 };
                 
                 playbackWebSocketService.sendDisplayData(displayData);
+              }
+              
+              // ✅ NEW: For Slot 2 (slave), detect buffering state changes and re-sync after buffering
+              if (slotNumber === 2 && !isMaster) {
+                const isCurrentlyBuffering = status.isBuffering || false;
+                
+                // Detect when buffering completes
+                if (wasBuffering && !isCurrentlyBuffering) {
+                  console.log('📺 [Slave Buffer Recovery] Buffering completed - requesting re-sync');
+                  // Request immediate sync to catch up with master after buffering
+                  setTimeout(() => {
+                    playbackWebSocketService.requestSync();
+                  }, 500); // Small delay to ensure video is ready
+                }
+                
+                setWasBuffering(isCurrentlyBuffering);
               }
               
               // Track ad start time when video starts playing (tracking happens at END with actual view time)

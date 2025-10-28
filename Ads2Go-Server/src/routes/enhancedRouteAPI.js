@@ -23,99 +23,186 @@ router.get('/route/:materialId', async (req, res) => {
 
     console.log(`🗺️ [Enhanced Route API] Fetching route for material: ${materialId}, date: ${date}`);
 
-    // Build query for DeviceDataHistoryV2
-    let query = { materialId };
+    // Determine if the requested date is today (Philippines timezone)
+    const now = new Date();
+    const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+    const todayDate = philippinesTime.toISOString().split('T')[0];
+    const isToday = date === todayDate;
     
-    // Filter by date range
-    if (date) {
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-      const nextDay = new Date(targetDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      
-      query['dailyData.date'] = {
-        $gte: targetDate,
-        $lt: nextDay
-      };
-    } else if (startDate && endDate) {
-      query['dailyData.date'] = {
-        $gte: new Date(startDate),
-        $lt: new Date(endDate)
-      };
-    }
-
-    // Find device data
-    const deviceData = await DeviceDataHistoryV2.findOne(query);
-    
-    if (!deviceData) {
-      return res.status(404).json({
-        success: false,
-        message: 'No device data found for the specified material and date range'
-      });
-    }
-
-    // Extract and process location history
     let allLocationPoints = [];
     let totalDistance = 0;
     let totalDuration = 0;
     let totalAdPlays = 0;
     let totalQRScans = 0;
     let totalHoursOnline = 0;
-
-    // Filter dailyData to only include the selected date(s)
-    let filteredDailyData = deviceData.dailyData;
     
-    if (date) {
-      // Single date filter
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-      const nextDay = new Date(targetDate);
-      nextDay.setDate(nextDay.getDate() + 1);
+    // ✅ TODAY'S DATE: Use real-time data for instant, up-to-date routes
+    if (isToday && date) {
+      console.log(`📍 [Enhanced Route API] Requesting TODAY's route - using real-time data`);
       
-      filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
-        const recordDate = new Date(dailyRecord.date);
-        return recordDate >= targetDate && recordDate < nextDay;
-      });
-      
-      console.log(`🗓️ [Enhanced Route API] Filtering for date ${date}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
-    } else if (startDate && endDate) {
-      // Date range filter
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
-        const recordDate = new Date(dailyRecord.date);
-        return recordDate >= start && recordDate <= end;
-      });
-      
-      console.log(`🗓️ [Enhanced Route API] Filtering for range ${startDate} to ${endDate}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
-    }
-
-    // Process filtered daily data
-    filteredDailyData.forEach(dailyRecord => {
-      if (dailyRecord.locationHistory && dailyRecord.locationHistory.length > 0) {
-        // Use advanced GPS cleaning for better accuracy
-        const cleanedPoints = GPSValidation.cleanGPSData(dailyRecord.locationHistory, {
-          strictMode: false,
-          maxAccuracy: 100, // Allow up to 100m accuracy
-          minAccuracy: 1,
-          requirePhilippinesBounds: true,
-          removeDrift: true,
-          maxSpeed: 200
+      try {
+        const DeviceTracking = require('../models/deviceTracking');
+        const deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+        
+        console.log(`🔍 [Enhanced Route API] DeviceTracking lookup result:`, {
+          found: !!deviceTracking,
+          hasLocationHistory: deviceTracking?.locationHistory?.length > 0,
+          locationCount: deviceTracking?.locationHistory?.length || 0
         });
-
-        allLocationPoints = allLocationPoints.concat(cleanedPoints);
-        totalDistance += dailyRecord.totalDistanceTraveled || 0;
-        totalAdPlays += dailyRecord.totalAdPlays || 0;
-        totalQRScans += dailyRecord.totalQRScans || 0;
-        totalHoursOnline += dailyRecord.totalHoursOnline || 0;
+        
+        if (deviceTracking && deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+          // Use real-time location data
+          console.log(`✅ [Enhanced Route API] Found ${deviceTracking.locationHistory.length} real-time location points`);
+          
+          // Clean the GPS data
+          const cleanedPoints = GPSValidation.cleanGPSData(deviceTracking.locationHistory, {
+            strictMode: false,
+            maxAccuracy: 100,
+            minAccuracy: 1,
+            requirePhilippinesBounds: true,
+            removeDrift: true,
+            maxSpeed: 200
+          });
+          
+          allLocationPoints = cleanedPoints;
+          totalDistance = deviceTracking.totalDistanceTraveled || 0;
+          totalAdPlays = deviceTracking.totalAdPlays || 0;
+          totalQRScans = deviceTracking.totalQRScans || 0;
+          totalHoursOnline = (deviceTracking.currentSession && deviceTracking.currentSession.totalHoursOnline) ? deviceTracking.currentSession.totalHoursOnline : 0;
+          
+          console.log(`✅ [Enhanced Route API] Processed ${allLocationPoints.length} real-time points for today`);
+        } else {
+          // Fallback: Check if today's data was already archived
+          console.log(`⚠️ [Enhanced Route API] No real-time data, checking historical archive for today...`);
+          
+          const deviceData = await DeviceDataHistoryV2.findOne({ materialId });
+          
+          if (deviceData && deviceData.dailyData && deviceData.dailyData.length > 0) {
+            const targetDate = new Date(date);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            const dayData = deviceData.dailyData.find(day => {
+              const dayDate = new Date(day.date);
+              dayDate.setHours(0, 0, 0, 0);
+              return dayDate.getTime() === targetDate.getTime();
+            });
+            
+            if (dayData && dayData.locationHistory && dayData.locationHistory.length > 0) {
+              const cleanedPoints = GPSValidation.cleanGPSData(dayData.locationHistory, {
+                strictMode: false,
+                maxAccuracy: 100,
+                minAccuracy: 1,
+                requirePhilippinesBounds: true,
+                removeDrift: true,
+                maxSpeed: 200
+              });
+              
+              allLocationPoints = cleanedPoints;
+              totalDistance = dayData.totalDistanceTraveled || 0;
+              totalAdPlays = dayData.totalAdPlays || 0;
+              totalQRScans = dayData.totalQRScans || 0;
+              totalHoursOnline = dayData.totalHoursOnline || 0;
+              
+              console.log(`✅ [Enhanced Route API] Found ${allLocationPoints.length} archived location points for today`);
+            }
+          }
+        }
+      } catch (todayError) {
+        console.error(`❌ [Enhanced Route API] Error fetching today's data:`, todayError);
+        // If there's an error, we'll fall through to the empty check below
       }
-    });
+    } else {
+      // 📅 PAST DATE or DATE RANGE: Use historical data only
+      console.log(`📅 [Enhanced Route API] Requesting ${date ? 'PAST date' : 'date range'} - using historical data only`);
+      
+      // Build query for DeviceDataHistoryV2
+      let query = { materialId };
+      
+      // Filter by date range
+      if (date) {
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        query['dailyData.date'] = {
+          $gte: targetDate,
+          $lt: nextDay
+        };
+      } else if (startDate && endDate) {
+        query['dailyData.date'] = {
+          $gte: new Date(startDate),
+          $lt: new Date(endDate)
+        };
+      }
 
+      // Find device data
+      const deviceData = await DeviceDataHistoryV2.findOne(query);
+      
+      if (!deviceData) {
+        return res.status(200).json({
+          success: false,
+          message: 'No device data found for the specified material and date range',
+          data: null
+        });
+      }
+
+      // Filter dailyData to only include the selected date(s)
+      let filteredDailyData = deviceData.dailyData;
+      
+      if (date) {
+        // Single date filter
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
+          const recordDate = new Date(dailyRecord.date);
+          return recordDate >= targetDate && recordDate < nextDay;
+        });
+        
+        console.log(`🗓️ [Enhanced Route API] Filtering for date ${date}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
+      } else if (startDate && endDate) {
+        // Date range filter
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
+          const recordDate = new Date(dailyRecord.date);
+          return recordDate >= start && recordDate <= end;
+        });
+        
+        console.log(`🗓️ [Enhanced Route API] Filtering for range ${startDate} to ${endDate}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
+      }
+
+      // Process filtered daily data
+      filteredDailyData.forEach(dailyRecord => {
+        if (dailyRecord.locationHistory && dailyRecord.locationHistory.length > 0) {
+          // Use advanced GPS cleaning for better accuracy
+          const cleanedPoints = GPSValidation.cleanGPSData(dailyRecord.locationHistory, {
+            strictMode: false,
+            maxAccuracy: 100, // Allow up to 100m accuracy
+            minAccuracy: 1,
+            requirePhilippinesBounds: true,
+            removeDrift: true,
+            maxSpeed: 200
+          });
+
+          allLocationPoints = allLocationPoints.concat(cleanedPoints);
+          totalDistance += dailyRecord.totalDistanceTraveled || 0;
+          totalAdPlays += dailyRecord.totalAdPlays || 0;
+          totalQRScans += dailyRecord.totalQRScans || 0;
+          totalHoursOnline += dailyRecord.totalHoursOnline || 0;
+        }
+      });
+    }
+    
     if (allLocationPoints.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
-        message: 'No valid location data found for the specified date range'
+        message: 'No valid location data found for the specified date range',
+        data: null
       });
     }
 
@@ -134,18 +221,32 @@ router.get('/route/:materialId', async (req, res) => {
     let cumulativeDistance = 0;
 
     allLocationPoints.forEach((point, index) => {
+      // Safety check: ensure point has coordinates
+      if (!point || !point.coordinates || point.coordinates.length < 2) {
+        console.warn(`⚠️ [Enhanced Route API] Skipping invalid point at index ${index}:`, point);
+        return;
+      }
+      
       const lat = point.coordinates[1];
       const lng = point.coordinates[0];
       
+      // Validate coordinates are numbers
+      if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+        console.warn(`⚠️ [Enhanced Route API] Skipping point with invalid coordinates at index ${index}:`, { lat, lng });
+        return;
+      }
+      
       // Calculate distance from previous point
       let segmentDistance = 0;
-      if (index > 0) {
+      if (index > 0 && routePoints.length > 0) {
         const prevPoint = allLocationPoints[index - 1];
-        segmentDistance = GPSValidation.calculateDistance(
-          prevPoint.coordinates[1], prevPoint.coordinates[0],
-          lat, lng
-        );
-        cumulativeDistance += segmentDistance;
+        if (prevPoint && prevPoint.coordinates && prevPoint.coordinates.length >= 2) {
+          segmentDistance = GPSValidation.calculateDistance(
+            prevPoint.coordinates[1], prevPoint.coordinates[0],
+            lat, lng
+          );
+          cumulativeDistance += segmentDistance;
+        }
       }
 
       routePoints.push({
@@ -159,9 +260,19 @@ router.get('/route/:materialId', async (req, res) => {
         altitude: point.altitude || 0,
         segmentDistance,
         cumulativeDistance,
-        index
+        index: routePoints.length // Use routePoints.length instead of index to account for skipped points
       });
     });
+
+    // Final safety check: ensure we have valid route points
+    if (routePoints.length === 0) {
+      console.warn(`⚠️ [Enhanced Route API] No valid route points after processing`);
+      return res.status(200).json({
+        success: false,
+        message: 'No valid location data found after processing',
+        data: null
+      });
+    }
 
     // Calculate metrics
     const metrics = {
@@ -192,9 +303,9 @@ router.get('/route/:materialId', async (req, res) => {
     const responseData = {
       success: true,
       data: {
-        materialId: deviceData.materialId,
-        carGroupId: deviceData.carGroupId,
-        deviceInfo: deviceData.deviceInfo,
+        materialId: materialId,
+        carGroupId: null, // Will be populated if available
+        deviceInfo: null, // Will be populated if available
         route: routePoints,
         speedSegments,
         waypoints,
@@ -202,12 +313,8 @@ router.get('/route/:materialId', async (req, res) => {
         metrics: includeMetrics === 'true' ? metrics : undefined,
         metadata: {
           generatedAt: new Date().toISOString(),
-          dataSource: 'DeviceDataHistoryV2',
-          totalDays: filteredDailyData.length,
-          dateRange: {
-            start: filteredDailyData[0]?.date,
-            end: filteredDailyData[filteredDailyData.length - 1]?.date
-          }
+          dataSource: isToday ? 'DeviceTracking (Real-time)' : 'DeviceDataHistoryV2',
+          date: date || new Date().toISOString().split('T')[0]
         }
       }
     };
@@ -218,10 +325,13 @@ router.get('/route/:materialId', async (req, res) => {
 
   } catch (error) {
     console.error('❌ [Enhanced Route API] Error:', error);
+    console.error('❌ [Enhanced Route API] Error Stack:', error.stack);
+    console.error('❌ [Enhanced Route API] Request params:', { materialId: req.params.materialId, date: req.query.date });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch route data',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -406,3 +516,4 @@ function calculateRouteBounds(routePoints) {
 }
 
 module.exports = router;
+

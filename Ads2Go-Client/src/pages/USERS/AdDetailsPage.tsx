@@ -1025,24 +1025,6 @@ const AdDetailsPage: React.FC = () => {
     }
   }, [id, analyticsData, analyticsCacheTime]);
 
-  // Fetch analytics when Analytics tab is active
-  useEffect(() => {
-    if (activeTab === 'Analytics' && !analyticsData) {
-      fetchAnalytics();
-    }
-  }, [activeTab, fetchAnalytics, analyticsData]);
-
-  // ✅ Auto-refresh Analytics every 30 seconds when Analytics tab is active (respects cache)
-  useEffect(() => {
-    if (activeTab === 'Analytics') {
-      const analyticsRefreshInterval = setInterval(() => {
-        // Silently refresh analytics in background (respects 5-minute cache)
-        fetchAnalytics(false); // false = use cache if valid
-      }, 30000); // Every 30 seconds
-
-      return () => clearInterval(analyticsRefreshInterval);
-    }
-  }, [activeTab, fetchAnalytics]);
 
   // Calculate duration in days between start and end dates
   const calculateDuration = (startDate: string, endDate: string) => {
@@ -1355,14 +1337,12 @@ const AdDetailsPage: React.FC = () => {
                 </div>
               )}
               
-              {/* Analytics tab - show if running */}
+              {/* Analytics button - show if running */}
               {(ad.status === 'RUNNING' || ad.status === 'APPROVED') && (
                 <div className="relative">
                   <button
-                    onClick={() => setActiveTab('Analytics')}
-                    className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
-                      activeTab === 'Analytics' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
-                    }`}
+                    onClick={() => navigate(`/detailed-analytics?adId=${id}`)}
+                    className="whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden text-black/60 hover:text-black/90"
                   >
                     Analytics
 
@@ -1370,7 +1350,6 @@ const AdDetailsPage: React.FC = () => {
                     <motion.div
                       className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
                       initial={{ width: 0 }}
-                      animate={{ width: activeTab === 'Analytics' ? '100%' : 0 }}
                       whileHover={{ width: '100%' }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
@@ -1560,154 +1539,6 @@ const AdDetailsPage: React.FC = () => {
                   <p className="text-lg font-medium mb-2">No Activity Yet</p>
                   <p className="text-sm text-gray-600">
                     Device activity and QR scans will appear here in real-time.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Analytics Tab */}
-          {activeTab === 'Analytics' && (
-            <div className="space-y-4">
-              {analyticsLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
-                  <div className="text-center space-y-2">
-                    <p className="text-lg font-medium text-gray-900">Loading Analytics...</p>
-                    <p className="text-sm text-gray-600">
-                      Processing historical data from all devices
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      This may take 20-30 seconds for complete analytics
-                    </p>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-64 bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${loadingProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">{loadingProgress}%</p>
-                </div>
-              ) : analyticsError ? (
-                <div className="text-center bg-red-50 rounded-lg text-red-600 py-8">
-                  <AlertTriangle className="w-12 h-12 mx-auto mb-4" />
-                  <p className="text-lg font-medium mb-2">Error Loading Analytics</p>
-                  <p className="text-sm">{analyticsError}</p>
-                  <button
-                    onClick={fetchAnalytics}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : analyticsData ? (
-                <>
-                  {/* Cache indicator */}
-                  {analyticsCacheTime && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Info className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm text-blue-900">
-                          Cached data from {new Date(analyticsCacheTime).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => fetchAnalytics(true)}
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center space-x-1"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        <span>Refresh</span>
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* Summary Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-blue-600">Total Plays</div>
-                      <div className="text-2xl font-bold text-blue-900">{analyticsData.totalPlays?.toLocaleString() || 0}</div>
-                      <div className="text-xs text-blue-500">All devices</div>
-                    </div>
-                    
-                    <div className="bg-orange-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-orange-600">QR Scans</div>
-                      <div className="text-2xl font-bold text-orange-900">{analyticsData.totalQRScans?.toLocaleString() || 0}</div>
-                      <div className="text-xs text-orange-500">Total scans</div>
-                    </div>
-                  </div>
-
-                  {/* Daily Performance Chart */}
-                  {analyticsData.dailyPerformance && analyticsData.dailyPerformance.length > 0 && (
-                    <div className="bg-white/60 rounded-lg p-4">
-                      <h4 className="text-md font-semibold text-gray-800 mb-4">Daily Performance</h4>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <AreaChart data={analyticsData.dailyPerformance}>
-                          <XAxis 
-                            dataKey="date" 
-                            tick={{ fontSize: 12 }}
-                            tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          />
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                            labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                            formatter={(value: any, name: string) => [
-                              value.toLocaleString(),
-                              name === 'plays' ? 'Plays' : 'QR Scans'
-                            ]}
-                          />
-                          <Area 
-                            type="monotone" 
-                            dataKey="plays" 
-                            stroke="#3b82f6" 
-                            fill="#93c5fd" 
-                            fillOpacity={0.6}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-
-                  {/* Device Performance Table */}
-                  {analyticsData.devicePerformance && analyticsData.devicePerformance.length > 0 && (
-                    <div className="bg-white/60 rounded-lg p-4">
-                      <h4 className="text-md font-semibold text-gray-800 mb-4">Device Performance</h4>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Plays</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">QR Scans</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            {analyticsData.devicePerformance.map((device: any, index: number) => (
-                              <tr key={device.materialId || index} className="hover:bg-gray-50">
-                                <td className="px-4 py-2 text-sm text-gray-900">{device.materialId}</td>
-                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{device.plays?.toLocaleString() || 0}</td>
-                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{device.qrScans?.toLocaleString() || 0}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Data Source Info */}
-                  <div className="text-xs text-gray-500 text-center">
-                    <Info className="w-4 h-4 inline mr-1" />
-                    Data from DeviceDataHistoryV2 • Last updated: {analyticsData.metadata?.generatedAt ? new Date(analyticsData.metadata.generatedAt).toLocaleString() : 'N/A'}
-                  </div>
-                </>
-              ) : (
-                <div className="text-center bg-white/60 rounded-lg text-gray-600 py-8">
-                  <Activity className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg font-medium mb-2">No Analytics Data</p>
-                  <p className="text-sm">
-                    Analytics data will appear once your ad starts playing on devices.
                   </p>
                 </div>
               )}

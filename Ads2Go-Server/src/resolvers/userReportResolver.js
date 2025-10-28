@@ -1,6 +1,7 @@
 const UserReport = require('../models/UserReport');
 const User = require('../models/User');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const resolvers = {
   Query: {
@@ -302,10 +303,44 @@ const resolvers = {
         // Store old status for comparison
         const oldStatus = report.status;
         
+        // Get current admin info
+        const currentAdmin = admin || superAdmin;
+        
         // Update the report
         const updateData = {};
         if (input.status) updateData.status = input.status;
-        if (input.adminNotes !== undefined) updateData.adminNotes = input.adminNotes.trim();
+        if (input.adminNotes !== undefined) {
+          const isNewNote = !report.adminNotes || report.adminNotes !== input.adminNotes;
+          updateData.adminNotes = input.adminNotes.trim();
+          // Track when and who updated the admin notes
+          updateData.adminNotesUpdatedAt = new Date();
+          updateData.adminNotesBy = {
+            adminId: currentAdmin.id || currentAdmin._id,
+            adminName: `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim(),
+            adminEmail: currentAdmin.email
+          };
+          
+          // Send notification to other admins when notes are added/updated
+          if (isNewNote && input.adminNotes && input.adminNotes.trim()) {
+            try {
+              const userDetails = await User.findById(report.userId);
+              const reporterName = userDetails 
+                ? `${userDetails.firstName} ${userDetails.lastName}` 
+                : 'Unknown User';
+              
+              await NotificationService.sendAdminRespondedToReportNotification(
+                currentAdmin._id || currentAdmin.id,
+                report._id.toString(),
+                'User',
+                report.title,
+                reporterName
+              );
+            } catch (notifError) {
+              console.error('Error sending admin response notification:', notifError);
+              // Don't fail the update if notification fails
+            }
+          }
+        }
         
         const updatedReport = await UserReport.findByIdAndUpdate(
           id,
@@ -364,6 +399,9 @@ const resolvers = {
     },
     resolvedAt: (parent) => {
       return parent.resolvedAt ? parent.resolvedAt.toISOString() : null;
+    },
+    adminNotesUpdatedAt: (parent) => {
+      return parent.adminNotesUpdatedAt ? parent.adminNotesUpdatedAt.toISOString() : null;
     }
   }
 };

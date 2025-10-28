@@ -64,6 +64,8 @@ router.post('/updateLocation', async (req, res) => {
     // ✅ MASTER SLOT VALIDATION: Only accept location updates from master slot
     // Find which slot this deviceId belongs to
     if (deviceTracking.slots && deviceTracking.slots.length > 0) {
+      const slotFailoverService = require('../services/slotFailoverService');
+      
       const currentSlot = deviceTracking.slots.find(s => s.deviceId === deviceId);
       const currentSlotNumber = currentSlot?.slotNumber;
       
@@ -71,34 +73,33 @@ router.post('/updateLocation', async (req, res) => {
         const slot1 = deviceTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
         const slot2 = deviceTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
         
-        // Check which slot is master (online)
-        const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
-        const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+        // ✅ ATOMIC FAILOVER CHECK with transition window
+        const failoverResult = await slotFailoverService.checkMasterSlot(
+          deviceTracking.materialId,
+          deviceId,
+          currentSlotNumber,
+          deviceStatusService,
+          slot1?.deviceId,
+          slot2?.deviceId
+        );
         
-        let masterSlotNumber = null;
-        if (slot1Online) {
-          masterSlotNumber = 1;
-        } else if (slot2Online) {
-          masterSlotNumber = 2;
-        }
-        
-        // Reject location update if it's not from the master slot
-        if (masterSlotNumber && currentSlotNumber !== masterSlotNumber) {
-          console.log(`🚫 [Master Location] Rejecting location update from ${deviceId} (Slot ${currentSlotNumber}) - Master is Slot ${masterSlotNumber}`);
+        if (!failoverResult.isMaster) {
+          console.log(`🚫 [Master Location] Rejecting location from ${deviceId} (Slot ${currentSlotNumber}): ${failoverResult.rejectReason}`);
           return res.json({
             success: true,
-            message: `Location update ignored - Slot ${masterSlotNumber} is the master`,
+            message: `Location update ignored - ${failoverResult.rejectReason}`,
             data: {
               deviceId,
               deviceSlot: currentSlotNumber,
-              masterSlot: masterSlotNumber,
+              masterSlot: failoverResult.masterSlot,
+              inTransition: failoverResult.inTransition,
               isOnline: deviceStatusService.getDeviceStatus(deviceId)?.isOnline || false,
-              reason: 'Only master slot can update location'
+              reason: failoverResult.rejectReason
             }
           });
         }
         
-        console.log(`✅ [Master Location] Accepting location update from ${deviceId} (Slot ${currentSlotNumber}, master slot)`);
+        console.log(`✅ [Master Location] Accepting location from ${deviceId} (Slot ${currentSlotNumber}, master, transition: ${failoverResult.inTransition})`);
       }
     }
 
@@ -112,12 +113,14 @@ router.post('/updateLocation', async (req, res) => {
       address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 
+    // ✅ FIX: Don't auto-reset here - let scheduled reset handle it
     // Check if we need to reset daily session (new day)
-    const wasReset = deviceTracking.resetDailySession();
-    if (wasReset) {
-      console.log(`🔄 Daily session reset for ${deviceId} - new day started`);
-      await deviceTracking.save();
-    }
+    // This is handled by the midnight cron job now
+    // const wasReset = deviceTracking.resetDailySession();
+    // if (wasReset) {
+    //   console.log(`🔄 Daily session reset for ${deviceId} - new day started`);
+    //   await deviceTracking.save();
+    // }
     
     // Enhanced session management for offline/online transitions
     const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
@@ -291,10 +294,56 @@ router.get('/route/:deviceId', async (req, res) => {
     let locationHistory = [];
     let historicalData = null;
     
-    // If date is provided, look in historical data first
-    if (date) {
-      console.log(`🔍 [ROUTE API] Date parameter provided: ${date} - will check historical data first`);
-
+    // Determine if the requested date is today (Philippines timezone)
+    const now = new Date();
+    const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+    const todayDate = philippinesTime.toISOString().split('T')[0];
+    const isToday = date === todayDate;
+    
+    console.log(`🔍 [ROUTE API] Date analysis:`, {
+      requestedDate: date,
+      todayDate: todayDate,
+      isToday: isToday,
+      deviceId: deviceId,
+      materialId: deviceTracking.materialId
+    });
+    
+    if (isToday) {
+      // ✅ TODAY'S DATE: Use real-time data for instant, up-to-date routes
+      console.log(`📍 [ROUTE API] Requesting TODAY's route - using real-time data for instant access`);
+      
+      if (deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+        locationHistory = deviceTracking.locationHistory;
+        console.log(`✅ [ROUTE] Found ${locationHistory.length} real-time location points for today`);
+      } else {
+        console.log(`⚠️ [ROUTE] No real-time location data found, checking historical archive...`);
+        
+        // Fallback: Check if today's data was already archived
+        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+        const deviceDataHistory = await DeviceDataHistoryV2.findOne({
+          materialId: deviceTracking.materialId
+        });
+        
+        if (deviceDataHistory && deviceDataHistory.dailyData && deviceDataHistory.dailyData.length > 0) {
+          const targetDate = new Date(date);
+          targetDate.setHours(0, 0, 0, 0);
+          
+          const dayData = deviceDataHistory.dailyData.find(day => {
+            const dayDate = new Date(day.date);
+            dayDate.setHours(0, 0, 0, 0);
+            return dayDate.getTime() === targetDate.getTime();
+          });
+          
+          if (dayData && dayData.locationHistory && dayData.locationHistory.length > 0) {
+            locationHistory = dayData.locationHistory;
+            historicalData = dayData;
+            console.log(`✅ [ROUTE] Found ${locationHistory.length} archived location points for today`);
+          }
+        }
+      }
+    } else if (date) {
+      // 📅 PAST DATE: Use historical data only - DO NOT fallback to real-time
+      console.log(`📅 [ROUTE API] Requesting PAST date (${date}) - using historical data only`);
       
       // Import DeviceDataHistoryV2 model
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
@@ -305,10 +354,8 @@ router.get('/route/:deviceId', async (req, res) => {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
       
-      console.log(`🔍 [ROUTE] Searching for historical data - deviceId: ${deviceId}, materialId: ${deviceTracking.materialId}, date: ${date}`);
+      console.log(`🔍 [ROUTE] Searching historical data for ${date}`);
       
-      // DeviceDataHistoryV2 uses materialId, not deviceId!
-      // And the date is stored in dailyData array
       const deviceDataHistory = await DeviceDataHistoryV2.findOne({
         materialId: deviceTracking.materialId
       });
@@ -345,23 +392,44 @@ router.get('/route/:deviceId', async (req, res) => {
         const allMaterials = await DeviceDataHistoryV2.find({}).select('materialId').limit(10);
         console.log(`📦 [ROUTE] Available materialIds in DB (first 10): ${allMaterials.map(m => m.materialId).join(', ')}`);
       }
-    }
-    
-    // If no historical data found or no date provided, try current session
-    if (locationHistory.length === 0 && deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
-      locationHistory = deviceTracking.currentSession.locationHistory;
       
-      // Filter by date if provided
-      if (date) {
-        const targetDate = new Date(date);
-        targetDate.setHours(0, 0, 0, 0);
-        const nextDay = new Date(targetDate);
-        nextDay.setDate(nextDay.getDate() + 1);
+      // ✅ FIX: For recent dates, fallback to DeviceTracking
+      if (locationHistory.length === 0 && !isToday) {
+        console.log(`📭 [ROUTE] No archived data for ${date}, checking DeviceTracking fallback...`);
         
-        locationHistory = locationHistory.filter(point => {
-          const pointDate = new Date(point.timestamp);
-          return pointDate >= targetDate && pointDate < nextDay;
-        });
+        // Fallback for recent dates (yesterday, today)
+        const daysSinceTarget = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceTarget <= 2) {
+          console.log(`🔄 [ROUTE] Attempting DeviceTracking fallback for recent date (${daysSinceTarget} days ago)`);
+          
+          const fallbackDevice = await DeviceTracking.findOne({
+            materialId: deviceTracking.materialId,
+            date: targetDate
+          });
+          
+          if (fallbackDevice && fallbackDevice.locationHistory && fallbackDevice.locationHistory.length > 0) {
+            console.log(`✅ [ROUTE] Found fallback data: ${fallbackDevice.locationHistory.length} points`);
+            locationHistory = fallbackDevice.locationHistory;
+            historicalData = {
+              totalHoursOnline: fallbackDevice.totalHoursOnline,
+              totalDistanceTraveled: fallbackDevice.totalDistanceTraveled,
+              totalAdPlays: fallbackDevice.totalAdPlays,
+              totalQRScans: fallbackDevice.totalQRScans,
+              source: 'fallback' // Flag as fallback data
+            };
+          } else {
+            console.log(`❌ [ROUTE] No fallback data available either`);
+          }
+        }
+      }
+    } else {
+      // No date provided: Use real-time data
+      console.log(`📍 [ROUTE API] No date specified - using current real-time data`);
+      
+      if (deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+        locationHistory = deviceTracking.locationHistory;
+        console.log(`✅ [ROUTE] Found ${locationHistory.length} real-time location points`);
       }
     }
     

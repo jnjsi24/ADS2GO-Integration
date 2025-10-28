@@ -60,6 +60,11 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
+  // Processing states for double-click prevention
+  const [markingAsReadId, setMarkingAsReadId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+
   
   // Fetch device notifications
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_DEVICE_NOTIFICATIONS, {
@@ -138,12 +143,21 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   });
 
   const handleMarkAsRead = async (notificationId: string) => {
+    // Prevent multiple clicks on the same notification
+    if (markingAsReadId === notificationId) {
+      return;
+    }
+    
+    setMarkingAsReadId(notificationId);
+    
     try {
       await markAsRead({
         variables: { notificationId }
       });
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    } finally {
+      setMarkingAsReadId(null);
     }
   };
 
@@ -153,14 +167,23 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   };
 
   const confirmDelete = async () => {
-    if (notificationToDelete) {
-      try {
-        await deleteNotification({
-          variables: { notificationId: notificationToDelete.id }
-        });
-      } catch (error) {
-        console.error('Error deleting notification:', error);
-      }
+    if (!notificationToDelete) return;
+    
+    // Prevent multiple clicks
+    if (isDeleting) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      await deleteNotification({
+        variables: { notificationId: notificationToDelete.id }
+      });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -191,27 +214,53 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const handleDeleteSelected = async () => {
     if (selectedNotifications.size === 0) return;
     
-    if (selectedNotifications.size === filteredNotifications.length) {
-      // If all notifications are selected, use deleteAllNotifications
-      await deleteAllNotifications();
-    } else {
-      // Delete selected notifications one by one
-      for (const notificationId of selectedNotifications) {
-        await deleteNotification({
-          variables: { notificationId }
-        });
-      }
+    // Prevent multiple clicks
+    if (isDeletingSelected) {
+      return;
     }
     
-    setSelectedNotifications(new Set());
-    setIsSelectMode(false);
+    setIsDeletingSelected(true);
+    
+    try {
+      if (selectedNotifications.size === filteredNotifications.length) {
+        // If all notifications are selected, use deleteAllNotifications
+        await deleteAllNotifications();
+      } else {
+        // Delete selected notifications one by one
+        for (const notificationId of selectedNotifications) {
+          await deleteNotification({
+            variables: { notificationId }
+          });
+        }
+      }
+      
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Error deleting selected notifications:', error);
+    } finally {
+      setIsDeletingSelected(false);
+    }
   };
 
   const handleDeleteAll = async () => {
+    // Prevent multiple clicks
+    if (isDeletingSelected) {
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
-      await deleteAllNotifications();
-      setSelectedNotifications(new Set());
-      setIsSelectMode(false);
+      setIsDeletingSelected(true);
+      
+      try {
+        await deleteAllNotifications();
+        setSelectedNotifications(new Set());
+        setIsSelectMode(false);
+      } catch (error) {
+        console.error('Error deleting all notifications:', error);
+      } finally {
+        setIsDeletingSelected(false);
+      }
     }
   };
 
@@ -274,6 +323,11 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     
     if (category === 'DEVICE_MILESTONE' || data?.achievementType === '8_HOUR_MILESTONE') {
       return <CheckCircle className="w-5 h-5 text-green-600" />;
+    }
+    
+    // Daily compliance missed
+    if (category === 'DAILY_COMPLIANCE_MISSED') {
+      return <Clock className="w-5 h-5 text-orange-600" />;
     }
     
     switch (category) {
@@ -480,11 +534,20 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           handleDeleteSelected(); // selection → delete selected
                         }
                       }}
-                      className="flex items-center space-x-2 px-3 py-1 bg-red-200 text-red-500 font-semibold rounded-lg hover:bg-red-300 text-sm transition-colors"
+                      disabled={isDeletingSelected}
+                      className={`flex items-center space-x-2 px-3 py-1 font-semibold rounded-lg text-sm transition-colors ${
+                        isDeletingSelected
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-red-200 text-red-500 hover:bg-red-300'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {isDeletingSelected ? (
+                        <div className="w-4 h-4 animate-spin border-2 border-red-500 border-t-transparent rounded-full" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                       <span>
-                        {selectedNotifications.size === 0 ? "Delete All" : `Delete (${selectedNotifications.size})`}
+                        {isDeletingSelected ? 'Deleting...' : (selectedNotifications.size === 0 ? "Delete All" : `Delete (${selectedNotifications.size})`)}
                       </span>
                     </button>
 
@@ -568,9 +631,6 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                             {notification.data?.driverName && (
                               <span className="text-gray-600">Driver: {notification.data.driverName}</span>
                             )}
-                            {notification.data?.reason && (
-                              <span className="text-gray-600">Reason: {notification.data.reason}</span>
-                            )}
                             {notification.data?.timeSinceLastSeen && (
                               <span className="text-gray-600">Last seen: {notification.data.timeSinceLastSeen}s ago</span>
                             )}
@@ -589,6 +649,28 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                             )}
                             {notification.data?.driverName && (
                               <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                            )}
+                          </div>
+                        )}
+                        {notification.category === 'DAILY_COMPLIANCE_MISSED' && (
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                              ⚠️ Compliance Missed
+                            </span>
+                            {notification.data?.materialId && (
+                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                            )}
+                            {notification.data?.slotNumber && (
+                              <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
+                            )}
+                            {notification.data?.driverName && (
+                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                            )}
+                            {notification.data?.hoursAchieved && (
+                              <span className="text-gray-600">Hours: {notification.data.hoursAchieved}/8.0</span>
+                            )}
+                            {notification.data?.hoursShort && (
+                              <span className="text-orange-600 font-medium">({notification.data.hoursShort}h short)</span>
                             )}
                           </div>
                         )}
@@ -624,12 +706,23 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                       {!notification.read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
-                          className="group flex items-center text-green-700 rounded-md overflow-hidden h-6 w-7 hover:w-24 transition-[width] duration-300"
+                          disabled={markingAsReadId === notification.id}
+                          className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-24 transition-[width] duration-300 ${
+                            markingAsReadId === notification.id
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-green-700'
+                          }`}
                         >
-                          <CheckCircle className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                            Mark as Read
-                          </span>
+                          {markingAsReadId === notification.id ? (
+                            <div className="w-4 h-4 animate-spin border-2 border-green-600 border-t-transparent rounded-full mx-auto" />
+                          ) : (
+                            <>
+                              <CheckCircle className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                                Mark as Read
+                              </span>
+                            </>
+                          )}
                         </button>
                       )}
 
@@ -682,15 +775,24 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
             <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelDelete}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                disabled={isDeleting}
+                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2 ${
+                  isDeleting
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                Delete
+                {isDeleting && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

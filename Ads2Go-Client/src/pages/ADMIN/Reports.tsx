@@ -26,6 +26,12 @@ interface Driver {
   vehiclePlateNumber: string;
 }
 
+interface AdminInfo {
+  adminId?: string;
+  adminName?: string;
+  adminEmail?: string;
+}
+
 interface Report {
   id: string;
   title: string;
@@ -37,6 +43,8 @@ interface Report {
   driverId?: string;
   attachments: string[];
   adminNotes?: string;
+  adminNotesUpdatedAt?: string;
+  adminNotesBy?: AdminInfo;
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
@@ -69,7 +77,7 @@ const Reports: React.FC = () => {
 
   const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
-  const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'OTHER'];
+  const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'OTHER'];
   const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   // Pagination state
@@ -553,48 +561,48 @@ const Reports: React.FC = () => {
         </div>
       )}
 
-      {/* Table Header */}
+      {/* Table Content */}
       {error ? (
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
+      ) : loading ? (
+        <AdminLoader />
       ) : filteredReports.length === 0 ? (
         <div className="text-center py-10 text-gray-500">
           {searchTerm ? 'No reports match your search criteria' : 'No reports found'}
         </div>
       ) : (
-        <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
-          <div className="col-span-3 flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
-              onChange={handleSelectAll}
-            />
-            <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
-              Title
-            </span>
-            <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-            </svg>
+        <>
+          {/* Table Header */}
+          <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+            <div className="col-span-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
+                onChange={handleSelectAll}
+              />
+              <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
+                Title
+              </span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+              </svg>
+            </div>
+            <div className="col-span-2 flex items-center">{reportSource === 'users' ? 'User' : 'Driver'}</div>
+            <div className="col-span-2 flex items-center">Category</div>
+            <div className="col-span-2 flex items-center gap-1">
+              <span>Status</span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+              </svg>
+            </div>
+            <div className="col-span-2 flex items-center">Created</div>
+            <div className="col-span-1 flex items-center justify-center">Actions</div>
           </div>
-          <div className="col-span-2 flex items-center">{reportSource === 'users' ? 'User' : 'Driver'}</div>
-          <div className="col-span-2 flex items-center">Category</div>
-          <div className="col-span-2 flex items-center gap-1">
-            <span>Status</span>
-            <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-            </svg>
-          </div>
-          <div className="col-span-2 flex items-center">Created</div>
-          <div className="col-span-1 flex items-center justify-center">Actions</div>
-        </div>
-      )}
 
-      {/* Rows */}
-      <div className="flex-1">
-        {filteredReports.length === 0 ? (
-          <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
-        ) : (
-          paginatedReports.map((report: Report) => (
+          {/* Rows */}
+          <div className="flex-1">
+            {paginatedReports.map((report: Report) => (
             <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
               {/* Mobile Card View */}
               <div className="md:hidden p-4">
@@ -726,9 +734,10 @@ const Reports: React.FC = () => {
                 </div>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+          </div>
+        </>
+      )}
 
       {/* Details Modal */}
       {expandedRow && selectedReport && (
@@ -746,10 +755,23 @@ const Reports: React.FC = () => {
               </div>
               {selectedReport.adminNotes && (
                 <div>
-                  <strong className="text-sm font-medium text-gray-700">Admin Notes:</strong>
-                  <p className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-sm font-medium text-gray-700">Admin Notes:</strong>
+                    {selectedReport.adminNotesUpdatedAt && (
+                      <span className="text-xs text-gray-500">
+                        Updated: {formatDate(selectedReport.adminNotesUpdatedAt)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none mt-1">
                     {selectedReport.adminNotes}
                   </p>
+                  {selectedReport.adminNotesBy && selectedReport.adminNotesBy.adminName && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Added by: {selectedReport.adminNotesBy.adminName}
+                      {selectedReport.adminNotesBy.adminEmail && ` (${selectedReport.adminNotesBy.adminEmail})`}
+                    </p>
+                  )}
                 </div>
               )}
               <div>

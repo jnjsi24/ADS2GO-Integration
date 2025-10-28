@@ -1337,6 +1337,54 @@ const RouteTab: React.FC = () => {
         </View>
       </View>
 
+      {/* Interactive Route Map */}
+      <View style={styles.mapContainer}>
+        <View style={styles.mapWrapper}>
+          {/* ✅ FIXED: Show single marker during midnight reset mode, otherwise show full route */}
+          {(() => {
+            // During midnight reset mode (12 AM - 8 AM on current day):
+            // - showOnlyLastLocation = true
+            // - lastLocationPoint = yesterday's last GPS location
+            // - routeData = null (we skip the API call)
+            const shouldShowSingleMarker = showOnlyLastLocation && lastLocationPoint;
+            
+            console.log('🗺️ [Map Render] Decision:', {
+              date: selectedDate.toDateString(),
+              showOnlyLastLocation,
+              hasLastLocationPoint: !!lastLocationPoint,
+              hasRouteData: !!routeData?.route,
+              routePointCount: routeData?.route?.length || 0,
+              shouldShowSingleMarker,
+              willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
+            });
+            
+            return shouldShowSingleMarker ? (
+              <>
+                <RouteMapView 
+                  route={[lastLocationPoint]} 
+                  style={styles.map}
+                  showSpeedColors={false}
+                  showWaypoints={false}
+                />
+                <View style={styles.midnightResetBanner}>
+                  <Ionicons name="moon" size={16} color="#f59e0b" />
+                  <Text style={styles.midnightResetText}>
+                    Showing last location from yesterday (driver completed 8 hours). New route will appear when ad player starts at 8 AM.
+                  </Text>
+                </View>
+              </>
+            ) : (
+          <RouteMapView 
+            route={routeData?.route || []} 
+            style={styles.map}
+            showSpeedColors={false}
+            showWaypoints={false}
+          />
+            );
+          })()}
+        </View>
+      </View>
+
       {/* Route Status Timeline */}
       <View style={styles.statusCard}>
         <View style={styles.statusHeader}>
@@ -1430,89 +1478,6 @@ const RouteTab: React.FC = () => {
           </View>
         )}
       </View>
-
-      {/* Interactive Route Map */}
-      <View style={styles.mapContainer}>
-        <View style={styles.mapWrapper}>
-          {/* ✅ FIXED: Show single marker during midnight reset mode, otherwise show full route */}
-          {(() => {
-            // During midnight reset mode (12 AM - 8 AM on current day):
-            // - showOnlyLastLocation = true
-            // - lastLocationPoint = yesterday's last GPS location
-            // - routeData = null (we skip the API call)
-            const shouldShowSingleMarker = showOnlyLastLocation && lastLocationPoint;
-            
-            console.log('🗺️ [Map Render] Decision:', {
-              date: selectedDate.toDateString(),
-              showOnlyLastLocation,
-              hasLastLocationPoint: !!lastLocationPoint,
-              hasRouteData: !!routeData?.route,
-              routePointCount: routeData?.route?.length || 0,
-              shouldShowSingleMarker,
-              willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
-            });
-            
-            return shouldShowSingleMarker ? (
-              <>
-                <RouteMapView 
-                  route={[lastLocationPoint]} 
-                  style={styles.map}
-                  showSpeedColors={false}
-                  showWaypoints={false}
-                />
-                <View style={styles.midnightResetBanner}>
-                  <Ionicons name="moon" size={16} color="#f59e0b" />
-                  <Text style={styles.midnightResetText}>
-                    Showing last location from yesterday (driver completed 8 hours). New route will appear when ad player starts at 8 AM.
-                  </Text>
-                </View>
-              </>
-            ) : (
-          <RouteMapView 
-            route={routeData?.route || []} 
-            style={styles.map}
-            showSpeedColors={false}
-            showWaypoints={false}
-          />
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* Route Points List */}
-      {routeData && routeData.route.length > 0 && (
-        <View style={styles.pointsContainer}>
-          <Text style={styles.pointsTitle}>Recent GPS Points</Text>
-          <ScrollView style={styles.pointsList} nestedScrollEnabled>
-            {routeData.route.slice(-10).reverse().map((point, index) => (
-              <View key={index} style={styles.pointItem}>
-                <View style={styles.pointHeader}>
-                  <Ionicons name="location" size={16} color="#3b82f6" />
-                  <Text style={styles.pointCoordinates}>
-                    {point.lat.toFixed(6)}, {point.lng.toFixed(6)}
-                  </Text>
-                  <Text style={styles.pointTime}>
-                    {formatTimestamp(point.timestamp)}
-                  </Text>
-                </View>
-                <View style={styles.pointDetails}>
-                  <Text style={styles.pointDetail}>
-                    Speed: {point.speed.toFixed(1)} km/h
-                  </Text>
-                  <Text style={styles.pointDetail}>
-                    Accuracy: {point.accuracy.toFixed(1)}m
-                  </Text>
-                  {point.address && (
-                    <Text style={styles.pointAddress} numberOfLines={1}>
-                      {point.address}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
 
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
@@ -1849,62 +1814,6 @@ const styles = StyleSheet.create({
   map: {
     height: 300,
     width: '100%',
-  },
-  pointsContainer: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  pointsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  pointsList: {
-    maxHeight: 300,
-  },
-  pointItem: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  pointHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  pointCoordinates: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-    marginLeft: 6,
-    flex: 1,
-  },
-  pointTime: {
-    fontSize: 10,
-    color: '#6b7280',
-  },
-  pointDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pointDetail: {
-    fontSize: 11,
-    color: '#6b7280',
-  },
-  pointAddress: {
-    fontSize: 10,
-    color: '#9ca3af',
-    fontStyle: 'italic',
-    flex: 1,
-    marginLeft: 8,
   },
   bottomSpacing: {
     height: 20,

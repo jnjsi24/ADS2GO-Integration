@@ -98,46 +98,38 @@ router.post('/location-update',
     // Priority: Slot 1 (if online) → Slot 2 (if Slot 1 offline)
     if (carTracking && carTracking.slots && carTracking.slots.length > 0) {
       const deviceStatusService = require('../services/deviceStatusService');
+      const slotFailoverService = require('../services/slotFailoverService');
+      
       const slot1 = carTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
       const slot2 = carTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
       
-      // Check which slot is master (online)
-      const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
-      const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+      // ✅ ATOMIC FAILOVER CHECK with transition window
+      const failoverResult = await slotFailoverService.checkMasterSlot(
+        materialId,
+        deviceId,
+        parseInt(deviceSlot),
+        deviceStatusService,
+        slot1?.deviceId,
+        slot2?.deviceId
+      );
       
-      let masterSlotNumber = null;
-      if (slot1Online) {
-        masterSlotNumber = 1;
-      } else if (slot2Online) {
-        masterSlotNumber = 2;
-      }
-      
-      // Log master detection details
-      console.log(`🔍 [Master Detection] Material ${materialId}:`, {
-        slot1: { deviceId: slot1?.deviceId, online: slot1Online },
-        slot2: { deviceId: slot2?.deviceId, online: slot2Online },
-        masterSlot: masterSlotNumber,
-        incomingSlot: parseInt(deviceSlot),
-        location: { lat: lat.toFixed(6), lng: lng.toFixed(6) }
-      });
-      
-      // Reject location update if it's not from the master slot
-      if (masterSlotNumber && parseInt(deviceSlot) !== masterSlotNumber) {
-        console.log(`🚫 [Master Location] Rejecting location update from Slot ${deviceSlot} - Master is Slot ${masterSlotNumber}`);
+      if (!failoverResult.isMaster) {
+        console.log(`🚫 [Master Location] Rejecting location from Slot ${deviceSlot}: ${failoverResult.rejectReason}`);
         return res.json({
           success: true,
-          message: `Location update ignored - Slot ${masterSlotNumber} is the master`,
+          message: `Location update ignored - ${failoverResult.rejectReason}`,
           data: {
             materialId,
             deviceId,
             deviceSlot: parseInt(deviceSlot),
-            masterSlot: masterSlotNumber,
-            reason: 'Only master slot can update location'
+            masterSlot: failoverResult.masterSlot,
+            inTransition: failoverResult.inTransition,
+            reason: failoverResult.rejectReason
           }
         });
       }
       
-      console.log(`✅ [Master Location] Accepting location update from Slot ${deviceSlot} (master slot)`);
+      console.log(`✅ [Master Location] Accepting location from Slot ${deviceSlot} (master, transition: ${failoverResult.inTransition})`);
     }
     
     // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
@@ -228,11 +220,9 @@ router.post('/location-update',
       throw new Error('Device tracking record disappeared after update');
     }
 
-    // Calculate and update online hours (incremental tracking)
-    if (carTracking.isOnline && carTracking.currentSession && carTracking.currentSession.isActive) {
-      carTracking.calculateAndUpdateOnlineHours();
-      await carTracking.save();
-    }
+    // ✅ FIX: Don't calculate hours here - let hoursUpdateService handle it
+    // This prevents multiple concurrent updates to totalHoursOnline
+    // Hours are calculated by hoursUpdateService every 30 seconds
 
     // Get slot status for response
     const slotStatus = carTracking.getSlotStatus ? carTracking.getSlotStatus() : null;
@@ -261,24 +251,36 @@ router.post('/location-update',
       requestBody: req.body
     });
     
-    // Handle version conflicts (race condition) - return success as the data was likely already updated
+    // ✅ FIX: Queue version conflicts instead of dropping them
     if (error.name === 'VersionError') {
-      console.log('⚠️ Version conflict detected - data may have been updated by another request');
+      const locationUpdateQueue = require('../services/locationUpdateQueue');
+      
+      console.log('⚠️ Version conflict detected - queuing update for retry');
+      
+      locationUpdateQueue.enqueue(req.body.materialId, {
+        lat: req.body.lat,
+        lng: req.body.lng,
+        speed: req.body.speed,
+        heading: req.body.heading,
+        accuracy: req.body.accuracy,
+        address: req.body.address,
+        timestamp: req.body.timestamp,
+        deviceId: req.body.deviceId,
+        deviceSlot: req.body.deviceSlot
+      });
+
       return res.json({
         success: true,
-        message: 'Location update queued (version conflict resolved)',
-        data: {
-          materialId: req.body.materialId,
-          deviceId: req.body.deviceId,
-          deviceSlot: req.body.deviceSlot
-        }
+        message: 'Location update queued due to version conflict',
+        queued: true,
+        queueStatus: locationUpdateQueue.getStatus(req.body.materialId)
       });
     }
     
     res.status(500).json({
       success: false,
       message: 'Failed to update location',
-      error: error.message // Always send error message for debugging
+      error: error.message
     });
   }
 });
@@ -511,71 +513,71 @@ router.post('/ad-playback', async (req, res) => {
       console.log(`⚠️ [AdPlayback] No slot info, accepting all data (fallback)`);
     }
     
-    // Add ad playback to the tracking record (always store, with slotNumber)
-    const adPlayback = {
-      adId,
-      userId,
-      adTitle,
-      materialId: materialId,
-      slotNumber: parseInt(deviceSlot),
-      adDuration: parseInt(adDuration),
-      startTime: new Date(),
-      endTime: null,
-      viewTime: Math.round(parseInt(viewTime) * 100) / 100,
-      completionRate: Math.round((parseInt(viewTime) / parseInt(adDuration)) * 10000) / 100,
-      impressions: 1
-    };
-    
-    deviceTracking.adPlaybacks.push(adPlayback);
-    
-    // ✅ Only increment totals if this is the master slot
+    // ✅ FIX: Only store playbacks from master slot (prevent duplicates in archive)
     if (isMasterSlot) {
+      const adPlayback = {
+        adId,
+        userId,
+        adTitle,
+        materialId: materialId,
+        slotNumber: parseInt(deviceSlot),
+        adDuration: parseInt(adDuration),
+        startTime: new Date(),
+        endTime: null,
+        viewTime: Math.round(parseInt(viewTime) * 100) / 100,
+        completionRate: Math.round((parseInt(viewTime) / parseInt(adDuration)) * 10000) / 100,
+        impressions: 1,
+        isMaster: true // ✅ Flag as master slot data
+      };
+      
+      deviceTracking.adPlaybacks.push(adPlayback);
+      
+      // Increment car-level totals
       deviceTracking.totalAdPlays += 1;
       deviceTracking.totalAdPlayTime += parseInt(viewTime);
       deviceTracking.totalAdImpressions += 1;
       console.log(`✅ [AdPlayback] Master slot - incremented totals`);
-    } else {
-      console.log(`💤 [AdPlayback] Slave slot - skipped incrementing totals`);
-    }
-    
-    // ✅ Update ad performance tracking (filter out entries without userId before adding new ones)
-    deviceTracking.adPerformance = deviceTracking.adPerformance.filter(perf => perf.userId);
-    
-    // ✅ Only update adPerformance if we have userId and this is the master slot
-    if (userId && isMasterSlot) {
-      let adPerf = deviceTracking.adPerformance.find(ad => ad.adId === adId);
-      if (!adPerf) {
-        adPerf = {
-          adId,
-          userId,
-          adTitle,
-          playCount: 0,
-          totalViewTime: 0,
-          averageViewTime: 0,
-          completionRate: 0,
-          firstPlayed: new Date(),
-          lastPlayed: new Date(),
-          impressions: 0
-        };
-        deviceTracking.adPerformance.push(adPerf);
+      
+      // ✅ Update ad performance tracking (filter out entries without userId before adding new ones)
+      deviceTracking.adPerformance = deviceTracking.adPerformance.filter(perf => perf.userId);
+      
+      // ✅ Update adPerformance (only for master slot)
+      if (userId) {
+        let adPerf = deviceTracking.adPerformance.find(ad => ad.adId === adId);
+        if (!adPerf) {
+          adPerf = {
+            adId,
+            userId,
+            adTitle,
+            playCount: 0,
+            totalViewTime: 0,
+            averageViewTime: 0,
+            completionRate: 0,
+            firstPlayed: new Date(),
+            lastPlayed: new Date(),
+            impressions: 0
+          };
+          deviceTracking.adPerformance.push(adPerf);
+        }
+        
+        adPerf.playCount += 1;
+        adPerf.totalViewTime += parseInt(viewTime);
+        adPerf.impressions += 1;
+        adPerf.lastPlayed = new Date();
+        adPerf.averageViewTime = adPerf.totalViewTime / adPerf.playCount;
+        adPerf.completionRate = adDuration > 0 ? (adPerf.totalViewTime / (adPerf.playCount * adDuration)) * 100 : 0;
+          
+        console.log(`✅ [AdPlayback] Updated adPerformance for ${adTitle}: playCount=${adPerf.playCount}, totalViewTime=${adPerf.totalViewTime}`);
       }
       
-      adPerf.playCount += 1;
-      adPerf.totalViewTime += parseInt(viewTime);
-      adPerf.impressions += 1;
-      adPerf.lastPlayed = new Date();
-      adPerf.averageViewTime = adPerf.totalViewTime / adPerf.playCount;
-      adPerf.completionRate = adDuration > 0 ? (adPerf.totalViewTime / (adPerf.playCount * adDuration)) * 100 : 0;
+      // Clean up old ad playbacks (keep only last 800)
+      deviceTracking.cleanupAdPlaybacks();
       
-      console.log(`✅ [AdPlayback] Updated adPerformance for ${adTitle}: playCount=${adPerf.playCount}, totalViewTime=${adPerf.totalViewTime}`);
-    } else if (!isMasterSlot) {
-      console.log(`💤 [AdPlayback] Slave slot - skipped updating adPerformance`);
+      await deviceTracking.save();
+    } else {
+      // Slave slot - just acknowledge without storing
+      console.log(`💤 [AdPlayback] Slave slot - data not stored`);
     }
-    
-    // Clean up old ad playbacks (keep only last 800)
-    deviceTracking.cleanupAdPlaybacks();
-    
-    await deviceTracking.save();
 
     res.json({
       success: true,

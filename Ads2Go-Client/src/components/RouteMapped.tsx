@@ -51,12 +51,19 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (bounds) {
-      const leafletBounds = L.latLngBounds(
-        [bounds.south, bounds.west],
-        [bounds.north, bounds.east]
-      );
-      map.fitBounds(leafletBounds, { padding: [20, 20] });
+    if (bounds && map) {
+      try {
+        // Wait for map to be ready before fitting bounds
+        map.whenReady(() => {
+          const leafletBounds = L.latLngBounds(
+            [bounds.south, bounds.west],
+            [bounds.north, bounds.east]
+          );
+          map.fitBounds(leafletBounds, { padding: [20, 20], animate: false });
+        });
+      } catch (error) {
+        console.warn('Error fitting bounds:', error);
+      }
     }
   }, [bounds, map]);
 
@@ -589,14 +596,14 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
           }
         } else {
           console.log('❌ [RouteMapped] API returned error:', result.message);
-          setError(result.message || 'Failed to fetch route data');
+          setError('No route data available for this date');
           setLoading(false);
           if (onLoadingChange) {
             onLoadingChange(false);
           }
         }
       } catch (err) {
-        setError('Network error: Unable to fetch route data');
+        setError('Unable to load route data');
         console.error('❌ [RouteMapped] Error:', err);
         setLoading(false);
         if (onLoadingChange) {
@@ -658,13 +665,15 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
       <div style={style} className={className} key={`wrapper-${materialId}-${date}`}>
         <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
           <div className="text-center p-6">
-            <div className="text-red-500 mb-2">
-              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            <div className="text-gray-400 mb-3">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Route</h3>
-            <p className="text-sm text-gray-600">{error}</p>
+            <h3 className="text-lg font-medium text-gray-700 mb-2">No Route Available</h3>
+            <p className="text-sm text-gray-500">
+              No tracking data available for this date. The vehicle may not have been active on this day.
+            </p>
           </div>
         </div>
       </div>

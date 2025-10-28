@@ -288,9 +288,11 @@ module.exports = {
             if (isNewDay) {
               // NEW DAY: Reset session and start fresh
               console.log(`📅 New day detected - resetting session for ${materialId}`);
+              // ✅ FIX: Use sentinel value for startTime - will be set to actual time when device comes online
+              const farFuture = new Date('2099-12-31T23:59:59Z');
               existingDeviceTracking.currentSession = {
                 date: today,
-                startTime: new Date(),
+                startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
                 lastOnlineUpdate: new Date(),
                 totalHoursOnline: 0,
                 totalDistanceTraveled: 0,
@@ -302,9 +304,11 @@ module.exports = {
               // SAME DAY, SESSION ENDED: Reactivate session, keep accumulated hours
               console.log(`🔄 Reactivating session for ${materialId} - preserving ${existingDeviceTracking.currentSession?.totalHoursOnline || 0} hours`);
               if (!existingDeviceTracking.currentSession) {
+                // ✅ FIX: Use sentinel value for startTime
+                const farFuture = new Date('2099-12-31T23:59:59Z');
                 existingDeviceTracking.currentSession = {
                   date: today,
-                  startTime: new Date(),
+                  startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
                   lastOnlineUpdate: new Date(),
                   totalHoursOnline: 0,
                   totalDistanceTraveled: 0,
@@ -545,14 +549,44 @@ module.exports = {
 
         await tablet.save();
 
-        // Update DeviceTracking collection - set deviceId to null while preserving historical data
+        // ✅ FIX: Archive data before unregistering
+        console.log(`📦 [Unregistration] Archiving data for ${oldDeviceId} before unregistration...`);
+        
         try {
+          const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
+          const DeviceUnregistrationLog = require('../models/DeviceUnregistrationLog');
+          
           const deviceTracking = await DeviceTracking.findOne({ 
             materialId: normalizedMaterialId,
-            'slots.slotNumber': slotNumber
+            'slots.deviceId': oldDeviceId
           });
 
           if (deviceTracking) {
+            // Archive current day's data
+            const todayStr = new Date().toISOString().split('T')[0];
+            try {
+              await dailyArchiveJobV2.archiveMaterialDataV2(deviceTracking, todayStr);
+              console.log(`✅ [Unregistration] Archived data for ${oldDeviceId}`);
+            } catch (archiveError) {
+              console.error(`❌ [Unregistration] Failed to archive data:`, archiveError);
+              // Don't block unregistration, but log error
+            }
+            
+            // Create unregistration log
+            await DeviceUnregistrationLog.create({
+              deviceId: oldDeviceId,
+              materialId: normalizedMaterialId,
+              slotNumber: slotNumber,
+              unregisteredAt: new Date(),
+              unregisteredBy: null, // Will add admin context later if needed
+              finalMetrics: {
+                totalAdPlays: deviceTracking.totalAdPlays || 0,
+                totalHoursOnline: deviceTracking.totalHoursOnline || 0,
+                totalQRScans: deviceTracking.totalQRScans || 0,
+                totalDistanceTraveled: deviceTracking.totalDistanceTraveled || 0
+              }
+            });
+            
             // Find the slot in the slots array
             const slotIndex = deviceTracking.slots.findIndex(s => s.slotNumber === slotNumber);
             
@@ -566,7 +600,8 @@ module.exports = {
                   $set: { 
                     [`slots.${slotIndex}.deviceId`]: null,
                     [`slots.${slotIndex}.isOnline`]: false,
-                    [`slots.${slotIndex}.lastSeen`]: new Date()
+                    [`slots.${slotIndex}.lastSeen`]: new Date(),
+                    [`slots.${slotIndex}.unregisteredAt`]: new Date()
                   }
                 }
               );
@@ -578,13 +613,22 @@ module.exports = {
               const anySlotOnline = updatedTracking.slots.some(s => s.isOnline);
               if (!anySlotOnline) {
                 updatedTracking.isOnline = false;
+                
                 // End the current session when device goes completely offline
                 if (updatedTracking.currentSession && updatedTracking.currentSession.isActive) {
                   updatedTracking.currentSession.isActive = false;
                   updatedTracking.currentSession.endTime = new Date();
+                  
+                  // Freeze final hours
+                  const finalHours = updatedTracking.currentHoursToday;
+                  updatedTracking.totalHoursOnline = finalHours;
+                  updatedTracking.currentSession.totalHoursOnline = finalHours;
+                  
+                  console.log(`📴 [Unregistration] Session ended, final hours: ${finalHours.toFixed(2)}`);
                 }
+                
                 await updatedTracking.save();
-                console.log(`📴 All slots offline - device marked as offline, session ended`);
+                console.log(`📴 All slots offline - device marked as offline`);
               }
               
               console.log(`✅ DeviceTracking updated - deviceId set to null for slot ${slotNumber}`);

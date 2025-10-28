@@ -52,6 +52,12 @@ const FAQManagement: React.FC = () => {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortBy, setSortBy] = useState('Newest First');
 
+  // Processing states for double-click prevention
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
   const categoryFilterOptions = ['all', 'ADVERTISERS', 'DRIVERS', 'EVERYONE'];
   const statusFilterOptions = ['all', 'active', 'inactive'];
   const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
@@ -136,6 +142,14 @@ const FAQManagement: React.FC = () => {
 
   const handleCreateFAQ = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple clicks
+    if (isCreating) {
+      return;
+    }
+    
+    setIsCreating(true);
+    
     try {
       const categoryFAQs = faqs.filter((faq: FAQ) => faq.category === createFormData.category);
       const maxOrder = categoryFAQs.length > 0 ? Math.max(...categoryFAQs.map((faq: FAQ) => faq.order)) : 0;
@@ -160,12 +174,21 @@ const FAQManagement: React.FC = () => {
       refetch();
     } catch (error) {
       console.error('Error creating FAQ:', error);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleEditFAQ = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFAQ) return;
+    
+    // Prevent multiple clicks
+    if (isUpdating) {
+      return;
+    }
+    
+    setIsUpdating(true);
     
     try {
       const { order, ...updateInput } = editFormData;
@@ -180,11 +203,20 @@ const FAQManagement: React.FC = () => {
       refetch();
     } catch (error) {
       console.error('Error updating FAQ:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleDeleteFAQ = async (id: string) => {
+    // Prevent multiple clicks
+    if (isDeleting) {
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this FAQ?')) {
+      setIsDeleting(true);
+      
       try {
         await deleteFAQ({
           variables: { id }
@@ -192,11 +224,20 @@ const FAQManagement: React.FC = () => {
         refetch();
       } catch (error) {
         console.error('Error deleting FAQ:', error);
+      } finally {
+        setIsDeleting(false);
       }
     }
   };
 
   const handleToggleStatus = async (faq: FAQ) => {
+    // Prevent multiple clicks on the same FAQ
+    if (togglingId === faq.id) {
+      return;
+    }
+    
+    setTogglingId(faq.id);
+    
     try {
       await updateFAQ({
         variables: {
@@ -209,6 +250,8 @@ const FAQManagement: React.FC = () => {
       refetch();
     } catch (error) {
       console.error('Error toggling FAQ status:', error);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -639,21 +682,28 @@ const FAQManagement: React.FC = () => {
                             {/* Toggle Status Button */}
                             <button
                               onClick={() => handleToggleStatus(faq)}
+                              disabled={togglingId === faq.id}
                               className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
-                                faq.isActive
+                                togglingId === faq.id
+                                  ? "bg-gray-300 cursor-not-allowed"
+                                  : faq.isActive
                                   ? "bg-green-200 text-green-700 hover:bg-green-200"
                                   : "bg-gray-200 text-gray-600 hover:bg-gray-200"
                               }`}
-                              title={faq.isActive ? "Click to deactivate" : "Click to activate"}
+                              title={togglingId === faq.id ? "Processing..." : faq.isActive ? "Click to deactivate" : "Click to activate"}
                             >
-                              {faq.isActive ? (
+                              {togglingId === faq.id ? (
+                                <div className="w-4 h-4 animate-spin border-2 border-gray-600 border-t-transparent rounded-full mx-auto" />
+                              ) : faq.isActive ? (
                                 <Eye className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                               ) : (
                                 <EyeOff className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                               )}
-                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
-                                {faq.isActive ? "Active" : "Inactive"}
-                              </span>
+                              {togglingId !== faq.id && (
+                                <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
+                                  {faq.isActive ? "Active" : "Inactive"}
+                                </span>
+                              )}
                             </button>
 
                             {/* Edit Button */}
@@ -671,13 +721,24 @@ const FAQManagement: React.FC = () => {
                             {/* Delete Button */}
                             <button
                               onClick={() => handleDeleteFAQ(faq.id)}
-                              className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
-                              title="Delete FAQ"
+                              disabled={isDeleting}
+                              className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                                isDeleting
+                                  ? 'text-gray-400 cursor-not-allowed'
+                                  : 'text-red-700'
+                              }`}
+                              title={isDeleting ? "Processing..." : "Delete FAQ"}
                             >
-                              <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
-                                Delete
-                              </span>
+                              {isDeleting ? (
+                                <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full mx-auto" />
+                              ) : (
+                                <>
+                                  <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                                  <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
+                                    Delete
+                                  </span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </div>
@@ -800,15 +861,24 @@ const FAQManagement: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                    disabled={isCreating}
+                    className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                    disabled={isCreating}
+                    className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${
+                      isCreating
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-[#3674B5] hover:bg-[#578FCA]'
+                    }`}
                     >
-                    Create FAQ
+                    {isCreating && (
+                      <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                    )}
+                    {isCreating ? 'Creating...' : 'Create FAQ'}
                   </button>
                 </div>
               </form>
@@ -898,15 +968,24 @@ const FAQManagement: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setIsEditModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                    disabled={isUpdating}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA]"
+                    disabled={isUpdating}
+                    className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${
+                      isUpdating
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-[#3674B5] hover:bg-[#578FCA]'
+                    }`}
                   >
-                    Update FAQ
+                    {isUpdating && (
+                      <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                    )}
+                    {isUpdating ? 'Updating...' : 'Update FAQ'}
                   </button>
                 </div>
               </form>

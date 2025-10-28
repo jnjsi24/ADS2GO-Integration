@@ -104,6 +104,9 @@ class HoursUpdateService {
         // Store previous hours to check if we crossed 8-hour threshold
         const previousHours = device.currentSession.totalHoursOnline || 0;
         
+        // ✅ FIX: Use centralized validation and update logic
+        const { validateHours, syncHoursFromSession } = require('../models/deviceTrackingHelpers');
+        
         // Update session hours
         device.currentSession.totalHoursOnline += hoursSinceLastUpdate;
         device.currentSession.lastOnlineUpdate = now;
@@ -113,6 +116,9 @@ class HoursUpdateService {
         const hasReached8Hours = device.currentSession.totalHoursOnline >= targetHours;
         const justReached8Hours = previousHours < targetHours && device.currentSession.totalHoursOnline >= targetHours;
         
+        // ✅ FIX: Use centralized validation
+        device.currentSession.totalHoursOnline = validateHours(device.currentSession.totalHoursOnline);
+        
         // Cap at 8 hours max per day
         device.currentSession.totalHoursOnline = Math.min(targetHours, device.currentSession.totalHoursOnline);
         
@@ -121,14 +127,8 @@ class HoursUpdateService {
           device.currentSession.totalHoursOnline >= targetHours ? 
           'COMPLIANT' : 'NON_COMPLIANT';
         
-        // Update total daily hours (not lifetime)
-        device.totalHoursOnline = device.currentSession.totalHoursOnline;
-        
-        // Update average daily hours
-        device.averageDailyHours = device.totalHoursOnline;
-        
-        // Update compliance rate
-        device.complianceRate = device.currentSession.complianceStatus === 'COMPLIANT' ? 100 : 0;
+        // ✅ FIX: Use centralized sync method
+        syncHoursFromSession(device);
         
         // ✅ AUTO-END SESSION AT 8 HOURS + STOP AD PLAYER
         if (justReached8Hours && hasReached8Hours) {

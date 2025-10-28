@@ -403,7 +403,7 @@ const RegisterForm = () => {
               text: 'Continue to Email Verification',
               onPress: () => {
                 router.push({
-                  pathname: '/(auth)/emailVerification',
+                  pathname: '/auth/emailVerification',
                   params: {
                     email: email.trim(),
                     driverId: result.data.createDriver.driver?.driverId,

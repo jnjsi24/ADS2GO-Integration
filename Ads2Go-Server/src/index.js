@@ -301,6 +301,9 @@ app.use('/api/device-offline', deviceOfflineNotificationRoutes);
 app.use('/api/diagnostic', diagnosticDeviceHoursRoutes);
 app.use('/api/cleanup-notifications', require('./routes/cleanupNotifications'));
 app.use('/api/admin', require('./routes/createIndexes'));
+app.use('/api/verifyMetrics', require('./routes/verifyMetrics'));
+app.use('/api/analyzeGPS', require('./routes/analyzeGPS'));
+app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for offline devices showing hours
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

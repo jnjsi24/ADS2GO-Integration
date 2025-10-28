@@ -53,11 +53,18 @@ const FitBounds: React.FC<{ route: RoutePoint[] }> = ({ route }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (route.length > 0) {
-      const bounds = L.latLngBounds(
-        route.map(point => [point.lat, point.lng])
-      );
-      map.fitBounds(bounds, { padding: [20, 20] });
+    if (route.length > 0 && map) {
+      try {
+        // Wait for map to be ready before fitting bounds
+        map.whenReady(() => {
+          const bounds = L.latLngBounds(
+            route.map(point => [point.lat, point.lng])
+          );
+          map.fitBounds(bounds, { padding: [20, 20], animate: false });
+        });
+      } catch (error) {
+        console.warn('Error fitting bounds:', error);
+      }
     }
   }, [map, route]);
 
@@ -75,10 +82,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [mapKey, setMapKey] = useState(0);
 
   // Set client-side rendering
   useEffect(() => {
     setIsClient(true);
+    setMapKey(prev => prev + 1);
   }, []);
 
   // Fetch route data
@@ -186,10 +195,12 @@ const RouteMap: React.FC<RouteMapProps> = ({
   return (
     <div style={style} className={className}>
       <MapContainer
+        key={mapKey}
         center={[centerLat, centerLng]}
         zoom={13}
         style={{ height: '100%', width: '100%' }}
         className="rounded-lg"
+        scrollWheelZoom={true}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

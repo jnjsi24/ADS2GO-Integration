@@ -22,6 +22,12 @@ export const GET_ALL_DRIVER_REPORTS = gql`
         status
         attachments
         adminNotes
+        adminNotesUpdatedAt
+        adminNotesBy {
+          adminId
+          adminName
+          adminEmail
+        }
         createdAt
         updatedAt
         resolvedAt
@@ -50,6 +56,12 @@ export const GET_DRIVER_REPORT_BY_ID = gql`
       status
       attachments
       adminNotes
+      adminNotesUpdatedAt
+      adminNotesBy {
+        adminId
+        adminName
+        adminEmail
+      }
       createdAt
       updatedAt
       resolvedAt

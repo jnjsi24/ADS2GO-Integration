@@ -2,6 +2,7 @@ const DriverReport = require('../models/DriverReport');
 const Driver = require('../models/Driver');
 const { checkDriverAuth } = require('../middleware/driverAuth');
 const { checkAdmin } = require('../middleware/auth');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const resolvers = {
   DriverReport: {
@@ -143,7 +144,17 @@ const resolvers = {
         // Send notification to admins about new report
         try {
           console.log(`📧 New driver report created: ${savedReport._id} by driver ${driver.driverId}`);
-          // TODO: Send email notification to admins
+          
+          // Find the driver details for notification
+          const driverDetails = await Driver.findOne({ driverId: driver.driverId });
+          if (driverDetails) {
+            await NotificationService.sendNewDriverReportNotification(
+              driverDetails._id,
+              savedReport._id.toString(),
+              savedReport.reportType,
+              savedReport.title
+            );
+          }
         } catch (notifError) {
           console.error('Error sending notification:', notifError);
           // Don't fail the report creation if notification fails
@@ -261,8 +272,8 @@ const resolvers = {
       }
     },
 
-    updateDriverReportAdmin: async (_, { id, input }, { user }) => {
-      checkAdmin(user);
+    updateDriverReportAdmin: async (_, { id, input }, { user, admin, superAdmin }) => {
+      checkAdmin(user || admin || superAdmin);
       
       try {
         const report = await DriverReport.findById(id);
@@ -270,6 +281,9 @@ const resolvers = {
         if (!report) {
           throw new Error('Report not found');
         }
+        
+        // Get current admin info
+        const currentAdmin = user || admin || superAdmin;
         
         // Update status if provided
         if (input.status) {
@@ -283,7 +297,36 @@ const resolvers = {
         
         // Update admin notes if provided
         if (input.adminNotes !== undefined) {
+          const isNewNote = !report.adminNotes || report.adminNotes !== input.adminNotes;
           report.adminNotes = input.adminNotes;
+          // Track when and who updated the admin notes
+          report.adminNotesUpdatedAt = new Date();
+          report.adminNotesBy = {
+            adminId: currentAdmin.id || currentAdmin._id,
+            adminName: `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim(),
+            adminEmail: currentAdmin.email
+          };
+          
+          // Send notification to other admins when notes are added/updated
+          if (isNewNote && input.adminNotes && input.adminNotes.trim()) {
+            try {
+              const driverDetails = await Driver.findOne({ driverId: report.driverId });
+              const reporterName = driverDetails 
+                ? `${driverDetails.firstName} ${driverDetails.lastName}` 
+                : 'Unknown Driver';
+              
+              await NotificationService.sendAdminRespondedToReportNotification(
+                currentAdmin._id || currentAdmin.id,
+                report._id.toString(),
+                'Driver',
+                report.title,
+                reporterName
+              );
+            } catch (notifError) {
+              console.error('Error sending admin response notification:', notifError);
+              // Don't fail the update if notification fails
+            }
+          }
         }
         
         const updatedReport = await report.save();
@@ -321,6 +364,9 @@ const resolvers = {
     },
     resolvedAt: (parent) => {
       return parent.resolvedAt ? parent.resolvedAt.toISOString() : null;
+    },
+    adminNotesUpdatedAt: (parent) => {
+      return parent.adminNotesUpdatedAt ? parent.adminNotesUpdatedAt.toISOString() : null;
     }
   }
 };

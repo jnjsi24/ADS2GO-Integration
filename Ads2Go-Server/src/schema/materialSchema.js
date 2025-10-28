@@ -211,9 +211,9 @@ extend type Query {
   }
 
   type AdminInfo {
-    adminId: String!
-    adminName: String!
-    adminEmail: String!
+    adminId: String
+    adminName: String
+    adminEmail: String
   }
 
   type MaterialUsageHistory {

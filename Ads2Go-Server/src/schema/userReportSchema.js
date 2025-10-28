@@ -30,6 +30,8 @@ const typeDefs = gql`
     status: ReportStatus!
     attachments: [String!]
     adminNotes: String
+    adminNotesUpdatedAt: String
+    adminNotesBy: AdminInfo
     createdAt: String!
     updatedAt: String!
     resolvedAt: String

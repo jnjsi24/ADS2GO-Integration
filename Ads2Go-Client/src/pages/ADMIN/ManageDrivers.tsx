@@ -185,6 +185,11 @@ const ManageDrivers: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(9);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  
+  // Processing states for double-click prevention
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+  const [isProcessingRejection, setIsProcessingRejection] = useState(false);
+  const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -329,6 +334,14 @@ const ManageDrivers: React.FC = () => {
 
   const handleConfirmApproveWithMaterials = async () => {
     if (!selectedDriverDetails) return;
+    
+    // Prevent multiple clicks
+    if (isProcessingApproval) {
+      return;
+    }
+    
+    setIsProcessingApproval(true);
+    
     try {
       const override = selectedMaterials.length > 0 ? selectedMaterials : null;
       const result = await approveDriver({ variables: { driverId: selectedDriverDetails.driverId, materialTypeOverride: override } });
@@ -350,6 +363,8 @@ const ManageDrivers: React.FC = () => {
       addToast({
         type: 'error', title: 'Approval Failed', message: error.message || 'Failed to approve driver', duration: 6000
       });
+    } finally {
+      setIsProcessingApproval(false);
     }
   };
 
@@ -375,6 +390,14 @@ const ManageDrivers: React.FC = () => {
       });
       return;
     }
+    
+    // Prevent multiple clicks
+    if (isProcessingRejection) {
+      return;
+    }
+    
+    setIsProcessingRejection(true);
+    
     try {
       const result = await rejectDriver({ variables: { driverId: driverToReject, reason: rejectReason.trim() } });
       if (result.data?.rejectDriver?.success) {
@@ -412,6 +435,8 @@ const ManageDrivers: React.FC = () => {
         message: errorMessage,
         duration: 6000
       });
+    } finally {
+      setIsProcessingRejection(false);
     }
   };
 
@@ -421,38 +446,47 @@ const ManageDrivers: React.FC = () => {
   };
 
   const confirmDelete = async () => {
-    if (driverToDelete) {
-      try {
-        const result = await deleteDriver({ variables: { driverId: driverToDelete } });
-        if (result.data?.deleteDriver?.success) {
-          addToast({
-            type: 'success',
-            title: 'Success!',
-            message: 'Driver has been deleted successfully.',
-            duration: 4000
-          });
-          refetch();
-        } else {
-          addToast({
-            type: 'error',
-            title: 'Deletion Failed',
-            message: result.data?.deleteDriver?.message || 'Failed to delete driver',
-            duration: 6000
-          });
-        }
-        setShowDeleteModal(false);
-        setDriverToDelete(null);
-      } catch (error: any) {
-        console.error('Error deleting driver:', error);
+    if (!driverToDelete) return;
+    
+    // Prevent multiple clicks
+    if (isProcessingDeletion) {
+      return;
+    }
+    
+    setIsProcessingDeletion(true);
+    
+    try {
+      const result = await deleteDriver({ variables: { driverId: driverToDelete } });
+      if (result.data?.deleteDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been deleted successfully.',
+          duration: 4000
+        });
+        refetch();
+      } else {
         addToast({
           type: 'error',
           title: 'Deletion Failed',
-          message: error.message || 'Failed to delete driver',
+          message: result.data?.deleteDriver?.message || 'Failed to delete driver',
           duration: 6000
         });
-        setShowDeleteModal(false);
-        setDriverToDelete(null);
       }
+      setShowDeleteModal(false);
+      setDriverToDelete(null);
+    } catch (error: any) {
+      console.error('Error deleting driver:', error);
+      addToast({
+        type: 'error',
+        title: 'Deletion Failed',
+        message: error.message || 'Failed to delete driver',
+        duration: 6000
+      });
+      setShowDeleteModal(false);
+      setDriverToDelete(null);
+    } finally {
+      setIsProcessingDeletion(false);
     }
   };
 
@@ -471,9 +505,6 @@ const ManageDrivers: React.FC = () => {
       refetchDriverMaterials && refetchDriverMaterials();
       refetchDriverUsage && refetchDriverUsage();
     }, 0);
-    if (driver.accountStatus === 'REJECTED') {
-      setShowRejectionNotification(true);
-    }
   };
 
   const handleCloseModal = () => {
@@ -926,14 +957,23 @@ const ManageDrivers: React.FC = () => {
               <button
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
                 onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
+                disabled={isProcessingApproval}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  isProcessingApproval
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
                 onClick={handleConfirmApproveWithMaterials}
+                disabled={isProcessingApproval}
               >
-                Confirm Approve
+                {isProcessingApproval && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isProcessingApproval ? 'Processing...' : 'Confirm Approve'}
               </button>
             </div>
           </div>
@@ -1372,6 +1412,7 @@ const ManageDrivers: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isProcessingDeletion}
       />
 
       {/* Reject Modal */}
@@ -1396,14 +1437,23 @@ const ManageDrivers: React.FC = () => {
               <button
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
                 onClick={() => setShowRejectModal(false)}
+                disabled={isProcessingRejection}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  isProcessingRejection
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
                 onClick={submitReject}
+                disabled={isProcessingRejection}
               >
-                Reject
+                {isProcessingRejection && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isProcessingRejection ? 'Processing...' : 'Reject'}
               </button>
             </div>
           </div>

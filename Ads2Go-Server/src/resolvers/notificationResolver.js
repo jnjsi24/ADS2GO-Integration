@@ -25,10 +25,18 @@ const notificationResolvers = {
         }
         
         // Return notifications array sorted by creation date (newest first)
-        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        // Convert Date objects to ISO strings for GraphQL
+        const notifications = userNotifications.notifications
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .map(notification => ({
+            ...notification.toObject(),
+            createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+            updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString(),
+            readAt: notification.readAt ? notification.readAt.toISOString() : null
+          }));
         
         logger.notification('🔔 Backend: Found notifications:', notifications.length);
-        logger.notification('🔔 Backend: Notifications data:', notifications);
+        logger.notification('🔔 Backend: Notifications data (first notification):', notifications[0]);
         return notifications;
       } catch (error) {
         console.error('Error fetching user notifications:', error);
@@ -353,7 +361,15 @@ const notificationResolvers = {
         }
         
         // Return notifications array sorted by creation date (newest first)
-        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        // Convert Date objects to ISO strings for GraphQL
+        const notifications = userNotifications.notifications
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .map(notification => ({
+            ...notification.toObject(),
+            createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+            updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString(),
+            readAt: notification.readAt ? notification.readAt.toISOString() : null
+          }));
         
         logger.notification('🔔 Backend: Found super admin notifications:', notifications.length);
         return {
@@ -533,7 +549,15 @@ const notificationResolvers = {
         }
         
         // Return notifications array sorted by creation date (newest first)
-        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        // Convert Date objects to ISO strings for GraphQL
+        const notifications = userNotifications.notifications
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .map(notification => ({
+            ...notification.toObject(),
+            createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+            updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString(),
+            readAt: notification.readAt ? notification.readAt.toISOString() : null
+          }));
         
         console.log('🔔 Found notifications for driver:', notifications.length);
         return {

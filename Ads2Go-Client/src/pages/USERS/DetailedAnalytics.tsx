@@ -11,12 +11,13 @@ import {
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { useMyAdsStatic } from '../../hooks/useMyAds';
 
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
+  const [searchParams] = useSearchParams();
   const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('7d');
   const [userFirstName, setUserFirstName] = useState('User');
   
@@ -209,6 +210,18 @@ const DetailedAnalytics: React.FC = () => {
   useEffect(() => {
     setAvailableAds(extractedAds);
   }, [extractedAds]);
+
+  // Handle URL query parameter for pre-selecting an ad
+  useEffect(() => {
+    const adIdFromUrl = searchParams.get('adId');
+    if (adIdFromUrl && availableAds.length > 0) {
+      const matchingAd = availableAds.find(ad => ad.id === adIdFromUrl);
+      if (matchingAd) {
+        setSelectedAd(adIdFromUrl);
+        setSelectedAdLabel(matchingAd.title);
+      }
+    }
+  }, [searchParams, availableAds]);
 
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
   const fetchDirectAnalytics = useCallback(async () => {

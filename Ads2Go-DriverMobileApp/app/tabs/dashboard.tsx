@@ -254,11 +254,6 @@ const Dashboard: React.FC = () => {
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
     try {
-      // Set refreshing state for silent updates
-      if (silent) {
-        setRefreshing(true);
-      }
-
       // Check cache first (5 minutes for today, 15 minutes for past dates)
       const dateKey = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const cacheKey = `${driverId}-${dateKey}`;
@@ -494,10 +489,6 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       // Analytics fetch failed - device may not be registered
       setAnalytics(null);
-    } finally {
-      if (silent) {
-        setRefreshing(false);
-      }
     }
   };
 

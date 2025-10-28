@@ -13,23 +13,19 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../types/navigation';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import API_CONFIG from "../../config/api";
 import { Ionicons } from '@expo/vector-icons';
-
-// Define your navigation stack params
-type EmailVerificationRouteProp = RouteProp<RootStackParamList, '(auth)/emailVerification'>;
-
-type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
 
 const { width } = Dimensions.get('window');
 
 const EmailVerification = () => {
-  const navigation = useNavigation<NavigationProps>();
-  const route = useRoute<EmailVerificationRouteProp>();
-  const { email, driverId, token, firstName } = route.params;
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const email = Array.isArray(params.email) ? params.email[0] : params.email || '';
+  const driverId = Array.isArray(params.driverId) ? params.driverId[0] : params.driverId || '';
+  const token = Array.isArray(params.token) ? params.token[0] : params.token || '';
+  const firstName = Array.isArray(params.firstName) ? params.firstName[0] : params.firstName || '';
 
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
@@ -138,7 +134,7 @@ const EmailVerification = () => {
         console.log('Navigating with verification code:', verificationCodeString);
         
         // Create params object with correct typing
-        const params = {
+        const navParams = {
           email,
           verificationCode: verificationCodeString,
           driverId,
@@ -146,8 +142,11 @@ const EmailVerification = () => {
           firstName: firstName || ''
         };
         
-        console.log('Navigation params:', params);
-        navigation.navigate('(auth)/verificationProgress', params);
+        console.log('Navigation params:', navParams);
+        router.push({
+          pathname: '/auth/verificationProgress',
+          params: navParams as Record<string, string>
+        });
       } else {
         const errorMessage = result.data?.verifyDriverEmail?.message || 
                            result.errors?.[0]?.message || 
@@ -178,8 +177,8 @@ const EmailVerification = () => {
         },
         body: JSON.stringify({
           query: `
-            mutation ResendVerificationEmail($email: String!) {
-              resendVerificationEmail(email: $email) {
+            mutation ResendDriverVerificationCode($email: String!) {
+              resendDriverVerificationCode(email: $email) {
                 success
                 message
               }
@@ -193,7 +192,7 @@ const EmailVerification = () => {
 
       const result = await response.json();
 
-      if (result.data?.resendVerificationEmail.success) {
+      if (result.data?.resendDriverVerificationCode.success) {
         Alert.alert('Code Sent', 'A new verification code has been sent to your email.');
         
         // Reset timer
@@ -204,7 +203,7 @@ const EmailVerification = () => {
         setVerificationCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       } else {
-        const errorMessage = result.data?.resendVerificationEmail.message || 
+        const errorMessage = result.data?.resendDriverVerificationCode.message || 
                            result.errors?.[0]?.message || 
                            'Failed to resend code. Please try again.';
         Alert.alert('Error', errorMessage);
@@ -302,7 +301,7 @@ const EmailVerification = () => {
       </View>
       <TouchableOpacity
         style={styles.changeEmailButton}
-        onPress={() => navigation.goBack()}
+        onPress={() => router.back()}
       >
         <Text style={styles.changeEmailText}>Change Email Address</Text>
       </TouchableOpacity>

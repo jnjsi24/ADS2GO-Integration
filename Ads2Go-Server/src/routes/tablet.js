@@ -196,26 +196,27 @@ router.post('/registerTablet', async (req, res) => {
     if (slotNumber === 2) {
       const slot1 = tablet.tablets.find(t => t.tabletNumber === 1);
       
-      // Check if Slot 1 exists and has a registered device
-      if (!slot1 || !slot1.deviceId || slot1.status === 'OFFLINE') {
-        console.log(`🚫 [Registration Blocked] Cannot register Slot 2 - Slot 1 must be registered first`);
-        console.log(`   Slot 1 status: ${slot1 ? (slot1.deviceId ? slot1.status : 'Not registered') : 'Not configured'}`);
+      // ✅ FIX: Only check if Slot 1 has a deviceId (not if it's offline)
+      // Slot 2 can register even if Slot 1 is temporarily offline
+      if (!slot1 || !slot1.deviceId) {
+        console.log(`🚫 [Registration Blocked] Cannot register Slot 2 - Slot 1 must have a registered device first`);
+        console.log(`   Slot 1 status: ${slot1 ? 'Not registered' : 'Not configured'}`);
         
         return res.status(400).json({
           success: false,
           blocked: true,
-          message: 'Cannot register Slot 2 before Slot 1',
+          message: 'Cannot register Slot 2 before Slot 1 has a registered device',
           reason: 'MASTER_SLAVE_ORDER',
           details: {
             slotNumber: 2,
             requiredSlot: 1,
-            slot1Status: slot1 ? (slot1.deviceId ? slot1.status : 'NOT_REGISTERED') : 'NOT_CONFIGURED',
-            explanation: 'Slot 1 (Master) must be registered and online before Slot 2 (Slave) can be registered'
+            slot1Status: slot1 ? 'NOT_REGISTERED' : 'NOT_CONFIGURED',
+            explanation: 'Slot 1 must have a registered device (deviceId) before Slot 2 can register'
           }
         });
       }
       
-      console.log(`✅ [Registration] Slot 1 is registered (${slot1.deviceId}) - allowing Slot 2 registration`);
+      console.log(`✅ [Registration] Slot 1 has deviceId (${slot1.deviceId}) - allowing Slot 2 registration`);
     }
 
     // Update the tablet slot

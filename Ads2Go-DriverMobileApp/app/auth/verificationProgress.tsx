@@ -1,30 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import API_CONFIG from '../../config/api';
-import { RootStackParamList } from '../../types/navigation';
-
-type VerificationProgressRouteProp = RouteProp<RootStackParamList, '(auth)/verificationProgress'>;
-type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
 
 const VerificationProgress = () => {
-  const route = useRoute<VerificationProgressRouteProp>();
-  const navigation = useNavigation<NavigationProps>();
+  const router = useRouter();
+  const params = useLocalSearchParams();
   const { signOut } = useAuth();
   
   // Get params from route
-  console.log('Route params:', route.params);
-  const { 
-    email = '', 
-    verificationCode = '',
-    firstName = '',
-    driverId = '',
-    token = ''
-  } = route.params || {};
+  console.log('Route params:', params);
+  const email = Array.isArray(params.email) ? params.email[0] : params.email || '';
+  const verificationCode = Array.isArray(params.verificationCode) ? params.verificationCode[0] : params.verificationCode || '';
+  const firstName = Array.isArray(params.firstName) ? params.firstName[0] : params.firstName || '';
+  const driverId = Array.isArray(params.driverId) ? params.driverId[0] : params.driverId || '';
+  const token = Array.isArray(params.token) ? params.token[0] : params.token || '';
   
   // Log the extracted values
   console.log('Extracted values:', { email, verificationCode, firstName, driverId, token });
@@ -117,14 +110,11 @@ const VerificationProgress = () => {
       // If account is approved/active and email is verified, navigate to login
       if ((statusData.status === 'approved' || statusData.status === 'active') && statusData.isEmailVerified) {
         // Navigate to login screen with success message
-        navigation.reset({
-          index: 0,
-          routes: [{
-            name: '(auth)/login' as never,
-            params: {
-              message: 'Your account has been verified! Please log in to continue.'
-            }
-          }],
+        router.replace({
+          pathname: '/auth/login',
+          params: {
+            message: 'Your account has been verified! Please log in to continue.'
+          }
         });
       } else if (statusData.status === 'not_found') {
         setError('Account not found. Please check your information and try again.');

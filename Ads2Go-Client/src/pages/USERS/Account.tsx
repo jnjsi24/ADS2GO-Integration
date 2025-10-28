@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, FileUp } from "lucide-react";
+import { Pencil, FileUp, Trash2 } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
 import { uploadUserProfilePicture } from "../../utils/fileUpload";
@@ -27,6 +27,16 @@ const UPDATE_USER = gql`
   }
 `;
 
+// GraphQL Mutation (delete own account)
+const DELETE_OWN_ACCOUNT = gql`
+  mutation DeleteOwnAccount {
+    deleteOwnAccount {
+      success
+      message
+    }
+  }
+`;
+
 interface FormData {
   firstName: string;
   middleName?: string;
@@ -42,8 +52,9 @@ interface FormData {
 const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
-  const { user, setUser} = useUserAuth();
+  const { user, setUser, logout } = useUserAuth();
   const [pos, setPos] = useState({ x: 50, y: 50 }); // for hover shine
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -58,6 +69,7 @@ const Account: React.FC = () => {
   });
 
   const [updateUser] = useMutation(UPDATE_USER);
+  const [deleteOwnAccount] = useMutation(DELETE_OWN_ACCOUNT);
 
   useEffect(() => {
     if (user) {
@@ -163,6 +175,36 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     setIsEditing((prev) => !prev);
   };
 
+  const handleDeleteAccount = () => {
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    try {
+      const { data } = await deleteOwnAccount();
+
+      if (data.deleteOwnAccount.success) {
+        alert(data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.");
+        
+        // Log out the user
+        logout();
+        
+        // Redirect to login page
+        navigate("/login");
+      } else {
+        alert("Failed to delete account: " + data.deleteOwnAccount.message);
+      }
+    } catch (error: any) {
+      alert("Error deleting account: " + (error.message || "Unknown error"));
+    } finally {
+      setShowDeleteModal(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+  };
+
 
   return (
     <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 flex items-center justify-center">
@@ -214,31 +256,44 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
           <p className="text-sm text-black/70 mb-6">{formData.email}</p>
 
           {!isEditing ? (
-            // Edit Button
-            <button
-              onClick={() => setIsEditing(true)}
-              onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / rect.width) * 100;
-                const y = ((e.clientY - rect.top) / rect.height) * 100;
-                setPos({ x, y });
-              }}
-              className="relative group inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-black/70 transition-all duration-300 hover:scale-105 rounded-md"
-              style={{
-                backgroundImage: `linear-gradient(to right, #FFB877 0%, #FF9B45 100%), radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Pencil size={16} />
-                Edit
-              </span>
-              <span
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+            // Edit Button & Delete Account Button
+            <div className="flex flex-col gap-3 w-full px-4">
+              <button
+                onClick={() => setIsEditing(true)}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setPos({ x, y });
                 }}
-              />
-            </button>
+                className="relative group inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-black/70 transition-all duration-300 hover:scale-105 rounded-md"
+                style={{
+                  backgroundImage: `linear-gradient(to right, #FFB877 0%, #FF9B45 100%), radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Pencil size={16} />
+                  Edit
+                </span>
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                  style={{
+                    background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                  }}
+                />
+              </button>
+
+              {/* Delete Account Button */}
+              <button
+                onClick={handleDeleteAccount}
+                className="relative group inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-white transition-all duration-300 hover:scale-105 rounded-md bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Trash2 size={16} />
+                  Delete Account
+                </span>
+              </button>
+            </div>
           ) : (
             // Save & Cancel Buttons
             <div className="flex gap-4">
@@ -388,6 +443,41 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         </div>
       </div>
     </div>
+
+    {/* Delete Account Confirmation Modal */}
+    {showDeleteModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="bg-white rounded-lg shadow-2xl p-6 sm:p-8 max-w-md w-full mx-4 relative">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
+              Delete Account
+            </h3>
+            <p className="text-sm sm:text-base text-gray-600 mb-6">
+              Are you sure you want to delete your account? Your account will be scheduled for permanent deletion in <span className="font-bold text-red-600">30 days</span>.
+              <br /><br />
+              During this period, you won't be able to access your account. After 30 days, all your data will be permanently deleted.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={cancelDelete}
+                className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteAccount}
+                className="px-6 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Yes, Delete My Account
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

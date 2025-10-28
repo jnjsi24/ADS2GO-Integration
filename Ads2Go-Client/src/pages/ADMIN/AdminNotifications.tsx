@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLoader } from "../../components/ProtectedRoute";
-import DeviceNotificationList from './tabs/dashboard/DeviceNotificationList';
 import { 
   GET_ADMIN_GENERAL_NOTIFICATIONS, 
   MARK_NOTIFICATION_READ, 
@@ -51,6 +50,12 @@ const AdminNotifications: React.FC = () => {
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
 
+  // Processing states for double-click prevention
+  const [markingAsReadId, setMarkingAsReadId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMarkingAllAsRead, setIsMarkingAllAsRead] = useState(false);
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+
   // Fetch general admin notifications (excluding device-specific notifications)
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
@@ -78,15 +83,31 @@ const AdminNotifications: React.FC = () => {
   const [deleteAllNotifications] = useMutation(DELETE_ALL_ADMIN_NOTIFICATIONS);
 
   const handleMarkAsRead = async (notificationId: string) => {
+    // Prevent multiple clicks on the same notification
+    if (markingAsReadId === notificationId) {
+      return;
+    }
+    
+    setMarkingAsReadId(notificationId);
+    
     try {
       await markAsRead({ variables: { notificationId } });
       await refetchNotifications();
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    } finally {
+      setMarkingAsReadId(null);
     }
   };
 
   const handleDeleteNotification = async (notificationId: string) => {
+    // Prevent multiple clicks
+    if (isDeleting) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
     try {
       await deleteNotification({ variables: { notificationId } });
       await refetchNotifications();
@@ -94,20 +115,38 @@ const AdminNotifications: React.FC = () => {
       setNotificationToDelete(null);
     } catch (error) {
       console.error('Error deleting notification:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleMarkAllAsRead = async () => {
+    // Prevent multiple clicks
+    if (isMarkingAllAsRead) {
+      return;
+    }
+    
+    setIsMarkingAllAsRead(true);
+    
     try {
       await markAllAsRead();
       await refetchNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+    } finally {
+      setIsMarkingAllAsRead(false);
     }
   };
 
   const handleDeleteAll = async () => {
+    // Prevent multiple clicks
+    if (isDeletingSelected) {
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete all notifications?')) {
+      setIsDeletingSelected(true);
+      
       try {
         await deleteAllNotifications();
         await refetchNotifications();
@@ -115,6 +154,8 @@ const AdminNotifications: React.FC = () => {
         setIsSelectMode(false);
       } catch (error) {
         console.error('Error deleting all notifications:', error);
+      } finally {
+        setIsDeletingSelected(false);
       }
     }
   };
@@ -211,16 +252,33 @@ const AdminNotifications: React.FC = () => {
   const handleDeleteSelected = async () => {
     if (selectedNotifications.size === 0) return;
     
-    if (selectedNotifications.size === filteredNotifications.length) {
-      await handleDeleteAll();
-    } else {
-       for (const notificationId of Array.from(selectedNotifications)) {
-         await handleDeleteNotification(notificationId);
-       }
+    // Prevent multiple clicks
+    if (isDeletingSelected) {
+      return;
     }
     
-    setSelectedNotifications(new Set());
-    setIsSelectMode(false);
+    setIsDeletingSelected(true);
+    
+    try {
+      if (selectedNotifications.size === filteredNotifications.length) {
+        // Use deleteAll mutation
+        await deleteAllNotifications();
+        await refetchNotifications();
+      } else {
+        // Delete selected notifications one by one
+        for (const notificationId of Array.from(selectedNotifications)) {
+          await deleteNotification({ variables: { notificationId } });
+        }
+        await refetchNotifications();
+      }
+      
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Error deleting selected notifications:', error);
+    } finally {
+      setIsDeletingSelected(false);
+    }
   };
 
   if (notificationsLoading) {
@@ -330,10 +388,19 @@ const AdminNotifications: React.FC = () => {
                     {selectedNotifications.size > 0 && (
                       <button
                         onClick={handleDeleteSelected}
-                        className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        disabled={isDeletingSelected}
+                        className={`flex items-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors ${
+                          isDeletingSelected
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-red-600 hover:bg-red-700'
+                        }`}
                       >
-                        <Trash2 className="w-4 h-4" />
-                        <span>Delete Selected ({selectedNotifications.size})</span>
+                        {isDeletingSelected ? (
+                          <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                        <span>{isDeletingSelected ? 'Deleting...' : `Delete Selected (${selectedNotifications.size})`}</span>
                       </button>
                     )}
                   </>
@@ -353,10 +420,19 @@ const AdminNotifications: React.FC = () => {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
-                className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                disabled={isMarkingAllAsRead}
+                className={`flex items-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors ${
+                  isMarkingAllAsRead
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
               >
-                <CheckCheck className="w-4 h-4" />
-                <span>Mark All Read</span>
+                {isMarkingAllAsRead ? (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <CheckCheck className="w-4 h-4" />
+                )}
+                <span>{isMarkingAllAsRead ? 'Processing...' : 'Mark All Read'}</span>
               </button>
             )}
           </div>
@@ -480,10 +556,19 @@ const AdminNotifications: React.FC = () => {
                       {!notification.read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
-                          className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-                          title="Mark as read"
+                          disabled={markingAsReadId === notification.id}
+                          className={`p-2 transition-colors ${
+                            markingAsReadId === notification.id
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-gray-400 hover:text-green-600'
+                          }`}
+                          title={markingAsReadId === notification.id ? "Processing..." : "Mark as read"}
                         >
-                          <Check className="w-4 h-4" />
+                          {markingAsReadId === notification.id ? (
+                            <div className="w-4 h-4 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                          ) : (
+                            <Check className="w-4 h-4" />
+                          )}
                         </button>
                       )}
                       <button
@@ -505,12 +590,6 @@ const AdminNotifications: React.FC = () => {
         )}
       </div>
 
-      {/* Device Notifications Section */}
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Device Notifications</h2>
-        <DeviceNotificationList maxNotifications={10} />
-      </div>
-
       {/* Delete Confirmation Modal */}
       {showDeleteModal && notificationToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -525,15 +604,24 @@ const AdminNotifications: React.FC = () => {
                   setShowDeleteModal(false);
                   setNotificationToDelete(null);
                 }}
-                className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDeleteNotification(notificationToDelete.id)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                disabled={isDeleting}
+                className={`px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 ${
+                  isDeleting
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                Delete
+                {isDeleting && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

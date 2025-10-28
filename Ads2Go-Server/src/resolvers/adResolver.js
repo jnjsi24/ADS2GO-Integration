@@ -16,7 +16,8 @@ const adResolvers = {
   Query: {
     getAllAds: async (_, __, { user }) => {
       checkAdmin(user);
-      return await Ad.find({})
+      // Filter out archived ads (30-day deferred deletion)
+      return await Ad.find({ isArchived: { $ne: true } })
         .populate('userId')
         .populate('driverId')
         .populate('materialId')
@@ -25,14 +26,16 @@ const adResolvers = {
 
     getAdsByUser: async (_, { userId }, { user }) => {
       checkAdmin(user);
-      return await Ad.find({ userId })
+      // Filter out archived ads (30-day deferred deletion)
+      return await Ad.find({ userId, isArchived: { $ne: true } })
         .populate('materialId')
         .populate('planId');
     },
 
     getMyAds: async (_, __, { user }) => {
       checkAuth(user);
-      return await Ad.find({ userId: user.id })
+      // Filter out archived ads (30-day deferred deletion)
+      return await Ad.find({ userId: user.id, isArchived: { $ne: true } })
         .populate('materialId')
         .populate('planId');
     },
@@ -444,102 +447,37 @@ const adResolvers = {
           throw new Error('You can only delete your own pending advertisements');
         }
 
-        console.log(`🗑️ Starting cascade delete for ad: ${id} (${ad.title})`);
-
-        // 2. Remove ad from all deployments (LCD slots and non-LCD)
-        const deployments = await AdsDeployment.find({
-          $or: [
-            { adId: id },
-            { 'lcdSlots.adId': id }
-          ]
-        });
-
-        console.log(`📦 Found ${deployments.length} deployments to update`);
-
-        for (const deployment of deployments) {
-          let shouldDeleteDeployment = false;
-          
-          // Remove from LCD slots
-          if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
-            const originalLength = deployment.lcdSlots.length;
-            deployment.lcdSlots = deployment.lcdSlots.filter(slot => 
-              slot.adId.toString() !== id.toString()
-            );
-            
-            if (deployment.lcdSlots.length < originalLength) {
-              console.log(`  ✅ Removed ad from LCD slot in deployment ${deployment._id}`);
-              
-              // If no LCD slots remain and no adId, delete the entire deployment
-              if (deployment.lcdSlots.length === 0 && !deployment.adId) {
-                shouldDeleteDeployment = true;
-              } else {
-                await deployment.save();
-              }
-            }
-          }
-          
-          // Remove from non-LCD deployment
-          if (deployment.adId && deployment.adId.toString() === id.toString()) {
-            // If this is the only ad in the deployment, delete the entire deployment
-            if (deployment.lcdSlots.length === 0) {
-              shouldDeleteDeployment = true;
-            } else {
-              // If there are LCD slots, just remove the adId
-              deployment.adId = null;
-              console.log(`  ✅ Removed ad from non-LCD deployment ${deployment._id}`);
-              await deployment.save();
-            }
-          }
-          
-          // Delete deployment if it should be removed
-          if (shouldDeleteDeployment) {
-            console.log(`  🗑️ Deleting entire deployment ${deployment._id} (no remaining ads)`);
-            await AdsDeployment.findByIdAndDelete(deployment._id);
-          }
+        // Check if already archived
+        if (ad.isArchived) {
+          throw new Error('Ad is already archived');
         }
 
-        // 3. Delete analytics records
-        const analyticsResult = await Analytics.deleteMany({ adId: id });
-        console.log(`📊 Deleted ${analyticsResult.deletedCount} analytics records`);
+        console.log(`🗑️ Archiving ad: ${id} (${ad.title}) - 30-day deferred deletion`);
 
-        // 4. Update payment records (set adsId to null instead of deleting)
-        const paymentResult = await Payment.updateMany(
-          { adsId: id },
-          { $unset: { adsId: 1 } }
-        );
-        console.log(`💳 Updated ${paymentResult.modifiedCount} payment records`);
+        // ✅ ARCHIVE INSTEAD OF DELETE (30-day deferred deletion like Facebook)
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
 
-        // 5. Remove from material availability
-        try {
-          await MaterialAvailabilityService.removeAdFromMaterials(id);
-          console.log(`📋 Removed ad from material availability`);
-        } catch (availabilityError) {
-          console.warn(`⚠️ Warning: Could not remove from material availability:`, availabilityError.message);
-        }
+        ad.isArchived = true;
+        ad.archivedAt = now;
+        ad.scheduledDeletionDate = deletionDate;
+        ad.status = 'ARCHIVED'; // Change status so devices won't play it
+        
+        await ad.save();
 
-        // 6. Delete media file from Firebase Storage
-        if (ad.mediaFile) {
-          try {
-            const deleteSuccess = await deleteFromFirebase(ad.mediaFile);
-            if (deleteSuccess) {
-              console.log(`🗑️ Successfully deleted media file from Firebase Storage`);
-            } else {
-              console.warn(`⚠️ Warning: Could not delete media file from Firebase Storage`);
-            }
-          } catch (firebaseError) {
-            console.warn(`⚠️ Warning: Error deleting media file from Firebase Storage:`, firebaseError.message);
-          }
-        }
+        console.log(`✅ Ad ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        console.log(`📌 Deployment slots preserved - devices will show company ads instead`);
 
-        // 7. Delete the ad itself
-        await Ad.findByIdAndDelete(id);
-        console.log(`✅ Ad ${id} deleted successfully`);
+        // ✅ DON'T remove from deployments - slots stay intact!
+        // Devices will skip this ad because status = 'ARCHIVED'
+        // Company ad filler system will automatically fill the slot
 
         return true;
 
       } catch (error) {
-        console.error('❌ Error in cascade delete:', error);
-        throw new Error(`Failed to delete ad: ${error.message}`);
+        console.error('❌ Error archiving ad:', error);
+        throw new Error(`Failed to archive ad: ${error.message}`);
       }
     }
   },

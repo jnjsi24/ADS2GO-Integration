@@ -123,6 +123,10 @@ const typeDefs = gql`
     pushToken: String         # Push notification token for mobile app
     createdAt: String
     updatedAt: String
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type DriverWithMaterial {

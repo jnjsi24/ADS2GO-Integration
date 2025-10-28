@@ -9,6 +9,7 @@ interface ConfirmationModalProps {
   confirmText?: string;
   cancelText?: string;
   confirmButtonClass?: string;
+  isProcessing?: boolean;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -19,7 +20,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   message,
   confirmText = "OK",
   cancelText = "Cancel",
-  confirmButtonClass = "bg-red-600 hover:bg-red-700"
+  confirmButtonClass = "bg-red-600 hover:bg-red-700",
+  isProcessing = false
 }) => {
   if (!isOpen) return null;
 
@@ -36,15 +38,24 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <div className="flex justify-end space-x-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              disabled={isProcessing}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {cancelText}
             </button>
             <button
               onClick={onConfirm}
-              className={`px-4 py-2 text-white rounded-lg font-medium transition-colors ${confirmButtonClass}`}
+              disabled={isProcessing}
+              className={`px-4 py-2 text-white rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                isProcessing
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : confirmButtonClass
+              }`}
             >
-              {confirmText}
+              {isProcessing && (
+                <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+              )}
+              {isProcessing ? 'Processing...' : confirmText}
             </button>
           </div>
         </div>

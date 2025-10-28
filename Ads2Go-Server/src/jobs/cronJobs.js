@@ -5,6 +5,7 @@ const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
 const driverSalaryJob = require('./driverSalaryJob');
 const deviceHoursNotificationService = require('../services/deviceHoursNotificationService');
 const adSchedulingJob = require('./adSchedulingJob');
+const userDeletionJob = require('./userDeletionJob');
 const logger = require('../utils/logger');
 
 class CronJobs {
@@ -156,8 +157,23 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
+    // Daily compliance missed check - runs every day at 11:00 PM PH time to check for devices that didn't reach 8 hours
+    const dailyComplianceCheckTask = cron.schedule('0 23 * * *', async () => {
+      console.log('⚠️ Daily compliance missed check job triggered');
+      try {
+        await deviceHoursNotificationService.checkAllDevicesForMissedCompliance();
+        console.log('✅ Daily compliance missed check completed');
+      } catch (error) {
+        console.error('❌ Daily compliance missed check job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     this.jobs.set('onlineHours', onlineHoursTask);
     this.jobs.set('eightHourCheck', eightHourCheckTask);
+    this.jobs.set('dailyComplianceCheck', dailyComplianceCheckTask);
 
     // Daily driver compliance reminder - runs every day at 10:00 AM PH time
     const complianceReminderTask = cron.schedule('0 10 * * *', async () => {
@@ -207,6 +223,52 @@ class CronJobs {
     });
 
     this.jobs.set('complianceReminder', complianceReminderTask);
+
+    // Daily user deletion job - runs at 2:00 AM PH time to permanently delete archived users
+    const userDeletionTask = cron.schedule('0 2 * * *', async () => {
+      console.log('🗑️ User deletion job triggered at 2:00 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredUsers();
+        console.log(`✅ User deletion job completed: ${result.deletedCount} users permanently deleted`);
+      } catch (error) {
+        console.error('❌ User deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily ad deletion job - runs at 2:15 AM PH time to permanently delete archived ads
+    const adDeletionTask = cron.schedule('15 2 * * *', async () => {
+      console.log('🗑️ Ad deletion job triggered at 2:15 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredAds();
+        console.log(`✅ Ad deletion job completed: ${result.deletedCount} ads permanently deleted`);
+      } catch (error) {
+        console.error('❌ Ad deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily driver deletion job - runs at 2:30 AM PH time to permanently delete archived drivers
+    const driverDeletionTask = cron.schedule('30 2 * * *', async () => {
+      console.log('🗑️ Driver deletion job triggered at 2:30 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredDrivers();
+        console.log(`✅ Driver deletion job completed: ${result.deletedCount} drivers permanently deleted`);
+      } catch (error) {
+        console.error('❌ Driver deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    this.jobs.set('userDeletion', userDeletionTask);
+    this.jobs.set('adDeletion', adDeletionTask);
+    this.jobs.set('driverDeletion', driverDeletionTask);
 
     // Start all cron jobs
     this.jobs.forEach((job, name) => {
@@ -315,90 +377,111 @@ class CronJobs {
   async resetAllDeviceTracking() {
     try {
       const DeviceTracking = require('../models/deviceTracking');
+      const { getUTCMidnight, formatDateString } = require('../utils/dateUtils');
       
       console.log('🔄 Starting daily reset of all DeviceTracking records...');
       
-      // Get today's date in Philippines timezone
-      const now = new Date();
-      const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
-      const year = philippinesTime.getFullYear();
-      const month = String(philippinesTime.getMonth() + 1).padStart(2, '0');
-      const day = String(philippinesTime.getDate()).padStart(2, '0');
-      const todayStr = `${year}-${month}-${day}`;
+      // ✅ FIX: Use standardized UTC midnight Date format
+      const todayUTC = getUTCMidnight();
+      const todayStr = formatDateString(todayUTC);
       
-      console.log(`📅 Resetting to date: ${todayStr}`);
+      console.log(`📅 Resetting to date: ${todayStr} (UTC: ${todayUTC.toISOString()})`);
       
-      // Find all DeviceTracking records
-      const devices = await DeviceTracking.find({});
-      logger.database(`📱 Found ${devices.length} DeviceTracking records to reset`);
-      
-      let resetCount = 0;
-      
-      for (const device of devices) {
-        try {
-          // ✅ Preserve completedAt from yesterday for 8 AM lock enforcement
-          const previousCompletedAt = device.currentSession?.completedAt;
-          
-          // Reset the daily session for the new day
-          device.currentSession = {
-            date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate()),
-            startTime: new Date(),
-            endTime: null,
-            completedAt: previousCompletedAt, // ✅ Preserve for 8 AM lock (12 AM - 7:59 AM)
-            totalHoursOnline: 0,
-            totalDistanceTraveled: 0,
-            isActive: true,
-            targetHours: 8,
-            complianceStatus: 'PENDING',
-            locationHistory: []
-          };
-          
-          // Reset daily counters
-          device.totalAdPlays = 0;
-          device.totalQRScans = 0;
-          device.totalDistanceTraveled = 0;
-          device.totalHoursOnline = 0;
-          device.totalAdImpressions = 0;
-          device.totalAdPlayTime = 0;
-          
-          // Clear daily data arrays
-          device.adPlaybacks = [];
-          device.qrScans = [];
-          device.locationHistory = [];
-          device.hourlyStats = [];
-          device.adPerformance = [];
-          device.qrScansByAd = [];
-          
-          // Reset current ad
-          device.currentAd = null;
-          
-          // Reset compliance data
-          device.complianceData = {
-            offlineIncidents: 0,
-            displayIssues: 0
-          };
-          
-          // ✅ DON'T reset lastSeen - preserve actual last online time for admin tracking
-          // lastSeen will only update when device is actually online and sending data
-          
-          // Update the date to today
-          device.date = todayStr;
-          
-          // Save the updated record
-          await device.save();
-          resetCount++;
-          
-          console.log(`✅ Reset ${device.materialId}: ${device.totalAdPlays} plays, ${device.totalQRScans} QR scans`);
-          
-        } catch (error) {
-          console.error(`❌ Error resetting device ${device.materialId}:`, error.message);
-        }
+      // ✅ FIX: Add simple lock mechanism to prevent concurrent resets
+      if (this._isResetting) {
+        console.log('⚠️ Reset already in progress, skipping...');
+        return;
       }
+      this._isResetting = true;
       
-      console.log(`🎉 Daily reset completed: ${resetCount}/${devices.length} devices reset successfully`);
+      try {
+        // Find all DeviceTracking records
+        const devices = await DeviceTracking.find({});
+        logger.database(`📱 Found ${devices.length} DeviceTracking records to reset`);
+        
+        let resetCount = 0;
+        
+        for (const device of devices) {
+          try {
+            // ✅ Preserve completedAt from yesterday for 8 AM lock enforcement
+            const previousCompletedAt = device.currentSession?.completedAt;
+            
+            // Reset the daily session for the new day
+            // ✅ FIX: Set startTime far in future as sentinel - will be updated when device actually comes online
+            // This prevents counting hours from midnight for offline devices
+            const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value
+            device.currentSession = {
+              date: todayUTC,  // ✅ FIX: Standardized UTC midnight Date (not local PH date)
+              startTime: farFuture, // ✅ Sentinel: will be set to actual time when device comes online
+              endTime: null,
+              completedAt: previousCompletedAt, // ✅ Preserve for 8 AM lock (12 AM - 7:59 AM)
+              totalHoursOnline: 0,
+              totalDistanceTraveled: 0,
+              isActive: true,
+              targetHours: 8,
+              complianceStatus: 'PENDING',
+              locationHistory: []
+            };
+            
+            // ✅ FIX: Set all devices to offline at midnight - they'll report online when they connect
+            device.isOnline = false;
+            if (device.slots && device.slots.length > 0) {
+              device.slots.forEach(slot => {
+                slot.isOnline = false;
+              });
+            }
+            
+            // Reset daily counters
+            device.totalAdPlays = 0;
+            device.totalQRScans = 0;
+            device.totalDistanceTraveled = 0;
+            device.totalHoursOnline = 0;
+            device.totalAdImpressions = 0;
+            device.totalAdPlayTime = 0;
+            
+            // Clear daily data arrays
+            device.adPlaybacks = [];
+            device.qrScans = [];
+            device.locationHistory = [];
+            device.hourlyStats = [];
+            device.adPerformance = [];
+            device.qrScansByAd = [];
+            
+            // Reset current ad
+            device.currentAd = null;
+            
+            // Reset compliance data
+            device.complianceData = {
+              offlineIncidents: 0,
+              displayIssues: 0
+            };
+            
+            // ✅ DON'T reset lastSeen - preserve actual last online time for admin tracking
+            // lastSeen will only update when device is actually online and sending data
+            
+            // ✅ FIX: Use standardized UTC midnight Date (not string)
+            device.date = todayUTC;
+            
+            // Save the updated record
+            await device.save();
+            resetCount++;
+            
+            console.log(`✅ Reset ${device.materialId}: ${device.totalAdPlays} plays, ${device.totalQRScans} QR scans`);
+            
+          } catch (error) {
+            console.error(`❌ Error resetting device ${device.materialId}:`, error.message);
+            }
+        }
+        
+        console.log(`🎉 Daily reset completed: ${resetCount}/${devices.length} devices reset successfully`);
+      } finally {
+        // ✅ FIX: Release lock
+        this._isResetting = false;
+      }
       
     } catch (error) {
       console.error('❌ Error in resetAllDeviceTracking:', error);
+      this._isResetting = false; // Release lock on error
       throw error;
     }
   }
@@ -516,6 +599,55 @@ class CronJobs {
   // Get archive status
   async getArchiveStatus() {
     return await dailyArchiveJobV2.getArchiveStatus();
+  }
+
+  // Manual trigger for user deletion job
+  async triggerUserDeletion() {
+    console.log('🔄 Manual trigger for user deletion job');
+    try {
+      const result = await userDeletionJob.deleteExpiredUsers();
+      console.log('✅ Manual user deletion completed');
+      return result;
+    } catch (error) {
+      console.error('❌ Manual user deletion failed:', error);
+      throw error;
+    }
+  }
+
+  // Get archived users statistics
+  async getArchivedUsersStats() {
+    return await userDeletionJob.getArchivedUsersStats();
+  }
+
+  // Restore an archived user (cancel deletion)
+  async restoreArchivedUser(userId) {
+    return await userDeletionJob.restoreUser(userId);
+  }
+
+  // Manually trigger ad deletion (for testing or admin purposes)
+  async triggerAdDeletion() {
+    console.log('🔄 Manual trigger for ad deletion job');
+    try {
+      const result = await userDeletionJob.deleteExpiredAds();
+      console.log('✅ Manual ad deletion completed');
+      return result;
+    } catch (error) {
+      console.error('❌ Manual ad deletion failed:', error);
+      throw error;
+    }
+  }
+
+  // Manually trigger driver deletion (for testing or admin purposes)
+  async triggerDriverDeletion() {
+    console.log('🔄 Manual trigger for driver deletion job');
+    try {
+      const result = await userDeletionJob.deleteExpiredDrivers();
+      console.log('✅ Manual driver deletion completed');
+      return result;
+    } catch (error) {
+      console.error('❌ Manual driver deletion failed:', error);
+      throw error;
+    }
   }
 }
 

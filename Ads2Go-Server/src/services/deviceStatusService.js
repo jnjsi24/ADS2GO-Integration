@@ -521,49 +521,19 @@ class DeviceStatusService {
           return; // Skip this update
         }
 
-        // Update current location
-        carTracking.currentLocation = {
-          type: 'Point',
-          coordinates: [lng, lat],
-          accuracy,
-          speed: speed || 0,
-          heading: heading || 0,
-          altitude: altitude || undefined,
-          timestamp: new Date(timestamp || Date.now())
-        };
-
-        // Add to location history (for route tracking)
-        if (!carTracking.locationHistory) {
-          carTracking.locationHistory = [];
-        }
-
-        carTracking.locationHistory.push({
-          type: 'Point',
-          coordinates: [lng, lat],
-          timestamp: new Date(timestamp || Date.now()),
-          speed: speed || 0,
-          heading: heading || 0,
-          accuracy
-        });
-
-        // Keep only last 1000 location points to avoid excessive storage
-        if (carTracking.locationHistory.length > 1000) {
-          carTracking.locationHistory = carTracking.locationHistory.slice(-1000);
-        }
-
-        // Update distance traveled
-        if (carTracking.currentSession && speed > 0) {
-          const timeDiff = Date.now() - new Date(carTracking.currentSession.lastOnlineUpdate).getTime();
-          const hours = timeDiff / (1000 * 60 * 60);
-          const distanceKm = (speed * 3.6) * hours; // speed in km/h * hours
-          
-          if (distanceKm > 0 && distanceKm < 10) { // Sanity check: less than 10km per update
-            carTracking.currentSession.totalDistanceTraveled += distanceKm;
-          }
-        }
-
-        // Save the updated tracking record
-        await carTracking.save();
+        // ✅ FIX: Use the updateLocation method which has proper distance filtering (20m threshold)
+        // This ensures the 20-meter minimum movement threshold is applied and stationary GPS drift is filtered
+        await carTracking.updateLocation(
+          lat,
+          lng,
+          speed || 0,
+          heading || 0,
+          accuracy || 0,
+          '', // address (will be geocoded later if needed)
+          new Date(timestamp || Date.now())
+        );
+        
+        // Note: updateLocation already saves the document, so we don't need carTracking.save() here
         
         // Success! Exit the retry loop
         return;
@@ -922,13 +892,9 @@ class DeviceStatusService {
         await deviceTracking.save();
         console.log(`✅ [updateDeviceStatus] Updated slot for device ${deviceId} in material ${materialId}`);
         
-        // Real-time hours calculation when device comes online
-        if (status) {
-          console.log(`🕐 [updateDeviceStatus] Calculating real-time hours for ${deviceId}`);
-          deviceTracking.calculateAndUpdateOnlineHours();
-          await deviceTracking.save();
-          console.log(`✅ [updateDeviceStatus] Real-time hours updated: ${deviceTracking.totalHoursOnline} hours`);
-        }
+        // ✅ FIX: Don't calculate hours here - let hoursUpdateService handle it
+        // This prevents multiple concurrent updates to totalHoursOnline
+        // Hours are calculated by hoursUpdateService every 30 seconds
       } else {
         console.log(`⚠️ [updateDeviceStatus] Device ${deviceId} not found in slots for material ${materialId}`);
       }

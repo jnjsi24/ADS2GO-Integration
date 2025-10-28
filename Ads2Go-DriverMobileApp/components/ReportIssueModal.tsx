@@ -46,6 +46,7 @@ const categories = [
   { value: 'VEHICLE_ISSUE', label: 'Vehicle Issue', icon: 'car-outline' },
   { value: 'MATERIAL_ISSUE', label: 'Material Issue', icon: 'cube-outline' },
   { value: 'APP_ISSUE', label: 'App Issue', icon: 'phone-portrait-outline' },
+  { value: 'REQUEST_ACCOUNT_CLOSURE', label: 'Request Account Closure', icon: 'trash-outline' },
   { value: 'OTHER', label: 'Other', icon: 'help-circle-outline' },
 ];
 
@@ -267,7 +268,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
           <View style={styles.infoBox}>
             <Ionicons name="information-circle" size={20} color="#3b82f6" />
             <Text style={styles.infoText}>
-              Our support team will review your report and respond as soon as possible. You can check the status of your reports in the app.
+              Our support team will review your report and respond as soon as possible. You can check the status and admin responses in the Reports tab.
             </Text>
           </View>
 

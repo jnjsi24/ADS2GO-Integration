@@ -288,6 +288,15 @@ class AdSchedulingJob {
             }
           }
           
+          // ✅ Send notification to admins about campaign started
+          try {
+            const NotificationService = require('../services/notifications/NotificationService');
+            await NotificationService.sendAdCampaignStartedNotification(ad._id);
+            console.log(`📧 Sent campaign started notification to admins for ad ${ad._id}`);
+          } catch (notifError) {
+            console.error(`❌ Error sending campaign started notification to admins for ad ${ad._id}:`, notifError);
+          }
+          
           startedCount++;
           console.log(`▶️  Started ad ${ad._id} (${ad.title}) - Status: RUNNING`);
           
@@ -366,6 +375,15 @@ class AdSchedulingJob {
           
           endedCount++;
           console.log(`⏹️  Ended ad ${ad._id} (${ad.title}) - Status: ENDED`);
+          
+          // ✅ Send notification to admins about campaign ended
+          try {
+            const NotificationService = require('../services/notifications/NotificationService');
+            await NotificationService.sendAdCampaignEndedNotification(ad._id);
+            console.log(`📧 Sent campaign ended notification to admins for ad ${ad._id}`);
+          } catch (notifError) {
+            console.error(`❌ Error sending campaign ended notification to admins for ad ${ad._id}:`, notifError);
+          }
           
         } catch (error) {
           console.error(`❌ Error ending ad ${ad._id}:`, error);

@@ -76,7 +76,7 @@ const AdSchema = new mongoose.Schema({
   // Approval & tracking
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'SCHEDULED', 'RUNNING', 'ENDED', 'CANCELLED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'SCHEDULED', 'RUNNING', 'ENDED', 'CANCELLED', 'ARCHIVED'],
     default: 'PENDING',
     required: true
   },
@@ -117,7 +117,21 @@ const AdSchema = new mongoose.Schema({
   // Flexible ad fields
   materialType: { type: String },
   vehicleType: { type: String },
-  category: { type: String }
+  category: { type: String },
+
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
+  }
 }, { timestamps: true });
 
 /**
@@ -411,5 +425,7 @@ AdSchema.index({ 'targetDevices': 1 }); // Array index for material lookup
 AdSchema.index({ startTime: 1, endTime: 1 }); // Date range queries
 AdSchema.index({ createdAt: -1 }); // Sort by creation date
 AdSchema.index({ updatedAt: -1 }); // Sort by update date
+AdSchema.index({ isArchived: 1 }); // Archive filter for queries
+AdSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 module.exports = mongoose.model('Ad', AdSchema);

@@ -231,7 +231,7 @@ const detectGPSDrift = (currentPoint, previousPoint, options = {}) => {
   const {
     maxSpeed = 200,        // km/h
     maxAcceleration = 50,  // m/s²
-    minTimeInterval = 1    // seconds
+    minTimeInterval = 0.1  // seconds - reduced from 1s to 0.1s to support high-frequency GPS (10Hz)
   } = options;
 
   if (!previousPoint) {

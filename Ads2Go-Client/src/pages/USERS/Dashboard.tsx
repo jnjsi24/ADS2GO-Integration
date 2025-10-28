@@ -18,6 +18,9 @@ import playbackWebSocketService from '../../services/playbackWebSocketService';
 import RealtimeMetrics from '../../components/RealtimeMetrics';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
+import UserMaterialsMap from '../../components/UserMaterialsMap';
+import MultiMaterialRouteMap from '../../components/MultiMaterialRouteMap';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 
 // NotificationList Component
 const transition: Transition = {
@@ -148,6 +151,12 @@ const Dashboard = () => {
   const [showAnalyticsPeriodDropdown, setShowAnalyticsPeriodDropdown] = useState(false);
   const [showTotalAdPlayedPeriodDropdown, setShowTotalAdPlayedPeriodDropdown] = useState(false);
 
+  // Map tab states
+  const [mapActiveTab, setMapActiveTab] = useState<'today' | 'history'>('today');
+  const [selectedAdForRoute, setSelectedAdForRoute] = useState<string | null>(null);
+  const [selectedRouteDate, setSelectedRouteDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showAdDropdown, setShowAdDropdown] = useState(false);
+
   // Fetch analytics data
   // ✅ OPTIMIZATION: Increased poll interval from 30s to 5 minutes (analytics don't change that frequently)
   // Reduces queries by 90% while maintaining fresh data
@@ -158,6 +167,11 @@ const Dashboard = () => {
     pollInterval: 300000, // Auto-refresh every 5 minutes (increased from 30s)
     errorPolicy: 'all', // Allow partial data even with errors
     notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
+  });
+
+  // Fetch user's ads for route history
+  const { data: myAdsData } = useQuery(GET_MY_ADS, {
+    fetchPolicy: 'cache-and-network',
   });
 
   // Handle analytics errors using useEffect (Apollo v3.14 recommended approach)
@@ -473,6 +487,26 @@ const Dashboard = () => {
     const activeCars = analyticsSummary?.activeCars || 1;
     const averageMileage = totalDistance / (totalHours * activeCars);
     return Math.round(averageMileage * 10) / 10;
+  };
+
+  // Get user's ads for route selector (only RUNNING or APPROVED ads with materials)
+  const userAdsForRoute = (myAdsData?.getMyAds || []).filter((ad: any) => 
+    (ad.status === 'RUNNING' || ad.status === 'APPROVED') && 
+    ad.materialId && 
+    ad.materialId.length > 0
+  );
+
+  // Get ALL material IDs from selected ad
+  const getSelectedMaterialIds = () => {
+    if (!selectedAdForRoute || !myAdsData?.getMyAds) return [];
+    
+    const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
+    if (!selectedAd || !selectedAd.materialId || selectedAd.materialId.length === 0) return [];
+    
+    // Return array of all materialId strings
+    return selectedAd.materialId
+      .map((material: any) => material?.materialId)
+      .filter((id: string) => id); // Remove any null/undefined
   };
 
   return (
@@ -901,71 +935,169 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-        {/* Car Location Heat Map */}
-        <div className="pt-6 lg:pt-10" onClick={() => window.location.href = '/detailed-analytics'}>
+        {/* Real-Time Material Location Map */}
+        <div className="pt-6 lg:pt-10">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Car Location Heat Map</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Advertisement Locations</h2>
             <div className="text-xs sm:text-sm text-gray-500">
-              Last updated: {new Date().toLocaleTimeString()}
+              Live tracking • Updated every 30s
             </div>
           </div>
-          <div className="relative bg-gray-100 overflow-hidden" style={{ height: '300px', minHeight: '250px' }}>
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
-              <div className="absolute inset-0 opacity-20">
-                <svg width="100%" height="100%" className="w-full h-full">
-                  <defs>
-                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
-                    </pattern>
-                  </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
-                </svg>
-              </div>
-              <div className="absolute inset-0 p-4">
-                <div className="absolute top-8 left-12 w-16 h-16 bg-red-500 opacity-60 animate-pulse"></div>
-                <div className="absolute top-20 right-16 w-12 h-12 bg-orange-500 opacity-50"></div>
-                <div className="absolute bottom-16 left-20 w-14 h-14 bg-red-400 opacity-55"></div>
-                <div className="absolute top-32 left-1/3 w-10 h-10 bg-yellow-500 opacity-45"></div>
-                <div className="absolute bottom-32 right-1/4 w-8 h-8 bg-yellow-400 opacity-40"></div>
-                <div className="absolute top-1/2 left-1/4 w-12 h-12 bg-yellow-500 opacity-50"></div>
-                <div className="absolute top-16 left-2/3 w-6 h-6 bg-green-500 opacity-35"></div>
-                <div className="absolute bottom-20 left-1/2 w-8 h-8 bg-green-400 opacity-30"></div>
-                <div className="absolute top-2/3 right-8 w-7 h-7 bg-green-500 opacity-40"></div>
-                <div className="absolute top-40 right-1/3 w-5 h-5 bg-blue-500 opacity-25"></div>
-                <div className="absolute bottom-40 left-1/5 w-6 h-6 bg-purple-500 opacity-30"></div>
-                <div className="absolute top-1/4 right-1/5 w-4 h-4 bg-indigo-500 opacity-35"></div>
-              </div>
-              <div className="absolute top-4 left-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
-                Downtown Area
-              </div>
-              <div className="absolute top-4 right-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
-                Mall District
-              </div>
-              <div className="absolute bottom-4 left-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
-                Residential Zone
-              </div>
-              <div className="absolute bottom-4 right-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
-                Highway Access
-              </div>
+
+          {/* Tab Navigation */}
+          <div className="bg-white/70 backdrop-blur-md rounded-t-lg border border-white/20 border-b-0">
+            <div className="flex space-x-1 p-1">
+              <button
+                onClick={() => setMapActiveTab('today')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                  mapActiveTab === 'today'
+                    ? 'bg-[#1b5087] text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  <span>Today</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setMapActiveTab('history')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                  mapActiveTab === 'history'
+                    ? 'bg-[#1b5087] text-white shadow-sm'
+                    : 'text-gray-600 hover:bg-white/50'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <Monitor className="w-4 h-4" />
+                  <span>History</span>
+                </div>
+              </button>
             </div>
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white px-4 py-2 shadow-sm">
-              <div className="flex items-center space-x-4 text-xs">
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-red-500"></div>
-                  <span>High Activity</span>
+          </div>
+
+          {/* Map Container */}
+          <div className="relative bg-white rounded-b-lg shadow-sm overflow-hidden">
+            {/* History Tab Controls */}
+            {mapActiveTab === 'history' && (
+              <div className="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center">
+                {/* Ad Selector */}
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Select Advertisement
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAdDropdown(!showAdDropdown)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1b5087]"
+                    >
+                      <span className="truncate">
+                        {selectedAdForRoute 
+                          ? userAdsForRoute.find((ad: any) => ad.id === selectedAdForRoute)?.title || 'Select Ad'
+                          : 'Select Ad'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showAdDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    <AnimatePresence>
+                      {showAdDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        >
+                          {userAdsForRoute.length === 0 ? (
+                            <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                              No active ads with materials
+                            </div>
+                          ) : (
+                            userAdsForRoute.map((ad: any) => (
+                              <button
+                                key={ad.id}
+                                onClick={() => {
+                                  setSelectedAdForRoute(ad.id);
+                                  setShowAdDropdown(false);
+                                }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
+                                  ad.id === selectedAdForRoute ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                                }`}
+                              >
+                                <div className="font-medium truncate">{ad.title}</div>
+                                <div className="text-xs text-gray-500">
+                                  {ad.materialId?.length || 0} material(s) assigned
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-yellow-500"></div>
-                  <span>Medium Activity</span>
+
+                {/* Date Picker */}
+                <div className="min-w-[150px]">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Select Date
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedRouteDate}
+                    onChange={(e) => setSelectedRouteDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1b5087]"
+                  />
                 </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-green-500"></div>
-                  <span>Low Activity</span>
+              </div>
+            )}
+
+            {/* Map Content */}
+            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }}>
+              {mapActiveTab === 'today' ? (
+                <UserMaterialsMap height="100%" className="rounded-b-lg" />
+              ) : (
+                <div className="h-full w-full">
+                  {!selectedAdForRoute ? (
+                    <div className="flex items-center justify-center h-full bg-gray-50">
+                      <div className="text-center p-8">
+                        <Monitor className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-700 mb-2">
+                          Select an Advertisement
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          Choose an ad from the dropdown above to view its historical routes
+                        </p>
+                      </div>
+                    </div>
+                  ) : getSelectedMaterialIds().length === 0 ? (
+                    <div className="flex items-center justify-center h-full bg-gray-50">
+                      <div className="text-center p-8">
+                        <svg className="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <h3 className="text-lg font-medium text-gray-700 mb-2">
+                          No Materials Assigned
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          This ad doesn't have any materials assigned yet
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <MultiMaterialRouteMap
+                      key={`route-${selectedAdForRoute}-${selectedRouteDate}`}
+                      materialIds={getSelectedMaterialIds()}
+                      date={selectedRouteDate}
+                      className="h-full w-full"
+                      style={{ height: '100%' }}
+                    />
+                  )}
                 </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
       </div>
     </div>
   );

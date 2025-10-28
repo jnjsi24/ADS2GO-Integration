@@ -181,48 +181,13 @@ module.exports = {
         throw new Error('Ad length must be 20, 40, or 60 seconds');
       }
 
-      // ✅ NEW: Auto-detect video duration and validate
-      const VideoDurationService = require('../services/videoDurationService');
-      let actualVideoDuration = adLengthSeconds; // Default to selected length
+      // ✅ TRUST FRONTEND VALIDATION: Frontend already validates video duration with HTML5 video element
+      // Backend re-detection often fails with Firebase URLs, causing false errors
+      // The frontend auto-selects the correct ad length based on detected video duration
+      console.log(`✅ Using user-selected ad length: ${adLengthSeconds}s (frontend-validated)`);
       
-      try {
-        console.log(`🎬 Auto-detecting video duration for flexible ad...`);
-        actualVideoDuration = await VideoDurationService.getVideoDuration(mediaFile);
-        console.log(`✅ Video duration detected: ${actualVideoDuration}s (selected: ${adLengthSeconds}s)`);
-        
-        // Validate video duration is within acceptable range of selected length
-        // Allow ±5 seconds tolerance to handle encoding/metadata discrepancies
-        // (e.g., 20s ad can be 15-25s, 40s ad can be 35-45s)
-        const tolerance = 5;
-        const minAllowed = adLengthSeconds - tolerance;
-        const maxAllowed = adLengthSeconds + tolerance;
-        
-        if (actualVideoDuration < minAllowed || actualVideoDuration > maxAllowed) {
-          throw new Error(
-            `Video duration (${actualVideoDuration}s) doesn't match selected ad length (${adLengthSeconds}s). ` +
-            `For a ${adLengthSeconds}-second ad slot, your video must be between ${minAllowed}-${maxAllowed} seconds. ` +
-            `Please either:\n` +
-            `• Upload a video that's ${minAllowed}-${maxAllowed} seconds long, or\n` +
-            `• Select a different ad length option (20s, 40s, or 60s) that matches your video duration.`
-          );
-        }
-        
-        // Additional validation: minimum 5 seconds
-        if (actualVideoDuration < 5) {
-          throw new Error(`Video duration (${actualVideoDuration}s) is too short. Minimum duration is 5 seconds.`);
-        }
-        
-        console.log(`✅ Video duration ${actualVideoDuration}s is valid for ${adLengthSeconds}s ad slot (within ${minAllowed}-${maxAllowed}s range)`);
-        
-      } catch (error) {
-        // Re-throw validation errors
-        if (error.message.includes('doesn\'t match selected') || error.message.includes('too short')) {
-          throw error;
-        }
-        // For other errors (e.g., network issues), warn but continue with selected duration
-        console.warn('⚠️ Could not detect video duration, using selected duration:', error.message);
-        actualVideoDuration = adLengthSeconds; // Fallback to user selection
-      }
+      // Set actualVideoDuration to match the selected length (frontend already validated this)
+      let actualVideoDuration = adLengthSeconds;
 
       // Validate duration - only allow 1-6 months (30-180 days)
       const allowedDurations = [30, 60, 90, 120, 150, 180];
