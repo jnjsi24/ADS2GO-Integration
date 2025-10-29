@@ -15,6 +15,7 @@ interface LocationAutocompleteProps {
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  addressLabel?: string;
   required?: boolean;
   error?: string;
 }
@@ -61,6 +62,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   onChange,
   placeholder = "Select location...",
   label,
+  addressLabel = "Enter your house number and street...",
   required = false,
   error
 }) => {
@@ -184,6 +186,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setFilteredOptions(filtered);
   }, [value, selectedRegion, selectedCity]);
 
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     
@@ -255,24 +258,39 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     }
   };
 
+
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newAddress = e.target.value;
+    
+    // Update local state immediately
     setUserAddress(newAddress);
     setIsEditingAddress(true);
-
+    
+    // Call parent onChange immediately
     if (selectedRegion && selectedCity && selectedBarangay) {
       const locationPart = getLocationPart();
-      
-      // ✅ FIX: Only update with the new address + location
-      // Don't check if it contains location, just always format it properly
       if (newAddress.trim() === '') {
         onChange(locationPart);
       } else {
         onChange(`${newAddress}, ${locationPart}`);
       }
     } else {
-      // Fallback: just pass the address
       onChange(newAddress);
+    }
+  };
+
+
+
+  const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Only prevent default for Enter key to avoid form submission
+    if (e.key === 'Enter') {
+      e.preventDefault();
+    }
+    
+    // For space key, ensure it's not prevented
+    if (e.key === ' ') {
+      // Allow the space to be processed normally
+      return;
     }
   };
 
@@ -430,6 +448,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               type="text"
               value={userAddress}
               onChange={handleAddressChange}
+              onKeyDown={handleAddressKeyDown}
               placeholder=""
               className="peer w-full px-0 pt-10 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
               style={{ backgroundColor: 'transparent' }}
@@ -439,7 +458,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                 userAddress ? 'top-3 text-sm font-bold' : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-base'
               } peer-focus:top-3 peer-focus:text-sm peer-focus:font-bold`}
             >
-              Enter your house number and street...
+              {addressLabel}
             </label>
           </div>
         )}
