@@ -31,15 +31,15 @@ philippinesData.regions.forEach(region => {
     type: 'region'
   });
 
-  // Add cities
-  region.cities.forEach(city => {
-    locationData.push({
-      id: city.id,
-      name: city.name,
-      type: 'city',
-      parentId: region.id,
-      postalCode: city.postalCode
-    });
+    // Add cities
+    region.cities.forEach(city => {
+      locationData.push({
+        id: city.id,
+        name: city.name,
+        type: 'city',
+        parentId: region.id,
+        postalCode: (city as any).postalCode || undefined
+      });
 
     // Add barangays
     city.barangays.forEach(barangay => {
