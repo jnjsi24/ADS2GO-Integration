@@ -45,7 +45,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   setUserEmail: (email: string) => void;
   login: (email: string, password: string) => Promise<User | null>;
-  register: (userData: any) => Promise<boolean>;
+  register: (userData: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -368,14 +368,21 @@ export const AuthProvider: React.FC<{
     }
   };
 
-  const register = async (userData: any): Promise<boolean> => {
+  const register = async (userData: any): Promise<{ success: boolean; error?: string }> => {
     try {
-      const { data } = await registerMutation({
+      const { data, errors } = await registerMutation({
         variables: { input: userData },
       });
 
+      // Check for GraphQL errors first
+      if (errors && errors.length > 0) {
+        const errorMessage = errors[0].message;
+        console.error('GraphQL registration error:', errorMessage);
+        return { success: false, error: errorMessage };
+      }
+
       const userRaw = data?.createUser;
-      if (!userRaw) return false;
+      if (!userRaw) return { success: false, error: 'Registration failed. Please try again.' };
 
       if (userRaw.token) {
         localStorage.setItem('token', userRaw.token);
@@ -405,10 +412,22 @@ export const AuthProvider: React.FC<{
         navigate(user.role === 'ADMIN' ? '/admin' : '/home');
       }
 
-      return true;
-    } catch (error) {
+      return { success: true };
+    } catch (error: any) {
       console.error('Registration error:', error);
-      return false;
+      
+      // Extract specific error message from various error sources
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error?.graphQLErrors && error.graphQLErrors.length > 0) {
+        errorMessage = error.graphQLErrors[0].message;
+      } else if (error?.networkError?.result?.errors && error.networkError.result.errors.length > 0) {
+        errorMessage = error.networkError.result.errors[0].message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      return { success: false, error: errorMessage };
     }
   };
 

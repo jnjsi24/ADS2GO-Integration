@@ -272,15 +272,15 @@ const Register: React.FC = () => {
         password: formData.password
       };
 
-      const success = await register(registrationData);
-      if (success) {
+      const result = await register(registrationData);
+      if (result.success) {
         // Clear the timeout since we're navigating away
         if (submissionTimeoutRef.current) {
           clearTimeout(submissionTimeoutRef.current);
         }
         navigate('/verify-email');
       } else {
-        setRegistrationError('Registration failed. Please try again.');
+        setRegistrationError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
       setRegistrationError(
