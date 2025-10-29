@@ -393,6 +393,90 @@ const Reports: React.FC = () => {
     }
   };
 
+  const handleExportToCSV = () => {
+    if (selectedReports.length === 0) return;
+
+    const reports = reportSource === 'users' 
+      ? data?.getAllUserReports?.reports 
+      : reportSource === 'drivers'
+      ? data?.getAllDriverReports?.reports
+      : data?.getAllContactMessages?.contactMessages;
+
+    const selectedReportData = reports?.filter((r: any) => selectedReports.includes(r.id)) || [];
+    
+    let csvData;
+    let filename;
+
+    if (reportSource === 'messages') {
+      // Newsletter Messages CSV
+      csvData = selectedReportData.map((msg: ContactMessage) => ({
+        'Message ID': msg.id,
+        'Name': msg.name,
+        'Email': msg.email,
+        'Message': msg.message.replace(/,/g, ';').replace(/\n/g, ' '), // Replace commas and newlines
+        'Category': msg.category,
+        'Status': msg.status,
+        'Created At': formatDate(msg.createdAt),
+        'Resolved At': msg.resolvedAt ? formatDate(msg.resolvedAt) : 'N/A',
+        'Resolved By': msg.resolvedBy?.adminName || 'N/A',
+        'Admin Reply': msg.adminReply ? 'Yes' : 'No'
+      }));
+      filename = `newsletter_messages_export_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (reportSource === 'users') {
+      // User Reports CSV
+      csvData = selectedReportData.map((report: Report) => ({
+        'Report ID': report.id,
+        'Title': report.title.replace(/,/g, ';'),
+        'Type': report.reportType,
+        'Status': report.status,
+        'User Name': report.user ? `${report.user.firstName} ${report.user.lastName}` : 'N/A',
+        'User Email': report.user?.email || 'N/A',
+        'Description': report.description.replace(/,/g, ';').replace(/\n/g, ' '),
+        'Admin Notes': report.adminNotes?.replace(/,/g, ';').replace(/\n/g, ' ') || 'N/A',
+        'Created At': formatDate(report.createdAt),
+        'Updated At': formatDate(report.updatedAt),
+        'Resolved At': report.resolvedAt ? formatDate(report.resolvedAt) : 'N/A',
+        'Attachments': report.attachments.length
+      }));
+      filename = `user_reports_export_${new Date().toISOString().split('T')[0]}.csv`;
+    } else {
+      // Driver Reports CSV
+      csvData = selectedReportData.map((report: Report) => ({
+        'Report ID': report.id,
+        'Title': report.title.replace(/,/g, ';'),
+        'Type': report.reportType,
+        'Status': report.status,
+        'Driver ID': report.driver?.driverId || 'N/A',
+        'Driver Name': report.driver ? `${report.driver.firstName} ${report.driver.lastName}` : 'N/A',
+        'Driver Email': report.driver?.email || 'N/A',
+        'Vehicle Plate': report.driver?.vehiclePlateNumber || 'N/A',
+        'Description': report.description.replace(/,/g, ';').replace(/\n/g, ' '),
+        'Admin Notes': report.adminNotes?.replace(/,/g, ';').replace(/\n/g, ' ') || 'N/A',
+        'Created At': formatDate(report.createdAt),
+        'Updated At': formatDate(report.updatedAt),
+        'Resolved At': report.resolvedAt ? formatDate(report.resolvedAt) : 'N/A',
+        'Attachments': report.attachments.length
+      }));
+      filename = `driver_reports_export_${new Date().toISOString().split('T')[0]}.csv`;
+    }
+
+    if (csvData.length === 0) return;
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -855,6 +939,12 @@ const Reports: React.FC = () => {
                   className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
                 >
                   Mark as Closed
+                </button>
+                <button
+                  onClick={handleExportToCSV}
+                  className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
+                >
+                  Export to CSV
                 </button>
               </div>
             </div>

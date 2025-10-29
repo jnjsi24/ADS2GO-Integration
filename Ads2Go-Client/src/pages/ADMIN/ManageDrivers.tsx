@@ -703,6 +703,50 @@ const ManageDrivers: React.FC = () => {
     setShowBulkDeleteModal(true);
   };
 
+  const handleExportToCSV = () => {
+    if (selectedDrivers.length === 0) return;
+
+    const selectedDriverData = drivers.filter(d => selectedDrivers.includes(d.driverId));
+    
+    const csvData = selectedDriverData.map(driver => ({
+      'Driver ID': driver.driverId,
+      'First Name': driver.firstName,
+      'Middle Name': driver.middleName || '',
+      'Last Name': driver.lastName,
+      'Email': driver.email,
+      'Contact Number': driver.contactNumber,
+      'Vehicle Type': driver.vehicleType,
+      'Vehicle Model': driver.vehicleModel,
+      'Vehicle Plate': driver.vehiclePlateNumber,
+      'Account Status': driver.accountStatus,
+      'Material Type': driver.installedMaterialType || 'N/A',
+      'Date Joined': formatDate(driver.dateJoined),
+      'Approval Date': driver.approvalDate ? formatDate(driver.approvalDate) : 'N/A',
+      'Created At': formatDate(driver.createdAt)
+    }));
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `drivers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    addToast({
+      type: 'success',
+      title: 'Export Successful!',
+      message: `${selectedDrivers.length} driver(s) exported to CSV`,
+      duration: 4000
+    });
+  };
+
   const confirmBulkDelete = async () => {
     setIsBulkProcessing(true);
 
@@ -958,23 +1002,29 @@ const ManageDrivers: React.FC = () => {
                     </button>
                   </>
                 )}
-                <button
-                  onClick={handleBulkDelete}
-                  className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
-                >
-                  Delete Selected
-                </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
+                  >
+                    Delete Selected
+                  </button>
+                  <button
+                    onClick={handleExportToCSV}
+                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
+                  >
+                    Export to CSV
+                  </button>
+                </div>
               </div>
+              <button
+                onClick={() => setSelectedDrivers([])}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+              >
+                Clear Selection
+              </button>
             </div>
-            <button
-              onClick={() => setSelectedDrivers([])}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-            >
-              Clear Selection
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Driver List */}
       {loading ? (
