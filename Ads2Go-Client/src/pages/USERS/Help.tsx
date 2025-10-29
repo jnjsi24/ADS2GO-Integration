@@ -7,7 +7,6 @@ import {
   List, 
   Search, 
   HelpCircle, 
-  MessageCircle, 
   Phone, 
   Mail, 
   Clock, 
@@ -278,21 +277,7 @@ const Help: React.FC = () => {
         )}
 
         {/* Support Options */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white/80 shadow-md p-8">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <MessageCircle className="w-6 h-6 text-[#3674B5]" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Live Chat</h3>
-            </div>
-            <p className="text-gray-600 mb-4">Get instant help from our support team</p>
-            <div className="flex items-center text-sm text-green-600 font-medium">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-              Online now
-            </div>
-          </div>
-
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white/80 shadow-md p-8">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 bg-green-100 rounded-xl">
