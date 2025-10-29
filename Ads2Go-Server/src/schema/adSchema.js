@@ -87,6 +87,13 @@ const adTypeDefs = gql`
     startTime: String      # update start time, auto-adjusts endTime
     adType: AdType
     reasonForReject: String
+    adLengthSeconds: Int
+    durationDays: Int
+    numberOfDevices: Int
+    price: Float
+    materialType: String
+    vehicleType: String
+    category: String
   }
 
   type Query {

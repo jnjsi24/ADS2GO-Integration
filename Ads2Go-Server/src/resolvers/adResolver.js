@@ -11,6 +11,7 @@ const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 const NotificationService = require('../services/notifications/NotificationService');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
+const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
 const adResolvers = {
   Query: {
@@ -404,10 +405,232 @@ const adResolvers = {
           await applyPlanChanges(input.planId, input.startTime || ad.startTime);
         }
 
+        // Handle flexible ad updates (no plan)
+        if (!ad.planId) {
+          // Check if material type or vehicle type is changing
+          const typeChanged = (input.materialType && input.materialType !== ad.materialType) ||
+                            (input.vehicleType && input.vehicleType !== ad.vehicleType);
+
+          if (typeChanged) {
+            console.log('🔄 [AdResolver] Material/Vehicle type changed, need to reassign materials');
+            
+            // Update the types
+            if (input.materialType) ad.materialType = input.materialType;
+            if (input.vehicleType) ad.vehicleType = input.vehicleType;
+            if (input.category) ad.category = input.category;
+
+            // Clear old material assignments
+            ad.materialId = [];
+            
+            console.log('✅ [AdResolver] Types updated, will reassign materials below');
+          }
+
+          // Update ad length
+          if (input.adLengthSeconds !== undefined) {
+            const allowedLengths = [20, 40, 60];
+            if (!allowedLengths.includes(input.adLengthSeconds)) {
+              throw new Error('Ad length must be 20, 40, or 60 seconds');
+            }
+            ad.adLengthSeconds = input.adLengthSeconds;
+          }
+
+          // Update duration
+          if (input.durationDays !== undefined) {
+            const allowedDurations = [30, 60, 90, 120, 150, 180];
+            if (!allowedDurations.includes(input.durationDays)) {
+              throw new Error('Duration must be 1-6 months (30-180 days)');
+            }
+            ad.durationDays = input.durationDays;
+
+            // Recalculate end time if start time exists
+            if (ad.startTime) {
+              const endTime = new Date(ad.startTime);
+              endTime.setDate(endTime.getDate() + input.durationDays);
+              ad.endTime = endTime;
+            }
+          }
+
+          // Update number of devices
+          if (input.numberOfDevices !== undefined) {
+            if (input.numberOfDevices < 1) {
+              throw new Error('At least 1 device is required');
+            }
+            ad.numberOfDevices = input.numberOfDevices;
+          }
+
+          // Update price
+          if (input.price !== undefined) {
+            ad.price = input.price;
+            ad.totalPrice = input.price;
+          }
+
+          // Check if device reassignment is needed
+          const needsDeviceReassignment = typeChanged || 
+                                         input.numberOfDevices !== undefined || 
+                                         input.startTime !== undefined || 
+                                         input.durationDays !== undefined;
+
+          // ✅ IMMEDIATE DEVICE REASSIGNMENT
+          if (needsDeviceReassignment && ad.materialType && ad.vehicleType) {
+            console.log('🔄 [AdResolver] Device reassignment needed - releasing old slots and finding new devices');
+            
+            // Step 1: Release old slot reservations
+            const oldMaterialIds = Array.isArray(ad.materialId) ? ad.materialId : (ad.materialId ? [ad.materialId] : []);
+            
+            if (oldMaterialIds.length > 0) {
+              console.log(`🧹 [AdResolver] Releasing ${oldMaterialIds.length} old slot reservation(s)...`);
+              for (const materialId of oldMaterialIds) {
+                try {
+                  const availability = await MaterialAvailability.findOne({ materialId });
+                  if (availability) {
+                    availability.removeAd(ad._id);
+                    await availability.save();
+                    console.log(`✅ [AdResolver] Released slot for material ${materialId}`);
+                  }
+                } catch (releaseError) {
+                  console.error(`❌ [AdResolver] Error releasing slot for material ${materialId}:`, releaseError.message);
+                  // Continue with other releases even if one fails
+                }
+              }
+            }
+
+            // Step 2: Get updated parameters for device selection
+            const updatedStartTime = input.startTime ? new Date(input.startTime) : ad.startTime;
+            const updatedDurationDays = input.durationDays !== undefined ? input.durationDays : ad.durationDays;
+            const updatedNumberOfDevices = input.numberOfDevices !== undefined ? input.numberOfDevices : ad.numberOfDevices;
+            const updatedMaterialType = input.materialType || ad.materialType;
+            const updatedVehicleType = input.vehicleType || ad.vehicleType;
+            const updatedCategory = input.category || ad.category;
+            
+            // Calculate new end time
+            const updatedEndTime = new Date(updatedStartTime);
+            updatedEndTime.setDate(updatedEndTime.getDate() + updatedDurationDays);
+
+            console.log(`🎯 [AdResolver] Finding ${updatedNumberOfDevices} devices for ${updatedMaterialType} ${updatedVehicleType} ${updatedCategory}`);
+            console.log(`📅 [AdResolver] Period: ${updatedStartTime.toISOString()} to ${updatedEndTime.toISOString()}`);
+
+            // Step 3: Run smart material selection
+            try {
+              const sortedMaterials = await getMaterialsSortedByAvailability(
+                updatedMaterialType,
+                updatedVehicleType,
+                updatedCategory,
+                updatedStartTime,
+                updatedEndTime
+              );
+
+              if (sortedMaterials.length === 0) {
+                throw new Error('No compatible devices found for this configuration. All devices are either full, not mounted, or have no driver assigned.');
+              }
+
+              if (sortedMaterials.length < updatedNumberOfDevices) {
+                throw new Error(`Only ${sortedMaterials.length} device${sortedMaterials.length === 1 ? '' : 's'} available, but you requested ${updatedNumberOfDevices}. Please reduce the number of devices.`);
+              }
+
+              // Step 4: Select and validate devices
+              let selectedMaterials = [];
+              let devicesSelected = 0;
+
+              for (const material of sortedMaterials) {
+                if (devicesSelected >= updatedNumberOfDevices) break;
+
+                // Validation: ensure material has driver and is mounted
+                if (!material.driverId) {
+                  console.log(`❌ [AdResolver] Skipping ${material.materialId}: No driver assigned`);
+                  continue;
+                }
+                
+                if (!material.mountedAt) {
+                  console.log(`❌ [AdResolver] Skipping ${material.materialId}: Not physically mounted`);
+                  continue;
+                }
+                
+                if (material.dismountedAt) {
+                  console.log(`❌ [AdResolver] Skipping ${material.materialId}: Already dismounted`);
+                  continue;
+                }
+
+                // Check if device has been connected
+                const DeviceTracking = require('../models/deviceTracking');
+                const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+                if (!deviceTracking) {
+                  console.log(`❌ [AdResolver] Skipping ${material.materialId}: No connected device`);
+                  continue;
+                }
+
+                const availability = await MaterialAvailability.findOne({ materialId: material._id });
+                if (availability && availability.canAcceptAd(updatedStartTime, updatedEndTime)) {
+                  selectedMaterials.push(material);
+                  devicesSelected++;
+                  console.log(`✅ [AdResolver] Selected device ${devicesSelected}/${updatedNumberOfDevices}: ${material.materialId}`);
+                }
+              }
+
+              if (selectedMaterials.length < updatedNumberOfDevices) {
+                throw new Error(`Only ${selectedMaterials.length} device${selectedMaterials.length === 1 ? '' : 's'} available with open slots, but you requested ${updatedNumberOfDevices}. Please reduce the number of devices.`);
+              }
+
+              // Step 5: Update ad with new device assignments
+              ad.materialId = selectedMaterials.map(m => m._id);
+              ad.targetDevices = selectedMaterials.map(m => m._id);
+              console.log(`✅ [AdResolver] Updated ad with ${selectedMaterials.length} new device(s)`);
+
+              // Step 6: Reserve new slots in scheduledAds
+              const reservationExpires = new Date();
+              reservationExpires.setDate(reservationExpires.getDate() + 7); // 7 days expiration
+
+              for (const material of selectedMaterials) {
+                let availability = await MaterialAvailability.findOne({ materialId: material._id });
+                if (!availability) {
+                  availability = new MaterialAvailability({
+                    materialId: material._id,
+                    totalSlots: 5,
+                    occupiedSlots: 0,
+                    availableSlots: 5,
+                    currentAds: [],
+                    scheduledAds: [],
+                    status: 'AVAILABLE'
+                  });
+                }
+
+                // Reserve slot
+                const slotNumber = availability.reserveSlot(ad._id, updatedStartTime, updatedEndTime, reservationExpires);
+                await availability.save();
+                console.log(`✅ [AdResolver] Reserved slot ${slotNumber} for ad on ${material.materialId} (expires: ${reservationExpires.toISOString()})`);
+              }
+
+              ad.reservationExpires = reservationExpires;
+              console.log(`🎉 [AdResolver] Device reassignment complete! ${selectedMaterials.length} devices assigned.`);
+
+            } catch (reassignmentError) {
+              console.error('❌ [AdResolver] Device reassignment failed:', reassignmentError.message);
+              // Clear materialId on error
+              ad.materialId = [];
+              throw new Error(`Failed to reassign devices: ${reassignmentError.message}`);
+            }
+          }
+
+          // If type changed or any campaign setting changed, reset to PENDING for re-approval
+          if (typeChanged || input.adLengthSeconds !== undefined || 
+              input.durationDays !== undefined || input.numberOfDevices !== undefined ||
+              input.price !== undefined) {
+            console.log('🔄 [AdResolver] Campaign settings changed, resetting to PENDING status');
+            ad.status = 'PENDING';
+            ad.approveTime = null;
+            ad.rejectTime = null;
+            ad.reasonForReject = null;
+          }
+        }
+
         if (input.startTime) {
           ad.startTime = new Date(input.startTime);
           if (ad.planId) {
             await applyPlanChanges(ad.planId, input.startTime);
+          } else if (ad.durationDays) {
+            // Recalculate end time for flexible ads
+            const endTime = new Date(input.startTime);
+            endTime.setDate(endTime.getDate() + ad.durationDays);
+            ad.endTime = endTime;
           }
         }
 

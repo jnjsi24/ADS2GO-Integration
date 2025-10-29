@@ -7,6 +7,7 @@ import { GET_ALL_MATERIALS } from '../../graphql/admin/queries/materials';
 import { GET_DRIVER_MATERIALS } from '../../graphql/admin/queries/driverMaterials';
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin/mutations/compliance';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
+import { GET_DRIVER_SALARY_SUMMARY } from '../../graphql/superadmin/queries/driverSalaryQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -190,6 +191,14 @@ const ManageDrivers: React.FC = () => {
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
   const [isProcessingRejection, setIsProcessingRejection] = useState(false);
   const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
+  
+  // Bulk actions state
+  const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
+  const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState('');
+  const [bulkSelectedMaterials, setBulkSelectedMaterials] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -238,6 +247,12 @@ const ManageDrivers: React.FC = () => {
   });
 
   const { data: driverMaterialsData, refetch: refetchDriverMaterials } = useQuery(GET_DRIVER_MATERIALS, {
+    variables: { driverId: selectedDriverDetails?.driverId || '' },
+    skip: !selectedDriverDetails?.driverId,
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const { data: driverSalaryData } = useQuery(GET_DRIVER_SALARY_SUMMARY, {
     variables: { driverId: selectedDriverDetails?.driverId || '' },
     skip: !selectedDriverDetails?.driverId,
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
@@ -544,6 +559,197 @@ const ManageDrivers: React.FC = () => {
     }
   };
 
+  // Bulk action handlers
+  const handleBulkApprove = () => {
+    if (selectedDrivers.length === 0) return;
+    setShowBulkApproveModal(true);
+  };
+
+  const submitBulkApprove = async () => {
+    if (bulkSelectedMaterials.length === 0) {
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please select at least one material type',
+        duration: 4000
+      });
+      return;
+    }
+
+    setIsBulkProcessing(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedDrivers.map(driverId =>
+          updateDriver({
+            variables: {
+              id: driverId,
+              input: {
+                status: 'APPROVED',
+                materialsProvidedByCompany: bulkSelectedMaterials
+              }
+            }
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} driver(s) approved successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to approve ${failCount} driver(s)`,
+          duration: 5000
+        });
+      }
+
+      setShowBulkApproveModal(false);
+      setBulkSelectedMaterials([]);
+      setSelectedDrivers([]);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error approving drivers: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkReject = () => {
+    if (selectedDrivers.length === 0) return;
+    setShowBulkRejectModal(true);
+  };
+
+  const submitBulkReject = async () => {
+    if (!bulkRejectReason.trim()) {
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for rejection',
+        duration: 4000
+      });
+      return;
+    }
+
+    setIsBulkProcessing(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedDrivers.map(driverId =>
+          updateDriver({
+            variables: {
+              id: driverId,
+              input: {
+                status: 'REJECTED',
+                reasonForReject: bulkRejectReason
+              }
+            }
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} driver(s) rejected successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to reject ${failCount} driver(s)`,
+          duration: 5000
+        });
+      }
+
+      setShowBulkRejectModal(false);
+      setBulkRejectReason('');
+      setSelectedDrivers([]);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error rejecting drivers: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDrivers.length === 0) return;
+    setShowBulkDeleteModal(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    setIsBulkProcessing(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedDrivers.map(driverId =>
+          deleteDriver({
+            variables: { id: driverId }
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} driver(s) deleted successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to delete ${failCount} driver(s)`,
+          duration: 5000
+        });
+      }
+
+      setShowBulkDeleteModal(false);
+      setSelectedDrivers([]);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error deleting drivers: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
   const totalPages = Math.ceil(filteredDrivers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -726,6 +932,49 @@ const ManageDrivers: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedDrivers.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-sm font-medium text-blue-800">
+                {selectedDrivers.length} driver{selectedDrivers.length > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {filteredDrivers.filter((d: any) => selectedDrivers.includes(d.driverId) && d.status === 'PENDING').length > 0 && (
+                  <>
+                    <button
+                      onClick={handleBulkApprove}
+                      className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                    >
+                      Approve Selected
+                    </button>
+                    <button
+                      onClick={handleBulkReject}
+                      className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                    >
+                      Reject Selected
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
+                >
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedDrivers([])}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Driver List */}
       {loading ? (
@@ -1098,6 +1347,13 @@ const ManageDrivers: React.FC = () => {
                           "N/A"}
                       </p>
                     </div>
+
+                    <div>
+                      <p className="text-xs sm:text-sm text-gray-500">Total Earnings</p>
+                      <p className="text-gray-900 font-bold text-sm sm:text-base text-green-600">
+                        ₱{driverSalaryData?.getDriverSalarySummary?.summary?.totalSalary?.toFixed(2) || '0.00'}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1459,6 +1715,170 @@ const ManageDrivers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Approve Modal */}
+      {showBulkApproveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Approve {selectedDrivers.length} Driver(s)</h2>
+              <button
+                onClick={() => {
+                  setShowBulkApproveModal(false);
+                  setBulkSelectedMaterials([]);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Select the materials that will be provided by the company to these drivers:
+            </p>
+
+            <div className="space-y-2 mb-6">
+              {['Helmet', 'Shirt', 'Tablet', 'Phone', 'Other'].map((material) => (
+                <label key={material} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bulkSelectedMaterials.includes(material)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setBulkSelectedMaterials([...bulkSelectedMaterials, material]);
+                      } else {
+                        setBulkSelectedMaterials(bulkSelectedMaterials.filter(m => m !== material));
+                      }
+                    }}
+                    className="form-checkbox"
+                  />
+                  <span className="text-sm">{material}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowBulkApproveModal(false);
+                  setBulkSelectedMaterials([]);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                disabled={isBulkProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitBulkApprove}
+                disabled={bulkSelectedMaterials.length === 0 || isBulkProcessing}
+                className={`px-4 py-2 text-white rounded ${
+                  bulkSelectedMaterials.length === 0 || isBulkProcessing
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-green-500 hover:bg-green-600'
+                }`}
+              >
+                {isBulkProcessing ? 'Processing...' : `Approve ${selectedDrivers.length} Driver${selectedDrivers.length > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Reject Modal */}
+      {showBulkRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Reject {selectedDrivers.length} Driver(s)</h2>
+              <button
+                onClick={() => {
+                  setShowBulkRejectModal(false);
+                  setBulkRejectReason('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="relative mb-6">
+              <textarea
+                id="bulkRejectReason"
+                name="bulkRejectReason"
+                required
+                value={bulkRejectReason}
+                onChange={(e) => {
+                  setBulkRejectReason(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+                }}
+                placeholder=" "
+                className={`peer w-full px-0 pt-6 pb-2 text-gray-800 border-b bg-transparent focus:outline-none focus:border-blue-500 placeholder-transparent transition
+                  ${!bulkRejectReason.trim() ? 'border-gray-300' : 'border-gray-400'}
+                `}
+                style={{
+                  minHeight: "40px",
+                  maxHeight: "100px",
+                  resize: "none",
+                  overflowY: "auto",
+                }}
+              />
+
+              <label
+                htmlFor="bulkRejectReason"
+                className={`absolute left-0 bg-white text-gray-600 transition-all duration-200
+                  ${
+                    bulkRejectReason
+                      ? '-top-2 text-sm text-blue-600 font-semibold'
+                      : 'peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                  }
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold`}
+              >
+                Reason for rejection
+              </label>
+
+              <p className="mt-1 text-xs text-gray-500">This reason will be visible to the affected drivers.</p>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowBulkRejectModal(false);
+                  setBulkRejectReason('');
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                disabled={isBulkProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitBulkReject}
+                disabled={!bulkRejectReason.trim() || isBulkProcessing}
+                className={`px-4 py-2 text-white rounded ${
+                  !bulkRejectReason.trim() || isBulkProcessing
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
+              >
+                {isBulkProcessing ? 'Processing...' : `Reject ${selectedDrivers.length} Driver${selectedDrivers.length > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={confirmBulkDelete}
+        title="Delete Multiple Drivers"
+        message={`Are you sure you want to delete ${selectedDrivers.length} driver(s)? This action cannot be undone.`}
+        confirmText={`Delete ${selectedDrivers.length} Driver${selectedDrivers.length > 1 ? 's' : ''}`}
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isBulkProcessing}
+      />
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />

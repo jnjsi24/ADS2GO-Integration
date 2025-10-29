@@ -21,7 +21,7 @@ const driverReportSchema = new mongoose.Schema({
   reportType: {
     type: String,
     required: true,
-    enum: ['BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'OTHER'],
+    enum: ['BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'UPDATE_PROFILE_DETAILS', 'OTHER'],
     index: true
   },
   status: {

@@ -6,7 +6,7 @@ const EmailService = require('../utils/emailService');
 // Subscribe to newsletter
 router.post('/subscribe', async (req, res) => {
   try {
-    const { email, source = 'landing_page' } = req.body;
+    const { email, source = 'contact_form' } = req.body;
 
     // Validate email
     if (!email || !email.includes('@')) {

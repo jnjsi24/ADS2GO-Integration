@@ -312,15 +312,24 @@ const materialResolvers = {
       }
     },
 
-    // Get usage history for a specific driver (Admin-only)
-    getDriverUsageHistory: async (_, { driverId }, { user }) => {
-      checkAdmin(user); // Only admin can access
+    // Get usage history for a specific driver (Admin and Driver can access)
+    getDriverUsageHistory: async (_, { driverId }, { user, driver }) => {
+      // Allow both admin and driver (driver can only access their own history)
+      if (!user && !driver) {
+        throw new Error('Unauthorized: Authentication required');
+      }
+
+      // If it's a driver, they can only access their own history
+      if (driver && driver.driverId !== driverId) {
+        throw new Error('Unauthorized: You can only access your own material history');
+      }
+
       try {
         console.log(`📊 Fetching usage history for driver ${driverId}`);
 
         // Verify driver exists
-        const driver = await Driver.findOne({ driverId });
-        if (!driver) {
+        const driverDoc = await Driver.findOne({ driverId });
+        if (!driverDoc) {
           throw new Error('Driver not found');
         }
 
@@ -1110,6 +1119,30 @@ const materialResolvers = {
 
       await tracking.save();
 
+      // Send notification to driver about photo approval
+      try {
+        const Admin = require('../models/Admin');
+        const currentAdmin = await Admin.findById(user.id);
+        const adminName = currentAdmin ? `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim() : 'Admin';
+        
+        if (material.driverId) {
+          const driverDetails = await Driver.findOne({ driverId: material.driverId });
+          if (driverDetails) {
+            await NotificationService.sendMonthlyPhotoApprovedToDriver(
+              driverDetails._id,
+              material.materialId,
+              month,
+              adminNotes || null,
+              adminName
+            );
+            console.log(`📧 [ApproveMonthlyPhoto] Sent approval notification to driver ${driverDetails.driverId}`);
+          }
+        }
+      } catch (notifError) {
+        console.error('Error sending monthly photo approval notification:', notifError);
+        // Don't fail the approval if notification fails
+      }
+
       return {
         success: true,
         message: 'Monthly photo approved',
@@ -1154,6 +1187,30 @@ const materialResolvers = {
       // Set status to NON_COMPLIANT, next due unchanged or sooner if desired
       tracking.photoComplianceStatus = 'NON_COMPLIANT';
       await tracking.save();
+
+      // Send notification to driver about photo rejection
+      try {
+        const Admin = require('../models/Admin');
+        const currentAdmin = await Admin.findById(user.id);
+        const adminName = currentAdmin ? `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim() : 'Admin';
+        
+        if (material.driverId) {
+          const driverDetails = await Driver.findOne({ driverId: material.driverId });
+          if (driverDetails) {
+            await NotificationService.sendMonthlyPhotoRejectedToDriver(
+              driverDetails._id,
+              material.materialId,
+              month,
+              adminNotes || 'Photo did not meet compliance requirements',
+              adminName
+            );
+            console.log(`📧 [RejectMonthlyPhoto] Sent rejection notification to driver ${driverDetails.driverId}`);
+          }
+        }
+      } catch (notifError) {
+        console.error('Error sending monthly photo rejection notification:', notifError);
+        // Don't fail the rejection if notification fails
+      }
 
       return {
         success: true,

@@ -4,7 +4,26 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { AuthProvider } from '../contexts/AuthContext';
+import { NotificationToastProvider, useNotificationToast } from '../contexts/NotificationToastContext';
+import NotificationToast from '../components/NotificationToast';
 import 'react-native-reanimated';
+
+function ToastWrapper() {
+  const { toastConfig, isVisible, hideToast } = useNotificationToast();
+
+  if (!toastConfig) return null;
+
+  return (
+    <NotificationToast
+      visible={isVisible}
+      title={toastConfig.title}
+      message={toastConfig.message}
+      type={toastConfig.type}
+      onDismiss={hideToast}
+      duration={toastConfig.duration}
+    />
+  );
+}
 
 function RootLayoutNav() {
   return (
@@ -32,8 +51,12 @@ function RootLayoutNav() {
             }} 
           />
           <Stack.Screen name="salary" options={{ title: 'Salary' }} />
+          <Stack.Screen name="my-reports" options={{ title: 'My Reports' }} />
           <Stack.Screen name="+not-found" />
         </Stack>
+        
+        {/* Global notification toast */}
+        <ToastWrapper />
         
         <StatusBar style="dark" />
       </View>
@@ -52,7 +75,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <NotificationToastProvider>
+        <RootLayoutNav />
+      </NotificationToastProvider>
     </AuthProvider>
   );
 }

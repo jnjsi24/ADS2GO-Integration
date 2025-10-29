@@ -180,38 +180,75 @@ class CronJobs {
       try {
         const DeviceCompliance = require('../models/deviceCompliance');
         const Driver = require('../models/Driver');
-        const DriverNotificationService = require('../services/notifications/DriverNotificationService');
+        const Material = require('../models/Material');
+        const NotificationService = require('../services/notifications/NotificationService');
         const now = new Date();
         const phNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
         const tomorrow = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 1);
         const dayAfter = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 2);
+        const today = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate());
 
-        // Find materials whose nextInspectionDue is tomorrow (within [tomorrow, dayAfter))
-        const dueSoon = await DeviceCompliance.find({
-          nextInspectionDue: { $gte: tomorrow, $lt: dayAfter }
+        // 1. Notify DRIVERS 1 day before photo due (nextPhotoDue = tomorrow)
+        const driverDueSoon = await DeviceCompliance.find({
+          nextPhotoDue: { $gte: tomorrow, $lt: dayAfter }
         }).lean();
 
-        for (const dc of dueSoon) {
-          // dc.driverId may be ObjectId or null; look up by material to find current driver if needed
+        for (const dc of driverDueSoon) {
+          // Find driver
           let driver = null;
           if (dc.driverId) {
             driver = await Driver.findById(dc.driverId);
           } else {
-            const Material = require('../models/Material');
             const mat = await Material.findById(dc.materialId);
             if (mat?.driverId) driver = await Driver.findOne({ driverId: mat.driverId });
           }
           if (!driver) continue;
 
+          // Get material info
+          const material = await Material.findById(dc.materialId);
+          const materialId = material?.materialId || 'Unknown';
+
           try {
-            await DriverNotificationService.sendGenericNotification(
+            await NotificationService.sendMonthlyPhotoDueReminderToDriver(
               driver._id,
-              'Monthly Photo Due Tomorrow',
-              'Your monthly inspection photo is due tomorrow. Please prepare to upload your compliance photo.',
-              { type: 'COMPLIANCE_DUE_SOON', materialId: String(dc.materialId), nextInspectionDue: dc.nextInspectionDue }
+              materialId,
+              dc.nextPhotoDue
             );
+            console.log(`📧 [CronJob] Sent 1-day reminder to driver ${driver.driverId} for material ${materialId}`);
           } catch (notifyErr) {
             console.error('❌ Error sending driver compliance reminder:', notifyErr);
+          }
+        }
+
+        // 2. Notify ADMINS on the due date (nextPhotoDue = today)
+        const adminDueToday = await DeviceCompliance.find({
+          nextPhotoDue: { $gte: today, $lt: tomorrow }
+        }).lean();
+
+        for (const dc of adminDueToday) {
+          // Find driver
+          let driver = null;
+          if (dc.driverId) {
+            driver = await Driver.findById(dc.driverId);
+          } else {
+            const mat = await Material.findById(dc.materialId);
+            if (mat?.driverId) driver = await Driver.findOne({ driverId: mat.driverId });
+          }
+          if (!driver) continue;
+
+          // Get material info
+          const material = await Material.findById(dc.materialId);
+          const materialId = material?.materialId || 'Unknown';
+
+          try {
+            await NotificationService.sendMonthlyPhotoDueToday(
+              materialId,
+              driver._id,
+              dc.nextPhotoDue
+            );
+            console.log(`📧 [CronJob] Sent due-today notification to admins for driver ${driver.driverId}, material ${materialId}`);
+          } catch (notifyErr) {
+            console.error('❌ Error sending admin photo due notification:', notifyErr);
           }
         }
       } catch (error) {

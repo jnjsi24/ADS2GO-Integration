@@ -65,6 +65,14 @@ const RouteTab: React.FC = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isRealTimeActive, setIsRealTimeActive] = useState(false);
+
+  // Helper function to check if selected date is today
+  const isSelectedDateToday = (): boolean => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const selected = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 0, 0, 0, 0);
+    return today.getTime() === selected.getTime();
+  };
   
   // Session status state (8-hour requirement)
   const [sessionStatus, setSessionStatus] = useState<{
@@ -905,6 +913,11 @@ const RouteTab: React.FC = () => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.loadingText}>Loading route data...</Text>
+        <View style={styles.loadingDotsContainer}>
+          <View style={[styles.loadingDot, styles.loadingDot1]} />
+          <View style={[styles.loadingDot, styles.loadingDot2]} />
+          <View style={[styles.loadingDot, styles.loadingDot3]} />
+        </View>
       </View>
     );
   }
@@ -1181,19 +1194,31 @@ const RouteTab: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.todayButton}
+            style={[
+              styles.todayButton,
+              isSelectedDateToday() && styles.todayButtonDisabled
+            ]}
             onPress={() => {
-              const now = new Date();
-              // ✅ Create today's date at midnight to avoid timezone issues
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-              console.log('🎯 [Today Button] Clicked:', {
-                dateStr: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
-                dateString: today.toDateString()
-              });
-              setSelectedDate(today);
+              if (!isSelectedDateToday()) {
+                const now = new Date();
+                // ✅ Create today's date at midnight to avoid timezone issues
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                console.log('🎯 [Today Button] Clicked:', {
+                  dateStr: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+                  dateString: today.toDateString()
+                });
+                setSelectedDate(today);
+              }
             }}
+            disabled={isSelectedDateToday()}
+            activeOpacity={isSelectedDateToday() ? 1 : 0.7}
           >
-            <Text style={styles.todayButtonText}>Today</Text>
+            <Text style={[
+              styles.todayButtonText,
+              isSelectedDateToday() && styles.todayButtonTextDisabled
+            ]}>
+              Today
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1500,6 +1525,26 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+  },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3b82f6',
+  },
+  loadingDot1: {
+    opacity: 0.3,
+  },
+  loadingDot2: {
+    opacity: 0.6,
+  },
+  loadingDot3: {
+    opacity: 1,
   },
   errorContainer: {
     flex: 1,
@@ -1869,6 +1914,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  todayButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  todayButtonTextDisabled: {
+    color: '#d1d5db',
   },
   
   // Date Picker Modal Styles

@@ -17,7 +17,9 @@ import {
   FileVideo,
   Image as ImageIcon,
   X, ChevronDown,
-  CloudUpload
+  CloudUpload,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { 
@@ -88,6 +90,10 @@ const CompanyAdsManagement: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [mediaFileError, setMediaFileError] = useState('');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  
   const [validationErrors, setValidationErrors] = useState<{
     title?: string;
     mediaFile?: string;
@@ -151,6 +157,30 @@ const CompanyAdsManagement: React.FC = () => {
     console.log(`Filtering ads: statusFilter=${statusFilter}, ad.isActive=${ad.isActive}, ad.isScheduled=${ad.isScheduled}, matchesStatus=${matchesStatus}, matchesSearch=${matchesSearch}`);
     return matchesSearch && matchesStatus;
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
+  const paginatedAds = filteredAds.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   // Handle file upload
   const handleFileUpload = async (file: File) => {
@@ -375,8 +405,13 @@ const CompanyAdsManagement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-lg text-gray-600">Loading company ads...</span>
+          </div>
+        </div>
       </div>
     );
   }
@@ -498,7 +533,7 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Company Ads Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredAds.map((ad) => (
+        {paginatedAds.map((ad) => (
           <div key={ad.id} className="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
             {/* Media Preview */}
             <div className="aspect-video bg-gray-100 rounded-t-lg relative overflow-hidden">
@@ -687,6 +722,70 @@ const CompanyAdsManagement: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Pagination Controls */}
+      {filteredAds.length > 0 && (
+        <div className="flex items-center justify-center px-4 py-4 mt-6 border-t">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              <span>Previous</span>
+            </button>
+
+            <div className="flex gap-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage < maxVisiblePages - 1) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black"
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
+
+                return pages;
+              })()}
+            </div>
+
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Empty State */}
       {filteredAds.length === 0 && (

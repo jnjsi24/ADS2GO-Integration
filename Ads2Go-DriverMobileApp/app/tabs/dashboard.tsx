@@ -133,7 +133,7 @@ const Dashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
-  const [materialAssignedDate, setMaterialAssignedDate] = useState<string | null>(null); // ✅ Track assigned date
+  const [materialMountedAt, setMaterialMountedAt] = useState<string | null>(null); // ✅ Track mounted date (when material was physically installed)
 
 
   useEffect(() => {
@@ -210,6 +210,52 @@ const Dashboard: React.FC = () => {
       selectedDate.getMonth() === today.getMonth() &&
       selectedDate.getFullYear() === today.getFullYear()
     );
+  };
+
+  // Helper function to create empty analytics for dates with no data
+  const createEmptyAnalytics = (driverData: any): DriverAnalytics => {
+    return {
+      driverId: driverData?.driverId || driverData?.id || 'Unknown',
+      vehiclePlateNumber: driverData?.vehiclePlateNumber || 'Unknown',
+      vehicleModel: driverData?.vehicleModel || 'Unknown',
+      vehicleType: driverData?.vehicleType || 'Unknown',
+      deviceId: driverData?.deviceId || 'Unknown',
+      screenType: 'Unknown',
+      materialId: driverData?.materialId || 'Unknown',
+      totalDistance: 0,
+      totalHours: 0,
+      hoursRemaining: 0,
+      averageSpeed: 0,
+      maxSpeed: 0,
+      qrImpressions: 0,
+      totalRoutes: 0,
+      isOnline: false,
+      complianceRate: 0,
+      dailyPerformance: [],
+      monthlyTrends: [],
+      dailyData: null,
+      monthlyData: null,
+      last7DaysData: {
+        period: 'last7days',
+        dateRange: {
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString()
+        },
+        dailyBreakdown: Array.from({ length: 7 }, (_, i) => {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          return {
+            date: date.toISOString(),
+            totalDistance: 0,
+            totalHours: 0,
+            totalQRImpressions: 0,
+            totalAdImpressions: 0,
+            totalAdPlayTime: 0,
+            totalAdPlays: 0
+          };
+        }).reverse()
+      }
+    };
   };
 
   const fetchSalarySummary = async () => {
@@ -304,19 +350,35 @@ const Dashboard: React.FC = () => {
       });
 
       if (!dailyResponse.ok) {
-        // Handle 404 gracefully - device may have been unregistered
+        // Handle 404 gracefully
         if (dailyResponse.status === 404) {
-          // Device not registered - this is normal
-          setAnalytics(null);
+          // If viewing today and getting 404, device is not registered
+          if (isToday) {
+            console.log('❌ Device not registered - no data for today');
+            setAnalytics(null);
+            setLoading(false);
+            return;
+          }
+          // If viewing old date and getting 404, show empty data (no tracking data for that date)
+          console.log('⚠️ No data for selected date, showing empty state');
+          const emptyAnalytics = createEmptyAnalytics(user);
+          setAnalytics(emptyAnalytics);
+          setLoading(false);
+          return;
+        } else {
+          // Handle other errors
+          console.warn(`Analytics endpoint error: ${dailyResponse.status}`);
+          if (isToday) {
+            setAnalytics(null);
+            setLoading(false);
+            return;
+          }
+          // For old dates, show empty state
+          const emptyAnalytics = createEmptyAnalytics(user);
+          setAnalytics(emptyAnalytics);
           setLoading(false);
           return;
         }
-        
-        // Handle other errors
-        console.warn(`Analytics endpoint error: ${dailyResponse.status}`);
-        setAnalytics(null);
-        setLoading(false);
-        return;
       }
 
       const screenTrackingData = await dailyResponse.json();
@@ -372,13 +434,13 @@ const Dashboard: React.FC = () => {
           // Historical data unavailable - continue without it
         }
 
-        // ✅ Save assigned date for date dropdown validation
-        // Try to get from screenTracking API first
-        let assignedDate = data.materialAssignedDate;
+        // ✅ Fetch mountedAt date for date dropdown validation
+        // mountedAt = when material was physically mounted on vehicle (data tracking starts from this date)
+        let mountedAt = data.materialMountedAt;
         
-        // If not available, fetch from GraphQL (same as Profile tab)
-        if (!assignedDate) {
-          console.log('⚠️ [Dashboard] No materialAssignedDate in screenTracking API, fetching from GraphQL...');
+        // If not available in screenTracking API, fetch from GraphQL
+        if (!mountedAt) {
+          console.log('⚠️ [Dashboard] No materialMountedAt in screenTracking API, fetching from GraphQL...');
           try {
             const materialsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
               method: 'POST',
@@ -392,7 +454,7 @@ const Dashboard: React.FC = () => {
                     getDriverMaterials(driverId: $driverId) {
                       success
                       materials {
-                        assignedDate
+                        mountedAt
                       }
                     }
                   }
@@ -404,18 +466,18 @@ const Dashboard: React.FC = () => {
             const materialsResult = await materialsResponse.json();
             if (materialsResult.data?.getDriverMaterials?.success) {
               const materials = materialsResult.data.getDriverMaterials.materials;
-              if (materials && materials.length > 0 && materials[0].assignedDate) {
-                assignedDate = materials[0].assignedDate;
-                console.log('✅ [Dashboard] Got assigned date from GraphQL:', assignedDate);
+              if (materials && materials.length > 0 && materials[0].mountedAt) {
+                mountedAt = materials[0].mountedAt;
+                console.log('✅ [Dashboard] Got mounted date from GraphQL:', mountedAt);
               }
             }
           } catch (error) {
-            console.warn('⚠️ [Dashboard] Could not fetch from GraphQL:', error);
+            console.warn('⚠️ [Dashboard] Could not fetch mountedAt from GraphQL:', error);
           }
         }
         
-        console.log('📅 [Dashboard] Final Material Assigned Date:', assignedDate);
-        setMaterialAssignedDate(assignedDate || null);
+        console.log('📅 [Dashboard] Final Material Mounted Date:', mountedAt);
+        setMaterialMountedAt(mountedAt || null);
 
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
@@ -484,11 +546,34 @@ const Dashboard: React.FC = () => {
           }
         }));
       } else {
-        throw new Error(screenTrackingData.message || 'Failed to fetch analytics');
+        // API returned success: false
+        const isToday = isSelectedDateToday();
+        if (isToday) {
+          // For today, if no success, device not registered
+          throw new Error(screenTrackingData.message || 'Failed to fetch analytics');
+        }
+        // For old dates, show empty state with 0 values
+        console.log('⚠️ No data for selected date, creating empty analytics');
+        const emptyAnalytics = createEmptyAnalytics(user);
+        setAnalytics(emptyAnalytics);
+        setLoading(false);
+        return;
       }
     } catch (error) {
-      // Analytics fetch failed - device may not be registered
-      setAnalytics(null);
+      // Analytics fetch failed
+      const isToday = isSelectedDateToday();
+      if (isToday) {
+        // For today, this means device is not registered
+        console.error('❌ Analytics fetch failed for today:', error);
+        setAnalytics(null);
+      } else {
+        // For old dates, show empty state instead of error
+        console.log('⚠️ Analytics fetch failed for old date, showing empty state');
+        const emptyAnalytics = createEmptyAnalytics(user);
+        setAnalytics(emptyAnalytics);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -812,14 +897,26 @@ const Dashboard: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={styles.todayButton}
+            style={[
+              styles.todayButton, 
+              isSelectedDateToday() && styles.todayButtonDisabled
+            ]}
             onPress={() => {
-              const now = new Date();
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-              setSelectedDate(today);
+              if (!isSelectedDateToday()) {
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                setSelectedDate(today);
+              }
             }}
+            disabled={isSelectedDateToday()}
+            activeOpacity={isSelectedDateToday() ? 1 : 0.7}
           >
-            <Text style={styles.todayButtonText}>Today</Text>
+            <Text style={[
+              styles.todayButtonText,
+              isSelectedDateToday() && styles.todayButtonTextDisabled
+            ]}>
+              Today
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -848,25 +945,25 @@ const Dashboard: React.FC = () => {
                   const now = new Date();
                   now.setHours(0, 0, 0, 0);
                   
-                  // ✅ Calculate days to show based on assigned date
-                  let daysToShow = 0; // Default to 0 (show nothing if no assigned date)
+                  // ✅ Calculate days to show based on mounted date (when material was physically installed)
+                  let daysToShow = 0; // Default to 0 (show nothing if no mounted date)
                   
-                  if (materialAssignedDate) {
-                    const assignedDate = new Date(materialAssignedDate);
-                    assignedDate.setHours(0, 0, 0, 0);
+                  if (materialMountedAt) {
+                    const mountedDate = new Date(materialMountedAt);
+                    mountedDate.setHours(0, 0, 0, 0);
                     
-                    // Calculate days from assignment to today
-                    const daysSinceAssignment = Math.floor((now.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                    daysToShow = daysSinceAssignment;
+                    // Calculate days from mounting to today
+                    const daysSinceMounted = Math.floor((now.getTime() - mountedDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    daysToShow = daysSinceMounted;
                     
                     console.log('📅 [Dashboard Date Dropdown] Calculated:', {
-                      assignedDate: assignedDate.toDateString(),
+                      mountedDate: mountedDate.toDateString(),
                       today: now.toDateString(),
-                      daysSinceAssignment,
+                      daysSinceMounted,
                       daysToShow
                     });
                   } else {
-                    console.log('⚠️ [Dashboard Date Dropdown] No assigned date - showing no dates');
+                    console.log('⚠️ [Dashboard Date Dropdown] No mounted date - showing no dates');
                   }
                   
                   // If no dates to show, display a message
@@ -875,7 +972,7 @@ const Dashboard: React.FC = () => {
                       <View style={styles.noDateContainer}>
                         <Ionicons name="calendar-outline" size={48} color="#9ca3af" />
                         <Text style={styles.noDateText}>No dates available</Text>
-                        <Text style={styles.noDateSubtext}>No material assigned yet</Text>
+                        <Text style={styles.noDateSubtext}>Material not mounted yet</Text>
                       </View>
                     );
                   }
@@ -1005,7 +1102,7 @@ const Dashboard: React.FC = () => {
         <Text style={styles.chartTitle}>
           Last 7 Days {getMetricShortLabel()} ({getMetricUnit()})
         </Text>
-        {chartData && chartData.datasets && chartData.datasets.length > 0 && chartData.datasets[0].data.some((val: number) => val > 0) ? (
+        {chartData && chartData.datasets && chartData.datasets.length > 0 ? (
           <LineChart
             data={chartData}
             width={screenWidth - 80}
@@ -1564,10 +1661,18 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  todayButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   todayButtonText: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  todayButtonTextDisabled: {
+    color: '#d1d5db',
   },
   // Modal Styles (matches Route Tab)
   modalOverlay: {

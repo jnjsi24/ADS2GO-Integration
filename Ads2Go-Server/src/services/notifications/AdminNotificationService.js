@@ -827,6 +827,63 @@ class AdminNotificationService extends BaseNotificationService {
       throw error;
     }
   }
+
+  /**
+   * Send monthly photo due today notification to admins
+   */
+  static async sendMonthlyPhotoDueTodayNotification(materialId, driverId, dueDate) {
+    try {
+      const Material = require('../../models/Material');
+      const Driver = require('../../models/Driver');
+      const Admin = require('../../models/Admin');
+      
+      const material = await Material.findOne({ materialId });
+      const driver = await Driver.findById(driverId);
+      
+      if (!material) throw new Error('Material not found');
+      if (!driver) throw new Error('Driver not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const dueDateFormatted = new Date(dueDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📸 Monthly Photo Due Today',
+          `Driver ${driver.firstName} ${driver.lastName}'s monthly compliance photo for material "${materialId}" is due today (${dueDateFormatted}). Please ensure the driver uploads the required photos.`,
+          'WARNING',
+          {
+            userRole: 'ADMIN',
+            category: 'MONTHLY_PHOTO_DUE_TODAY',
+            priority: 'HIGH',
+            data: { 
+              materialId,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              driverName: `${driver.firstName} ${driver.lastName}`,
+              driverEmail: driver.email,
+              driverId: driver.driverId,
+              dueDate: new Date(dueDate).toISOString(),
+              timestamp: new Date().toISOString()
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending monthly photo due today notification:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = AdminNotificationService;

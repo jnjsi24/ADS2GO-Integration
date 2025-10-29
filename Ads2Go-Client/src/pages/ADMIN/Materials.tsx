@@ -155,6 +155,12 @@ const Materials: React.FC = () => {
   const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
   const [dismountReason, setDismountReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  
+  // Bulk actions state
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [bulkSelectedDriver, setBulkSelectedDriver] = useState('');
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -708,11 +714,179 @@ const Materials: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedMaterials.length === filtered.length) {
-      setSelectedMaterials([]);
+    const currentPageIds = paginatedMaterials.map(material => material.id);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedMaterials.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect only items from current page
+      setSelectedMaterials(prev => prev.filter(id => !currentPageIds.includes(id)));
     } else {
-      setSelectedMaterials(filtered.map(material => material.id));
+      // Add current page items to existing selection
+      setSelectedMaterials(prev => {
+        const newSelection = [...prev];
+        currentPageIds.forEach(id => {
+          if (!newSelection.includes(id)) newSelection.push(id);
+        });
+        return newSelection;
+      });
     }
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = () => {
+    if (selectedMaterials.length === 0) return;
+    setShowBulkDeleteModal(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    setIsBulkProcessing(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedMaterials.map(id =>
+          deleteMaterial({
+            variables: { id }
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} material(s) deleted successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to delete ${failCount} material(s)`,
+          duration: 5000
+        });
+      }
+
+      setShowBulkDeleteModal(false);
+      setSelectedMaterials([]);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error deleting materials: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkAssign = () => {
+    if (selectedMaterials.length === 0) return;
+    setShowBulkAssignModal(true);
+  };
+
+  const confirmBulkAssign = async () => {
+    if (!bulkSelectedDriver) {
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please select a driver',
+        duration: 4000
+      });
+      return;
+    }
+
+    setIsBulkProcessing(true);
+
+    try {
+      const results = await Promise.allSettled(
+        selectedMaterials.map(materialId =>
+          assignMaterialToDriver({
+            variables: { materialId, driverId: bulkSelectedDriver }
+          })
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} material(s) assigned successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to assign ${failCount} material(s)`,
+          duration: 5000
+        });
+      }
+
+      setShowBulkAssignModal(false);
+      setBulkSelectedDriver('');
+      setSelectedMaterials([]);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error assigning materials: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleExportToCSV = () => {
+    if (selectedMaterials.length === 0) return;
+
+    const selectedMaterialData = materials.filter(m => selectedMaterials.includes(m.id));
+    
+    const csvData = selectedMaterialData.map(material => ({
+      'Material ID': material.materialId,
+      'Vehicle Type': material.vehicleType,
+      'Material Type': material.materialType,
+      Category: material.category,
+      Description: material.description || '',
+      Requirements: material.requirements,
+      Status: material.driverId ? 'Used' : 'Available',
+      'Driver ID': material.driverId || 'N/A',
+      'Driver Name': material.driver?.fullName || 'N/A',
+      'Assigned Date': material.assignedDate ? new Date(material.assignedDate).toLocaleDateString() : 'N/A',
+      'Created At': new Date(material.createdAt).toLocaleDateString()
+    }));
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `materials_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    addToast({
+      type: 'success',
+      title: 'Export Successful!',
+      message: `${selectedMaterials.length} material(s) exported to CSV`,
+      duration: 4000
+    });
   };
 
   const handleAssignSubmit = async (driverId: string) => {
@@ -806,6 +980,8 @@ const Materials: React.FC = () => {
   };
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedMaterials = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -912,7 +1088,7 @@ const Materials: React.FC = () => {
     }));
   };
 
-  const isAllSelected = selectedMaterials.length === filtered.length && filtered.length > 0;
+  const isAllSelected = paginatedMaterials.length > 0 && paginatedMaterials.every(material => selectedMaterials.includes(material.id));
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'N/A';
@@ -979,6 +1155,45 @@ const Materials: React.FC = () => {
           onCreateClick={() => setShowCreateModal(true)}
         />
 
+        {/* Bulk Actions Bar */}
+        {selectedMaterials.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedMaterials.length} material{selectedMaterials.length > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                  >
+                    Delete Selected
+                  </button>
+                  <button
+                    onClick={handleBulkAssign}
+                    className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                  >
+                    Assign to Driver
+                  </button>
+                  <button
+                    onClick={handleExportToCSV}
+                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
+                  >
+                    Export to CSV
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMaterials([])}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="rounded-xl mb-5 overflow-hidden">
           {/* Table Header */}
@@ -1004,9 +1219,7 @@ const Materials: React.FC = () => {
             <AdminLoader />
           ) : (
             <>
-              {filtered
-              .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-              .map((material) => {
+              {paginatedMaterials.map((material) => {
                 const status = getStatus(material);
                 
                 return (
@@ -1268,6 +1481,85 @@ const Materials: React.FC = () => {
               className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {unassigning ? 'Removing...' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Bulk Delete Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showBulkDeleteModal}
+      onClose={() => setShowBulkDeleteModal(false)}
+      onConfirm={confirmBulkDelete}
+      title="Delete Multiple Materials"
+      message={`Are you sure you want to delete ${selectedMaterials.length} material(s)? This action cannot be undone.`}
+      confirmText={`Delete ${selectedMaterials.length} Material${selectedMaterials.length > 1 ? 's' : ''}`}
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+      isProcessing={isBulkProcessing}
+    />
+
+    {/* Bulk Assign Modal */}
+    {showBulkAssignModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Assign {selectedMaterials.length} Material(s) to Driver</h2>
+            <button
+              onClick={() => {
+                setShowBulkAssignModal(false);
+                setBulkSelectedDriver('');
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <Pencil size={20} />
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">
+            Select a driver to assign the selected materials to:
+          </p>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Driver
+            </label>
+            <select
+              value={bulkSelectedDriver}
+              onChange={(e) => setBulkSelectedDriver(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Select Driver --</option>
+              {driversData?.getDriversForMaterials?.map((driver: Driver) => (
+                <option key={driver.driverId} value={driver.driverId}>
+                  {driver.fullName} - {driver.vehiclePlateNumber}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => {
+                setShowBulkAssignModal(false);
+                setBulkSelectedDriver('');
+              }}
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+              disabled={isBulkProcessing}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmBulkAssign}
+              disabled={!bulkSelectedDriver || isBulkProcessing}
+              className={`px-4 py-2 text-white rounded ${
+                !bulkSelectedDriver || isBulkProcessing
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
+            >
+              {isBulkProcessing ? 'Processing...' : `Assign ${selectedMaterials.length} Material${selectedMaterials.length > 1 ? 's' : ''}`}
             </button>
           </div>
         </div>

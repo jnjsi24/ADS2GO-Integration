@@ -209,11 +209,18 @@ router.get('/route/:materialId', async (req, res) => {
     // Sort points by timestamp
     allLocationPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // Calculate duration
-    if (allLocationPoints.length > 1) {
+    // ✅ FIXED: Use stored totalHoursOnline for duration (consistent with archived data)
+    // For historical data, use actual online hours from DeviceDataHistoryV2, not GPS timestamp span
+    // This prevents showing 22h duration when only 2-3h were actually online
+    if (totalHoursOnline > 0) {
+      totalDuration = totalHoursOnline * 3600; // Convert stored hours to seconds
+      console.log(`⏱️ [Enhanced Route API] Using stored totalHoursOnline: ${totalHoursOnline}h = ${totalDuration}s`);
+    } else if (allLocationPoints.length > 1) {
+      // Fallback: calculate from GPS timestamps if no stored hours available
       const startTime = new Date(allLocationPoints[0].timestamp);
       const endTime = new Date(allLocationPoints[allLocationPoints.length - 1].timestamp);
       totalDuration = (endTime - startTime) / 1000; // seconds
+      console.log(`⏱️ [Enhanced Route API] Fallback to GPS timestamp span: ${totalDuration}s`);
     }
 
     // Create route points with enhanced data
@@ -290,7 +297,7 @@ router.get('/route/:materialId', async (req, res) => {
 
     // Create speed segments for color coding
     let speedSegments = [];
-    if (includeSpeedSegments === 'true') {
+    if (includeSpeedSegments === 'true' || includeSpeedSegments === true) {
       speedSegments = createSpeedSegments(routePoints);
     }
 
@@ -310,7 +317,7 @@ router.get('/route/:materialId', async (req, res) => {
         speedSegments,
         waypoints,
         bounds,
-        metrics: includeMetrics === 'true' ? metrics : undefined,
+        metrics: (includeMetrics === 'true' || includeMetrics === true) ? metrics : undefined,
         metadata: {
           generatedAt: new Date().toISOString(),
           dataSource: isToday ? 'DeviceTracking (Real-time)' : 'DeviceDataHistoryV2',

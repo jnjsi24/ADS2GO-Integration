@@ -249,6 +249,36 @@ const resolvers = {
         
         await newUser.save();
 
+        // Subscribe user to newsletter with 'registration' source
+        try {
+          const Newsletter = require('../models/Newsletter');
+          const existingSubscription = await Newsletter.findOne({ 
+            email: newUser.email 
+          });
+
+          if (!existingSubscription) {
+            // Create new newsletter subscription with 'registration' source
+            const newsletter = new Newsletter({
+              email: newUser.email,
+              subscribedAt: new Date(),
+              isActive: true,
+              source: 'registration'
+            });
+            await newsletter.save();
+            console.log(`✅ User subscribed to newsletter (registration source): ${newUser.email}`);
+          } else {
+            // Update existing subscription source to 'registration' if it was from contact form
+            if (existingSubscription.source === 'contact_form') {
+              existingSubscription.source = 'registration';
+              await existingSubscription.save();
+              console.log(`✅ Updated newsletter source from contact_form to registration: ${newUser.email}`);
+            }
+          }
+        } catch (newsletterError) {
+          console.error('⚠️  Newsletter subscription error during registration:', newsletterError.message);
+          // Don't fail the user creation if newsletter subscription fails
+        }
+
         // Send notification to admins about new user registration
         try {
           const NotificationService = require('../services/notifications/NotificationService');
@@ -334,6 +364,36 @@ const resolvers = {
         });
 
         await newUser.save();
+
+        // Subscribe user to newsletter with 'registration' source
+        try {
+          const Newsletter = require('../models/Newsletter');
+          const existingSubscription = await Newsletter.findOne({ 
+            email: newUser.email 
+          });
+
+          if (!existingSubscription) {
+            // Create new newsletter subscription with 'registration' source
+            const newsletter = new Newsletter({
+              email: newUser.email,
+              subscribedAt: new Date(),
+              isActive: true,
+              source: 'registration'
+            });
+            await newsletter.save();
+            console.log(`✅ Google OAuth user subscribed to newsletter (registration source): ${newUser.email}`);
+          } else {
+            // Update existing subscription source to 'registration' if it was from contact form
+            if (existingSubscription.source === 'contact_form') {
+              existingSubscription.source = 'registration';
+              await existingSubscription.save();
+              console.log(`✅ Updated newsletter source from contact_form to registration (Google OAuth): ${newUser.email}`);
+            }
+          }
+        } catch (newsletterError) {
+          console.error('⚠️  Newsletter subscription error during Google OAuth registration:', newsletterError.message);
+          // Don't fail the user creation if newsletter subscription fails
+        }
 
         // Generate JWT token
         const token = jwt.sign({
@@ -617,6 +677,20 @@ const resolvers = {
         userRecord.tokenVersion += 1;
         
         await userRecord.save();
+        
+        // Auto-unsubscribe from newsletter when account is deleted
+        try {
+          const Newsletter = require('../models/Newsletter');
+          const newsletter = await Newsletter.findOne({ email: userRecord.email });
+          
+          if (newsletter && newsletter.isActive) {
+            newsletter.isActive = false;
+            await newsletter.save();
+            console.log(`✅ Auto-unsubscribed ${userRecord.email} from newsletter (account deleted)`);
+          }
+        } catch (newsletterError) {
+          console.error('⚠️  Newsletter unsubscribe error during account deletion:', newsletterError.message);
+        }
         
         console.log(`✅ User ${userRecord.email} deleted their own account. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
         

@@ -10,6 +10,7 @@ const typeDefs = gql`
     MATERIAL_ISSUE
     APP_ISSUE
     REQUEST_ACCOUNT_CLOSURE
+    UPDATE_PROFILE_DETAILS
     OTHER
   }
 

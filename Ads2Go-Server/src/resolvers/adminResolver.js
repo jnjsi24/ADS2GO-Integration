@@ -382,6 +382,20 @@ const resolvers = {
       
       await user.save();
       
+      // Auto-unsubscribe from newsletter when admin archives user
+      try {
+        const Newsletter = require('../models/Newsletter');
+        const newsletter = await Newsletter.findOne({ email: user.email });
+        
+        if (newsletter && newsletter.isActive) {
+          newsletter.isActive = false;
+          await newsletter.save();
+          console.log(`✅ Auto-unsubscribed ${user.email} from newsletter (user archived by admin)`);
+        }
+      } catch (newsletterError) {
+        console.error('⚠️  Newsletter unsubscribe error during user archival:', newsletterError.message);
+      }
+      
       console.log(`✅ User ${user.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
       
       return {

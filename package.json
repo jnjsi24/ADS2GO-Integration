@@ -10,7 +10,15 @@
     "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",
     "install:all": "npm install && npm install --prefix Ads2Go-Client && npm install --prefix Ads2Go-Server && npm install --prefix Ads2Go-MobileAppExpo && npm install --prefix androidPlayerExpo",
     "build": "npm run build --prefix Ads2Go-Client",
-    "test": "npm test --prefix Ads2Go-Client"
+    "test": "npm test --prefix Ads2Go-Client",
+    "indexes:build": "npm run indexes:build --prefix Ads2Go-Server",
+    "indexes:rebuild": "npm run indexes:rebuild --prefix Ads2Go-Server",
+    "indexes:verify": "npm run indexes:verify --prefix Ads2Go-Server",
+    "indexes:clean": "npm run indexes:clean --prefix Ads2Go-Server",
+    "indexes:device": "npm run indexes:device --prefix Ads2Go-Server",
+    "server:create-admin": "npm run script:create-admin --prefix Ads2Go-Server",
+    "server:verify-ads": "npm run script:verify-ads --prefix Ads2Go-Server",
+    "server:migrate-newsletter": "npm run script:migrate-newsletter --prefix Ads2Go-Server"
   },
   "dependencies": {
     "concurrently": "^8.2.2",

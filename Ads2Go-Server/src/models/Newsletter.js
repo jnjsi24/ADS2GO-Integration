@@ -23,8 +23,8 @@ const newsletterSchema = new mongoose.Schema({
   },
   source: {
     type: String,
-    enum: ['landing_page', 'contact_form', 'registration', 'manual', 'existing_user_migration'],
-    default: 'landing_page'
+    enum: ['contact_form', 'registration'],
+    default: 'contact_form'
   },
   preferences: {
     frequency: {

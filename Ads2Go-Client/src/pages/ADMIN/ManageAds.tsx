@@ -18,7 +18,9 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useLocation } from 'react-router-dom';
@@ -66,9 +68,18 @@ const ManageAds: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
+  
+  // Bulk actions state
+  const [selectedAds, setSelectedAds] = useState<string[]>([]);
+  const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState('');
 
   // Loading states for approve/reject buttons
   const [processingAds, setProcessingAds] = useState<Set<string>>(new Set());
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(9);
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
@@ -144,6 +155,11 @@ const ManageAds: React.FC = () => {
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
   });
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, adsStatusFilter, selectedSortBy]);
 
   const handleViewAdDetails = (ad: Ad) => {
   setSelectedAd(ad);
@@ -372,6 +388,151 @@ const ManageAds: React.FC = () => {
     setAdToDelete(null);
   };
 
+  // Bulk action handlers
+  const handleAdSelect = (id: string) => {
+    setSelectedAds(prev =>
+      prev.includes(id)
+        ? prev.filter(adId => adId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAllAds = () => {
+    const currentPageIds = paginatedAds.map((ad: Ad) => ad.id);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedAds.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect only items from current page
+      setSelectedAds(prev => prev.filter(id => !currentPageIds.includes(id)));
+    } else {
+      // Add current page items to existing selection
+      setSelectedAds(prev => {
+        const newSelection = [...prev];
+        currentPageIds.forEach(id => {
+          if (!newSelection.includes(id)) newSelection.push(id);
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (selectedAds.length === 0) return;
+
+    try {
+      await Promise.all(
+        selectedAds.map(id =>
+          updateAd({
+            variables: {
+              id,
+              input: {
+                status: 'APPROVED'
+              }
+            }
+          })
+        )
+      );
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: `${selectedAds.length} advertisement(s) approved successfully`,
+        duration: 5000
+      });
+      setSelectedAds([]);
+    } catch (error) {
+      console.error('Error bulk approving ads:', error);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Failed to approve some advertisements',
+        duration: 5000
+      });
+    }
+  };
+
+  const handleBulkReject = () => {
+    if (selectedAds.length === 0) return;
+    setShowBulkRejectModal(true);
+  };
+
+  const submitBulkReject = async () => {
+    if (!bulkRejectReason.trim()) {
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for rejection',
+        duration: 4000
+      });
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedAds.map(id =>
+          updateAd({
+            variables: {
+              id,
+              input: {
+                status: 'REJECTED',
+                reasonForReject: bulkRejectReason
+              }
+            }
+          })
+        )
+      );
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: `${selectedAds.length} advertisement(s) rejected successfully`,
+        duration: 5000
+      });
+      setShowBulkRejectModal(false);
+      setBulkRejectReason('');
+      setSelectedAds([]);
+    } catch (error) {
+      console.error('Error bulk rejecting ads:', error);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Failed to reject some advertisements',
+        duration: 5000
+      });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedAds.length === 0) return;
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedAds.length} advertisement(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await Promise.all(
+        selectedAds.map(id =>
+          deleteAd({
+            variables: { id }
+          })
+        )
+      );
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: `${selectedAds.length} advertisement(s) deleted successfully`,
+        duration: 5000
+      });
+      setSelectedAds([]);
+    } catch (error) {
+      console.error('Error bulk deleting ads:', error);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Failed to delete some advertisements',
+        duration: 5000
+      });
+    }
+  };
+
   const handleStatusFilterChange = (status: string) => {
     setSelectedStatusFilter(status);
     setShowStatusDropdown(false);
@@ -462,6 +623,30 @@ const ManageAds: React.FC = () => {
         return 0;
     }
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
+  const paginatedAds = filteredAds.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   if (error) {
     return (
@@ -693,6 +878,49 @@ const ManageAds: React.FC = () => {
               </div>
             </div>
 
+            {/* Bulk Actions Bar */}
+            {selectedAds.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <span className="text-sm font-medium text-blue-800">
+                      {selectedAds.length} advertisement{selectedAds.length > 1 ? 's' : ''} selected
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {filteredAds.filter((ad: Ad) => selectedAds.includes(ad.id) && ad.status === 'PENDING').length > 0 && (
+                        <>
+                          <button
+                            onClick={handleBulkApprove}
+                            className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                          >
+                            Approve Selected
+                          </button>
+                          <button
+                            onClick={handleBulkReject}
+                            className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                          >
+                            Reject Selected
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={handleBulkDelete}
+                        className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
+                      >
+                        Delete Selected
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedAds([])}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Table */}
             {loading ? (
               <AdminLoader />
@@ -703,20 +931,37 @@ const ManageAds: React.FC = () => {
             ) : (
               <div className="rounded-md mb-4 overflow-hidden">
                 <div className="grid grid-cols-12 px-4 py-3 text-sm font-semibold text-gray-600">
-                  <div className="col-span-3">Title</div>
+                  <div className="col-span-3 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={paginatedAds.length > 0 && paginatedAds.every((ad: Ad) => selectedAds.includes(ad.id))}
+                      onChange={handleSelectAllAds}
+                    />
+                    <span className="cursor-pointer" onClick={handleSelectAllAds}>Title</span>
+                  </div>
                   <div className="col-span-3">Advertiser</div>
                   <div className="col-span-2">Ad Type</div>
                   <div className="col-span-2">Status</div>
                   <div className="col-span-2 text-center">Actions</div>
                 </div>
 
-                {filteredAds.map((ad: Ad) => (
+                {paginatedAds.map((ad: Ad) => (
                   <div key={ad.id} className="bg-white mb-3 rounded-lg shadow-md">
                     <div
                       className="grid grid-cols-12 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointe"
                       onClick={() => handleRowClick(ad)}
                     >
-                      <div className="col-span-3 truncate" title={ad.title}>{ad.title}</div>
+                      <div className="col-span-3 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox"
+                          checked={selectedAds.includes(ad.id)}
+                          onChange={() => handleAdSelect(ad.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="truncate" title={ad.title}>{ad.title}</span>
+                      </div>
                       <div className="col-span-3 truncate" title={getAdvertiserName(ad.userId)}>
                         {getAdvertiserName(ad.userId)}
                       </div>
@@ -801,6 +1046,70 @@ const ManageAds: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {!loading && filteredAds.length > 0 && (
+              <div className="flex items-center justify-center px-4 py-4 border-t">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    <span>Previous</span>
+                  </button>
+
+                  <div className="flex gap-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                      if (endPage - startPage < maxVisiblePages - 1) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-1 text-sm rounded ${
+                              currentPage === i
+                                ? "border border-gray-300 text-black"
+                                : "text-gray-700 hover:border border-gray-300"
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+
+                      if (endPage < totalPages) {
+                        pages.push(
+                          <span key="ellipsis" className="px-2 text-gray-500">
+                            …
+                          </span>
+                        );
+                      }
+
+                      return pages;
+                    })()}
+                  </div>
+
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1040,6 +1349,88 @@ const ManageAds: React.FC = () => {
                 {adToReject && processingAds.has(adToReject)
                   ? 'Processing...'
                   : 'Reject Advertisement'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Reject Modal */}
+      {showBulkRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800 mb-5">Reject {selectedAds.length} Advertisement(s)</h2>
+              <button
+                onClick={() => {
+                  setShowBulkRejectModal(false);
+                  setBulkRejectReason('');
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="relative mb-6">
+              <textarea
+                id="bulkRejectReason"
+                name="bulkRejectReason"
+                required
+                value={bulkRejectReason}
+                onChange={(e) => {
+                  setBulkRejectReason(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+                }}
+                placeholder=" "
+                className={`peer w-full px-0 pt-6 pb-2 text-gray-800 border-b bg-transparent focus:outline-none focus:border-blue-500 placeholder-transparent transition
+                  ${!bulkRejectReason.trim() ? 'border-gray-300' : 'border-gray-400'}
+                `}
+                style={{
+                  minHeight: "40px",
+                  maxHeight: "100px",
+                  resize: "none",
+                  overflowY: "auto",
+                }}
+              />
+
+              <label
+                htmlFor="bulkRejectReason"
+                className={`absolute left-0 bg-white text-gray-600 transition-all duration-200
+                  ${
+                    bulkRejectReason
+                      ? '-top-2 text-sm text-blue-600 font-semibold'
+                      : 'peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                  }
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold`}
+              >
+                Reason for rejection
+              </label>
+
+              <p className="mt-1 text-xs text-gray-500">This reason will be visible to all selected advertisers.</p>
+            </div>
+
+            <div className="flex gap-3 justify-between">
+              <button
+                onClick={() => {
+                  setShowBulkRejectModal(false);
+                  setBulkRejectReason('');
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitBulkReject}
+                disabled={!bulkRejectReason.trim()}
+                className={`px-4 py-2 text-white rounded transition-colors ${
+                  !bulkRejectReason.trim()
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
+              >
+                Reject {selectedAds.length} Advertisement{selectedAds.length > 1 ? 's' : ''}
               </button>
             </div>
           </div>

@@ -85,4 +85,60 @@ export class NewsletterService {
       return false;
     }
   }
+
+  /**
+   * Send contact form message
+   * Saves message to database and subscribes email to newsletter
+   */
+  static async sendContactMessage({ name, email, message }: { name: string; email: string; message: string }): Promise<{ success: boolean; message: string }> {
+    try {
+      // Validate inputs
+      if (!name || !email || !message) {
+        return {
+          success: false,
+          message: 'Please fill out all fields'
+        };
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return {
+          success: false,
+          message: 'Please enter a valid email address'
+        };
+      }
+
+      const apiUrl = process.env.REACT_APP_API_URL;
+      
+      if (!apiUrl) {
+        console.error('❌ Missing REACT_APP_API_URL environment variable');
+        throw new Error('REACT_APP_API_URL is required in .env file');
+      }
+
+      // Strip /graphql if present since this is for REST API calls
+      const baseUrl = apiUrl.replace('/graphql', '').replace(/\/$/, '');
+      
+      const response = await fetch(`${baseUrl}/api/contact/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, message }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send message');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Contact message error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to send message'
+      };
+    }
+  }
 }

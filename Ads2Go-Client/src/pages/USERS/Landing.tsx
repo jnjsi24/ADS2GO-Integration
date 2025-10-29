@@ -560,7 +560,7 @@ export default function Home() {
             </div>
             <div className="md:w-1/2">
               <h3 className="text-xl font-semibold mb-2">Contact Us</h3>
-              <form onSubmit={handleNewsletterSubmit} className="mt-2">
+              <form onSubmit={handleContactSubmit} className="mt-2">
                 <div className="mb-4">
                   <label htmlFor="contact-name" className="block text-sm font-medium mb-1">
                     Name
@@ -588,17 +588,17 @@ export default function Home() {
                   <input
                     id="contact-email"
                     type="email"
-                    value={newsletterEmail}
-                    onChange={(e) => setNewsletterEmail(e.target.value)}
+                    value={contactForm.email}
+                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
                     placeholder="Your email address"
                     className={`w-full p-2 pl-4 pr-10 text-black focus:outline-none ${
-                      newsletterStatus === 'error' && !newsletterEmail.trim() ? 'border-2 border-red-500' : ''
+                      contactStatus === 'error' && !contactForm.email.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
                       WebkitTextFillColor: '#000000',
                     }}
-                    disabled={newsletterStatus === 'loading'}
+                    disabled={contactStatus === 'loading'}
                   />
                 </div>
                 <div className="mb-4">
@@ -623,9 +623,9 @@ export default function Home() {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={newsletterStatus === 'loading'}
+                    disabled={contactStatus === 'loading'}
                     onMouseMove={(e) => {
-                      if (newsletterStatus === 'loading') return;
+                      if (contactStatus === 'loading') return;
                       const rect = e.currentTarget.getBoundingClientRect();
                       const x = ((e.clientX - rect.left) / rect.width) * 100;
                       const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -633,19 +633,19 @@ export default function Home() {
                     }}
                     className={`relative group inline-flex items-center justify-center overflow-hidden
                                 mt-6 py-2 rounded-md font-semibold text-white transition-all duration-300
-                                ${newsletterStatus === 'loading'
+                                ${contactStatus === 'loading'
                                   ? "bg-gray-400 cursor-not-allowed"
                                   : "hover:scale-105"
                                 }`}
-                    style={newsletterStatus === 'loading' ? {} : {
+                    style={contactStatus === 'loading' ? {} : {
                       backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
                                         radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
                     }}
                   >
                     <span className="inline-flex items-center gap-2 px-6">
-                      {newsletterStatus === 'loading' ? "Processing..." : "Send"}
+                      {contactStatus === 'loading' ? "Processing..." : "Send"}
                     </span>
-                    {newsletterStatus !== 'loading' && (
+                    {contactStatus !== 'loading' && (
                       <span
                         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                         style={{
@@ -655,13 +655,13 @@ export default function Home() {
                     )}
                   </button>
                 </div>
-                {newsletterMessage && (
+                {contactMessage && (
                   <div
                     className={`mt-2 text-sm pl-4 ${
-                      newsletterStatus === 'success' ? 'text-green-400' : 'text-red-400'
+                      contactStatus === 'success' ? 'text-green-400' : 'text-red-400'
                     }`}
                   >
-                    {newsletterMessage}
+                    {contactMessage}
                   </div>
                 )}
               </form>

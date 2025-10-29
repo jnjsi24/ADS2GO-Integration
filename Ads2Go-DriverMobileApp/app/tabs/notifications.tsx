@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -330,6 +331,18 @@ export default function NotificationsScreen() {
         return 'map-outline';
       case 'DEVICE_ISSUE':
         return 'warning-outline';
+      case 'REPORT_STATUS_UPDATE':
+        return 'document-text-outline';
+      case 'MATERIAL_STATUS_CHANGE':
+        return 'radio-outline';
+      case 'HOURS_MILESTONE':
+        return 'trophy-outline';
+      case 'MONTHLY_PHOTO_DUE_REMINDER':
+        return 'calendar-outline';
+      case 'MONTHLY_PHOTO_APPROVED':
+        return 'checkmark-circle-outline';
+      case 'MONTHLY_PHOTO_REJECTED':
+        return 'close-circle-outline';
       default:
         return type === 'SUCCESS' ? 'checkmark-circle-outline' : 'information-circle-outline';
     }
@@ -392,7 +405,13 @@ export default function NotificationsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3674B5" />
         <Text style={styles.loadingText}>Loading notifications...</Text>
+        <View style={styles.loadingDotsContainer}>
+          <View style={[styles.loadingDot, styles.loadingDot1]} />
+          <View style={[styles.loadingDot, styles.loadingDot2]} />
+          <View style={[styles.loadingDot, styles.loadingDot3]} />
+        </View>
       </View>
     );
   }
@@ -560,6 +579,27 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#666',
+    marginTop: 16,
+  },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3674B5',
+  },
+  loadingDot1: {
+    opacity: 0.3,
+  },
+  loadingDot2: {
+    opacity: 0.6,
+  },
+  loadingDot3: {
+    opacity: 1,
   },
   header: {
     flexDirection: 'row',

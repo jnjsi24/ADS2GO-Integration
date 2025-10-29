@@ -309,37 +309,15 @@ router.get('/route/:deviceId', async (req, res) => {
     });
     
     if (isToday) {
-      // ✅ TODAY'S DATE: Use real-time data for instant, up-to-date routes
-      console.log(`📍 [ROUTE API] Requesting TODAY's route - using real-time data for instant access`);
+      // ✅ TODAY'S DATE: Use real-time data ONLY - no fallback to historical
+      console.log(`📍 [ROUTE API] Requesting TODAY's route - using real-time data only`);
       
       if (deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
         locationHistory = deviceTracking.locationHistory;
         console.log(`✅ [ROUTE] Found ${locationHistory.length} real-time location points for today`);
       } else {
-        console.log(`⚠️ [ROUTE] No real-time location data found, checking historical archive...`);
-        
-        // Fallback: Check if today's data was already archived
-        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-        const deviceDataHistory = await DeviceDataHistoryV2.findOne({
-          materialId: deviceTracking.materialId
-        });
-        
-        if (deviceDataHistory && deviceDataHistory.dailyData && deviceDataHistory.dailyData.length > 0) {
-          const targetDate = new Date(date);
-          targetDate.setHours(0, 0, 0, 0);
-          
-          const dayData = deviceDataHistory.dailyData.find(day => {
-            const dayDate = new Date(day.date);
-            dayDate.setHours(0, 0, 0, 0);
-            return dayDate.getTime() === targetDate.getTime();
-          });
-          
-          if (dayData && dayData.locationHistory && dayData.locationHistory.length > 0) {
-            locationHistory = dayData.locationHistory;
-            historicalData = dayData;
-            console.log(`✅ [ROUTE] Found ${locationHistory.length} archived location points for today`);
-          }
-        }
+        console.log(`ℹ️ [ROUTE] No real-time location data found for today - returning empty route (material not opened yet or after midnight reset)`);
+        locationHistory = []; // Return empty array for today if no real-time data
       }
     } else if (date) {
       // 📅 PAST DATE: Use historical data only - DO NOT fallback to real-time
@@ -2805,6 +2783,7 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
       materialType: material.materialType,
       // ✅ Use same logic as GraphQL resolver to match Profile tab display
       materialAssignedDate: formatDateField(material.assignedDate) || formatDateField(material.mountedAt) || formatDateField(material.createdAt),
+      materialMountedAt: formatDateField(material.mountedAt), // ✅ Add mountedAt for profile tab calculations
       isOnline: deviceTracking.isOnline,
       lastSeen: deviceTracking.lastSeen,
       currentLocation: deviceTracking.currentLocation,

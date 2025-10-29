@@ -3,7 +3,9 @@ import {
   PlayCircle, 
   Clock, 
   Activity,
-  Settings 
+  Settings,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import {
@@ -26,6 +28,10 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   onStatusChange
 }) => {
   const [deploymentFilter, setDeploymentFilter] = useState(parentFilter || 'all');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     if (parentFilter) setDeploymentFilter(parentFilter);
@@ -88,6 +94,29 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     return deployment.currentStatus?.toLowerCase() === parentFilter.toLowerCase();
   }) || [];
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredDeployments.length / itemsPerPage);
+  const paginatedDeployments = filteredDeployments.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   if (deploymentsLoading) {
     return (
@@ -207,7 +236,7 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredDeployments.map((deployment: AdDeployment) => (
+          {paginatedDeployments.map((deployment: AdDeployment) => (
             <div key={deployment.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
               {/* Header with Material ID and Status */}
               <div className="flex justify-between items-start mb-4">
@@ -457,6 +486,70 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
             </div>
           ))}
+
+          {/* Pagination Controls */}
+          {filteredDeployments.length > 0 && (
+            <div className="flex items-center justify-center px-4 py-4 mt-4 border-t">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  <span>Previous</span>
+                </button>
+
+                <div className="flex gap-1">
+                  {(() => {
+                    const pages = [];
+                    const maxVisiblePages = 5;
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    if (endPage - startPage < maxVisiblePages - 1) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          className={`px-3 py-1 text-sm rounded ${
+                            currentPage === i
+                              ? "border border-gray-300 text-black"
+                              : "text-gray-700 hover:border border-gray-300"
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    if (endPage < totalPages) {
+                      pages.push(
+                        <span key="ellipsis" className="px-2 text-gray-500">
+                          …
+                        </span>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

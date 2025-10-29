@@ -38,6 +38,7 @@ const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const driverReportTypeDefs = require('./schema/driverReportSchema');
+const contactMessageTypeDefs = require('./schema/contactMessageSchema');
 const driverSalaryTypeDefs = require('./schema/driverSalarySchema');
 const faqTypeDefs = require('./schema/faqSchema');
 const companyAdTypeDefs = require('./schema/companyAdSchema');
@@ -60,6 +61,7 @@ const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const driverReportResolvers = require('./resolvers/driverReportResolver');
+const contactMessageResolvers = require('./resolvers/contactMessageResolver');
 const driverSalaryResolvers = require('./resolvers/driverSalaryResolver');
 const faqResolvers = require('./resolvers/faqResolver');
 const companyAdResolvers = require('./resolvers/companyAdResolver');
@@ -83,6 +85,7 @@ const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
 const newsletterRoutes = require('./routes/newsletter');
+const contactRoutes = require('./routes/contact');
 const cleanupRoutes = require('./routes/cleanup');
 const deviceHoursNotificationRoutes = require('./routes/deviceHoursNotification');
 const deviceOfflineNotificationRoutes = require('./routes/deviceOfflineNotification');
@@ -151,6 +154,7 @@ const server = new ApolloServer({
       notificationTypeDefs,
       userReportTypeDefs,
       driverReportTypeDefs,
+      contactMessageTypeDefs,
       driverSalaryTypeDefs,
       faqTypeDefs,
       companyAdTypeDefs,
@@ -184,6 +188,7 @@ const server = new ApolloServer({
     notificationResolvers,
     userReportResolvers,
     driverReportResolvers,
+    contactMessageResolvers,
     driverSalaryResolvers,
     faqResolvers,
     companyAdResolvers,
@@ -289,6 +294,7 @@ app.use('/ads', adsRoutes);
 app.use('/material-photos', materialPhotoUploadRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/contact', contactRoutes);
 app.use('/cleanup', cleanupRoutes);
 app.use('/offlineQueue', require('./routes/offlineQueue'));
 app.use('/cron-test', require('./routes/cronTest'));

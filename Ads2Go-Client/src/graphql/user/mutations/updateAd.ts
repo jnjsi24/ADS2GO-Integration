@@ -1,28 +1,28 @@
 import { gql } from '@apollo/client';
 
-export const GET_MY_ADS = gql`
-  query GetMyAds {
-    getMyAds {
+export const UPDATE_AD = gql`
+  mutation UpdateAd($id: ID!, $input: UpdateAdInput!) {
+    updateAd(id: $id, input: $input) {
       id
       title
       description
       adFormat
       mediaFile
       adType
+      vehicleType
+      price
       status
       paymentStatus
-      vehicleType
+      reasonForReject
       createdAt
       updatedAt
-      price
       startTime
       endTime
       adLengthSeconds
       durationDays
       materialType
       category
-
-      planId {       # populated AdsPlan object
+      planId {
         id
         name
         durationDays
@@ -32,8 +32,7 @@ export const GET_MY_ADS = gql`
         pricePerPlay
         totalPrice
       }
-
-      materialId {   # populated Material object
+      materialId {
         id
         materialId
         materialType
@@ -42,8 +41,7 @@ export const GET_MY_ADS = gql`
         mountedAt
         dismountedAt
       }
-
-      
     }
   }
 `;
+

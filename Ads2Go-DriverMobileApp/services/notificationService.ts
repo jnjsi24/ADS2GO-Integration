@@ -161,6 +161,12 @@ class NotificationService {
       this.handleRouteUpdateNotification(data);
     } else if (data?.category === 'DEVICE_ISSUE') {
       this.handleDeviceIssueNotification(data);
+    } else if (data?.category === 'REPORT_STATUS_UPDATE') {
+      this.handleReportStatusUpdateNotification(data);
+    } else if (data?.category === 'MATERIAL_STATUS_CHANGE') {
+      this.handleMaterialStatusChangeNotification(data);
+    } else if (data?.category === 'HOURS_MILESTONE') {
+      this.handleHoursMilestoneNotification(data);
     }
   }
 
@@ -237,14 +243,68 @@ class NotificationService {
   }
 
   /**
-   * Show in-app notification (you can implement this with a toast library)
+   * Handle report status update notification
+   */
+  private handleReportStatusUpdateNotification(data: NotificationData): void {
+    console.log('📋 Report status update notification:', data);
+    
+    const status = data.status || 'updated';
+    const reportTitle = data.reportTitle || 'Your report';
+    
+    this.showInAppNotification(
+      '📋 Report Update',
+      `${reportTitle} status: ${status}`,
+      status === 'RESOLVED' ? 'success' : status === 'CLOSED' ? 'warning' : 'info'
+    );
+  }
+
+  /**
+   * Handle material status change notification (online/offline)
+   */
+  private handleMaterialStatusChangeNotification(data: NotificationData): void {
+    console.log('🔄 Material status change notification:', data);
+    
+    const isOnline = data.status === 'ONLINE';
+    const materialId = data.materialId || 'Your material';
+    
+    this.showInAppNotification(
+      isOnline ? '🟢 Material Online' : '🔴 Material Offline',
+      `${materialId} is now ${data.status?.toLowerCase()}`,
+      isOnline ? 'success' : 'warning'
+    );
+  }
+
+  /**
+   * Handle hours milestone notification
+   */
+  private handleHoursMilestoneNotification(data: NotificationData): void {
+    console.log('🎯 Hours milestone notification:', data);
+    
+    const hours = data.hours || 8;
+    
+    this.showInAppNotification(
+      '🎯 Milestone Achieved!',
+      `Congratulations! You've reached ${hours} hours online today!`,
+      'success'
+    );
+  }
+
+  /**
+   * Show in-app notification toast
    */
   private showInAppNotification(title: string, message: string, type: 'success' | 'info' | 'warning' | 'error'): void {
-    // This is a placeholder - you can implement with react-native-toast-message or similar
     console.log(`📢 In-app notification [${type}]: ${title} - ${message}`);
     
-    // Example implementation with Alert (you might want to use a better toast library)
-    // Alert.alert(title, message);
+    // Use the ToastManager to show toast popup
+    const ToastManager = require('./toastManager').default;
+    const toastManager = ToastManager.getInstance();
+    
+    toastManager.showToast({
+      title,
+      message,
+      type,
+      duration: type === 'error' ? 6000 : 4000, // Errors stay longer
+    });
   }
 
   /**

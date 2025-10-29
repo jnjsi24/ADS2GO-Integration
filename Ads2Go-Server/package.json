@@ -7,7 +7,15 @@
     "start": "node --max-old-space-size=4096 src/index.js",
     "dev": "nodemon --max-old-space-size=4096 src/index.js",
     "start:verbose": "node --max-old-space-size=4096 smartlogger.js",
-    "dev:verbose": "VERBOSE_LOGS=true nodemon --max-old-space-size=4096 src/index.js"
+    "dev:verbose": "VERBOSE_LOGS=true nodemon --max-old-space-size=4096 src/index.js",
+    "indexes:build": "node scripts/indexManager.js build",
+    "indexes:rebuild": "node scripts/indexManager.js rebuild",
+    "indexes:verify": "node scripts/indexManager.js verify",
+    "indexes:clean": "node scripts/indexManager.js clean",
+    "indexes:device": "node scripts/indexManager.js build-device",
+    "script:create-admin": "node scripts/createSuperAdmin.js",
+    "script:verify-ads": "node scripts/verifyAdPlays.js",
+    "script:migrate-newsletter": "node scripts/migrateNewsletterSources.js"
   },
   "author": "",
   "license": "ISC",

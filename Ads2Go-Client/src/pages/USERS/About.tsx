@@ -1,5 +1,6 @@
 import React from 'react';
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from 'react-router-dom';
 import { 
   Info, 
   Target, 
@@ -16,7 +17,8 @@ import {
   Star,
   BarChart3,
   Zap,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 
 const CountUp = ({end, duration = 2000, suffix = "" }: {end: number, duration?: number, suffix?: string}) => {
@@ -61,6 +63,22 @@ const CountUp = ({end, duration = 2000, suffix = "" }: {end: number, duration?: 
 };
 
 const About: React.FC = () => {
+  const navigate = useNavigate();
+  const [isStartAdvertisingLoading, setIsStartAdvertisingLoading] = useState(false);
+  const [isLearnMoreLoading, setIsLearnMoreLoading] = useState(false);
+
+  const handleStartAdvertising = () => {
+    setIsStartAdvertisingLoading(true);
+    // Navigate to create advertisement page
+    navigate('/create-advertisement');
+  };
+
+  const handleLearnMore = () => {
+    setIsLearnMoreLoading(true);
+    // Navigate to landing page (home)
+    navigate('/');
+  };
+
   return (
   <div className="relative min-h-screen overflow-hidden">
     {/* Background Image */}
@@ -403,11 +421,33 @@ const About: React.FC = () => {
               mobile advertising platform designed for the Philippines market.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <button className="px-8 py-4 bg-white text-[#3674B5] rounded-2xl font-semibold hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1">
-                Start Advertising
+              <button 
+                onClick={handleStartAdvertising}
+                disabled={isStartAdvertisingLoading || isLearnMoreLoading}
+                className="px-8 py-4 bg-white text-[#3674B5] rounded-2xl font-semibold hover:bg-blue-50 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
+              >
+                {isStartAdvertisingLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Start Advertising'
+                )}
               </button>
-              <button className="px-8 py-4 bg-white/20 text-white rounded-2xl font-semibold hover:bg-white/30 transition-all backdrop-blur-sm">
-                Learn More
+              <button 
+                onClick={handleLearnMore}
+                disabled={isStartAdvertisingLoading || isLearnMoreLoading}
+                className="px-8 py-4 bg-white/20 text-white rounded-2xl font-semibold hover:bg-white/30 transition-all backdrop-blur-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isLearnMoreLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Learn More'
+                )}
               </button>
             </div>
           </section>

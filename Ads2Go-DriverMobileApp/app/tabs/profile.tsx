@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -118,14 +119,15 @@ const GET_DRIVER_MATERIALS = gql`
   }
 `;
 
-const GET_DRIVER_ANALYTICS = `
-  query GetDriverAnalytics($driverId: ID!) {
-    getDriverAnalytics(driverId: $driverId) {
+const GET_SALARY_SUMMARY = `
+  query GetMySalarySummary {
+    getMySalarySummary {
       success
       message
-      analytics {
-        totalDistance
-        totalHours
+      summary {
+        totalSalary
+        totalCalculations
+        averageMonthlySalary
       }
     }
   }
@@ -138,6 +140,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [realTotalEarnings, setRealTotalEarnings] = useState<number>(0);
   const router = useRouter();
   const { signOut } = useAuth();
 
@@ -218,28 +221,130 @@ export default function ProfileScreen() {
         }
       }
 
-      // Fetch analytics for distance and hours
+      // Fetch TOTAL analytics (distance and hours since mountedAt)
       try {
-        const analyticsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+        // Step 1: Get real-time data to fetch materialMountedAt and today's metrics
+        const realtimeResponse = await fetch(
+          `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=realtime`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (realtimeResponse.ok) {
+          const realtimeResult = await realtimeResponse.json();
+          if (realtimeResult.success && realtimeResult.data && profileData) {
+            const realtimeData = realtimeResult.data;
+            const materialMountedAt = realtimeData.materialMountedAt;
+            const todayDistance = realtimeData.totalDistanceToday || 0;
+            const todayHours = realtimeData.currentHours || 0;
+
+            console.log('📊 Real-time data:', {
+              mountedAt: materialMountedAt,
+              todayDistance,
+              todayHours
+            });
+
+            // Step 2: If mountedAt exists, fetch historical data from mountedAt to yesterday
+            if (materialMountedAt) {
+              try {
+                const mountedDate = new Date(materialMountedAt);
+                mountedDate.setHours(0, 0, 0, 0);
+
+                // Get yesterday (to exclude today, we'll add today's data separately)
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                yesterday.setHours(23, 59, 59, 999);
+
+                // Only fetch historical if mountedAt is before today
+                if (mountedDate < yesterday) {
+                  const historicalUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${mountedDate.toISOString()}&endDate=${yesterday.toISOString()}`;
+                  
+                  const historicalResponse = await fetch(historicalUrl, {
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                  });
+
+                  if (historicalResponse.ok) {
+                    const historicalResult = await historicalResponse.json();
+                    if (historicalResult.success && historicalResult.data?.dailyData?.aggregatedMetrics) {
+                      const historicalMetrics = historicalResult.data.dailyData.aggregatedMetrics;
+                      
+                      // TOTAL = Historical (mountedAt to yesterday) + Today
+                      profileData.totalDistance = (historicalMetrics.totalDistance || 0) + todayDistance;
+                      profileData.totalHours = (historicalMetrics.totalHours || 0) + todayHours;
+
+                      console.log('✅ Total analytics calculated:', {
+                        historicalDistance: historicalMetrics.totalDistance,
+                        todayDistance,
+                        totalDistance: profileData.totalDistance,
+                        historicalHours: historicalMetrics.totalHours,
+                        todayHours,
+                        totalHours: profileData.totalHours
+                      });
+                    } else {
+                      // No historical data, use only today's data
+                      profileData.totalDistance = todayDistance;
+                      profileData.totalHours = todayHours;
+                      console.log('ℹ️ No historical data, using today only');
+                    }
+                  } else {
+                    // Failed to fetch historical, use only today's data
+                    profileData.totalDistance = todayDistance;
+                    profileData.totalHours = todayHours;
+                    console.log('⚠️ Historical fetch failed, using today only');
+                  }
+                } else {
+                  // Mounted today, use only today's data
+                  profileData.totalDistance = todayDistance;
+                  profileData.totalHours = todayHours;
+                  console.log('ℹ️ Material mounted today, using today only');
+                }
+              } catch (historicalError) {
+                console.log('Error fetching historical data:', historicalError);
+                // Fallback to today's data
+                profileData.totalDistance = todayDistance;
+                profileData.totalHours = todayHours;
+              }
+            } else {
+              // No mountedAt, use only today's data
+              profileData.totalDistance = todayDistance;
+              profileData.totalHours = todayHours;
+              console.log('⚠️ No mountedAt date, using today only');
+            }
+          }
+        } else {
+          console.log('⚠️ Analytics endpoint returned:', realtimeResponse.status);
+        }
+      } catch (error) {
+        console.log('Analytics not available:', error);
+      }
+
+      // Fetch real salary data
+      try {
+        const salaryResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
-            query: GET_DRIVER_ANALYTICS,
-            variables: { driverId },
+            query: GET_SALARY_SUMMARY,
           }),
         });
 
-        const analyticsResult = await analyticsResponse.json();
-        if (analyticsResult.data?.getDriverAnalytics?.success && profileData) {
-          const analytics = analyticsResult.data.getDriverAnalytics.analytics;
-          profileData.totalDistance = analytics?.totalDistance || 0;
-          profileData.totalHours = analytics?.totalHours || 0;
+        const salaryResult = await salaryResponse.json();
+        if (salaryResult.data?.getMySalarySummary?.success) {
+          const summary = salaryResult.data.getMySalarySummary.summary;
+          setRealTotalEarnings(summary.totalSalary || 0);
         }
       } catch (error) {
-        console.log('Analytics not available:', error);
+        console.log('Salary data not available:', error);
       }
 
       setProfile(profileData);
@@ -323,7 +428,13 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3674B5" />
         <Text style={styles.loadingText}>Loading profile...</Text>
+        <View style={styles.loadingDotsContainer}>
+          <View style={[styles.loadingDot, styles.loadingDot1]} />
+          <View style={[styles.loadingDot, styles.loadingDot2]} />
+          <View style={[styles.loadingDot, styles.loadingDot3]} />
+        </View>
       </View>
     );
   }
@@ -444,12 +555,12 @@ export default function ProfileScreen() {
                   {/* Materials Button */}
                   <TouchableOpacity 
                     style={styles.materialsActionButton} 
-                    onPress={() => router.push('/materials')}
-                  >
-                    <Ionicons name="cube-outline" size={20} color="#ffffff" />
-                    <Text style={styles.materialsActionText}>View All Materials</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-                  </TouchableOpacity>
+                  onPress={() => router.push('/materials')}
+                >
+                  <Ionicons name="cube-outline" size={20} color="#ffffff" />
+                  <Text style={styles.materialsActionText}>View Assigned Material</Text>
+                  <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                </TouchableOpacity>
 
                   {/* Compliance Upload Button */}
                   <TouchableOpacity 
@@ -520,6 +631,9 @@ export default function ProfileScreen() {
             {profile.isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.headerIcons}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/my-reports')}>
+              <Ionicons name="document-text-outline" size={24} color="#10b981" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={() => setShowReportModal(true)}>
               <Ionicons name="mail-outline" size={24} color="#3b82f6" />
             </TouchableOpacity>
@@ -541,8 +655,8 @@ export default function ProfileScreen() {
           <View style={styles.statIconContainer}>
             <Ionicons name="cash-outline" size={32} color="#4ade80" />
           </View>
-          <Text style={styles.statValue}>₱ {profile.totalEarnings}</Text>
-          <Text style={styles.statLabel}>Earnings</Text>
+          <Text style={styles.statValue}>₱ {realTotalEarnings.toFixed(2)}</Text>
+          <Text style={styles.statLabel}>Total Earnings</Text>
         </View>
         <View style={styles.statCard}>
           <View style={styles.statIconContainer}>
@@ -555,7 +669,7 @@ export default function ProfileScreen() {
           <View style={styles.statIconContainer}>
             <Ionicons name="time-outline" size={32} color="#f59e0b" />
           </View>
-          <Text style={styles.statValue}>{profile.totalHours.toFixed(1)}. hours</Text>
+          <Text style={styles.statValue}>{profile.totalHours.toFixed(1)} hours</Text>
           <Text style={styles.statLabel}>Hours</Text>
         </View>
       </View>
@@ -619,6 +733,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginTop: 16,
+  },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3674B5',
+  },
+  loadingDot1: {
+    opacity: 0.3,
+  },
+  loadingDot2: {
+    opacity: 0.6,
+  },
+  loadingDot3: {
+    opacity: 1,
   },
   errorContainer: {
     flex: 1,

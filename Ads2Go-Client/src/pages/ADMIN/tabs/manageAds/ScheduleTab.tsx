@@ -20,6 +20,10 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
 
   const [filterType, setFilterType] = useState<"day" | "month" | "year">("day");
   const [selectedDate, setSelectedDate] = useState<string>("");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
@@ -281,6 +285,30 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
 
   const goToday = () => setCursorDate(new Date());
 
+  // Pagination calculations
+  const totalPages = Math.ceil(groupedByMaterial.length / itemsPerPage);
+  const paginatedGroupedMaterials = groupedByMaterial.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
   return (
     <div className="">
       <div className="flex justify-between items-center mb-6">
@@ -290,20 +318,25 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
 
 
       {loading ? (
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500">Loading schedules...</p>
+        <div className="p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-lg text-gray-600">Loading schedules...</span>
+            </div>
+          </div>
         </div>
       ) : error ? (
         <div className="bg-red-50 rounded-lg p-4 text-red-700">Failed to load schedules.</div>
-      ) : groupedByMaterial.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500">No ads scheduled in this period.</p>
-        </div>
       ) : (
         <div className="space-y-4">
-          {groupedByMaterial.map(([materialId, ads]) => (
+          {groupedByMaterial.length === 0 ? (
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500">No ads scheduled in this period.</p>
+            </div>
+          ) : (
+            paginatedGroupedMaterials.map(([materialId, ads]) => (
             <div key={materialId}>
               {/* Material Header */}
               <div className="px-4 py-2 text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -390,8 +423,72 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
                   ))}
               </ul>
             </div>
-          ))}
+            ))
+          )}
 
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-center px-4 py-4 mt-4 border-t">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1 || totalPages === 0}
+                className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                <span>Previous</span>
+              </button>
+
+              <div className="flex gap-1">
+                {(() => {
+                  const pages = [];
+                  const maxVisiblePages = 5;
+                  const effectiveTotalPages = totalPages === 0 ? 1 : totalPages;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                  let endPage = Math.min(effectiveTotalPages, startPage + maxVisiblePages - 1);
+
+                  if (endPage - startPage < maxVisiblePages - 1) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                  }
+
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        disabled={totalPages === 0}
+                        className={`px-3 py-1 text-sm rounded ${
+                          currentPage === i
+                            ? "border border-gray-300 text-black"
+                            : "text-gray-700 hover:border border-gray-300"
+                        } ${totalPages === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+
+                  if (endPage < effectiveTotalPages) {
+                    pages.push(
+                      <span key="ellipsis" className="px-2 text-gray-500">
+                        …
+                      </span>
+                    );
+                  }
+
+                  return pages;
+                })()}
+              </div>
+
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

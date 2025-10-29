@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, SafeAreaView, RefreshControl } from 'react-native';
 import { Stack } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DocumentUploader } from '../components/DocumentUploader';
 
 export default function DocumentsScreen() {
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, boolean>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleUploadSuccess = (documentType: string) => {
     setUploadedDocs(prev => ({
@@ -19,6 +20,14 @@ export default function DocumentsScreen() {
     return requiredDocs.every(doc => uploadedDocs[doc]);
   };
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    // Refresh logic - could reload document status from server
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen 
@@ -29,7 +38,12 @@ export default function DocumentsScreen() {
         }} 
       />
       
-      <ScrollView style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <View style={styles.header}>
           <MaterialIcons name="folder" size={24} color="#4CAF50" />
           <Text style={styles.title}>Required Documents</Text>

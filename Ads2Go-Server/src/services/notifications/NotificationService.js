@@ -76,6 +76,22 @@ class NotificationService {
     return await DriverNotificationService.sendDeviceIssueNotification(driverId, deviceId, issue);
   }
 
+  static async sendReportStatusUpdateNotification(driverId, reportId, reportTitle, status, adminNotes, adminName) {
+    return await DriverNotificationService.sendReportStatusUpdateNotification(driverId, reportId, reportTitle, status, adminNotes, adminName);
+  }
+
+  static async sendMaterialOnlineNotification(driverId, materialId, materialName) {
+    return await DriverNotificationService.sendMaterialOnlineNotification(driverId, materialId, materialName);
+  }
+
+  static async sendMaterialOfflineNotification(driverId, materialId, materialName, reason) {
+    return await DriverNotificationService.sendMaterialOfflineNotification(driverId, materialId, materialName, reason);
+  }
+
+  static async send8HourMilestoneNotificationToDriver(driverId, materialId, hours, materialName) {
+    return await DriverNotificationService.send8HourMilestoneNotification(driverId, materialId, hours, materialName);
+  }
+
   // ==================== ADMIN NOTIFICATIONS ====================
 
   static async sendNewAdSubmissionNotification(adId) {
@@ -221,6 +237,36 @@ class NotificationService {
 
   static async sendDriverStatusChangeEmail(email, firstName, status, reason) {
     return await DriverNotificationService.sendDriverStatusChangeEmail(email, firstName, status, reason);
+  }
+
+  // ==================== MONTHLY PHOTO COMPLIANCE NOTIFICATIONS ====================
+
+  /**
+   * Notify driver 1 day before monthly photo is due
+   */
+  static async sendMonthlyPhotoDueReminderToDriver(driverId, materialId, dueDate) {
+    return await DriverNotificationService.sendMonthlyPhotoDueReminderNotification(driverId, materialId, dueDate);
+  }
+
+  /**
+   * Notify admins on the day the monthly photo is due
+   */
+  static async sendMonthlyPhotoDueToday(materialId, driverId, dueDate) {
+    return await AdminNotificationService.sendMonthlyPhotoDueTodayNotification(materialId, driverId, dueDate);
+  }
+
+  /**
+   * Notify driver when their monthly photo is approved
+   */
+  static async sendMonthlyPhotoApprovedToDriver(driverId, materialId, month, adminNotes, adminName) {
+    return await DriverNotificationService.sendMonthlyPhotoApprovedNotification(driverId, materialId, month, adminNotes, adminName);
+  }
+
+  /**
+   * Notify driver when their monthly photo is rejected
+   */
+  static async sendMonthlyPhotoRejectedToDriver(driverId, materialId, month, adminNotes, adminName) {
+    return await DriverNotificationService.sendMonthlyPhotoRejectedNotification(driverId, materialId, month, adminNotes, adminName);
   }
 }
 

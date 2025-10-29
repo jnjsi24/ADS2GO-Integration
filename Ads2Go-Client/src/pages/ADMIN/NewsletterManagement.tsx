@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Subscriber {
@@ -34,16 +34,21 @@ const NewsletterManagement: React.FC = () => {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortBy, setSortBy] = useState('Newest First');
   
+  // Bulk actions state
+  const [selectedSubscribers, setSelectedSubscribers] = useState<string[]>([]);
+  const [showBulkUnsubscribeModal, setShowBulkUnsubscribeModal] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
   const filterOptions = [
     'All Subscribers',
-    'Active Subscribers',
-    'User Subscribers',
-    'Non-User Subscribers',
-    'Unsubscribed'
+    'Active',
+    'Inactive',
+    'via Registration',
+    'via Contact Form'
   ];
 
   const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
@@ -140,10 +145,10 @@ const NewsletterManagement: React.FC = () => {
         const inactiveCount = subscribers.filter((sub: Subscriber) => !sub.isActive).length;
         
         const userSubscribers = subscribers.filter((sub: Subscriber) => 
-          sub.isActive && (sub.source === 'registration' || sub.source === 'existing_user_migration')
+          sub.source === 'registration'
         ).length;
         const nonUserSubscribers = subscribers.filter((sub: Subscriber) => 
-          sub.isActive && !['registration', 'existing_user_migration'].includes(sub.source)
+          sub.source === 'contact_form'
         ).length;
         
         setStats({
@@ -181,21 +186,21 @@ const NewsletterManagement: React.FC = () => {
   const applyFilter = (filter: string, subscribersData: Subscriber[], search: string, sort: string = sortBy) => {
     let filtered = subscribersData;
     switch (filter) {
-      case 'Active Subscribers':
+      case 'Active':
         filtered = subscribersData.filter(sub => sub.isActive);
         break;
-      case 'User Subscribers':
-        filtered = subscribersData.filter(sub => 
-          sub.isActive && (sub.source === 'registration' || sub.source === 'existing_user_migration')
-        );
-        break;
-      case 'Non-User Subscribers':
-        filtered = subscribersData.filter(sub => 
-          sub.isActive && !['registration', 'existing_user_migration'].includes(sub.source)
-        );
-        break;
-      case 'Unsubscribed':
+      case 'Inactive':
         filtered = subscribersData.filter(sub => !sub.isActive);
+        break;
+      case 'via Registration':
+        filtered = subscribersData.filter(sub => 
+          sub.source === 'registration'
+        );
+        break;
+      case 'via Contact Form':
+        filtered = subscribersData.filter(sub => 
+          sub.source === 'contact_form'
+        );
         break;
       case 'All Subscribers':
       default:
@@ -275,6 +280,116 @@ const NewsletterManagement: React.FC = () => {
       console.error('❌ Unsubscribe error:', err);
       alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
     }
+  };
+
+  // Bulk action handlers
+  const handleSubscriberSelect = (id: string) => {
+    setSelectedSubscribers(prev =>
+      prev.includes(id)
+        ? prev.filter(subId => subId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const currentPageIds = paginatedSubscribers.map(sub => sub._id);
+    const allCurrentPageSelected = currentPageIds.every(id => selectedSubscribers.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect only items from current page
+      setSelectedSubscribers(prev => prev.filter(id => !currentPageIds.includes(id)));
+    } else {
+      // Add current page items to existing selection
+      setSelectedSubscribers(prev => {
+        const newSelection = [...prev];
+        currentPageIds.forEach(id => {
+          if (!newSelection.includes(id)) newSelection.push(id);
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const handleBulkUnsubscribe = () => {
+    if (selectedSubscribers.length === 0) return;
+    setShowBulkUnsubscribeModal(true);
+  };
+
+  const confirmBulkUnsubscribe = async () => {
+    if (selectedSubscribers.length === 0) return;
+
+    setIsBulkProcessing(true);
+    const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+
+    try {
+      const selectedEmails = subscribers
+        .filter(sub => selectedSubscribers.includes(sub._id))
+        .map(sub => sub.email);
+
+      const results = await Promise.allSettled(
+        selectedEmails.map(email =>
+          fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email }),
+            signal: AbortSignal.timeout(10000)
+          }).then(res => res.json())
+        )
+      );
+
+      const successCount = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
+      const failCount = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r.value as any).success)).length;
+
+      if (successCount > 0) {
+        alert(`${successCount} subscriber(s) unsubscribed successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`);
+      }
+
+      if (failCount > 0 && successCount === 0) {
+        alert(`Failed to unsubscribe ${failCount} subscriber(s)`);
+      }
+
+      fetchSubscribers();
+      setShowBulkUnsubscribeModal(false);
+      setSelectedSubscribers([]);
+    } catch (err) {
+      console.error('❌ Bulk unsubscribe error:', err);
+      alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleExportToCSV = () => {
+    if (selectedSubscribers.length === 0) return;
+
+    const selectedSubData = subscribers.filter(sub => selectedSubscribers.includes(sub._id));
+    
+    const csvData = selectedSubData.map(sub => ({
+      Email: sub.email,
+      Status: sub.isActive ? 'Active' : 'Inactive',
+      Source: sub.source,
+      'Subscribed At': formatDate(sub.subscribedAt),
+      'Emails Sent': sub.emailCount,
+      'Last Email': sub.lastEmailSent ? formatDate(sub.lastEmailSent) : 'N/A'
+    }));
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `newsletter_subscribers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    alert(`${selectedSubscribers.length} subscriber(s) exported to CSV`);
   };
 
   const formatDate = (dateString: string) => {
@@ -513,24 +628,24 @@ const NewsletterManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* User Subscribers */}
+              {/* Registration Source */}
               <div className="bg-purple-50 shadow-md rounded-lg p-6">
                 <div className="flex items-center">
                   <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
                   <div className="ml-4">
-                    <div className="text-sm text-gray-600">Users</div>
-                    <div className="text-xs text-gray-500">Website users</div>
+                    <div className="text-sm text-gray-600">Registration</div>
+                    <div className="text-xs text-gray-500">Registered users</div>
                   </div>
                 </div>
               </div>
 
-              {/* Non-User Subscribers */}
+              {/* Contact Form Source */}
               <div className="bg-orange-50 shadow-md rounded-lg p-6">
                 <div className="flex items-center">
                   <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
                   <div className="ml-4">
-                    <div className="text-sm text-gray-600">Non-Users</div>
-                    <div className="text-xs text-gray-500">Landing page only</div>
+                    <div className="text-sm text-gray-600">Contact Form</div>
+                    <div className="text-xs text-gray-500">Contact submissions</div>
                   </div>
                 </div>
               </div>
@@ -540,7 +655,7 @@ const NewsletterManagement: React.FC = () => {
                 <div className="flex items-center">
                   <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
                   <div className="ml-4">
-                    <div className="text-sm text-gray-600">Unsubscribed</div>
+                    <div className="text-sm text-gray-600">Inactive</div>
                     <div className="text-xs text-gray-500">No longer active</div>
                   </div>
                 </div>
@@ -558,11 +673,54 @@ const NewsletterManagement: React.FC = () => {
             </div>
           )}
 
+          {/* Bulk Actions Bar */}
+          {selectedSubscribers.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <span className="text-sm font-medium text-blue-800">
+                    {selectedSubscribers.length} subscriber{selectedSubscribers.length > 1 ? 's' : ''} selected
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {subscribers.filter(sub => selectedSubscribers.includes(sub._id) && sub.isActive).length > 0 && (
+                      <button
+                        onClick={handleBulkUnsubscribe}
+                        className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                      >
+                        Unsubscribe Selected
+                      </button>
+                    )}
+                    <button
+                      onClick={handleExportToCSV}
+                      className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                    >
+                      Export to CSV
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedSubscribers([])}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-md mb-4 overflow-hidden">
             {/* Header - Hidden on mobile */}
             {!isMobile && (
               <div className="grid grid-cols-12 gap-1 px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100">
-                <div className="col-span-3">Email</div>
+                <div className="col-span-3 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={paginatedSubscribers.length > 0 && paginatedSubscribers.every(sub => selectedSubscribers.includes(sub._id))}
+                    onChange={handleSelectAll}
+                  />
+                  <span className="cursor-pointer" onClick={handleSelectAll}>Email</span>
+                </div>
                 <div className="col-span-2">Status</div>
                 <div className="col-span-2">Source</div>
                 <div className="col-span-2">Subscribed</div>
@@ -610,23 +768,14 @@ const NewsletterManagement: React.FC = () => {
                           <div className="font-medium text-xs">Source</div>
                           <span
                             className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
-                              subscriber.source === "registration" ||
-                              subscriber.source === "existing_user_migration"
+                              subscriber.source === "registration"
                                 ? "bg-purple-100 text-purple-800"
                                 : "bg-orange-100 text-orange-800"
                             }`}
                           >
                             {subscriber.source === "registration"
-                              ? "USER REGISTRATION"
-                              : subscriber.source === "existing_user_migration"
-                              ? "EXISTING USER"
-                              : subscriber.source === "landing_page"
-                              ? "LANDING PAGE"
-                              : subscriber.source === "contact_form"
-                              ? "CONTACT FORM"
-                              : subscriber.source === "manual"
-                              ? "MANUAL"
-                              : subscriber.source.replace("_", " ").toUpperCase()}
+                              ? "REGISTRATION"
+                              : "CONTACT FORM"}
                           </span>
                         </div>
                       </div>
@@ -649,8 +798,15 @@ const NewsletterManagement: React.FC = () => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
-                      <div className="col-span-3 truncate font-medium text-gray-900">
-                        {subscriber.email}
+                      <div className="col-span-3 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox"
+                          checked={selectedSubscribers.includes(subscriber._id)}
+                          onChange={() => handleSubscriberSelect(subscriber._id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="truncate font-medium text-gray-900">{subscriber.email}</span>
                       </div>
                       <div className="col-span-2">
                         <span
@@ -666,23 +822,14 @@ const NewsletterManagement: React.FC = () => {
                       <div className="col-span-2">
                         <span
                           className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                            subscriber.source === "registration" ||
-                            subscriber.source === "existing_user_migration"
+                            subscriber.source === "registration"
                               ? "bg-purple-100 text-purple-800"
                               : "bg-orange-100 text-orange-800"
                             }`}
                         >
                           {subscriber.source === "registration"
-                            ? "USER REGISTRATION"
-                            : subscriber.source === "existing_user_migration"
-                            ? "EXISTING USER"
-                            : subscriber.source === "landing_page"
-                            ? "LANDING PAGE"
-                            : subscriber.source === "contact_form"
-                            ? "CONTACT FORM"
-                            : subscriber.source === "manual"
-                            ? "MANUAL"
-                            : subscriber.source.replace("_", " ").toUpperCase()}
+                            ? "REGISTRATION"
+                            : "CONTACT FORM"}
                         </span>
                       </div>
                       <div className="col-span-2 text-gray-500">
@@ -804,6 +951,48 @@ const NewsletterManagement: React.FC = () => {
                     className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors duration-200"
                   >
                     Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bulk Unsubscribe Modal */}
+          {showBulkUnsubscribeModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">Unsubscribe Multiple Subscribers</h2>
+                  <button
+                    onClick={() => setShowBulkUnsubscribeModal(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to unsubscribe <strong>{selectedSubscribers.length}</strong> subscriber(s) from the newsletter? This action cannot be undone.
+                </p>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowBulkUnsubscribeModal(false)}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                    disabled={isBulkProcessing}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmBulkUnsubscribe}
+                    disabled={isBulkProcessing}
+                    className={`px-4 py-2 text-white rounded ${
+                      isBulkProcessing
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-red-600 hover:bg-red-700'
+                    }`}
+                  >
+                    {isBulkProcessing ? 'Processing...' : `Unsubscribe ${selectedSubscribers.length} Subscriber${selectedSubscribers.length > 1 ? 's' : ''}`}
                   </button>
                 </div>
               </div>

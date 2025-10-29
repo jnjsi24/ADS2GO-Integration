@@ -55,6 +55,31 @@ const GET_DRIVER_MATERIALS = gql`
   }
 `;
 
+// GraphQL query to get driver's material usage history
+const GET_DRIVER_USAGE_HISTORY = gql`
+  query GetDriverUsageHistory($driverId: ID!) {
+    getDriverUsageHistory(driverId: $driverId) {
+      success
+      message
+      usageHistory {
+        id
+        materialId
+        materialStringId
+        assignedAt
+        unassignedAt
+        mountedAt
+        dismountedAt
+        usageDuration
+        assignmentReason
+        unassignmentReason
+        customDismountReason
+        notes
+        isActive
+      }
+    }
+  }
+`;
+
 interface MonthlyPhoto {
   month: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -85,6 +110,22 @@ interface Material {
   };
 }
 
+interface UsageHistory {
+  id: string;
+  materialId: string;
+  materialStringId: string;
+  assignedAt: string;
+  unassignedAt?: string;
+  mountedAt?: string;
+  dismountedAt?: string;
+  usageDuration?: number;
+  assignmentReason: string;
+  unassignmentReason?: string;
+  customDismountReason?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
 interface DriverAnalytics {
   driverId: string;
   vehiclePlateNumber: string;
@@ -108,6 +149,7 @@ export default function MaterialsScreen() {
   const router = useRouter();
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [usageHistory, setUsageHistory] = useState<UsageHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -138,10 +180,11 @@ export default function MaterialsScreen() {
         return;
       }
 
-      // Fetch both analytics and materials data
+      // Fetch analytics, materials, and usage history data
       await Promise.all([
         fetchDriverAnalytics(driverId),
-        loadDriverMaterials(driverId)
+        loadDriverMaterials(driverId),
+        loadUsageHistory(driverId)
       ]);
     } catch (error) {
       console.error('Error loading driver data:', error);
@@ -220,6 +263,39 @@ export default function MaterialsScreen() {
       console.error('Error loading driver materials:', error);
       // Treat GraphQL 400/Unauthorized as empty state for a better UX
       setMaterials([]);
+    }
+  };
+
+  const loadUsageHistory = async (id: string) => {
+    try {
+      // Get the stored token
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.error('No token found for usage history request');
+        return;
+      }
+      
+      const data = await request(API_URL, GET_DRIVER_USAGE_HISTORY, { driverId: id }, {
+        Authorization: `Bearer ${token}`
+      }) as any;
+      
+      if (data.getDriverUsageHistory?.success) {
+        // Filter out active records (they're already shown in current materials)
+        const pastHistory = data.getDriverUsageHistory.usageHistory
+          .filter((history: UsageHistory) => !history.isActive)
+          .sort((a: UsageHistory, b: UsageHistory) => {
+            // Sort by unassignedAt (most recent first)
+            const dateA = a.unassignedAt ? new Date(a.unassignedAt).getTime() : 0;
+            const dateB = b.unassignedAt ? new Date(b.unassignedAt).getTime() : 0;
+            return dateB - dateA;
+          });
+        setUsageHistory(pastHistory);
+      } else {
+        setUsageHistory([]);
+      }
+    } catch (error) {
+      console.error('Error loading usage history:', error);
+      setUsageHistory([]);
     }
   };
 
@@ -304,10 +380,6 @@ export default function MaterialsScreen() {
       </SafeAreaView>
     );
   }
-
-  const navigateToTab = (tabName: string) => {
-    router.push(`/(tabs)/${tabName}`);
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -590,42 +662,82 @@ export default function MaterialsScreen() {
             </>
           )}
         </View>
-      </ScrollView>
 
-      {/* Bottom Navigation Bar */}
-      <View style={styles.bottomNavBar}>
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigateToTab('dashboard')}
-        >
-          <Ionicons name="grid-outline" size={24} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Dashboard</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigateToTab('route')}
-        >
-          <Ionicons name="map-outline" size={24} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Route</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigateToTab('profile')}
-        >
-          <Ionicons name="person-outline" size={24} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigateToTab('notifications')}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Notifications</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Past Materials Section */}
+        {usageHistory.length > 0 && (
+          <View style={styles.materialsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Past Materials</Text>
+              <Text style={styles.materialCount}>
+                {usageHistory.length} {usageHistory.length === 1 ? 'material' : 'materials'}
+              </Text>
+            </View>
+
+            {usageHistory.map((history) => (
+              <View key={history.id} style={styles.pastMaterialCard}>
+                <View style={styles.materialHeader}>
+                  <View style={styles.materialInfo}>
+                    <Text style={styles.materialId}>{history.materialStringId}</Text>
+                    <Text style={styles.pastMaterialBadge}>UNASSIGNED</Text>
+                  </View>
+                </View>
+
+                <View style={styles.pastMaterialDetails}>
+                  <View style={styles.detailItem}>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                    <Text style={styles.detailText}>
+                      Assigned: {formatDate(history.assignedAt)}
+                    </Text>
+                  </View>
+                  
+                  {history.unassignedAt && (
+                    <View style={styles.detailItem}>
+                      <Ionicons name="calendar-outline" size={16} color="#666" />
+                      <Text style={styles.detailText}>
+                        Unassigned: {formatDate(history.unassignedAt)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {history.mountedAt && (
+                    <View style={styles.detailItem}>
+                      <Ionicons name="checkmark-circle-outline" size={16} color="#4CAF50" />
+                      <Text style={styles.detailText}>
+                        Mounted: {formatDate(history.mountedAt)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {history.dismountedAt && (
+                    <View style={styles.detailItem}>
+                      <Ionicons name="close-circle-outline" size={16} color="#F44336" />
+                      <Text style={styles.detailText}>
+                        Dismounted: {formatDate(history.dismountedAt)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {history.usageDuration && (
+                    <View style={styles.detailItem}>
+                      <Ionicons name="time-outline" size={16} color="#666" />
+                      <Text style={styles.detailText}>
+                        Duration: {Math.ceil(history.usageDuration / (1000 * 60 * 60 * 24))} days
+                      </Text>
+                    </View>
+                  )}
+
+                  {history.customDismountReason && (
+                    <View style={styles.reasonContainer}>
+                      <Text style={styles.reasonLabel}>Removal Reason:</Text>
+                      <Text style={styles.reasonText}>{history.customDismountReason}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -1005,37 +1117,41 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginLeft: 8,
   },
-  bottomNavBar: {
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    height: 65,
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+  pastMaterialCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
-    textAlign: 'center',
+  pastMaterialBadge: {
+    fontSize: 12,
     color: '#9CA3AF',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  pastMaterialDetails: {
+    gap: 8,
+    marginTop: 12,
+  },
+  reasonContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F87171',
+  },
+  reasonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#B91C1C',
+    marginBottom: 4,
+  },
+  reasonText: {
+    fontSize: 13,
+    color: '#7F1D1D',
+    lineHeight: 18,
   },
 });

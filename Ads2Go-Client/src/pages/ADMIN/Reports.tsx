@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car } from 'lucide-react';
+import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useSearchParams } from 'react-router-dom';
@@ -7,6 +7,10 @@ import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
 import { GET_ALL_DRIVER_REPORTS } from '../../graphql/admin/queries/driverReports';
 import { UPDATE_DRIVER_REPORT_ADMIN } from '../../graphql/admin/mutations/driverReports';
+import { GET_DRIVER_BY_ID } from '../../graphql/admin/queries/driverDetails';
+import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
+import { GET_ALL_CONTACT_MESSAGES } from '../../graphql/admin/queries/contactMessages';
+import { UPDATE_CONTACT_MESSAGE, SEND_CONTACT_REPLY } from '../../graphql/admin/mutations/contactMessages';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
@@ -50,8 +54,27 @@ interface Report {
   resolvedAt?: string;
 }
 
+interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
+  category: string;
+  adminReply?: {
+    subject: string;
+    message: string;
+    sentBy: AdminInfo;
+    sentAt: string;
+  };
+  resolvedAt?: string;
+  resolvedBy?: AdminInfo;
+  createdAt: string;
+  updatedAt: string;
+}
+
 type ReportStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
-type ReportSource = 'users' | 'drivers';
+type ReportSource = 'users' | 'drivers' | 'messages';
 
 const Reports: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
@@ -75,10 +98,44 @@ const Reports: React.FC = () => {
     adminNotes: ''
   });
 
+  // Driver Edit Modal States
+  const [isDriverEditModalOpen, setIsDriverEditModalOpen] = useState(false);
+  const [driverDetails, setDriverDetails] = useState<any>(null);
+  const [requestedChanges, setRequestedChanges] = useState<any>(null);
+  const [isLoadingDriverDetails, setIsLoadingDriverDetails] = useState(false);
+  const [showApproveConfirmModal, setShowApproveConfirmModal] = useState(false);
+  const [showRejectPromptModal, setShowRejectPromptModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isApprovingChanges, setIsApprovingChanges] = useState(false);
+  const [isRejectingChanges, setIsRejectingChanges] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Contact Message Reply Modal States
+  const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
+  const [selectedContactMessage, setSelectedContactMessage] = useState<ContactMessage | null>(null);
+  const [replySubject, setReplySubject] = useState('');
+  const [replyMessage, setReplyMessage] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [userRegistrationStatus, setUserRegistrationStatus] = useState<'checking' | 'registered' | 'not_registered'>('checking');
+
   const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
-  const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'OTHER'];
+  const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'UPDATE_PROFILE_DETAILS', 'OTHER'];
   const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
+
+  // Helper function to format type labels for display
+  const formatTypeLabel = (type: string): string => {
+    if (type === 'All Types') return type;
+    
+    // Convert underscores to spaces and capitalize each word
+    return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -113,16 +170,29 @@ const Reports: React.FC = () => {
     skip: reportSource !== 'drivers',
   });
 
+  // Fetch contact messages
+  const { data: contactData, loading: contactLoading, error: contactError } = useQuery(GET_ALL_CONTACT_MESSAGES, {
+    fetchPolicy: 'network-only',
+    skip: reportSource !== 'messages',
+  });
+
   // Update mutations
   const [updateUserReport] = useMutation(UPDATE_USER_REPORT_ADMIN);
   const [updateDriverReport] = useMutation(UPDATE_DRIVER_REPORT_ADMIN);
+  const [updateContactMessage] = useMutation(UPDATE_CONTACT_MESSAGE);
+  const [sendContactReply] = useMutation(SEND_CONTACT_REPLY);
+  const [updateDriver] = useMutation(UPDATE_DRIVER);
 
   // Select appropriate data based on report source
-  const data = reportSource === 'users' ? userData : driverData;
-  const loading = reportSource === 'users' ? userLoading : driverLoading;
-  const error = reportSource === 'users' ? userError : driverError;
+  const data = reportSource === 'users' ? userData : reportSource === 'drivers' ? driverData : contactData;
+  const loading = reportSource === 'users' ? userLoading : reportSource === 'drivers' ? driverLoading : contactLoading;
+  const error = reportSource === 'users' ? userError : reportSource === 'drivers' ? driverError : contactError;
   const updateReport = reportSource === 'users' ? updateUserReport : updateDriverReport;
-  const typeFilterOptions = reportSource === 'users' ? userTypeFilterOptions : driverTypeFilterOptions;
+  const typeFilterOptions = reportSource === 'users' 
+    ? userTypeFilterOptions 
+    : reportSource === 'drivers' 
+    ? driverTypeFilterOptions 
+    : []; // Newsletter Messages don't have types
 
   // Detect mobile screen size
   useEffect(() => {
@@ -139,44 +209,67 @@ const Reports: React.FC = () => {
   // Filter reports based on search term, status, and type
   const reports = reportSource === 'users' 
     ? data?.getAllUserReports?.reports 
-    : data?.getAllDriverReports?.reports;
+    : reportSource === 'drivers'
+    ? data?.getAllDriverReports?.reports
+    : data?.getAllContactMessages?.contactMessages;
 
-  const filteredReports = reports?.filter((report: Report) => {
+  const filteredReports = reports?.filter((report: Report | ContactMessage) => {
     const searchLower = searchTerm.toLowerCase();
     
-    let matchesSearch = report.title.toLowerCase().includes(searchLower);
+    // Handle different report types
+    let matchesSearch = false;
     
-    if (reportSource === 'users' && report.user) {
+    if (reportSource === 'messages') {
+      const message = report as ContactMessage;
+      matchesSearch = 
+        message.name.toLowerCase().includes(searchLower) ||
+        message.email.toLowerCase().includes(searchLower) ||
+        message.message.toLowerCase().includes(searchLower);
+    } else {
+      const normalReport = report as Report;
+      matchesSearch = normalReport.title?.toLowerCase().includes(searchLower) || false;
+    }
+    
+    if (reportSource === 'users' && (report as Report).user) {
+      const userReport = report as Report;
       matchesSearch = matchesSearch ||
-        report.user.firstName.toLowerCase().includes(searchLower) ||
-        report.user.lastName.toLowerCase().includes(searchLower) ||
-        report.user.email.toLowerCase().includes(searchLower);
-    } else if (reportSource === 'drivers' && report.driver) {
+        userReport.user!.firstName.toLowerCase().includes(searchLower) ||
+        userReport.user!.lastName.toLowerCase().includes(searchLower) ||
+        userReport.user!.email.toLowerCase().includes(searchLower);
+    } else if (reportSource === 'drivers' && (report as Report).driver) {
+      const driverReport = report as Report;
       matchesSearch = matchesSearch ||
-        report.driver.firstName.toLowerCase().includes(searchLower) ||
-        report.driver.lastName.toLowerCase().includes(searchLower) ||
-        report.driver.email.toLowerCase().includes(searchLower) ||
-        report.driver.driverId.toLowerCase().includes(searchLower) ||
-        (report.driver.vehiclePlateNumber && report.driver.vehiclePlateNumber.toLowerCase().includes(searchLower));
+        driverReport.driver!.firstName.toLowerCase().includes(searchLower) ||
+        driverReport.driver!.lastName.toLowerCase().includes(searchLower) ||
+        driverReport.driver!.email.toLowerCase().includes(searchLower) ||
+        driverReport.driver!.driverId.toLowerCase().includes(searchLower) ||
+        (driverReport.driver!.vehiclePlateNumber && driverReport.driver!.vehiclePlateNumber.toLowerCase().includes(searchLower));
     }
     
     const matchesStatus = selectedStatusFilter === 'All Status' || 
       report.status === selectedStatusFilter.toUpperCase().replace(' ', '_');
     
-    const matchesType = selectedTypeFilter === 'All Types' || 
-      report.reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
+    // Contact messages don't have reportType, skip type filter for them
+    const matchesType = reportSource === 'messages' || 
+      selectedTypeFilter === 'All Types' || 
+      (report as Report).reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
     
     return matchesSearch && matchesStatus && matchesType;
   }).sort((a, b) => {
+    // Handle sorting for different types
+    if (sortBy === 'Alphabetical (A-Z)' || sortBy === 'Alphabetical (Z-A)') {
+      const aValue = reportSource === 'messages' ? (a as ContactMessage).name : (a as Report).title;
+      const bValue = reportSource === 'messages' ? (b as ContactMessage).name : (b as Report).title;
+      return sortBy === 'Alphabetical (A-Z)' 
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+    
     switch (sortBy) {
       case 'Newest First':
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       case 'Oldest First':
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      case 'Alphabetical (A-Z)':
-        return a.title.localeCompare(b.title);
-      case 'Alphabetical (Z-A)':
-        return b.title.localeCompare(a.title);
       default:
         return 0;
     }
@@ -192,6 +285,11 @@ const Reports: React.FC = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedStatusFilter, selectedTypeFilter]);
+
+  // Clear selections when switching tabs
+  useEffect(() => {
+    setSelectedReports([]);
+  }, [reportSource]);
 
   const handleStatusFilterChange = (status: string) => {
     setSelectedStatusFilter(status);
@@ -222,10 +320,21 @@ const Reports: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedReports.length === filteredReports.length) {
-      setSelectedReports([]);
+    const currentPageIds = paginatedReports.map((report: Report) => report.id);
+    const allCurrentPageSelected = currentPageIds.every((id: string) => selectedReports.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect only items from current page
+      setSelectedReports(prev => prev.filter((id: string) => !currentPageIds.includes(id)));
     } else {
-      setSelectedReports(filteredReports.map((report: Report) => report.id));
+      // Add current page items to existing selection
+      setSelectedReports(prev => {
+        const newSelection = [...prev];
+        currentPageIds.forEach((id: string) => {
+          if (!newSelection.includes(id)) newSelection.push(id);
+        });
+        return newSelection;
+      });
     }
   };
 
@@ -297,6 +406,180 @@ const Reports: React.FC = () => {
   const handleNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Driver Edit Modal Handlers
+  const handleOpenDriverEditModal = async (report: Report) => {
+    if (report.reportType !== 'UPDATE_PROFILE_DETAILS' || !report.driver) {
+      return;
+    }
+
+    setIsLoadingDriverDetails(true);
+    setIsDriverEditModalOpen(true);
+
+    try {
+      // Parse requested changes from report description
+      const changes = JSON.parse(report.description);
+      setRequestedChanges(changes);
+      setSelectedReport(report);
+
+      // Fetch current driver details using lazy query
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+        },
+        body: JSON.stringify({
+          query: `
+            query GetDriverById($driverId: ID!) {
+              getDriverById(driverId: $driverId) {
+                id
+                driverId
+                firstName
+                middleName
+                lastName
+                email
+                contactNumber
+                address
+                licenseNumber
+                licensePictureURL
+                vehiclePlateNumber
+                vehicleModel
+                vehicleType
+                vehicleYear
+                vehiclePhotoURL
+                orCrPictureURL
+                profilePicture
+              }
+            }
+          `,
+          variables: { driverId: report.driver.driverId },
+        }),
+      });
+
+      const result = await response.json();
+      
+      // Check for GraphQL errors
+      if (result.errors) {
+        console.error('GraphQL errors:', result.errors);
+        alert(`Failed to load driver details: ${result.errors[0]?.message || 'Unknown error'}`);
+        setIsDriverEditModalOpen(false);
+        setIsLoadingDriverDetails(false);
+        return;
+      }
+      
+      if (result.data?.getDriverById) {
+        setDriverDetails(result.data.getDriverById);
+      } else {
+        console.error('No driver data returned');
+        alert('Failed to load driver details: No data returned');
+        setIsDriverEditModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error fetching driver details:', error);
+      alert(`Failed to load driver details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsDriverEditModalOpen(false);
+    } finally {
+      setIsLoadingDriverDetails(false);
+    }
+  };
+
+  const handleApproveDriverChanges = async () => {
+    if (!selectedReport || !driverDetails || !requestedChanges || isApprovingChanges) return;
+
+    setIsApprovingChanges(true);
+
+    try {
+      // Build update input from requested changes
+      const updateInput: any = {};
+
+      requestedChanges.changes.forEach((change: any) => {
+        const fieldKey = change.fieldKey;
+        
+        // Map field keys to actual driver fields
+        if (fieldKey === 'vehiclePhoto') {
+          updateInput.vehiclePhotoURL = change.newValue;
+        } else if (fieldKey === 'orCrDocument') {
+          updateInput.orCrPictureURL = change.newValue;
+        } else if (fieldKey === 'profilePicture') {
+          updateInput.profilePicture = change.newValue;
+        } else if (change.newValue && change.newValue !== 'See attachment') {
+          updateInput[fieldKey] = change.newValue;
+        }
+      });
+
+      // Update driver details
+      await updateDriver({
+        variables: {
+          driverId: driverDetails.driverId,
+          input: updateInput,
+        },
+      });
+
+      // Update report status to RESOLVED
+      await updateDriverReport({
+        variables: {
+          id: selectedReport.id,
+          input: {
+            status: 'RESOLVED',
+            adminNotes: `Profile details updated successfully by ${admin?.firstName || 'Admin'} on ${new Date().toLocaleString()}`,
+          },
+        },
+        refetchQueries: [{ query: GET_ALL_DRIVER_REPORTS }],
+      });
+
+      // Show success modal
+      setSuccessMessage('Driver details updated successfully!');
+      setShowSuccessModal(true);
+      setIsDriverEditModalOpen(false);
+      setShowApproveConfirmModal(false);
+      setSelectedReport(null);
+      setDriverDetails(null);
+      setRequestedChanges(null);
+    } catch (error: any) {
+      console.error('Error updating driver details:', error);
+      setErrorMessage(`Failed to update driver details: ${error.message || 'Unknown error'}`);
+      setShowErrorModal(true);
+    } finally {
+      setIsApprovingChanges(false);
+    }
+  };
+
+  const handleRejectDriverChanges = async () => {
+    if (!selectedReport || !rejectReason.trim() || isRejectingChanges) return;
+
+    setIsRejectingChanges(true);
+
+    try {
+      // Update report status to CLOSED
+      await updateDriverReport({
+        variables: {
+          id: selectedReport.id,
+          input: {
+            status: 'CLOSED',
+            adminNotes: `Request rejected by ${admin?.firstName || 'Admin'}: ${rejectReason}`,
+          },
+        },
+        refetchQueries: [{ query: GET_ALL_DRIVER_REPORTS }],
+      });
+
+      // Show success modal
+      setSuccessMessage('Request rejected successfully');
+      setShowSuccessModal(true);
+      setIsDriverEditModalOpen(false);
+      setShowRejectPromptModal(false);
+      setRejectReason('');
+      setSelectedReport(null);
+      setDriverDetails(null);
+      setRequestedChanges(null);
+    } catch (error: any) {
+      console.error('Error rejecting request:', error);
+      setErrorMessage(`Failed to reject request: ${error.message || 'Unknown error'}`);
+      setShowErrorModal(true);
+    } finally {
+      setIsRejectingChanges(false);
     }
   };
 
@@ -403,6 +686,21 @@ const Reports: React.FC = () => {
             <Car size={18} />
             <span className="font-medium">Driver Reports</span>
           </button>
+          <button
+            onClick={() => {
+              setReportSource('messages');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+              reportSource === 'messages'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <MessageSquare size={18} />
+            <span className="font-medium">Newsletter Messages</span>
+          </button>
         </div>
       </div>
 
@@ -413,7 +711,13 @@ const Reports: React.FC = () => {
             <input
               type="text"
               className="text-xs text-black rounded-lg pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
-              placeholder={reportSource === 'users' ? "Search by title, user name, or email" : "Search by title, driver name, ID, or vehicle"}
+              placeholder={
+                reportSource === 'users' 
+                  ? "Search by title, user name, or email" 
+                  : reportSource === 'drivers'
+                  ? "Search by title, driver name, ID, or vehicle"
+                  : "Search by name, email, or message"
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -451,39 +755,42 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-              <div className="relative w-full sm:w-40">
-                <button
-                  onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-                >
-                  <span className="truncate">{selectedTypeFilter}</span>
-                  <ChevronDown
-                    size={16}
-                    className={`transform transition-transform duration-200 ${showTypeDropdown ? 'rotate-180' : 'rotate-0'}`}
-                  />
-                </button>
-                <AnimatePresence>
-                  {showTypeDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                    >
-                      {typeFilterOptions.map((type) => (
-                        <button
-                          key={type}
-                          onClick={() => handleTypeFilterChange(type)}
-                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              {/* Only show Type filter for User Reports and Driver Reports, not Newsletter Messages */}
+              {reportSource !== 'messages' && (
+                <div className="relative w-full sm:w-40">
+                  <button
+                    onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    <span className="truncate">{formatTypeLabel(selectedTypeFilter)}</span>
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${showTypeDropdown ? 'rotate-180' : 'rotate-0'}`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showTypeDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {typeFilterOptions.map((type) => (
+                          <button
+                            key={type}
+                            onClick={() => handleTypeFilterChange(type)}
+                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {formatTypeLabel(type)}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
               <div className="relative w-full sm:w-36">
                 <button
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
@@ -578,7 +885,7 @@ const Reports: React.FC = () => {
               <input
                 type="checkbox"
                 className="form-checkbox"
-                checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
+                checked={paginatedReports.length > 0 && paginatedReports.every((report: Report) => selectedReports.includes(report.id))}
                 onChange={handleSelectAll}
               />
               <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
@@ -651,7 +958,7 @@ const Reports: React.FC = () => {
                     {/* Category */}
                     <div>
                       <div className="font-medium">Category:</div>
-                      <div>{report.reportType.replace('_', ' ')}</div>
+                      <div>{formatTypeLabel(report.reportType)}</div>
                     </div>
                   </div>
 
@@ -709,7 +1016,7 @@ const Reports: React.FC = () => {
                     ? `${report.driver.firstName} ${report.driver.lastName}`
                     : 'N/A'}
                 </div>
-                <div className="col-span-2 truncate">{report.reportType.replace('_', ' ')}</div>
+                <div className="col-span-2 truncate">{formatTypeLabel(report.reportType)}</div>
                 <div className="col-span-2 flex items-center gap-1">
                   {getStatusIcon(report.status)}
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(report.status)}`}>
@@ -750,9 +1057,42 @@ const Reports: React.FC = () => {
             </div>
             <div className="p-6 space-y-6">
               <div>
-                <strong className="text-sm font-bold text-gray-700">Description:</strong>
-                <p className="mt-1 text-gray-700">{selectedReport.description}</p>
-              </div>
+                <strong className="text-sm font-bold text-gray-700">
+                  {selectedReport.reportType === 'UPDATE_PROFILE_DETAILS' ? 'Requested Changes:' : 'Description:'}
+                </strong>
+                {selectedReport.reportType === 'UPDATE_PROFILE_DETAILS' ? (
+                  (() => {
+                    try {
+                      const data = JSON.parse(selectedReport.description);
+                      return (
+                        <div className="mt-3 space-y-3">
+                          {data.changes?.map((change: any, index: number) => (
+                            <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                              <p className="font-semibold text-gray-900 mb-2">{change.fieldLabel}</p>
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Current:</span>
+                                  <p className="text-gray-900 font-medium mt-1">{change.currentValue || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-blue-600">Requested:</span>
+                                  <p className="text-blue-900 font-semibold mt-1">{change.newValue || 'N/A'}</p>
+                                </div>
+                              </div>
+                              {change.hasAttachment && (
+                                <p className="text-xs text-gray-500 mt-2 italic">📎 Document attached (see attachments below)</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } catch {
+                      return <p className="mt-1 text-gray-700">{selectedReport.description}</p>;
+                    }
+                  })()
+                ) : (
+                  <p className="mt-1 text-gray-700">{selectedReport.description}</p>
+                )}</div>
               {selectedReport.adminNotes && (
                 <div>
                   <div className="flex items-center justify-between">
@@ -911,6 +1251,21 @@ const Reports: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Update Profile Details Button */}
+              {selectedReport.reportType === 'UPDATE_PROFILE_DETAILS' && 
+               reportSource === 'drivers' && 
+               (selectedReport.status === 'PENDING' || selectedReport.status === 'IN_PROGRESS') && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => handleOpenDriverEditModal(selectedReport)}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    <Edit size={18} />
+                    Review & Update Driver Details
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -922,7 +1277,7 @@ const Reports: React.FC = () => {
           {/* Previous button */}
           <button
             onClick={handlePreviousPage}
-            disabled={currentPage === 1}
+            disabled={currentPage === 1 || totalPages === 0}
             className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -936,8 +1291,9 @@ const Reports: React.FC = () => {
             {(() => {
               const pages = [];
               const maxVisiblePages = 3;
+              const effectiveTotalPages = totalPages === 0 ? 1 : totalPages;
               let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+              let endPage = Math.min(effectiveTotalPages, startPage + maxVisiblePages - 1);
 
               if (endPage - startPage + 1 < maxVisiblePages) {
                 startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -948,18 +1304,19 @@ const Reports: React.FC = () => {
                   <button
                     key={i}
                     onClick={() => handlePageChange(i)}
+                    disabled={totalPages === 0}
                     className={`px-3 py-1 text-sm rounded ${
                       currentPage === i
                         ? "border border-gray-300 text-black" 
                         : "text-gray-700 hover:border border-gray-300"
-                    }`}
+                    } ${totalPages === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {i}
                   </button>
                 );
               }
 
-              if (endPage < totalPages) {
+              if (endPage < effectiveTotalPages) {
                 pages.push(
                   <span key="ellipsis" className="px-2 text-gray-500">
                     …
@@ -974,7 +1331,7 @@ const Reports: React.FC = () => {
           {/* Next button */}
           <button
             onClick={handleNextPage}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === totalPages || totalPages === 0}
             className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
@@ -1069,6 +1426,329 @@ const Reports: React.FC = () => {
                 className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Edit Modal */}
+      {isDriverEditModalOpen && selectedReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-semibold text-gray-900">Update Driver Profile Details</h2>
+              <button
+                onClick={() => {
+                  setIsDriverEditModalOpen(false);
+                  setDriverDetails(null);
+                  setRequestedChanges(null);
+                  setSelectedReport(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <CloseIcon size={24} />
+              </button>
+            </div>
+
+            {isLoadingDriverDetails ? (
+              <div className="p-12 text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-gray-600">Loading driver details...</p>
+              </div>
+            ) : driverDetails && requestedChanges ? (
+              <div className="p-6 space-y-6">
+                {/* Current Driver Details */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Users size={20} />
+                    Current Driver Details
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">Name:</span>
+                      <p className="text-gray-900">
+                        {[driverDetails.firstName, driverDetails.middleName, driverDetails.lastName]
+                          .filter(Boolean)
+                          .join(' ')}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Email:</span>
+                      <p className="text-gray-900">{driverDetails.email}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Contact:</span>
+                      <p className="text-gray-900">{driverDetails.contactNumber}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">License:</span>
+                      <p className="text-gray-900">{driverDetails.licenseNumber}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Vehicle Plate:</span>
+                      <p className="text-gray-900">{driverDetails.vehiclePlateNumber}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Vehicle:</span>
+                      <p className="text-gray-900">
+                        {driverDetails.vehicleYear} {driverDetails.vehicleModel} ({driverDetails.vehicleType})
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="font-medium text-gray-600">Address:</span>
+                      <p className="text-gray-900">{driverDetails.address}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Requested Changes */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Edit size={20} />
+                    Requested Changes
+                  </h3>
+                  <div className="space-y-4">
+                    {requestedChanges.changes.map((change: any, index: number) => {
+                      // Find the attachment for this field if it exists
+                      const attachmentIndex = selectedReport.attachments.findIndex((att: string) =>
+                        att.includes(change.fieldKey) || index < selectedReport.attachments.length
+                      );
+                      const attachment = attachmentIndex >= 0 ? selectedReport.attachments[attachmentIndex] : null;
+
+                      return (
+                        <div
+                          key={change.fieldKey}
+                          className="bg-white border-2 border-blue-100 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 mb-2">{change.fieldLabel}</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <span className="text-gray-500">Current:</span>
+                                  <p className="text-gray-900 font-medium mt-1">{change.currentValue || 'N/A'}</p>
+                                </div>
+                                <div>
+                                  <span className="text-blue-600">Requested:</span>
+                                  <p className="text-blue-900 font-semibold mt-1">
+                                    {change.newValue === 'See attachment' ? '📎 See attachment below' : change.newValue}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {/* Show attachment if exists */}
+                              {change.hasAttachment && attachment && (
+                                <div className="mt-3 pt-3 border-t border-gray-200">
+                                  <span className="text-sm text-gray-600 font-medium">Uploaded Document:</span>
+                                  <div className="mt-2">
+                                    {attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
+                                    attachment.includes('data:image/') ||
+                                    attachment.includes('firebasestorage.googleapis.com') ? (
+                                      <div>
+                                        <img
+                                          src={attachment}
+                                          alt={change.fieldLabel}
+                                          className="max-w-xs h-auto rounded-lg border border-gray-300 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                                          onClick={() => window.open(attachment, '_blank')}
+                                        />
+                                        <a
+                                          href={attachment}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-600 hover:text-blue-800 text-xs underline mt-2 inline-block"
+                                        >
+                                          Open in new tab
+                                        </a>
+                                      </div>
+                                    ) : (
+                                      <a
+                                        href={attachment}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm underline"
+                                      >
+                                        <FileText size={16} />
+                                        View Document
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                {selectedReport && (selectedReport.status === 'PENDING' || selectedReport.status === 'IN_PROGRESS') ? (
+                  <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
+                    <button
+                      onClick={() => setShowRejectPromptModal(true)}
+                      className="flex items-center gap-2 px-6 py-3 border-2 border-red-500 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-semibold"
+                    >
+                      <CloseIcon size={18} />
+                      Reject Request
+                    </button>
+                    <button
+                      onClick={() => setShowApproveConfirmModal(true)}
+                      className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-semibold"
+                    >
+                      <Save size={18} />
+                      Approve & Update Details
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-6 border-t border-gray-200">
+                    <div className={`text-center py-3 px-4 rounded-lg ${
+                      selectedReport?.status === 'RESOLVED' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      <p className="font-semibold">
+                        {selectedReport?.status === 'RESOLVED' 
+                          ? '✓ This request has been approved and processed' 
+                          : `This request has been ${selectedReport?.status?.toLowerCase()}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-12 text-center">
+                <p className="text-gray-600">Failed to load driver details</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Approve Confirmation Modal */}
+      {showApproveConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Approval</h3>
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to approve and apply all these changes to the driver's profile?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowApproveConfirmModal(false)}
+                disabled={isApprovingChanges}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowApproveConfirmModal(false);
+                  handleApproveDriverChanges();
+                }}
+                disabled={isApprovingChanges}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isApprovingChanges && <Loader size={16} className="animate-spin" />}
+                Yes, Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Prompt Modal */}
+      {showRejectPromptModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Reject Request</h3>
+            <p className="text-gray-700 mb-4">
+              Please provide a reason for rejecting this request:
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Enter rejection reason..."
+              disabled={isRejectingChanges}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              rows={4}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowRejectPromptModal(false);
+                  setRejectReason('');
+                }}
+                disabled={isRejectingChanges}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (rejectReason.trim()) {
+                    setShowRejectPromptModal(false);
+                    handleRejectDriverChanges();
+                  }
+                }}
+                disabled={!rejectReason.trim() || isRejectingChanges}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {isRejectingChanges && <Loader size={16} className="animate-spin" />}
+                Reject Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle size={24} className="text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Success</h3>
+            </div>
+            <p className="text-gray-700 mb-6">{successMessage}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  setSuccessMessage('');
+                }}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle size={24} className="text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Error</h3>
+            </div>
+            <p className="text-gray-700 mb-6">{errorMessage}</p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  setErrorMessage('');
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+              >
+                OK
               </button>
             </div>
           </div>

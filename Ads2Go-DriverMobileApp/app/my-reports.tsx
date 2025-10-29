@@ -13,8 +13,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { request } from 'graphql-request';
-import API_CONFIG from '../../config/api';
-import { GET_DRIVER_REPORTS } from '../../graphql/driverReports';
+import { useRouter } from 'expo-router';
+import API_CONFIG from '../config/api';
+import { GET_DRIVER_REPORTS } from '../graphql/driverReports';
 import { useFocusEffect } from '@react-navigation/native';
 
 interface AdminInfo {
@@ -54,10 +55,12 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   MATERIAL_ISSUE: 'Material Issue',
   APP_ISSUE: 'App Issue',
   REQUEST_ACCOUNT_CLOSURE: 'Account Closure Request',
+  UPDATE_PROFILE_DETAILS: 'Profile Update Request',
   OTHER: 'Other',
 };
 
-export default function ReportsScreen() {
+export default function MyReportsScreen() {
+  const router = useRouter();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,7 +162,13 @@ export default function ReportsScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Reports</Text>
+          <View style={styles.headerTop}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>My Reports</Text>
+            <View style={styles.placeholder} />
+          </View>
           <Text style={styles.headerSubtitle}>
             {filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'}
           </Text>
@@ -240,7 +249,17 @@ export default function ReportsScreen() {
                   </Text>
 
                   <Text style={styles.reportCardDescription} numberOfLines={2}>
-                    {report.description}
+                    {report.reportType === 'UPDATE_PROFILE_DETAILS' 
+                      ? (() => {
+                          try {
+                            const data = JSON.parse(report.description);
+                            const fieldCount = data.changes?.length || 0;
+                            return `Requesting to update ${fieldCount} field${fieldCount !== 1 ? 's' : ''}`;
+                          } catch {
+                            return report.description;
+                          }
+                        })()
+                      : report.description}
                   </Text>
 
                   {report.adminNotes && (
@@ -320,8 +339,46 @@ export default function ReportsScreen() {
 
               {/* Description */}
               <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>Description</Text>
-                <Text style={styles.modalSectionContent}>{selectedReport.description}</Text>
+                <Text style={styles.modalSectionTitle}>
+                  {selectedReport.reportType === 'UPDATE_PROFILE_DETAILS' ? 'Requested Changes' : 'Description'}
+                </Text>
+                {selectedReport.reportType === 'UPDATE_PROFILE_DETAILS' ? (
+                  (() => {
+                    try {
+                      const data = JSON.parse(selectedReport.description);
+                      return (
+                        <View>
+                          {data.changes?.map((change: any, index: number) => (
+                            <View key={index} style={styles.changeItem}>
+                              <Text style={styles.changeFieldLabel}>{change.fieldLabel}</Text>
+                              <View style={styles.changeValues}>
+                                <View style={styles.changeValueContainer}>
+                                  <Text style={styles.changeValueLabel}>Current:</Text>
+                                  <Text style={styles.changeCurrentValue}>{change.currentValue || 'N/A'}</Text>
+                                </View>
+                                <Ionicons name="arrow-forward" size={16} color="#3b82f6" style={styles.changeArrow} />
+                                <View style={styles.changeValueContainer}>
+                                  <Text style={styles.changeValueLabel}>New:</Text>
+                                  <Text style={styles.changeNewValue}>{change.newValue || 'N/A'}</Text>
+                                </View>
+                              </View>
+                              {change.hasAttachment && (
+                                <View style={styles.attachmentIndicator}>
+                                  <Ionicons name="attach" size={14} color="#6b7280" />
+                                  <Text style={styles.attachmentText}>Document attached</Text>
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    } catch {
+                      return <Text style={styles.modalSectionContent}>{selectedReport.description}</Text>;
+                    }
+                  })()
+                ) : (
+                  <Text style={styles.modalSectionContent}>{selectedReport.description}</Text>
+                )}
               </View>
 
               {/* Admin Notes */}
@@ -409,15 +466,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  backButton: {
+    padding: 4,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 4,
+  },
+  placeholder: {
+    width: 32,
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#6b7280',
+    marginTop: 4,
   },
   filterContainer: {
     backgroundColor: '#ffffff',
@@ -580,9 +649,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
   },
-  placeholder: {
-    width: 36,
-  },
   modalContent: {
     flex: 1,
     padding: 20,
@@ -698,6 +764,60 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     marginBottom: 8,
+  },
+  changeItem: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  changeFieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  changeValues: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  changeValueContainer: {
+    flex: 1,
+  },
+  changeValueLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  changeCurrentValue: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  changeNewValue: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  changeArrow: {
+    marginHorizontal: 12,
+  },
+  attachmentIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  attachmentText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginLeft: 4,
+    fontStyle: 'italic',
   },
 });
 

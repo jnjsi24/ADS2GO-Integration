@@ -23,7 +23,8 @@ import {
   Info,
   CreditCard,
   RefreshCw,
-  Calendar
+  Calendar,
+  Edit
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { DELETE_AD } from '../../graphql/user';
@@ -32,6 +33,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import RouteMap from '../../components/RouteMap';
 import MapView from '../../components/MapView';
 import Payment from './Payment';
+import EditAdModal from '../../components/EditAdModal';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -151,6 +153,7 @@ type Ad = {
   paymentStatus?: string | null;
   reasonForReject?: string;
   createdAt: string;
+  updatedAt: string;
   startTime: string;  // Campaign start date
   endTime: string;    // Campaign end date
   planId: {
@@ -257,6 +260,9 @@ const AdDetailsPage: React.FC = () => {
   const [debugLogged, setDebugLogged] = useState(false);
   const [showStatusInfo, setShowStatusInfo] = useState(false);
   
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  
   // Delete success tracking
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   
@@ -310,7 +316,7 @@ const AdDetailsPage: React.FC = () => {
   
   // ✅ OPTIMIZATION: Use shared hook (static variant - fetches once, then uses cache)
   // Removed inline query definition, now imports from centralized location
-  const { loading, error, data } = useMyAdsStatic();
+  const { loading, error, data, refetch } = useMyAdsStatic();
 
   // Handle query errors
   useEffect(() => {
@@ -1263,6 +1269,17 @@ const AdDetailsPage: React.FC = () => {
             </div>
             
             
+            {/* Edit Button - Only show when ad is PENDING */}
+            {ad.status === 'PENDING' && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4" />
+                Edit Ad
+              </button>
+            )}
+            
             {/* Payment Button - Only show when ad is APPROVED and payment is PENDING */}
             {shouldShowPaymentButton && (
               <button
@@ -1283,6 +1300,33 @@ const AdDetailsPage: React.FC = () => {
           <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
           <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
           <p className="text-black/70">{ad.description}</p>
+          
+          {/* Timestamp Display */}
+          <div className="mt-4 space-y-1 text-sm text-gray-500">
+            <p className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Created: {new Date(ad.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </p>
+            {/* Only show "Edited" for PENDING ads (user can edit PENDING ads only) */}
+            {ad.status === 'PENDING' && ad.updatedAt && new Date(ad.updatedAt).getTime() > new Date(ad.createdAt).getTime() && (
+              <p className="flex items-center gap-2 text-orange-600">
+                <RefreshCw className="w-4 h-4" />
+                Edited: {new Date(ad.updatedAt).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1398,10 +1442,15 @@ const AdDetailsPage: React.FC = () => {
                 {/* Upper right: Devices section */}
                 <div className="flex justify-end">
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-black/90 mb-2">Devices:</p>
+                    <p className="text-sm font-semibold text-black/90 mb-2">
+                      {isFullyPaidAndApproved ? 'Devices:' : 'Initial Devices:'}
+                    </p>
                     {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 ? (
                       <div className="space-y-1">
                         {ad.materialId.map((material: any, index: number) => {
+                          // Only show device status for fully paid and approved ads
+                          const shouldShowStatus = isFullyPaidAndApproved;
+                          
                           // Find the online status for this material from ALL locations (not just those with GPS)
                           const deviceLocation = allDeviceLocations.find(
                             (loc) => loc.materialId === material.materialId
@@ -1429,21 +1478,26 @@ const AdDetailsPage: React.FC = () => {
                             <div 
                               key={material.id || index} 
                               className="text-sm flex items-center justify-end space-x-2"
-                              title={isOnline ? 'Online' : `Offline - Last seen: ${getLastSeenText()}`}
+                              title={shouldShowStatus ? (isOnline ? 'Online' : `Offline - Last seen: ${getLastSeenText()}`) : 'Initial device assignment (subject to change)'}
                             >
                               <span className="text-black/70">
                                 🚗 {material.materialId || 'N/A'}
                               </span>
-                              {isOnline ? (
-                                <span className="flex items-center text-green-600 font-medium">
-                                  <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                                  Online
-                                </span>
-                              ) : (
-                                <span className="flex items-center text-red-600 font-medium">
-                                  <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
-                                  Offline
-                                </span>
+                              {/* Only show online/offline status for fully paid and approved ads */}
+                              {shouldShowStatus && (
+                                <>
+                                  {isOnline ? (
+                                    <span className="flex items-center text-green-600 font-medium">
+                                      <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                                      Online
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center text-red-600 font-medium">
+                                      <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+                                      Offline
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           );
@@ -1767,6 +1821,18 @@ const AdDetailsPage: React.FC = () => {
             setShowPaymentModal(false);
             // Optionally refresh the ad data
             window.location.reload();
+          }}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && ad && (
+        <EditAdModal
+          ad={ad}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            console.log('Ad updated successfully, refetching ads...');
+            refetch();
           }}
         />
       )}

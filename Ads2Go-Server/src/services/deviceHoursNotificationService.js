@@ -162,6 +162,23 @@ class DeviceHoursNotificationService {
       }
 
       console.log(`📧 [DeviceHoursNotification] Sent 8-hour milestone notifications to ${admins.length} admins`);
+      
+      // Also notify the driver
+      if (driverInfo) {
+        try {
+          const NotificationService = require('./notifications/NotificationService');
+          await NotificationService.send8HourMilestoneNotificationToDriver(
+            driverInfo.id,
+            materialId,
+            formattedHours,
+            materialId
+          );
+          console.log(`📧 [DeviceHoursNotification] Sent 8-hour milestone notification to driver ${driverInfo.driverId}`);
+        } catch (driverNotifError) {
+          console.error('Error sending 8-hour milestone notification to driver:', driverNotifError);
+        }
+      }
+      
       return notifications;
     } catch (error) {
       console.error('❌ [DeviceHoursNotification] Error sending 8-hour milestone notification:', error);

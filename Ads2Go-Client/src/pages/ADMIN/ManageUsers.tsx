@@ -144,6 +144,10 @@ const ManageUsers: React.FC = () => {
   
   // Processing states for double-click prevention
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  
+  // Bulk delete state
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
@@ -354,6 +358,110 @@ const ManageUsers: React.FC = () => {
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setUserToDelete(null);
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = () => {
+    if (selectedUsers.length === 0) return;
+    setShowBulkDeleteModal(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedUsers.length === 0) return;
+    
+    setIsBulkDeleting(true);
+    
+    try {
+      const results = await Promise.allSettled(
+        selectedUsers.map(userId =>
+          deleteUser({
+            variables: { id: userId },
+          })
+        )
+      );
+      
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+      
+      setUsers(prev => prev.filter((user) => !selectedUsers.includes(user.id)));
+      setSelectedUsers([]);
+      
+      if (successCount > 0) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `${successCount} advertiser(s) deleted successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
+      }
+      
+      if (failCount > 0 && successCount === 0) {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: `Failed to delete ${failCount} advertiser(s)`,
+          duration: 5000
+        });
+      }
+      
+      setShowBulkDeleteModal(false);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error deleting advertisers: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+      setShowBulkDeleteModal(false);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const cancelBulkDelete = () => {
+    setShowBulkDeleteModal(false);
+  };
+
+  const handleExportToCSV = () => {
+    if (selectedUsers.length === 0) return;
+
+    const selectedUserData = users.filter(u => selectedUsers.includes(u.id));
+    
+    const csvData = selectedUserData.map(user => ({
+      ID: user.id,
+      'First Name': user.firstName,
+      'Last Name': user.lastName,
+      Email: user.email,
+      Company: user.company,
+      Contact: user.contact,
+      Address: user.address,
+      City: user.city,
+      Status: user.status,
+      'Ads Count': user.ads.length,
+      'Created At': formatDate(user.createdAt),
+      'Last Login': formatDate(user.lastLogin)
+    }));
+
+    const headers = Object.keys(csvData[0]).join(',');
+    const rows = csvData.map(row => Object.values(row).join(',')).join('\n');
+    const csv = `${headers}\n${rows}`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `advertisers_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    addToast({
+      type: 'success',
+      title: 'Export Successful!',
+      message: `${selectedUsers.length} advertiser(s) exported to CSV`,
+      duration: 4000
+    });
   };
 
   const handleStatusFilterChange = (status: string) => {
@@ -627,6 +735,39 @@ const ManageUsers: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedUsers.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-sm font-medium text-blue-800">
+                {selectedUsers.length} advertiser{selectedUsers.length > 1 ? 's' : ''} selected
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                >
+                  Delete Selected
+                </button>
+                <button
+                  onClick={handleExportToCSV}
+                  className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                >
+                  Export to CSV
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedUsers([])}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* User List */}
       {loading ? (
@@ -1033,6 +1174,19 @@ const ManageUsers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isDeletingUser}
+      />
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showBulkDeleteModal}
+        onClose={cancelBulkDelete}
+        onConfirm={confirmBulkDelete}
+        title="Delete Multiple Advertisers"
+        message={`Are you sure you want to delete ${selectedUsers.length} advertiser(s)? This action cannot be undone.`}
+        confirmText={`Delete ${selectedUsers.length} Advertiser${selectedUsers.length > 1 ? 's' : ''}`}
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isBulkDeleting}
       />
 
       {/* Toast Notifications */}

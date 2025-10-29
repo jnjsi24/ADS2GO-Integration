@@ -10,3 +10,4 @@ export * from './mutations/CompleteGoogleOAuth';
 export * from './mutations/VerifyEmail';
 export * from './mutations/Logout';
 export * from './mutations/deleteAd';
+export * from './mutations/updateAd';

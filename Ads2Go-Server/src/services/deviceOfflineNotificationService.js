@@ -166,6 +166,23 @@ class DeviceOfflineNotificationService {
       this.setCooldown(deviceId);
 
       console.log(`📧 [DeviceOfflineNotification] Sent offline notification for device ${deviceId} to ${admins.length} admins`);
+      
+      // Also notify the driver
+      if (driverInfo) {
+        try {
+          const NotificationService = require('./notifications/NotificationService');
+          await NotificationService.sendMaterialOfflineNotification(
+            driverInfo.id,
+            materialId,
+            materialId,
+            reason
+          );
+          console.log(`📧 [DeviceOfflineNotification] Sent offline notification to driver ${driverInfo.driverId}`);
+        } catch (driverNotifError) {
+          console.error('Error sending offline notification to driver:', driverNotifError);
+        }
+      }
+      
       return notifications;
     } catch (error) {
       console.error('❌ [DeviceOfflineNotification] Error sending offline notification:', error);
@@ -256,6 +273,22 @@ class DeviceOfflineNotificationService {
       }
 
       console.log(`📧 [DeviceOfflineNotification] Sent online notification for device ${deviceId} to ${admins.length} admins`);
+      
+      // Also notify the driver
+      if (driverInfo) {
+        try {
+          const NotificationService = require('./notifications/NotificationService');
+          await NotificationService.sendMaterialOnlineNotification(
+            driverInfo.id,
+            materialId,
+            materialId
+          );
+          console.log(`📧 [DeviceOfflineNotification] Sent online notification to driver ${driverInfo.driverId}`);
+        } catch (driverNotifError) {
+          console.error('Error sending online notification to driver:', driverNotifError);
+        }
+      }
+      
       return notifications;
     } catch (error) {
       console.error('❌ [DeviceOfflineNotification] Error sending online notification:', error);

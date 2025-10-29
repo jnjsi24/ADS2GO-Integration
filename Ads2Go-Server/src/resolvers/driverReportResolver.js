@@ -115,7 +115,7 @@ const resolvers = {
         }
         
         // Validate report type
-        const validReportTypes = ['BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'OTHER'];
+        const validReportTypes = ['BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'UPDATE_PROFILE_DETAILS', 'OTHER'];
         if (!validReportTypes.includes(input.reportType)) {
           throw new Error('Invalid report type');
         }
@@ -330,6 +330,26 @@ const resolvers = {
         }
         
         const updatedReport = await report.save();
+        
+        // Send notification to driver about report status update
+        try {
+          const driverDetails = await Driver.findOne({ driverId: report.driverId });
+          if (driverDetails) {
+            const adminName = `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim();
+            await NotificationService.sendReportStatusUpdateNotification(
+              driverDetails._id,
+              report._id.toString(),
+              report.title,
+              report.status,
+              input.adminNotes || null,
+              adminName
+            );
+            console.log(`📧 [DriverReportResolver] Sent status update notification to driver ${driverDetails.driverId}`);
+          }
+        } catch (notifError) {
+          console.error('Error sending driver report status notification:', notifError);
+          // Don't fail the update if notification fails
+        }
         
         return {
           success: true,

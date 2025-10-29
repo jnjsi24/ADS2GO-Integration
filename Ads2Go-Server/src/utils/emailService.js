@@ -308,6 +308,67 @@ class EmailService {
       return false;
     }
   }
+
+  // Send reply to contact form submission
+  static async sendContactReply(toEmail, toName, subject, message, adminName) {
+    console.log(`📧 Sending contact reply to: ${toEmail}`);
+    
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.error('❌ Cannot send email: Email service not configured');
+      return false;
+    }
+
+    const mailOptions = {
+      from: `Ads2Go Support <${process.env.EMAIL_USER}>`,
+      to: toEmail,
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #3674B5; margin: 0; font-size: 24px;">Ads2Go</h1>
+              <p style="color: #666; margin: 10px 0 0 0; font-size: 14px;">Mobile Advertising Solutions</p>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+              <p style="margin: 0; color: #333; font-size: 16px;">Dear ${toName},</p>
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3674B5;">
+              ${message.replace(/\n/g, '<br>')}
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="margin: 0; color: #666; font-size: 14px;">
+                Best regards,<br>
+                <strong style="color: #3674B5;">${adminName || 'Ads2Go Team'}</strong>
+              </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">
+                This email was sent in response to your inquiry at 
+                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}" 
+                   style="color: #3674B5; text-decoration: none;">Ads2Go</a>.<br>
+                If you have any questions, please reply to this email.
+              </p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    try {
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`✅ Contact reply sent successfully to ${toEmail}`);
+      console.log(`   Message ID: ${result.messageId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending contact reply:', error.message);
+      return false;
+    }
+  }
 }
 
 module.exports = EmailService;
