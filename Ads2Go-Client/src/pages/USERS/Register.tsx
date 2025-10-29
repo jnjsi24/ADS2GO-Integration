@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import LocationAutocomplete from '../../components/LocationAutocomplete';
+import TermsAndConditionsModal from '../../components/TermsAndConditionsModal';
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -26,6 +27,7 @@ const Register: React.FC = () => {
   const [registrationError, setRegistrationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   
   const isSubmittingRef = useRef(false);
   const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -145,10 +147,23 @@ const Register: React.FC = () => {
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Auto-capitalize first letter of each word for name fields
+    let processedValue = value;
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      if (value.length > 0) {
+        processedValue = value
+          .toLowerCase()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+    }
+    
+    setFormData(prev => ({ ...prev, [name]: processedValue }));
     
     // Validate the field in real-time
-    const error = validateField(name, value);
+    const error = validateField(name, processedValue);
     setErrors(prev => {
       const newErrors = { ...prev };
       if (error) {
@@ -503,6 +518,7 @@ const Register: React.FC = () => {
                 value={formData.companyAddress}
                 onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
                 placeholder="Select company location or enter address..."
+                addressLabel="Enter your business house number and street..."
                 required
                 error={errors.companyAddress}
               />
@@ -511,6 +527,7 @@ const Register: React.FC = () => {
                 value={formData.houseAddress}
                 onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
                 placeholder="Select house location or enter address..."
+                addressLabel="Enter your house number and street..."
                 required
                 error={errors.houseAddress}
               />
@@ -585,12 +602,10 @@ const Register: React.FC = () => {
 
               {/* Terms Checkbox */}
               <div className="flex items-center text-sm mt-6">
-                <div
-                  className="flex items-center space-x-2 cursor-pointer"
-                  onClick={() => setChecked((prev) => !prev)}
-                >
+                <div className="flex items-center space-x-2">
                   <div
-                    className="relative w-5 h-5 border-2 border-gray-400 flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
+                    className="relative w-5 h-5 border-2 border-gray-400 flex items-center justify-center transition-colors duration-200 hover:border-blue-500 cursor-pointer"
+                    onClick={() => setChecked((prev) => !prev)}
                   >
                     <AnimatePresence>
                       {checked && (
@@ -607,7 +622,16 @@ const Register: React.FC = () => {
                       )}
                     </AnimatePresence>
                   </div>
-                  <span className="text-white select-none">I agree to the terms and conditions</span>
+                  <span className="text-white select-none">
+                    I agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsModal(true)}
+                      className="text-blue-300 underline hover:text-blue-200 transition-colors"
+                    >
+                      terms and conditions
+                    </button>
+                  </span>
                 </div>
               </div>
 
@@ -665,6 +689,12 @@ const Register: React.FC = () => {
           </Link>
         </div>
       </div>
+      
+      {/* Terms and Conditions Modal */}
+      <TermsAndConditionsModal 
+        isOpen={showTermsModal} 
+        onClose={() => setShowTermsModal(false)} 
+      />
     </div>
   );
 };
