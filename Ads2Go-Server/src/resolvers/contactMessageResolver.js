@@ -154,8 +154,10 @@ const contactMessageResolvers = {
           };
         }
 
-        // Check if already replied
-        if (contactMessage.adminReply) {
+        // Check if a complete reply was already sent (must have both subject and message)
+        if (contactMessage.adminReply && 
+            contactMessage.adminReply.subject && 
+            contactMessage.adminReply.message) {
           return {
             success: false,
             message: 'A reply has already been sent to this message'
@@ -209,6 +211,25 @@ const contactMessageResolvers = {
           message: error.message || 'Failed to send reply'
         };
       }
+    }
+  },
+
+  // Field resolvers to convert dates to ISO strings
+  ContactMessage: {
+    createdAt: (parent) => {
+      return parent.createdAt ? parent.createdAt.toISOString() : null;
+    },
+    updatedAt: (parent) => {
+      return parent.updatedAt ? parent.updatedAt.toISOString() : null;
+    },
+    resolvedAt: (parent) => {
+      return parent.resolvedAt ? parent.resolvedAt.toISOString() : null;
+    }
+  },
+
+  AdminReply: {
+    sentAt: (parent) => {
+      return parent.sentAt ? parent.sentAt.toISOString() : null;
     }
   }
 };

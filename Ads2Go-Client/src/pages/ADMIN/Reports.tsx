@@ -62,10 +62,10 @@ interface ContactMessage {
   status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED';
   category: string;
   adminReply?: {
-    subject: string;
-    message: string;
-    sentBy: AdminInfo;
-    sentAt: string;
+    subject?: string;
+    message?: string;
+    sentBy?: AdminInfo;
+    sentAt?: string;
   };
   resolvedAt?: string;
   resolvedBy?: AdminInfo;
@@ -90,6 +90,7 @@ const Reports: React.FC = () => {
   const [sortBy, setSortBy] = useState('Newest First');
   const [expandedRow, setExpandedRow] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedContactForDetails, setSelectedContactForDetails] = useState<ContactMessage | null>(null);
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [showModalStatusDropdown, setShowModalStatusDropdown] = useState(false);
@@ -121,14 +122,18 @@ const Reports: React.FC = () => {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [userRegistrationStatus, setUserRegistrationStatus] = useState<'checking' | 'registered' | 'not_registered'>('checking');
 
-  const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
+  // Status filter options - different for Contact Messages vs Reports
+  const statusFilterOptions = reportSource === 'messages'
+    ? ['All Status', 'Pending', 'In Progress', 'Resolved']  // Contact Messages: No 'Closed'
+    : ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];  // User/Driver Reports: Include 'Closed'
+  
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
   const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'UPDATE_PROFILE_DETAILS', 'OTHER'];
   const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   // Helper function to format type labels for display
-  const formatTypeLabel = (type: string): string => {
-    if (type === 'All Types') return type;
+  const formatTypeLabel = (type: string | undefined): string => {
+    if (!type || type === 'All Types') return type || '';
     
     // Convert underscores to spaces and capitalize each word
     return type
@@ -157,6 +162,13 @@ const Reports: React.FC = () => {
       setSelectedStatusFilter('Pending');
     }
   }, [searchParams]);
+
+  // Reset status filter to "All Status" if "Closed" is selected when switching to General Inquiries
+  useEffect(() => {
+    if (reportSource === 'messages' && selectedStatusFilter === 'Closed') {
+      setSelectedStatusFilter('All Status');
+    }
+  }, [reportSource, selectedStatusFilter]);
 
   // Fetch user reports
   const { data: userData, loading: userLoading, error: userError } = useQuery(GET_ALL_USER_REPORTS, {
@@ -192,7 +204,7 @@ const Reports: React.FC = () => {
     ? userTypeFilterOptions 
     : reportSource === 'drivers' 
     ? driverTypeFilterOptions 
-    : []; // Newsletter Messages don't have types
+    : []; // General Inquiries don't have types
 
   // Detect mobile screen size
   useEffect(() => {
@@ -301,14 +313,22 @@ const Reports: React.FC = () => {
     setShowTypeDropdown(false);
   };
 
-  const handleRowClick = (report: Report) => {
-    setSelectedReport(report);
+  const handleRowClick = (report: Report | ContactMessage) => {
+    if (reportSource === 'messages') {
+      setSelectedContactForDetails(report as ContactMessage);
+      return;
+    }
+    setSelectedReport(report as Report);
     setExpandedRow(true);
   };
 
   const handleCloseDetailsModal = () => {
     setExpandedRow(false);
     setSelectedReport(null);
+  };
+
+  const handleCloseContactDetailsModal = () => {
+    setSelectedContactForDetails(null);
   };
 
   const handleSelectReport = (id: string) => {
@@ -338,11 +358,20 @@ const Reports: React.FC = () => {
     }
   };
 
-  const handleUpdateReport = (report: Report) => {
-    setSelectedReport(report);
+  const handleUpdateReport = (report: Report | ContactMessage) => {
+    if (reportSource === 'messages') {
+      // For contact messages, open reply modal
+      setSelectedContactMessage(report as ContactMessage);
+      setReplySubject('Ads2Go Help Support');
+      setReplyMessage('');
+      setIsReplyModalOpen(true);
+      return;
+    }
+    setSelectedReport(report as Report);
+    const reportData = report as Report;
     setUpdateData({
-      status: report.status,
-      adminNotes: report.adminNotes || ''
+      status: reportData.status,
+      adminNotes: reportData.adminNotes || ''
     });
     setIsUpdateModalOpen(true);
   };
@@ -372,24 +401,106 @@ const Reports: React.FC = () => {
 
   const handleBulkStatusUpdate = async (status: ReportStatus) => {
     try {
-      await Promise.all(
-        selectedReports.map(id =>
-          updateReport({
-            variables: {
-              id,
-              input: {
-                status
-              }
-            },
-            refetchQueries: [
-              { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
-            ],
-          })
-        )
-      );
+      if (reportSource === 'messages') {
+        // Handle Contact Messages bulk update
+        await Promise.all(
+          selectedReports.map(id =>
+            updateContactMessage({
+              variables: {
+                id,
+                input: {
+                  status
+                }
+              },
+              refetchQueries: [{ query: GET_ALL_CONTACT_MESSAGES }],
+            })
+          )
+        );
+      } else {
+        // Handle User/Driver Reports bulk update
+        await Promise.all(
+          selectedReports.map(id =>
+            updateReport({
+              variables: {
+                id,
+                input: {
+                  status
+                }
+              },
+              refetchQueries: [
+                { query: reportSource === 'users' ? GET_ALL_USER_REPORTS : GET_ALL_DRIVER_REPORTS }
+              ],
+            })
+          )
+        );
+      }
       setSelectedReports([]);
     } catch (error) {
       console.error('Error bulk updating reports:', error);
+    }
+  };
+
+  // Handle sending reply to contact message via email
+  const handleSendReply = async () => {
+    if (!selectedContactMessage || !replySubject.trim() || !replyMessage.trim()) {
+      setErrorMessage('Please fill in both subject and message fields.');
+      setShowErrorModal(true);
+      return;
+    }
+
+    setIsSendingReply(true);
+
+    try {
+      const result = await sendContactReply({
+        variables: {
+          input: {
+            contactMessageId: selectedContactMessage.id,
+            subject: replySubject.trim(),
+            message: replyMessage.trim()
+          }
+        },
+        refetchQueries: [{ query: GET_ALL_CONTACT_MESSAGES }]
+      });
+
+      if (result.data?.sendContactReply?.success) {
+        setSuccessMessage('Reply sent successfully via email!');
+        setShowSuccessModal(true);
+        setIsReplyModalOpen(false);
+        setSelectedContactMessage(null);
+        setReplySubject('');
+        setReplyMessage('');
+      } else {
+        setErrorMessage(result.data?.sendContactReply?.message || 'Failed to send reply');
+        setShowErrorModal(true);
+      }
+    } catch (error: any) {
+      console.error('Error sending reply:', error);
+      setErrorMessage(error.message || 'Failed to send reply. Please try again.');
+      setShowErrorModal(true);
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
+  // Handle updating contact message status
+  const handleUpdateContactStatus = async (messageId: string, newStatus: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED') => {
+    try {
+      await updateContactMessage({
+        variables: {
+          id: messageId,
+          input: {
+            status: newStatus
+          }
+        },
+        refetchQueries: [{ query: GET_ALL_CONTACT_MESSAGES }]
+      });
+
+      setSuccessMessage(`Message status updated to ${newStatus.replace('_', ' ')}`);
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Error updating contact message status:', error);
+      setErrorMessage(error.message || 'Failed to update status');
+      setShowErrorModal(true);
     }
   };
 
@@ -408,7 +519,7 @@ const Reports: React.FC = () => {
     let filename;
 
     if (reportSource === 'messages') {
-      // Newsletter Messages CSV
+      // General Inquiries CSV
       csvData = selectedReportData.map((msg: ContactMessage) => ({
         'Message ID': msg.id,
         'Name': msg.name,
@@ -421,7 +532,7 @@ const Reports: React.FC = () => {
         'Resolved By': msg.resolvedBy?.adminName || 'N/A',
         'Admin Reply': msg.adminReply ? 'Yes' : 'No'
       }));
-      filename = `newsletter_messages_export_${new Date().toISOString().split('T')[0]}.csv`;
+      filename = `general_inquiries_export_${new Date().toISOString().split('T')[0]}.csv`;
     } else if (reportSource === 'users') {
       // User Reports CSV
       csvData = selectedReportData.map((report: Report) => ({
@@ -783,7 +894,7 @@ const Reports: React.FC = () => {
             }`}
           >
             <MessageSquare size={18} />
-            <span className="font-medium">Newsletter Messages</span>
+            <span className="font-medium">General Inquiries</span>
           </button>
         </div>
       </div>
@@ -839,7 +950,7 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-              {/* Only show Type filter for User Reports and Driver Reports, not Newsletter Messages */}
+              {/* Only show Type filter for User Reports and Driver Reports, not General Inquiries */}
               {reportSource !== 'messages' && (
                 <div className="relative w-full sm:w-40">
                   <button
@@ -914,49 +1025,109 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Bulk Actions Bar */}
-      {selectedReports.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-sm font-medium text-blue-800">
-                {selectedReports.length} report{selectedReports.length > 1 ? 's' : ''} selected
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => handleBulkStatusUpdate('IN_PROGRESS')}
-                  className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded hover:bg-yellow-200"
-                >
-                  Mark as In Progress
-                </button>
-                <button
-                  onClick={() => handleBulkStatusUpdate('RESOLVED')}
-                  className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
-                >
-                  Mark as Resolved
-                </button>
-                <button
-                  onClick={() => handleBulkStatusUpdate('CLOSED')}
-                  className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
-                >
-                  Mark as Closed
-                </button>
-                <button
-                  onClick={handleExportToCSV}
-                  className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
-                >
-                  Export to CSV
-                </button>
+      {selectedReports.length > 0 && (() => {
+        // Get statuses of selected reports
+        const selectedReportStatuses = filteredReports
+          .filter((r: Report | ContactMessage) => selectedReports.includes(r.id))
+          .map((r: Report | ContactMessage) => r.status);
+
+        // Determine which bulk actions are valid based on selected statuses
+        let canBulkResolve = false;
+        let canBulkClose = false;
+        let infoMessage = '';
+
+        // Check if ALL selected are final statuses
+        const allFinalStatuses = selectedReportStatuses.every(
+          (s: string) => s === 'RESOLVED' || s === 'CLOSED'
+        );
+
+        // Check if statuses are mixed
+        const hasMixedStatuses = new Set(selectedReportStatuses).size > 1;
+
+        if (reportSource === 'messages') {
+          // Contact Messages: Can only resolve if ALL are IN_PROGRESS
+          canBulkResolve = selectedReportStatuses.every((s: string) => s === 'IN_PROGRESS');
+          
+          if (!canBulkResolve) {
+            if (allFinalStatuses) {
+              infoMessage = selectedReports.length === 1 
+                ? 'Final status - cannot be changed' 
+                : 'Final statuses - cannot be changed';
+            } else {
+              infoMessage = 'Only IN_PROGRESS messages can be bulk resolved';
+            }
+          }
+        } else {
+          // User/Driver Reports: Can resolve if ALL are IN_PROGRESS
+          canBulkResolve = selectedReportStatuses.every((s: string) => s === 'IN_PROGRESS');
+          // Can close if ALL are PENDING or IN_PROGRESS
+          canBulkClose = selectedReportStatuses.every((s: string) => s === 'PENDING' || s === 'IN_PROGRESS');
+          
+          if (!canBulkResolve && !canBulkClose) {
+            if (allFinalStatuses) {
+              infoMessage = selectedReports.length === 1 
+                ? 'Final status - cannot be changed' 
+                : 'Final statuses - cannot be changed';
+            } else if (hasMixedStatuses) {
+              infoMessage = 'Cannot bulk update reports with mixed statuses';
+            }
+          }
+        }
+
+        return (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedReports.length} {reportSource === 'messages' ? 'message' : 'report'}{selectedReports.length > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {/* Mark as Resolved - Only if ALL selected are IN_PROGRESS */}
+                  {canBulkResolve && (
+                    <button
+                      onClick={() => handleBulkStatusUpdate('RESOLVED')}
+                      className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                    >
+                      Mark as Resolved
+                    </button>
+                  )}
+                  
+                  {/* Mark as Closed - Only for User/Driver Reports, and only if ALL are PENDING or IN_PROGRESS */}
+                  {reportSource !== 'messages' && canBulkClose && (
+                    <button
+                      onClick={() => handleBulkStatusUpdate('CLOSED')}
+                      className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
+                    >
+                      Mark as Closed
+                    </button>
+                  )}
+                  
+                  {/* Show info message if no status actions available */}
+                  {infoMessage && (
+                    <span className="text-xs text-gray-600 italic px-2 py-1">
+                      {infoMessage}
+                    </span>
+                  )}
+                  
+                  {/* Export to CSV - Always available */}
+                  <button
+                    onClick={handleExportToCSV}
+                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
+                  >
+                    Export to CSV
+                  </button>
+                </div>
               </div>
+              <button
+                onClick={() => setSelectedReports([])}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
+              >
+                Clear Selection
+              </button>
             </div>
-            <button
-              onClick={() => setSelectedReports([])}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-            >
-              Clear Selection
-            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Table Content */}
       {error ? (
@@ -979,14 +1150,18 @@ const Reports: React.FC = () => {
                 onChange={handleSelectAll}
               />
               <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
-                Title
+                {reportSource === 'messages' ? 'Name' : 'Title'}
               </span>
               <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
               </svg>
             </div>
-            <div className="col-span-2 flex items-center">{reportSource === 'users' ? 'User' : 'Driver'}</div>
-            <div className="col-span-2 flex items-center">Category</div>
+            <div className={reportSource === 'messages' ? 'col-span-4' : 'col-span-2'}>
+              {reportSource === 'messages' ? 'Email' : reportSource === 'users' ? 'User' : 'Driver'}
+            </div>
+            {reportSource !== 'messages' && (
+              <div className="col-span-2 flex items-center">Category</div>
+            )}
             <div className="col-span-2 flex items-center gap-1">
               <span>Status</span>
               <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1014,9 +1189,9 @@ const Reports: React.FC = () => {
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="font-semibold text-gray-800 truncate overflow-hidden whitespace-nowrap"
-                        title={report.title}
+                        title={reportSource === 'messages' ? (report as ContactMessage).name : report.title}
                       >
-                        {report.title}
+                        {reportSource === 'messages' ? (report as ContactMessage).name : report.title}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
@@ -1028,11 +1203,13 @@ const Reports: React.FC = () => {
                 
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="grid grid-cols-2 gap-2">
-                    {/* User or Driver */}
+                    {/* User or Driver or Email */}
                     <div>
-                      <div className="font-medium">{reportSource === 'users' ? 'User:' : 'Driver:'}</div>
+                      <div className="font-medium">{reportSource === 'messages' ? 'Email:' : reportSource === 'users' ? 'User:' : 'Driver:'}</div>
                       <div>
-                        {reportSource === 'users' && report.user
+                        {reportSource === 'messages'
+                          ? (report as ContactMessage).email
+                          : reportSource === 'users' && report.user
                           ? `${report.user.firstName} ${report.user.lastName}`
                           : reportSource === 'drivers' && report.driver
                           ? `${report.driver.firstName} ${report.driver.lastName}`
@@ -1045,11 +1222,13 @@ const Reports: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Category */}
-                    <div>
-                      <div className="font-medium">Category:</div>
-                      <div>{formatTypeLabel(report.reportType)}</div>
-                    </div>
+                    {/* Category - Only show for User/Driver reports */}
+                    {reportSource !== 'messages' && (
+                      <div>
+                        <div className="font-medium">Category:</div>
+                        <div>{formatTypeLabel((report as Report).reportType)}</div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Status and Button */}
@@ -1089,24 +1268,30 @@ const Reports: React.FC = () => {
                     onChange={() => handleSelectReport(report.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <span className="truncate font-semibold" title={report.title}>
-                    {report.title}
+                  <span className="truncate font-semibold" title={reportSource === 'messages' ? (report as ContactMessage).name : report.title}>
+                    {reportSource === 'messages' ? (report as ContactMessage).name : report.title}
                   </span>
                 </div>
-                <div className="col-span-2 truncate" title={
-                  reportSource === 'users' && report.user
+                <div className={reportSource === 'messages' ? 'col-span-4' : 'col-span-2'} title={
+                  reportSource === 'messages'
+                    ? (report as ContactMessage).email
+                    : reportSource === 'users' && report.user
                     ? `${report.user.firstName} ${report.user.lastName}`
                     : reportSource === 'drivers' && report.driver
                     ? `${report.driver.firstName} ${report.driver.lastName}`
                     : 'N/A'
                 }>
-                  {reportSource === 'users' && report.user
+                  {reportSource === 'messages'
+                    ? (report as ContactMessage).email
+                    : reportSource === 'users' && report.user
                     ? `${report.user.firstName} ${report.user.lastName}`
                     : reportSource === 'drivers' && report.driver
                     ? `${report.driver.firstName} ${report.driver.lastName}`
                     : 'N/A'}
                 </div>
-                <div className="col-span-2 truncate">{formatTypeLabel(report.reportType)}</div>
+                {reportSource !== 'messages' && (
+                  <div className="col-span-2 truncate">{formatTypeLabel((report as Report).reportType)}</div>
+                )}
                 <div className="col-span-2 flex items-center gap-1">
                   {getStatusIcon(report.status)}
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(report.status)}`}>
@@ -1449,46 +1634,83 @@ const Reports: React.FC = () => {
               {/* Status Dropdown */}
               <div className="relative w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <button
-                  onClick={() => setShowModalStatusDropdown(!showModalStatusDropdown)}
-                  className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                  {updateData.status
-                    .replace('_', ' ')
-                    .toLowerCase()
-                    .replace(/\b\w/g, (c) => c.toUpperCase())}
-                  <ChevronDown
-                    size={16}
-                    className={`transform transition-transform duration-200 ${
-                      showModalStatusDropdown ? 'rotate-180' : 'rotate-0'
-                    }`}
-                  />
-                </button>
+                
+                {(() => {
+                  // Determine available status options based on current status
+                  const getAvailableStatuses = (currentStatus: ReportStatus): string[] => {
+                    switch (currentStatus) {
+                      case 'PENDING':
+                        return ['Closed']; // Can only close from pending (reject without addressing)
+                      case 'IN_PROGRESS':
+                        return ['Resolved', 'Closed']; // Can resolve or close after reviewing
+                      case 'RESOLVED':
+                        return []; // No changes allowed from resolved (final state)
+                      case 'CLOSED':
+                        return []; // No changes allowed from closed (final state)
+                      default:
+                        return [];
+                    }
+                  };
 
-                <AnimatePresence>
-                  {showModalStatusDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -5 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                    >
-                      {['Pending', 'In Progress', 'Resolved', 'Closed'].map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => {
-                            const apiStatus = status.toUpperCase().replace(' ', '_') as ReportStatus;
-                            setUpdateData((prev) => ({ ...prev, status: apiStatus }));
-                            setShowModalStatusDropdown(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                        >
-                          {status}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  const availableStatuses = getAvailableStatuses(selectedReport.status);
+                  
+                  if (availableStatuses.length === 0) {
+                    // Show current status as read-only
+                    return (
+                      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 text-gray-700 rounded-lg border border-gray-200">
+                        <span className="text-sm font-medium">
+                          {selectedReport.status.replace('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </span>
+                        <span className="text-xs text-gray-500">(Final status - cannot be changed)</span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <>
+                      <button
+                        onClick={() => setShowModalStatusDropdown(!showModalStatusDropdown)}
+                        className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                        {updateData.status
+                          .replace('_', ' ')
+                          .toLowerCase()
+                          .replace(/\b\w/g, (c) => c.toUpperCase())}
+                        <ChevronDown
+                          size={16}
+                          className={`transform transition-transform duration-200 ${
+                            showModalStatusDropdown ? 'rotate-180' : 'rotate-0'
+                          }`}
+                        />
+                      </button>
+
+                      <AnimatePresence>
+                        {showModalStatusDropdown && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -5 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                          >
+                            {availableStatuses.map((status) => (
+                              <button
+                                key={status}
+                                onClick={() => {
+                                  const apiStatus = status.toUpperCase().replace(' ', '_') as ReportStatus;
+                                  setUpdateData((prev) => ({ ...prev, status: apiStatus }));
+                                  setShowModalStatusDropdown(false);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                              >
+                                {status}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Admin Notes */}
@@ -1839,6 +2061,371 @@ const Reports: React.FC = () => {
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
               >
                 OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contact Message Reply Modal */}
+      {isReplyModalOpen && selectedContactMessage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            if (!isSendingReply) {
+              setIsReplyModalOpen(false);
+              setSelectedContactMessage(null);
+              setReplySubject('');
+              setReplyMessage('');
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <MessageSquare size={24} className="text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Contact Message</h2>
+                  <p className="text-sm text-gray-500">Reply via email</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isSendingReply) {
+                    setIsReplyModalOpen(false);
+                    setSelectedContactMessage(null);
+                    setReplySubject('');
+                    setReplyMessage('');
+                  }
+                }}
+                disabled={isSendingReply}
+                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CloseIcon size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Contact Information */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-gray-600" />
+                  <div>
+                    <p className="text-sm text-gray-500">From</p>
+                    <p className="font-semibold text-gray-900">{selectedContactMessage.name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail size={18} className="text-gray-600" />
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-semibold text-gray-900">{selectedContactMessage.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileText size={18} className="text-gray-600" />
+                  <div>
+                    <p className="text-sm text-gray-500">Category</p>
+                    <p className="font-semibold text-gray-900">{formatTypeLabel(selectedContactMessage.category)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    selectedContactMessage.status === 'PENDING' 
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : selectedContactMessage.status === 'IN_PROGRESS'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {selectedContactMessage.status.replace('_', ' ')}
+                  </div>
+                </div>
+              </div>
+
+              {/* User's Message */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  User's Message
+                </label>
+                <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+                  <p className="text-gray-900 whitespace-pre-wrap">{selectedContactMessage.message}</p>
+                </div>
+              </div>
+
+              {/* Already Replied Notice */}
+              {selectedContactMessage.adminReply && selectedContactMessage.adminReply.subject && selectedContactMessage.adminReply.message && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900 mb-2">Reply Already Sent</p>
+                      <div className="space-y-2 text-sm text-green-800">
+                        <p><strong>Subject:</strong> {selectedContactMessage.adminReply.subject}</p>
+                        <p><strong>Message:</strong> {selectedContactMessage.adminReply.message}</p>
+                        <p className="text-xs text-green-600">
+                          Sent by {selectedContactMessage.adminReply.sentBy?.adminName || 'Admin'} on{' '}
+                          {selectedContactMessage.adminReply.sentAt 
+                            ? new Date(selectedContactMessage.adminReply.sentAt).toLocaleString()
+                            : 'Unknown date'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Reply Form (only show if not already replied) */}
+              {(!selectedContactMessage.adminReply || !selectedContactMessage.adminReply.subject || !selectedContactMessage.adminReply.message) && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Reply Subject *
+                    </label>
+                    <input
+                      type="text"
+                      value={replySubject}
+                      onChange={(e) => setReplySubject(e.target.value)}
+                      placeholder="Enter email subject..."
+                      disabled={isSendingReply}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Reply Message *
+                    </label>
+                    <textarea
+                      value={replyMessage}
+                      onChange={(e) => setReplyMessage(e.target.value)}
+                      placeholder="Enter your reply message..."
+                      disabled={isSendingReply}
+                      rows={6}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> This reply will be sent to <strong>{selectedContactMessage.email}</strong> via email. 
+                      The message status will automatically change to "In Progress" after sending.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Status Update Options */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Update Status
+                </label>
+                
+                {selectedContactMessage.status === 'IN_PROGRESS' ? (
+                  // Only show "Mark as Resolved" when status is IN_PROGRESS
+                  <button
+                    onClick={() => handleUpdateContactStatus(selectedContactMessage.id, 'RESOLVED')}
+                    disabled={isSendingReply}
+                    className="px-4 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    Mark as Resolved
+                  </button>
+                ) : selectedContactMessage.status === 'RESOLVED' ? (
+                  // Show status when already resolved
+                  <div className="flex items-center gap-2 text-green-600">
+                    <CheckCircle size={18} />
+                    <p className="text-sm font-medium">
+                      This message has been marked as resolved
+                    </p>
+                  </div>
+                ) : (
+                  // Show info when PENDING
+                  <p className="text-sm text-gray-600">
+                    Status will automatically change to "In Progress" when you send a reply.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => {
+                  if (!isSendingReply) {
+                    setIsReplyModalOpen(false);
+                    setSelectedContactMessage(null);
+                    setReplySubject('');
+                    setReplyMessage('');
+                  }
+                }}
+                disabled={isSendingReply}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Close
+              </button>
+              {(!selectedContactMessage.adminReply || !selectedContactMessage.adminReply.subject || !selectedContactMessage.adminReply.message) && (
+                <button
+                  onClick={handleSendReply}
+                  disabled={isSendingReply || !replySubject.trim() || !replyMessage.trim()}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {isSendingReply && <Loader size={16} className="animate-spin" />}
+                  {isSendingReply ? 'Sending...' : 'Send Reply via Email'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contact Message Details Modal (for General Inquiries) */}
+      {selectedContactForDetails && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={handleCloseContactDetailsModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">General Inquiry Details</h2>
+                <p className="text-sm text-gray-500 mt-1">Contact form submission</p>
+              </div>
+              <button
+                onClick={handleCloseContactDetailsModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <CloseIcon size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Name and Email */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users size={16} className="text-gray-600" />
+                    <strong className="text-sm font-medium text-gray-700">Name</strong>
+                  </div>
+                  <p className="text-gray-900 font-semibold">{selectedContactForDetails.name}</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Mail size={16} className="text-gray-600" />
+                    <strong className="text-sm font-medium text-gray-700">Email</strong>
+                  </div>
+                  <p className="text-gray-900 font-semibold">{selectedContactForDetails.email}</p>
+                </div>
+              </div>
+
+              {/* Category and Status */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={16} className="text-gray-600" />
+                    <strong className="text-sm font-medium text-gray-700">Category</strong>
+                  </div>
+                  <p className="text-gray-900">{formatTypeLabel(selectedContactForDetails.category)}</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    {getStatusIcon(selectedContactForDetails.status)}
+                    <strong className="text-sm font-medium text-gray-700">Status</strong>
+                  </div>
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedContactForDetails.status)}`}>
+                    {selectedContactForDetails.status.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* User's Message */}
+              <div>
+                <strong className="text-sm font-bold text-gray-700 block mb-2">User's Message:</strong>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <p className="text-gray-900 whitespace-pre-wrap">{selectedContactForDetails.message}</p>
+                </div>
+              </div>
+
+              {/* Admin Reply (if exists) */}
+              {selectedContactForDetails.adminReply && selectedContactForDetails.adminReply.subject && selectedContactForDetails.adminReply.message && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900 mb-2">Admin Reply Sent</p>
+                      <div className="space-y-2 text-sm text-green-800">
+                        <div>
+                          <strong>Subject:</strong> {selectedContactForDetails.adminReply.subject}
+                        </div>
+                        <div>
+                          <strong>Message:</strong>
+                          <p className="mt-1 whitespace-pre-wrap">{selectedContactForDetails.adminReply.message}</p>
+                        </div>
+                        <p className="text-xs text-green-600 mt-2">
+                          Sent by {selectedContactForDetails.adminReply.sentBy?.adminName || 'Admin'} on{' '}
+                          {selectedContactForDetails.adminReply.sentAt
+                            ? new Date(selectedContactForDetails.adminReply.sentAt).toLocaleString()
+                            : 'Unknown date'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarClock size={16} className="text-blue-500" />
+                    <strong className="text-sm font-medium text-gray-700">Created</strong>
+                  </div>
+                  <p className="text-gray-900">{formatDate(selectedContactForDetails.createdAt)}</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarClock size={16} className="text-yellow-500" />
+                    <strong className="text-sm font-medium text-gray-700">Last Updated</strong>
+                  </div>
+                  <p className="text-gray-900">{formatDate(selectedContactForDetails.updatedAt)}</p>
+                </div>
+              </div>
+
+              {/* Resolved Info */}
+              {selectedContactForDetails.resolvedAt && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CalendarCheck size={16} className="text-green-500" />
+                    <strong className="text-sm font-medium text-gray-700">Resolved At</strong>
+                  </div>
+                  <p className="text-gray-900">{formatDate(selectedContactForDetails.resolvedAt)}</p>
+                  {selectedContactForDetails.resolvedBy && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Resolved by: {selectedContactForDetails.resolvedBy.adminName}
+                      {selectedContactForDetails.resolvedBy.adminEmail && ` (${selectedContactForDetails.resolvedBy.adminEmail})`}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={handleCloseContactDetailsModal}
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
               </button>
             </div>
           </div>

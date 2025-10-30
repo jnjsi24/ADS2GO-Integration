@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const GPSValidation = require('../utils/gpsValidation');
 
 // Handle queued device status updates
 router.post('/device-status', async (req, res) => {
@@ -109,36 +110,12 @@ router.post('/location-data', async (req, res) => {
         message: 'Device not found for location update'
       });
     }
-    
-    // Helper function to validate GPS coordinates
-    const isValidGPSCoordinates = (lat, lng) => {
-      // Check if coordinates are valid numbers
-      if (typeof lat !== 'number' || typeof lng !== 'number') {
-        return false;
-      }
-      
-      // Check if coordinates are not NaN or Infinity
-      if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
-        return false;
-      }
-      
-      // Check if coordinates are not [0,0] (GPS initialization issue)
-      if (lat === 0 && lng === 0) {
-        return false;
-      }
-      
-      // Check if coordinates are within valid GPS ranges
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        return false;
-      }
-      
-      return true;
-    };
 
     // Helper function to determine if location should be updated
     const shouldUpdateLocation = async (materialTracking, lat, lng, accuracy, timestamp) => {
-      // Validate GPS coordinates first
-      if (!isValidGPSCoordinates(lat, lng)) {
+      // Validate GPS coordinates using centralized validation
+      const coordValidation = GPSValidation.validateCoordinates(lat, lng);
+      if (!coordValidation.isValid) {
         return false;
       }
       
@@ -169,25 +146,13 @@ router.post('/location-data', async (req, res) => {
       // Update if location has moved significantly (more than 10 meters)
       const currentLat = materialTracking.currentLocation.coordinates[1];
       const currentLng = materialTracking.currentLocation.coordinates[0];
-      const distance = calculateDistance(currentLat, currentLng, lat, lng);
+      const distance = GPSValidation.calculateDistance(currentLat, currentLng, lat, lng);
       
-      if (distance > 10) { // 10 meters
+      if (distance > 0.01) { // 0.01 km = 10 meters
         return true;
       }
 
       return false;
-    };
-
-    // Helper function to calculate distance between two points
-    const calculateDistance = (lat1, lng1, lat2, lng2) => {
-      const R = 6371; // Earth's radius in kilometers
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLng/2) * Math.sin(dLng/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
     };
 
     const shouldUpdate = await shouldUpdateLocation(carTracking, lat, lng, accuracy, queuedTimestamp);

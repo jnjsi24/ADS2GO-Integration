@@ -283,7 +283,11 @@ const CreateAdvertisement: React.FC = () => {
   const handleCalendarDateSelect = (date: Date | null) => {
     setSelectedDate(date);
     if (date) {
-      const dateString = date.toISOString().split('T')[0];
+      // Format date using local timezone to avoid date shift
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
       setFormData(prev => ({ ...prev, startDate: dateString }));
       // Clear any existing startDate error when a valid date is selected
       if (errors.startDate) {
@@ -1242,9 +1246,14 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                       onClick={() => {
                         const today = new Date();
                         setSelectedDate(today);
+                        // Format date using local timezone to avoid date shift
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        const dateString = `${year}-${month}-${day}`;
                         setFormData(prev => ({
                           ...prev,
-                          startDate: today.toISOString().split('T')[0]
+                          startDate: dateString
                         }));
                         setShowCalendar(false);
                       }}

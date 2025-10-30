@@ -29,7 +29,7 @@ const contactMessageSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    default: 'CONTACT_US',
+    default: 'GENERAL_INQUIRIES',
     immutable: true
   },
   // Admin reply (sent once via popup)

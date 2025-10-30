@@ -47,9 +47,11 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
   const mapRef = useRef<L.Map | null>(null);
 
   // Fetch materials with location
+  // 🔄 Changed from 30s to 2s for smooth real-time updates (matches Admin Client)
   const { data, loading, error, refetch } = useQuery(GET_USER_MATERIALS_WITH_LOCATION, {
     fetchPolicy: 'cache-and-network',
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 2000, // ✅ Refresh every 2 seconds (smooth, real-time updates)
+    notifyOnNetworkStatusChange: false, // Silent refresh - no loading state during background updates
   });
 
   // Update materials when data changes

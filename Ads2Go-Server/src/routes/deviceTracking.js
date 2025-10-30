@@ -6,30 +6,8 @@ const cronJobs = require('../jobs/cronJobs');
 const GPSValidation = require('../utils/gpsValidation');
 const { validateGPSData, logGPSQuality, enforceQualityThresholds } = require('../middleware/gpsValidation');
 
-// Helper function to validate GPS coordinates
-function isValidGPSCoordinates(lat, lng) {
-  // Check if coordinates are valid numbers
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    return false;
-  }
-  
-  // Check if coordinates are not NaN or Infinity
-  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
-    return false;
-  }
-  
-  // Check if coordinates are not [0,0] (GPS initialization issue)
-  if (lat === 0 && lng === 0) {
-    return false;
-  }
-  
-  // Check if coordinates are within valid GPS ranges
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return false;
-  }
-  
-  return true;
-}
+// Note: GPS validation functions (validateCoordinates, calculateDistance) 
+// are centralized in utils/gpsValidation.js and used via GPSValidation.* throughout the codebase
 
 // Enhanced function to determine if location should be updated
 async function shouldUpdateLocation(materialTracking, lat, lng, accuracy, timestamp) {
@@ -1069,17 +1047,5 @@ router.get('/archive-status', async (req, res) => {
     });
   }
 });
-
-// Helper function to calculate distance between two points
-function calculateDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
 
 module.exports = router;

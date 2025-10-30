@@ -264,6 +264,66 @@ const detectGPSDrift = (currentPoint, previousPoint, options = {}) => {
 };
 
 /**
+ * Master validation function that validates all location parameters at once
+ * Used by deviceTracking.js updateLocation method
+ */
+const validateLocation = (lat, lng, accuracy, speed, heading) => {
+  const errors = [];
+  const warnings = [];
+  let isValid = true;
+
+  // Validate coordinates
+  const coordValidation = validateCoordinates(lat, lng);
+  if (!coordValidation.isValid) {
+    errors.push(...coordValidation.errors);
+    isValid = false;
+  }
+  warnings.push(...coordValidation.warnings);
+
+  // Validate accuracy
+  if (accuracy !== undefined && accuracy !== null) {
+    const accuracyValidation = validateAccuracy(accuracy);
+    if (!accuracyValidation.isValid) {
+      errors.push(accuracyValidation.message);
+      isValid = false;
+    }
+  }
+
+  // Validate speed
+  if (speed !== undefined && speed !== null) {
+    const speedValidation = validateSpeed(speed);
+    if (!speedValidation.isValid) {
+      errors.push(speedValidation.message);
+      isValid = false;
+    }
+  }
+
+  // Validate heading (if provided)
+  if (heading !== undefined && heading !== null) {
+    if (typeof heading !== 'number' || isNaN(heading) || heading < -1 || heading > 360) {
+      errors.push('Heading must be between -1 (unknown) and 360 degrees');
+      isValid = false;
+    }
+  }
+
+  // Sanitize values (ensure they're within acceptable ranges)
+  const sanitized = {
+    lat: parseFloat(lat) || 0,
+    lng: parseFloat(lng) || 0,
+    accuracy: Math.max(0, parseFloat(accuracy) || 0),
+    speed: Math.max(0, parseFloat(speed) || 0),
+    heading: parseFloat(heading) || 0
+  };
+
+  return {
+    isValid,
+    errors,
+    warnings,
+    sanitized
+  };
+};
+
+/**
  * Clean GPS data by removing invalid and inaccurate points
  */
 const cleanGPSData = (locationHistory, options = {}) => {
@@ -405,6 +465,7 @@ module.exports = {
   validateCoordinates,
   validateAccuracy,
   validateSpeed,
+  validateLocation,
   shouldAcceptLocationUpdate,
   
   // Advanced validation (comprehensive)

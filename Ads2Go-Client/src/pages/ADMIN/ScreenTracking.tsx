@@ -141,6 +141,8 @@ const ScreenTracking: React.FC = () => {
   const [showMap, setShowMap] = useState(true); // Control map visibility
   const [openPopupForSelected, setOpenPopupForSelected] = useState(false); // Flag to open popup for selected screen
   const [currentTime, setCurrentTime] = useState(new Date()); // Current time for display
+  const [routeRefreshTrigger, setRouteRefreshTrigger] = useState(0); // Trigger to force RouteMapped refresh
+  const isInitialHistoricalLoadRef = useRef(true); // Track if this is the first historical load
   
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
@@ -199,7 +201,15 @@ const ScreenTracking: React.FC = () => {
   // Fetch historical route data
   const fetchHistoricalRoute = async (materialId: string, date: string) => {
     try {
-      setLoadingHistorical(true);
+      // Only show loading state on initial load, do silent refresh for subsequent loads
+      const isInitialLoad = isInitialHistoricalLoadRef.current;
+      if (isInitialLoad) {
+        setLoadingHistorical(true);
+        console.log('📡 [Historical] Initial load - showing loading state');
+      } else {
+        console.log('📡 [Historical] Silent refresh - no loading state');
+      }
+      
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
       const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${date}`;
       
@@ -208,6 +218,10 @@ const ScreenTracking: React.FC = () => {
       
       if (result.success) {
         setHistoricalRouteData(result.data);
+        
+        // Mark initial load as complete after first successful fetch
+        isInitialHistoricalLoadRef.current = false;
+        
         return result.data;
       } else {
         console.error('❌ Failed to fetch historical route:', result.message);
@@ -219,8 +233,10 @@ const ScreenTracking: React.FC = () => {
       setHistoricalRouteData(null);
       return null;
     } finally {
-      // Set loading to false when fetch completes, regardless of success/failure
-      setLoadingHistorical(false);
+      // Only set loading to false if it was set (initial load)
+      if (isInitialHistoricalLoadRef.current === false || loadingHistorical) {
+        setLoadingHistorical(false);
+      }
     }
   };
 
@@ -244,6 +260,8 @@ const ScreenTracking: React.FC = () => {
     // For historical tab with selected screen, fetch device-specific route
     if (activeTab === 'historical' && selectedScreen && selectedDate) {
       console.log('📡 Fetching historical route for:', selectedScreen.materialId, 'on', selectedDate);
+      // Reset to initial load when changing screen or date
+      isInitialHistoricalLoadRef.current = true;
       // Clear previous data before fetching new data
       setHistoricalRouteData(null);
       setClearMap(true); // Flag to clear map
@@ -252,6 +270,29 @@ const ScreenTracking: React.FC = () => {
     
     // Note: For material-only selection (no screens), the RouteMapped component
     // will fetch its own data directly from the API
+  }, [activeTab, selectedScreen, selectedDate]);
+
+  // 🔄 AUTO-REFRESH: Update route map every 2 seconds when viewing Route Map tab
+  useEffect(() => {
+    // Only auto-refresh when on historical tab with a selected screen
+    if (activeTab !== 'historical' || !selectedScreen || !selectedDate) {
+      return;
+    }
+
+    console.log('🔄 [Auto-Refresh] Starting route map auto-refresh every 2 seconds');
+    
+    // Set up interval to refresh route data every 2 seconds
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 [Auto-Refresh] Triggering route refresh for:', selectedScreen.materialId);
+      // Increment trigger to force RouteMapped component to re-fetch
+      setRouteRefreshTrigger(prev => prev + 1);
+    }, 2000); // Refresh every 2 seconds
+
+    // Cleanup interval when conditions change or component unmounts
+    return () => {
+      console.log('🔄 [Auto-Refresh] Stopping route map auto-refresh');
+      clearInterval(refreshInterval);
+    };
   }, [activeTab, selectedScreen, selectedDate]);
 
 
@@ -393,6 +434,31 @@ const ScreenTracking: React.FC = () => {
     }
   }, [selectedDate]);
 
+  // 🔄 AUTO-REFRESH: Update device positions every 2 seconds when viewing Live Tracking tab
+  useEffect(() => {
+    // Only auto-refresh when on live tab
+    if (activeTab !== 'live') {
+      return;
+    }
+
+    console.log('🔄 [Auto-Refresh Live] Starting device position auto-refresh every 2 seconds');
+    
+    // Fetch device data immediately when starting
+    fetchData();
+    
+    // Set up interval to refresh device positions every 2 seconds
+    const liveRefreshInterval = setInterval(() => {
+      console.log('🔄 [Auto-Refresh Live] Refreshing device positions');
+      fetchData();
+    }, 2000); // Refresh every 2 seconds
+
+    // Cleanup interval when conditions change or component unmounts
+    return () => {
+      console.log('🔄 [Auto-Refresh Live] Stopping device position auto-refresh');
+      clearInterval(liveRefreshInterval);
+    };
+  }, [activeTab, fetchData]);
+
   // Update map center when screens change
   useEffect(() => {
     if (screens && screens.length > 0) {
@@ -406,15 +472,18 @@ const ScreenTracking: React.FC = () => {
   }, [screens]);
 
 
-  // Auto-refresh data every 30 seconds
+  // Auto-refresh data every 30 seconds (but not on Live Tracking tab - it has its own 2s refresh)
   useEffect(() => {
     fetchData();
     fetchMaterials();
     
-    // Auto-refresh enabled - refresh every 30 seconds for data consistency
-    const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [selectedDate, fetchData]);
+    // Only set up 30-second interval if NOT on Live Tracking tab
+    if (activeTab !== 'live') {
+      // Auto-refresh enabled - refresh every 30 seconds for data consistency
+      const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [selectedDate, fetchData, activeTab]);
 
   // Auto-update selectedDate when day changes (for live tab)
   useEffect(() => {
@@ -658,12 +727,8 @@ const ScreenTracking: React.FC = () => {
     });
   }, []);
 
-  // Fetch path when screen is selected
-  useEffect(() => {
-    if (selectedScreen) {
-      fetchPathData(selectedScreen.deviceId);
-    }
-  }, [selectedScreen, selectedDate, fetchPathData]);
+  // Note: Path data is now fetched by auto-refresh effects above
+  // This ensures smooth updates every 2 seconds for both Live and Route Map tabs
 
   // Handle popup opening for selected screen
   useEffect(() => {
@@ -1097,6 +1162,7 @@ const ScreenTracking: React.FC = () => {
                         materialId={mapMaterialId}
                         date={selectedDate}
                         snapToRoads={snapToRoads}
+                        refreshTrigger={routeRefreshTrigger}
                         onRouteLoad={(data) => {
                           setHistoricalRouteData(data);
                         }}
@@ -1110,6 +1176,10 @@ const ScreenTracking: React.FC = () => {
                         <div>Material ID: {mapMaterialId}</div>
                         <div>Date: {selectedDate}</div>
                         <div>Filtered Screens: {screens?.length || 0}</div>
+                        <div className="flex items-center gap-1 mt-1 text-green-600">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span>Auto-refresh active (2s)</span>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1349,24 +1419,6 @@ const ScreenTracking: React.FC = () => {
                       );
                     })()
                   )}
-                  
-                  {/* Path for selected tablet */}
-                  {pathData && pathData.locationHistory?.length > 1 && (() => {
-                    const validPositions = pathData.locationHistory
-                      .filter(point => point && typeof point.lat === 'number' && typeof point.lng === 'number' && 
-                             !isNaN(point.lat) && !isNaN(point.lng) &&
-                             isValidCoordinate(point.lat, point.lng))
-                      .map(point => [point.lat, point.lng] as LatLngTuple);
-                    
-                    return validPositions.length > 1 ? (
-                      <Polyline
-                        positions={validPositions}
-                        color="#3b82f6"
-                        weight={3}
-                        opacity={0.7}
-                      />
-                    ) : null;
-                  })()}
                     </>
                   ) : (
                     // Historical route markers and polylines

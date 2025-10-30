@@ -14,11 +14,15 @@ import StatusModal from '../../components/modals/StatusModal';
 import LogoLoop from "../../components/LogoLoop";
 import HamburgerMenuOverlay from '../../components/HamburgerMenuOverlay';
 
+// Import auth context
+import { useUserAuth } from '../../contexts/UserAuthContext';
+
 // Import newsletter service
 import { NewsletterService } from '../../services/newsletterService';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useUserAuth();
 
   // State for the popup in the footer
   const [showPopup, setShowPopup] = useState(false);
@@ -104,11 +108,22 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle Home click - check if user is logged in
+  const handleHomeClick = () => {
+    if (user) {
+      // User is logged in → navigate to dashboard
+      navigate('/dashboard');
+    } else {
+      // User not logged in → scroll to hero section
+      document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   // Hamburger menu items
   const menuItems = [
     {
       label: 'Home',
-      onClick: () => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' }),
+      onClick: handleHomeClick,
     },
     {
       label: 'About Us',
@@ -251,7 +266,11 @@ export default function Home() {
         setContactMessage('Your message has been sent successfully!');
         setContactForm({ name: '', email: '', message: '' });
         setShowPopup(true);
-        setTimeout(() => setShowPopup(false), 5000);
+        setTimeout(() => {
+          setShowPopup(false);
+          setContactStatus('idle');
+          setContactMessage('');
+        }, 5000);
       } else {
         setContactStatus('error');
         setContactMessage(result.message || 'Failed to send message. Please try again.');
@@ -316,7 +335,7 @@ export default function Home() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-6 md:space-x-8 z-[1003]">
             <button
-              onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={handleHomeClick}
               className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
             >
               Home
@@ -578,7 +597,7 @@ export default function Home() {
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
                       WebkitTextFillColor: '#000000'
                     }}
-                    disabled={contactStatus === 'loading'}
+                    disabled={contactStatus === 'loading' || contactStatus === 'success'}
                   />
                 </div>
                 <div className="mb-4">
@@ -598,7 +617,7 @@ export default function Home() {
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
                       WebkitTextFillColor: '#000000',
                     }}
-                    disabled={contactStatus === 'loading'}
+                    disabled={contactStatus === 'loading' || contactStatus === 'success'}
                   />
                 </div>
                 <div className="mb-4">
@@ -617,15 +636,15 @@ export default function Home() {
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
                       WebkitTextFillColor: '#000000'
                     }}
-                    disabled={contactStatus === 'loading'}
+                    disabled={contactStatus === 'loading' || contactStatus === 'success'}
                   />
                 </div>
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={contactStatus === 'loading'}
+                    disabled={contactStatus === 'loading' || contactStatus === 'success'}
                     onMouseMove={(e) => {
-                      if (contactStatus === 'loading') return;
+                      if (contactStatus === 'loading' || contactStatus === 'success') return;
                       const rect = e.currentTarget.getBoundingClientRect();
                       const x = ((e.clientX - rect.left) / rect.width) * 100;
                       const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -633,19 +652,19 @@ export default function Home() {
                     }}
                     className={`relative group inline-flex items-center justify-center overflow-hidden
                                 mt-6 py-2 rounded-md font-semibold text-white transition-all duration-300
-                                ${contactStatus === 'loading'
+                                ${contactStatus === 'loading' || contactStatus === 'success'
                                   ? "bg-gray-400 cursor-not-allowed"
                                   : "hover:scale-105"
                                 }`}
-                    style={contactStatus === 'loading' ? {} : {
+                    style={contactStatus === 'loading' || contactStatus === 'success' ? {} : {
                       backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
                                         radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
                     }}
                   >
                     <span className="inline-flex items-center gap-2 px-6">
-                      {contactStatus === 'loading' ? "Processing..." : "Send"}
+                      {contactStatus === 'loading' ? "Processing..." : contactStatus === 'success' ? "Sent!" : "Send"}
                     </span>
-                    {contactStatus !== 'loading' && (
+                    {contactStatus !== 'loading' && contactStatus !== 'success' && (
                       <span
                         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
                         style={{

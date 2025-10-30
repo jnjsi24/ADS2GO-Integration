@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -101,6 +101,9 @@ const RouteTab: React.FC = () => {
   // ✅ NEW: Midnight reset mode - show only last location marker
   const [showOnlyLastLocation, setShowOnlyLastLocation] = useState(false);
   const [lastLocationPoint, setLastLocationPoint] = useState<RoutePoint | null>(null);
+  
+  // 🔄 NEW: Batch GPS updates to prevent constant WebView reloads (smooth route line display)
+  const pendingGPSPointsRef = useRef<RoutePoint[]>([]);
   useEffect(() => {
     // ✅ CRITICAL FIX: Use local date comparison to avoid timezone issues
     const selectedYear = selectedDate.getFullYear();
@@ -122,6 +125,9 @@ const RouteTab: React.FC = () => {
       selectedDate: selectedDate.toString(),
       now: now.toString()
     });
+    
+    // 🔄 Clear pending GPS queue when date changes
+    pendingGPSPointsRef.current = [];
     
     loadDriverInfoAndRoute(false); // Initial load with loading screen
     
@@ -195,41 +201,84 @@ const RouteTab: React.FC = () => {
           address: '' // Will be geocoded if needed
         };
 
-        // Update route data with new GPS point
+        // 🔄 NEW: Add to pending queue instead of immediately updating (prevents constant WebView reloads)
+        // The batch update effect will process these every 2 seconds
+        pendingGPSPointsRef.current.push(newPoint);
+        
+        // Log occasionally for debugging
+        if (Math.random() < 0.1) {
+          console.log('📍 [Route Tab] GPS update queued for batch processing:', {
+            speed: `${newPoint.speed.toFixed(1)} km/h`,
+            accuracy: `${newPoint.accuracy.toFixed(1)}m`,
+            queueSize: pendingGPSPointsRef.current.length
+          });
+        }
+      }
+    });
+
+    return () => {
+      console.log('🔌 [Route Tab] Cleaning up WebSocket subscription');
+      unsubscribe();
+    };
+  }, [isRealTimeActive, driverInfo?.deviceId]);
+
+  // 🔄 NEW: Batch GPS updates every 2 seconds to prevent constant WebView reloads (smooth display)
+  useEffect(() => {
+    // Only batch updates when viewing today's date with real-time active
+    if (!isRealTimeActive || !driverInfo?.deviceId || driverInfo.deviceId === 'No Device') {
+      return;
+    }
+
+    console.log('🔄 [Batch Update] Starting 2-second batch update interval for smooth route display');
+
+    const batchInterval = setInterval(() => {
+      // Check if there are pending GPS points to process
+      if (pendingGPSPointsRef.current.length > 0) {
+        const pointsToAdd = [...pendingGPSPointsRef.current]; // Copy the array
+        pendingGPSPointsRef.current = []; // Clear the queue
+
+        console.log(`🔄 [Batch Update] Processing ${pointsToAdd.length} GPS points`);
+
+        // Update route data with all pending points at once
         setRouteData(prev => {
           if (!prev) {
-            // Initialize route data if it doesn't exist
+            // Initialize route data with first point
+            const firstPoint = pointsToAdd[0];
             return {
               deviceId: driverInfo.deviceId,
               materialId: driverInfo.materialId,
-              route: [newPoint],
+              route: pointsToAdd,
               metrics: {
                 totalDistance: 0,
                 totalDuration: 0,
-                averageSpeed: newPoint.speed,
-                pointCount: 1,
-                startTime: newPoint.timestamp,
-                endTime: newPoint.timestamp
+                averageSpeed: firstPoint.speed,
+                pointCount: pointsToAdd.length,
+                startTime: firstPoint.timestamp,
+                endTime: pointsToAdd[pointsToAdd.length - 1].timestamp
               }
             };
           }
 
-          // Add new point to existing route
-          const updatedRoute = [...prev.route, newPoint];
+          // Add all pending points to existing route
+          const updatedRoute = [...prev.route, ...pointsToAdd];
           
           // Update metrics
-          const startTime = prev.metrics.startTime || newPoint.timestamp;
-          const endTime = newPoint.timestamp;
+          const startTime = prev.metrics.startTime || pointsToAdd[0].timestamp;
+          const endTime = pointsToAdd[pointsToAdd.length - 1].timestamp;
           const duration = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000;
           
-          // Calculate total distance
+          // Calculate total distance including new points
           let totalDistance = prev.metrics.totalDistance || 0;
-          if (prev.route.length > 0) {
-            const lastPoint = prev.route[prev.route.length - 1];
-            totalDistance += calculateDistance(
-              lastPoint.lat, lastPoint.lng,
-              newPoint.lat, newPoint.lng
-            );
+          let lastPoint = prev.route.length > 0 ? prev.route[prev.route.length - 1] : null;
+          
+          for (const newPoint of pointsToAdd) {
+            if (lastPoint) {
+              totalDistance += calculateDistance(
+                lastPoint.lat, lastPoint.lng,
+                newPoint.lat, newPoint.lng
+              );
+            }
+            lastPoint = newPoint;
           }
 
           const averageSpeed = duration > 0 ? (totalDistance / duration) * 3600 : 0;
@@ -249,21 +298,13 @@ const RouteTab: React.FC = () => {
         });
 
         setLastUpdate(new Date());
-        
-        // Log occasionally for debugging
-        if (Math.random() < 0.1) {
-          console.log('📍 [Route Tab] Real-time GPS update received:', {
-            speed: `${newPoint.speed.toFixed(1)} km/h`,
-            accuracy: `${newPoint.accuracy.toFixed(1)}m`,
-            points: (routeData?.route?.length || 0) + 1
-          });
-        }
+        console.log(`✅ [Batch Update] Route updated with ${pointsToAdd.length} new points`);
       }
-    });
+    }, 2000); // Process batch every 2 seconds
 
     return () => {
-      console.log('🔌 [Route Tab] Cleaning up WebSocket subscription');
-      unsubscribe();
+      console.log('🔄 [Batch Update] Stopping batch update interval');
+      clearInterval(batchInterval);
     };
   }, [isRealTimeActive, driverInfo?.deviceId]);
 

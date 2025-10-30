@@ -1,7 +1,7 @@
 // server/utils/emailService.js
 
 const nodemailer = require('nodemailer');
-require('dotenv').config({ path: '.env.development' });
+require('dotenv').config();
 
 class EmailService {
   static transporter = null;
@@ -305,6 +305,75 @@ class EmailService {
       return true;
     } catch (error) {
       console.error('❌ Error sending newsletter email:', error.message);
+      return false;
+    }
+  }
+
+  // Send newsletter email with image and styled template
+  static async sendNewsletterEmailWithImage(subject, message, imageUrl, subscribers) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
+      console.error('❌ Cannot send email: Email service not configured');
+      return false;
+    }
+
+    // Convert plain text message to HTML with line breaks
+    const formattedMessage = message.replace(/\n/g, '<br>');
+
+    // Build unsubscribe link (generic for now)
+    const unsubscribeLink = `${process.env.CLIENT_URL || 'http://localhost:3000'}/unsubscribe`;
+
+    // Build HTML email with Ads2Go style
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+        <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <!-- Ads2Go Logo/Header -->
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #4A90E2; margin: 0; font-size: 32px; font-weight: bold;">Ads2Go</h1>
+            <p style="color: #999; margin: 5px 0 0 0; font-size: 14px;">Digital Advertising Solutions</p>
+          </div>
+          
+          <!-- Divider -->
+          <div style="border-bottom: 2px solid #f0f0f0; margin-bottom: 30px;"></div>
+          
+          <!-- Image (if provided) -->
+          ${imageUrl ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+              <img src="${imageUrl}" alt="Newsletter Image" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            </div>
+          ` : ''}
+          
+          <!-- Message Content -->
+          <div style="color: #333; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">
+            ${formattedMessage}
+          </div>
+          
+          <!-- Footer -->
+          <div style="border-top: 2px solid #f0f0f0; padding-top: 20px; margin-top: 30px;">
+            <p style="color: #999; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Ads2Go. All rights reserved.
+            </p>
+            <p style="color: #999; font-size: 12px; text-align: center; margin: 10px 0 0 0;">
+              <a href="${unsubscribeLink}" style="color: #4A90E2; text-decoration: none;">Unsubscribe from this newsletter</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: `Ads2Go <${process.env.EMAIL_USER}>`,
+      bcc: subscribers.map(sub => sub.email).join(','),
+      subject: subject,
+      html: htmlContent
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`✅ Newsletter with image sent to ${subscribers.length} subscribers`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending newsletter email with image:', error.message);
       return false;
     }
   }

@@ -133,6 +133,7 @@ const DailyDataSchema = new mongoose.Schema({
     country: { type: String },
     city: { type: String },
     location: LocationPointSchema,
+    address: { type: String }, // Geocoded address from GPS coordinates
     timeOnPage: { type: Number, default: 0 },
     converted: { type: Boolean, default: false },
     conversionType: { type: String },

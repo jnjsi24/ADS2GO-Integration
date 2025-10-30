@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@apollo/client";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/solid";
 import { 
@@ -7,8 +8,6 @@ import {
   List, 
   Search, 
   HelpCircle, 
-  MessageCircle, 
-  Phone, 
   Mail, 
   Clock, 
   CheckCircle,
@@ -96,6 +95,7 @@ const FAQItem: React.FC<{ question: string; answer: string; searchQuery?: string
 };
 
 const Help: React.FC = () => {
+  const navigate = useNavigate();
   const [isCreateReportOpen, setIsCreateReportOpen] = useState(false);
   const [showUserReports, setShowUserReports] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +113,18 @@ const Help: React.FC = () => {
   const handleCreateReportSuccess = () => {
     // You can add a success notification here
     console.log('Report created successfully');
+  };
+
+  const handleNavigateToContact = () => {
+    // Navigate to landing page
+    navigate('/');
+    // Wait for navigation to complete, then scroll to contact section
+    setTimeout(() => {
+      const contactSection = document.getElementById('contact-us');
+      if (contactSection) {
+        contactSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   // Search functionality with debouncing
@@ -278,46 +290,24 @@ const Help: React.FC = () => {
         )}
 
         {/* Support Options */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white/80 shadow-md p-8">
+        <section className="max-w-md mx-auto">
+          <div 
+            onClick={handleNavigateToContact}
+            className="bg-white/80 shadow-md p-8 cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 group"
+          >
             <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <MessageCircle className="w-6 h-6 text-[#3674B5]" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Live Chat</h3>
-            </div>
-            <p className="text-gray-600 mb-4">Get instant help from our support team</p>
-            <div className="flex items-center text-sm text-green-600 font-medium">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-              Online now
-            </div>
-          </div>
-
-          <div className="bg-white/80 shadow-md p-8">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-green-100 rounded-xl">
-                <Phone className="w-6 h-6 text-green-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800">Phone Support</h3>
-            </div>
-            <p className="text-gray-600 mb-4">Call us for immediate assistance</p>
-            <div className="text-sm text-gray-500">
-              <Clock className="w-4 h-4 inline mr-1" />
-              Mon-Fri, 9AM-6PM PST
-            </div>
-          </div>
-
-          <div className="bg-white/80 shadow-md p-8">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="p-3 bg-purple-100 rounded-xl">
+              <div className="p-3 bg-purple-100 rounded-xl group-hover:bg-purple-200 transition-colors duration-300">
                 <Mail className="w-6 h-6 text-purple-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-800">Email Support</h3>
+              <h3 className="text-xl font-bold text-gray-800 group-hover:text-[#3674B5] transition-colors duration-300">Email Support</h3>
             </div>
             <p className="text-gray-600 mb-4">Send us a detailed message</p>
-            <div className="text-sm text-gray-500">
-              <Clock className="w-4 h-4 inline mr-1" />
-              Response within 24 hours
+            <div className="text-sm text-gray-500 flex items-center justify-between">
+              <span>
+                <Clock className="w-4 h-4 inline mr-1" />
+                Response within 24 hours
+              </span>
+              <ArrowRight className="w-5 h-5 text-[#3674B5] opacity-0 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all duration-300" />
             </div>
           </div>
         </section>

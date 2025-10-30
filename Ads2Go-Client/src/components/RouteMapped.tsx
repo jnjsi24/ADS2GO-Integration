@@ -42,6 +42,7 @@ interface RouteMappedProps {
   className?: string;
   style?: React.CSSProperties;
   snapToRoads?: boolean;
+  refreshTrigger?: number; // Optional trigger to force refresh even with same props
   onRouteLoad?: (data: any) => void;
   onLoadingChange?: (isLoading: boolean) => void;
 }
@@ -438,6 +439,7 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   className = '',
   style = { height: '100%', width: '100%' },
   snapToRoads = true,
+  refreshTrigger,
   onRouteLoad,
   onLoadingChange
 }) => {
@@ -445,14 +447,17 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fetchingRef = useRef(false);
-  const lastFetchParams = useRef<string>('');
+  const lastFetchTime = useRef<number>(0);
+  const MIN_FETCH_INTERVAL = 1000; // Minimum 1 second between fetches to avoid spam
+  const isInitialLoadRef = useRef(true); // Track if this is the first load
   
   // Validate materialId
   const isValidMaterialId = materialId && materialId !== 'all' && typeof materialId === 'string';
 
-  // Reset fetching state when materialId or date changes
+  // Reset fetching state and initial load flag when materialId or date changes
   useEffect(() => {
     fetchingRef.current = false;
+    isInitialLoadRef.current = true; // Reset to initial load for new material/date
   }, [materialId, date]);
 
   // Extract route data (only if available)
@@ -553,24 +558,37 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
 
     const fetchRouteData = async () => {
       try {
-        // Create a unique key for this request
-        const requestKey = `${materialId}-${date}`;
-        
-        // Skip if we're already fetching the same data
-        if (fetchingRef.current || lastFetchParams.current === requestKey) {
-          console.log('🚫 [RouteMapped] Skipping duplicate request:', requestKey);
+        // Check if we're already fetching
+        if (fetchingRef.current) {
+          console.log('🚫 [RouteMapped] Request already in progress, skipping...');
+          return;
+        }
+
+        // Check if enough time has passed since last fetch (throttle to prevent spam)
+        const now = Date.now();
+        const timeSinceLastFetch = now - lastFetchTime.current;
+        if (timeSinceLastFetch < MIN_FETCH_INTERVAL) {
+          console.log(`🚫 [RouteMapped] Throttling: Only ${timeSinceLastFetch}ms since last fetch`);
           return;
         }
 
         fetchingRef.current = true;
-        lastFetchParams.current = requestKey;
-        setLoading(true);
-        setError(null);
-        if (onLoadingChange) {
-          onLoadingChange(true);
+        lastFetchTime.current = now;
+        
+        // Only show loading state on initial load, do silent refresh for subsequent loads
+        const isInitialLoad = isInitialLoadRef.current;
+        if (isInitialLoad) {
+          setLoading(true);
+          if (onLoadingChange) {
+            onLoadingChange(true);
+          }
+          console.log('🗺️ [RouteMapped] Initial load - showing loading state');
+        } else {
+          console.log('🗺️ [RouteMapped] Silent refresh - no loading state');
         }
-
-        console.log('🗺️ [RouteMapped] Props:', { materialId, date });
+        
+        setError(null);
+        console.log('🗺️ [RouteMapped] Fetching route data:', { materialId, date, isInitialLoad });
 
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
         let url = `${baseUrl}/api/enhancedRoute/route/${materialId}`;
@@ -587,36 +605,49 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
         if (result.success) {
           console.log('✅ [RouteMapped] Route data received:', result.data);
           setRouteData(result.data);
-          setLoading(false);
-          if (onLoadingChange) {
-            onLoadingChange(false);
+          
+          // Mark initial load as complete after first successful fetch
+          isInitialLoadRef.current = false;
+          
+          // Only update loading state if it was set (initial load)
+          if (isInitialLoad) {
+            setLoading(false);
+            if (onLoadingChange) {
+              onLoadingChange(false);
+            }
           }
+          
           if (onRouteLoad) {
             onRouteLoad(result.data);
           }
         } else {
           console.log('❌ [RouteMapped] API returned error:', result.message);
           setError('No route data available for this date');
-          setLoading(false);
-          if (onLoadingChange) {
-            onLoadingChange(false);
+          
+          if (isInitialLoad) {
+            setLoading(false);
+            if (onLoadingChange) {
+              onLoadingChange(false);
+            }
           }
         }
       } catch (err) {
         setError('Unable to load route data');
         console.error('❌ [RouteMapped] Error:', err);
-        setLoading(false);
-        if (onLoadingChange) {
-          onLoadingChange(false);
+        
+        if (isInitialLoad) {
+          setLoading(false);
+          if (onLoadingChange) {
+            onLoadingChange(false);
+          }
         }
       } finally {
         fetchingRef.current = false;
-        lastFetchParams.current = ''; // Reset to allow future requests
       }
     };
 
     fetchRouteData();
-  }, [materialId, date, isValidMaterialId]);
+  }, [materialId, date, isValidMaterialId, refreshTrigger]);
 
   // Cleanup effect - reset loading state when component unmounts or materialId/date changes
   useEffect(() => {

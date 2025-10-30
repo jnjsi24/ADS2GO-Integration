@@ -16,10 +16,10 @@ const contactMessageTypeDefs = gql`
   }
 
   type AdminReply {
-    subject: String!
-    message: String!
-    sentBy: AdminInfo!
-    sentAt: String!
+    subject: String
+    message: String
+    sentBy: AdminInfo
+    sentAt: String
   }
 
   type AdminInfo {

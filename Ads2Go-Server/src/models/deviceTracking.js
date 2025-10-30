@@ -67,6 +67,7 @@ const QRScanSchema = new mongoose.Schema({
   country: { type: String },
   city: { type: String },
   location: LocationPointSchema,
+  address: { type: String }, // Geocoded address from GPS coordinates
   timeOnPage: { type: Number, default: 0 },
   converted: { type: Boolean, default: false },
   conversionType: { type: String },
@@ -938,12 +939,12 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       const currentAccuracy = accuracy || 0;
       const previousAccuracy = prevLocation.accuracy || 0;
       const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
-      const MIN_MOVEMENT_THRESHOLD = 0.02; // 0.02 km = 20 meters - filters stationary GPS drift
+      const MIN_MOVEMENT_THRESHOLD = 0.008; // 0.008 km = 8 meters - filters stationary GPS drift
       
       // Only add distance if:
-      // 1. Movement is significant (more than 20 meters) - filters stationary GPS noise and drift
+      // 1. Movement is significant (more than 8 meters) - filters stationary GPS noise while capturing actual movement
       // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
-      // NOTE: Increased from 10m to 20m to eliminate ~3km of stationary GPS drift
+      // NOTE: Set to 8m based on real-world testing - balances accuracy vs capturing valid movements
       if (distance > MIN_MOVEMENT_THRESHOLD) {
         // Check if both current and previous GPS readings are accurate enough
         if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
@@ -954,7 +955,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
           console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
         }
       } else {
-        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise/drift`);
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m < 8m threshold) - ignoring GPS noise/drift`);
       }
     } else {
       console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
@@ -995,51 +996,8 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   });
 };
 
-// Helper method to validate GPS coordinates
-DeviceTrackingSchema.methods.isValidGPSCoordinates = function(lat, lng) {
-  // Check if coordinates are valid numbers
-  if (typeof lat !== 'number' || typeof lng !== 'number') {
-    return false;
-  }
-  
-  // Check if coordinates are not NaN or Infinity
-  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
-    return false;
-  }
-  
-  // Check if coordinates are not [0,0] (GPS initialization issue)
-  if (lat === 0 && lng === 0) {
-    return false;
-  }
-  
-  // Check if coordinates are within valid GPS ranges
-  // Latitude: -90 to 90 degrees
-  // Longitude: -180 to 180 degrees
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return false;
-  }
-  
-  // Check if coordinates are reasonable for the Philippines region
-  // Philippines is roughly: 4.5°N to 21.1°N, 116.9°E to 126.6°E
-  if (lat < 4.5 || lat > 21.1 || lng < 116.9 || lng > 126.6) {
-    console.log(`📍 [GPS Validation] ${this.materialId}: Coordinates [${lat}, ${lng}] outside Philippines region`);
-    // Don't reject, just log - device might be traveling
-  }
-  
-  return true;
-};
-
-// Helper method to calculate distance between two points
-DeviceTrackingSchema.methods.calculateDistance = function(lat1, lng1, lat2, lng2) {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-};
+// Note: GPS validation functions (validateCoordinates, calculateDistance) 
+// are centralized in utils/gpsValidation.js and used via GPSValidation.* throughout the codebase
 
 DeviceTrackingSchema.methods.trackAdPlayback = async function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {
   const now = new Date();

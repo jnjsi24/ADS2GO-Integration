@@ -31,7 +31,7 @@ router.post('/send', async (req, res) => {
       email: email.toLowerCase().trim(),
       message: message.trim(),
       status: 'PENDING',
-      category: 'CONTACT_US'
+      category: 'GENERAL_INQUIRIES'
     });
 
     await contactMessage.save();

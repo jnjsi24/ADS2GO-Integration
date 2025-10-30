@@ -1358,7 +1358,7 @@ const AdDetailsPage: React.FC = () => {
                 </button>
               </div>
               
-              {/* Only show Ad Activity tab if fully paid and approved */}
+              {/* Only show QR Scan Activity tab if fully paid and approved */}
               {isFullyPaidAndApproved && (
                 <div className="relative">
                   <button
@@ -1367,7 +1367,7 @@ const AdDetailsPage: React.FC = () => {
                       activeTab === 'AdActivity' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
                     }`}
                   >
-                    Ad Activity
+                    QR Scan Activity
 
                     {/* Hover underline with framer-motion */}
                     <motion.div
@@ -1523,7 +1523,6 @@ const AdDetailsPage: React.FC = () => {
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {/* Real-time notifications */}
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Ad Activity</h3>
                 <div className="flex items-center space-x-2">
                   <div className={`w-3 h-3 rounded-full ${
                     connectionStatus === 'connected' ? 'bg-green-500' : 
@@ -1565,18 +1564,18 @@ const AdDetailsPage: React.FC = () => {
               {qrImpressions.length > 0 && (
                 <div className="mt-4">
                   <h4 className="text-md font-semibold text-gray-800 mb-2">QR Code Scans</h4>
-                  {qrImpressions.map((impression) => (
-                    <div key={impression.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 shadow-md rounded-lg mb-2">
+                  {qrImpressions.map((impression, index) => (
+                    <div key={`${impression.id}-${index}`} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 shadow-md rounded-lg mb-2">
                   <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                         <p className="text-black/90 text-sm font-medium">
-                          QR code scanned {impression.scans} time{impression.scans > 1 ? 's' : ''}
+                          QR code scanned from {impression.materialId || 'Unknown Device'}
                         </p>
                         <p className="text-black/70 text-xs">
                           {new Date(impression.timestamp).toLocaleString()}
-                          {impression.location && (
+                          {impression.location && (impression.location.address || (impression.location.lat && impression.location.lng)) && (
                             <span className="ml-2 text-gray-500">
-                              • {impression.location.address}
+                              • {impression.location.address || `GPS: ${impression.location.lat.toFixed(4)}, ${impression.location.lng.toFixed(4)}`}
                             </span>
                           )}
                         </p>

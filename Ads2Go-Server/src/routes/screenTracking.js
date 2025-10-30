@@ -5,6 +5,7 @@ const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 const { checkDriver } = require('../middleware/driverAuth');
 const logger = require('../utils/logger');
+const GPSValidation = require('../utils/gpsValidation');
 
 // Simple in-memory cache for geocoded addresses
 const geocodingCache = new Map();
@@ -459,7 +460,7 @@ router.get('/route/:deviceId', async (req, res) => {
       for (let i = 1; i < routeData.length; i++) {
         const prev = routeData[i - 1];
         const curr = routeData[i];
-        const distance = calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+        const distance = GPSValidation.calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
         totalDistance += distance;
       }
       
@@ -635,20 +636,6 @@ router.get('/route/:deviceId', async (req, res) => {
     });
   }
 });
-
-// Helper function to calculate distance between two points using Haversine formula
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  const distance = R * c; // Distance in kilometers
-  return distance;
-}
 
 // GET /deviceByMaterial/:materialId - Get device ID from material ID
 router.get('/deviceByMaterial/:materialId', async (req, res) => {

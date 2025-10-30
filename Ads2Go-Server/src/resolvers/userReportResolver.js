@@ -306,9 +306,38 @@ const resolvers = {
         // Get current admin info
         const currentAdmin = admin || superAdmin;
         
+        // Validate status transitions before making changes
+        if (input.status && input.status !== oldStatus) {
+          // Prevent backward movement from IN_PROGRESS to PENDING
+          if (oldStatus === 'IN_PROGRESS' && input.status === 'PENDING') {
+            throw new Error('Cannot change status back to PENDING from IN_PROGRESS');
+          }
+          
+          // Prevent any changes from RESOLVED
+          if (oldStatus === 'RESOLVED' && (input.status === 'PENDING' || input.status === 'IN_PROGRESS')) {
+            throw new Error('Cannot change status back from RESOLVED');
+          }
+          
+          // Prevent any changes from CLOSED
+          if (oldStatus === 'CLOSED') {
+            throw new Error('Cannot change status from CLOSED');
+          }
+        }
+        
         // Update the report
         const updateData = {};
-        if (input.status) updateData.status = input.status;
+        
+        // Check if admin is leaving a note
+        const isLeavingNote = input.adminNotes !== undefined && input.adminNotes.trim() && 
+                              (!report.adminNotes || report.adminNotes !== input.adminNotes);
+        
+        // Auto-change PENDING to IN_PROGRESS when admin leaves a note
+        if (isLeavingNote && report.status === 'PENDING') {
+          updateData.status = 'IN_PROGRESS';
+        } else if (input.status) {
+          updateData.status = input.status;
+        }
+        
         if (input.adminNotes !== undefined) {
           const isNewNote = !report.adminNotes || report.adminNotes !== input.adminNotes;
           updateData.adminNotes = input.adminNotes.trim();

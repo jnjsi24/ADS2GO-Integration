@@ -25,19 +25,21 @@ class DriverSalaryJob {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
 
-      // Check if calculations already exist for this month
       const startDate = new Date(year, currentDate.getMonth(), 1);
       const endDate = new Date(year, currentDate.getMonth() + 1, 0);
 
-      const existingCalculations = await DriverSalaryCalculation.countDocuments({
+      // ✅ FIXED: Get existing calculations to identify which drivers already have them
+      const existingCalculations = await DriverSalaryCalculation.find({
         'calculationPeriod.startDate': { $gte: startDate },
-        'calculationPeriod.endDate': { $lte: endDate }
-      });
+        'calculationPeriod.endDate': { $lte: endDate },
+        isActive: true
+      }).select('driverId');
 
-      if (existingCalculations > 0) {
-        console.log(`⏭️  Salary calculations for ${year}-${String(month).padStart(2, '0')} already exist (${existingCalculations} calculations)`);
-        this.isRunning = false;
-        return;
+      const driversWithCalculations = new Set(existingCalculations.map(c => c.driverId));
+      
+      if (existingCalculations.length > 0) {
+        console.log(`📊 Found ${existingCalculations.length} existing calculations for ${year}-${String(month).padStart(2, '0')}`);
+        console.log(`   Will generate only for drivers without calculations...`);
       }
 
       // Get all active drivers with materials
@@ -50,9 +52,17 @@ class DriverSalaryJob {
 
       let successCount = 0;
       let errorCount = 0;
+      let skippedCount = 0;
 
       for (const driver of drivers) {
         try {
+          // ✅ FIXED: Check if THIS driver already has a calculation
+          if (driversWithCalculations.has(driver.driverId)) {
+            console.log(`⏭️  ${driver.driverId} already has calculation, skipping`);
+            skippedCount++;
+            continue;
+          }
+
           // Calculate salary for this driver
           const calculationData = await DriverSalaryService.calculateDriverSalary(
             driver.driverId,
@@ -84,6 +94,7 @@ class DriverSalaryJob {
 
       console.log('🎉 Monthly salary generation complete!');
       console.log(`✅ Successful: ${successCount}`);
+      console.log(`⏭️  Skipped (already exist): ${skippedCount}`);
       console.log(`❌ Errors: ${errorCount}`);
       console.log(`📊 Total calculations created: ${successCount}`);
 
@@ -160,6 +171,14 @@ class DriverSalaryJob {
   start() {
     console.log('⏰ Starting driver salary cron jobs...');
 
+    // ✅ NEW: Daily check at midnight - generates for any drivers missing calculations
+    cron.schedule('1 0 * * *', () => {
+      console.log('🔄 Daily salary generation check (midnight)...');
+      this.generateMonthlySalaryCalculations();
+    }, {
+      timezone: 'Asia/Manila'
+    });
+
     // Monthly generation - Last day of each month at 11:59 PM
     cron.schedule('59 23 28-31 * *', () => {
       const today = new Date();
@@ -168,6 +187,7 @@ class DriverSalaryJob {
       
       // Only run on the last day of the month
       if (today.getMonth() !== tomorrow.getMonth()) {
+        console.log('🗓️  End of month - running full salary generation...');
         this.generateMonthlySalaryCalculations();
       }
     }, {
@@ -175,8 +195,15 @@ class DriverSalaryJob {
     });
 
     console.log('✅ Driver salary cron jobs started');
+    console.log('📅 Daily check: Every day at 12:01 AM (catches new drivers)');
     console.log('📅 Monthly generation: Last day of month at 11:59 PM');
     console.log('⚡ Real-time updates: Automatic when tracking data changes');
+    
+    // ✅ NEW: Run once on startup to catch up on any missing calculations
+    console.log('🔄 Running initial salary generation check in 10 seconds...');
+    setTimeout(() => {
+      this.generateMonthlySalaryCalculations();
+    }, 10000); // Wait 10 seconds after server startup to ensure DB is ready
   }
 
   /**

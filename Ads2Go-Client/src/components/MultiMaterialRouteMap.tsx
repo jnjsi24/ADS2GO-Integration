@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -62,11 +62,19 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   const [loading, setLoading] = useState(true);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]);
   const [zoom, setZoom] = useState(12);
+  
+  // 🔄 Track if this is the initial load (for silent refresh)
+  const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
-    const fetchAllRoutes = async () => {
-      setLoading(true);
-      console.log(`📍 [MultiMaterialRouteMap] Fetching routes for ${materialIds.length} materials on ${date}`);
+    const fetchAllRoutes = async (silentRefresh = false) => {
+      // Only show loading state on initial load, not on silent refreshes
+      if (!silentRefresh) {
+        setLoading(true);
+      }
+      
+      const logPrefix = silentRefresh ? '🔄 [Silent Refresh]' : '📍 [MultiMaterialRouteMap]';
+      console.log(`${logPrefix} Fetching routes for ${materialIds.length} materials on ${date}`);
 
       const routes: MaterialRoute[] = [];
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
@@ -122,11 +130,11 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       // Filter out null results (failed or empty routes)
       routes.push(...fetchedRoutes.filter((route): route is MaterialRoute => route !== null));
 
-      console.log(`📍 [MultiMaterialRouteMap] Total routes found: ${routes.length}/${materialIds.length}`);
+      console.log(`${logPrefix} Total routes found: ${routes.length}/${materialIds.length}`);
       setMaterialRoutes(routes);
 
-      // Calculate map center from all routes
-      if (routes.length > 0) {
+      // Calculate map center from all routes (only on initial load, not silent refresh)
+      if (!silentRefresh && routes.length > 0) {
         const allPoints = routes.flatMap(r => r.route);
         const avgLat = allPoints.reduce((sum, p) => sum + p.lat, 0) / allPoints.length;
         const avgLng = allPoints.reduce((sum, p) => sum + p.lng, 0) / allPoints.length;
@@ -140,14 +148,86 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
         }
       }
 
-      setLoading(false);
+      // Mark initial load as complete
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false;
+      }
+
+      // Only update loading state if this wasn't a silent refresh
+      if (!silentRefresh) {
+        setLoading(false);
+      }
     };
 
+    // Reset initial load flag when materialIds or date changes
+    isInitialLoadRef.current = true;
+    
     if (materialIds.length > 0) {
-      fetchAllRoutes();
+      fetchAllRoutes(false); // Initial load with loading state
     } else {
       setLoading(false);
     }
+  }, [materialIds, date]);
+
+  // 🔄 NEW: Auto-refresh routes every 2 seconds for smooth real-time updates (matches Admin Client)
+  useEffect(() => {
+    // Only auto-refresh if we have materials to track
+    if (materialIds.length === 0) {
+      return;
+    }
+
+    console.log('🔄 [MultiMaterialRouteMap] Starting 2-second auto-refresh for smooth route updates');
+
+    const refreshInterval = setInterval(async () => {
+      console.log('🔄 [Auto-Refresh] Refreshing routes silently');
+      
+      // Silent refresh - don't show loading state
+      const routes: MaterialRoute[] = [];
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
+
+      // Fetch all routes in parallel
+      const fetchPromises = materialIds.map(async (materialId, i) => {
+        const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+
+        try {
+          const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${date}`;
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            return null;
+          }
+          
+          const result = await response.json();
+
+          if (!result.success || !result.data || !result.data?.route || result.data.route.length === 0) {
+            return null;
+          }
+
+          return {
+            materialId,
+            route: result.data.route,
+            color,
+            totalDistance: result.data.totalDistance,
+            duration: result.data.duration,
+            avgSpeed: result.data.avgSpeed,
+          };
+        } catch (error) {
+          return null;
+        }
+      });
+
+      const fetchedRoutes = await Promise.all(fetchPromises);
+      routes.push(...fetchedRoutes.filter((route): route is MaterialRoute => route !== null));
+
+      // Update routes silently (no loading state, no map center change)
+      setMaterialRoutes(routes);
+      console.log(`✅ [Auto-Refresh] Routes updated: ${routes.length}/${materialIds.length}`);
+    }, 2000); // Refresh every 2 seconds
+
+    return () => {
+      console.log('🔄 [MultiMaterialRouteMap] Stopping auto-refresh');
+      clearInterval(refreshInterval);
+    };
   }, [materialIds, date]);
 
   // Create custom markers for start/end points

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X, Mail, Upload, Loader, Send, Image as ImageIcon } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Subscriber {
@@ -42,6 +42,16 @@ const NewsletterManagement: React.FC = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
+
+  // Email compose modal state
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailImage, setEmailImage] = useState<File | null>(null);
+  const [emailImagePreview, setEmailImagePreview] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [sendToAllActive, setSendToAllActive] = useState(false);
 
   const filterOptions = [
     'All Subscribers',
@@ -249,6 +259,144 @@ const NewsletterManagement: React.FC = () => {
     setShowSortDropdown(false);
   };
 
+  // Handle image selection and preview
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+      }
+
+      setEmailImage(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEmailImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload image to server
+  const uploadNewsletterImage = async () => {
+    if (!emailImage) return null;
+
+    try {
+      const formData = new FormData();
+      formData.append('image', emailImage);
+
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const actualServerUrl = baseUrl.replace('/graphql', '').replace(/\/$/, '');
+      
+      const response = await fetch(`${actualServerUrl}/api/newsletter/upload-image`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log('✅ Image uploaded:', data.imageUrl);
+        return data.imageUrl;
+      } else {
+        throw new Error(data.message || 'Failed to upload image');
+      }
+    } catch (error) {
+      console.error('❌ Image upload error:', error);
+      throw error;
+    }
+  };
+
+  // Send newsletter email
+  const handleSendNewsletter = async () => {
+    try {
+      // Validation
+      if (!emailSubject.trim()) {
+        alert('Please enter a subject');
+        return;
+      }
+
+      if (!emailMessage.trim()) {
+        alert('Please enter a message');
+        return;
+      }
+
+      if (!sendToAllActive && selectedSubscribers.length === 0) {
+        alert('Please select at least one subscriber or choose "All Active Subscribers"');
+        return;
+      }
+
+      setIsSendingEmail(true);
+
+      // Upload image if selected
+      let imageUrl = null;
+      if (emailImage) {
+        imageUrl = await uploadNewsletterImage();
+      }
+
+      // Prepare request data
+      const requestData = {
+        subject: emailSubject,
+        message: emailMessage,
+        imageUrl,
+        sendToAllActive,
+        subscriberIds: sendToAllActive ? [] : selectedSubscribers
+      };
+
+      // Send email
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const actualServerUrl = baseUrl.replace('/graphql', '').replace(/\/$/, '');
+      
+      const response = await fetch(`${actualServerUrl}/api/newsletter/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ Newsletter sent successfully to ${data.recipientCount} subscriber(s)!`);
+        
+        // Close modal and reset form
+        setIsEmailModalOpen(false);
+        setEmailSubject('');
+        setEmailMessage('');
+        setEmailImage(null);
+        setEmailImagePreview(null);
+        setUploadedImageUrl(null);
+        setSelectedSubscribers([]);
+        
+        // Refresh subscribers to show updated lastEmailSent
+        await fetchSubscribers();
+      } else {
+        throw new Error(data.message || 'Failed to send newsletter');
+      }
+    } catch (error) {
+      console.error('❌ Newsletter send error:', error);
+      alert(`Failed to send newsletter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // Open email modal
+  const handleOpenEmailModal = (allActive: boolean) => {
+    setSendToAllActive(allActive);
+    setIsEmailModalOpen(true);
+  };
+
   const handleUnsubscribe = async (email: string) => {
     setEmailToUnsubscribe(email);
     setShowUnsubscribeModal(true);
@@ -292,7 +440,10 @@ const NewsletterManagement: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    const currentPageIds = paginatedSubscribers.map(sub => sub._id);
+    // Only select active subscribers
+    const currentPageIds = paginatedSubscribers
+      .filter(sub => sub.isActive)
+      .map(sub => sub._id);
     const allCurrentPageSelected = currentPageIds.every(id => selectedSubscribers.includes(id));
     
     if (allCurrentPageSelected) {
@@ -585,22 +736,28 @@ const NewsletterManagement: React.FC = () => {
 
             {/* Email All Active Subscribers Button */}
             <button
-              onClick={() =>
-                window.open(
-                  'mailto:' +
-                    filteredSubscribers
-                      .filter((s) => s.isActive)
-                      .map((s) => s.email)
-                      .join(',')
-                )
-              }
+              onClick={() => handleOpenEmailModal(true)}
               className={`flex items-center justify-center gap-2 bg-green-600 text-xs text-white px-3 py-3 rounded-md hover:bg-green-700 transition-colors duration-200 ${
                 isMobile ? 'text-xs flex-[0.8]' : ''
               }`}
               disabled={stats.active === 0}
             >
+              <Mail className="w-4 h-4" />
               Email All Active Subscribers
             </button>
+
+            {/* Email Selected Subscribers Button (only show if some are selected) */}
+            {selectedSubscribers.length > 0 && (
+              <button
+                onClick={() => handleOpenEmailModal(false)}
+                className={`flex items-center justify-center gap-2 bg-blue-600 text-xs text-white px-3 py-3 rounded-md hover:bg-blue-700 transition-colors duration-200 ${
+                  isMobile ? 'text-xs flex-1' : ''
+                }`}
+              >
+                <Send className="w-4 h-4" />
+                Email Selected ({selectedSubscribers.length})
+              </button>
+            )}
           </div>
 
 
@@ -716,7 +873,10 @@ const NewsletterManagement: React.FC = () => {
                   <input
                     type="checkbox"
                     className="form-checkbox"
-                    checked={paginatedSubscribers.length > 0 && paginatedSubscribers.every(sub => selectedSubscribers.includes(sub._id))}
+                    checked={
+                      paginatedSubscribers.filter(sub => sub.isActive).length > 0 && 
+                      paginatedSubscribers.filter(sub => sub.isActive).every(sub => selectedSubscribers.includes(sub._id))
+                    }
                     onChange={handleSelectAll}
                   />
                   <span className="cursor-pointer" onClick={handleSelectAll}>Email</span>
@@ -801,12 +961,16 @@ const NewsletterManagement: React.FC = () => {
                       <div className="col-span-3 flex items-center gap-2">
                         <input
                           type="checkbox"
-                          className="form-checkbox"
+                          className={`form-checkbox ${!subscriber.isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
                           checked={selectedSubscribers.includes(subscriber._id)}
                           onChange={() => handleSubscriberSelect(subscriber._id)}
                           onClick={(e) => e.stopPropagation()}
+                          disabled={!subscriber.isActive}
+                          title={!subscriber.isActive ? 'Cannot email inactive subscribers' : ''}
                         />
-                        <span className="truncate font-medium text-gray-900">{subscriber.email}</span>
+                        <span className={`truncate font-medium ${subscriber.isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                          {subscriber.email}
+                        </span>
                       </div>
                       <div className="col-span-2">
                         <span
@@ -993,6 +1157,182 @@ const NewsletterManagement: React.FC = () => {
                     }`}
                   >
                     {isBulkProcessing ? 'Processing...' : `Unsubscribe ${selectedSubscribers.length} Subscriber${selectedSubscribers.length > 1 ? 's' : ''}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Email Compose Modal */}
+          {isEmailModalOpen && (
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+              onClick={() => setIsEmailModalOpen(false)}
+            >
+              <div
+                className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Send Newsletter Email</h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {sendToAllActive
+                        ? `Send to all ${stats.active} active subscribers`
+                        : `Send to ${selectedSubscribers.length} selected subscriber(s)`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsEmailModalOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-4">
+                  {/* Send To Options */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Send To:
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sendTo"
+                          checked={sendToAllActive}
+                          onChange={() => setSendToAllActive(true)}
+                          className="form-radio text-blue-600"
+                        />
+                        <span className="text-sm text-gray-700">
+                          All Active Subscribers ({stats.active} subscribers)
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sendTo"
+                          checked={!sendToAllActive}
+                          onChange={() => setSendToAllActive(false)}
+                          className="form-radio text-blue-600"
+                          disabled={selectedSubscribers.length === 0}
+                        />
+                        <span className={`text-sm ${selectedSubscribers.length === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
+                          Selected Subscribers Only ({selectedSubscribers.length} selected)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Subject */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Subject <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Enter email subject"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Message */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Message <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={emailMessage}
+                      onChange={(e) => setEmailMessage(e.target.value)}
+                      placeholder="Enter your message..."
+                      rows={8}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                  </div>
+
+                  {/* Image Upload */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Image (Optional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors">
+                        <Upload size={16} />
+                        <span className="text-sm">Choose Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      {emailImage && (
+                        <button
+                          onClick={() => {
+                            setEmailImage(null);
+                            setEmailImagePreview(null);
+                          }}
+                          className="text-red-600 hover:text-red-700 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    {emailImagePreview && (
+                      <div className="mt-3 border border-gray-200 rounded-lg p-3">
+                        <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                        <img
+                          src={emailImagePreview}
+                          alt="Preview"
+                          className="max-w-full h-auto max-h-64 rounded"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Note */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-blue-800">
+                      <strong>Note:</strong> Email will be sent via BCC to protect subscriber privacy. 
+                      The image will be displayed at the top of the email message.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+                  <button
+                    onClick={() => setIsEmailModalOpen(false)}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                    disabled={isSendingEmail}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendNewsletter}
+                    disabled={isSendingEmail || !emailSubject.trim() || !emailMessage.trim()}
+                    className={`px-6 py-2 rounded-lg transition-colors font-medium flex items-center gap-2 ${
+                      isSendingEmail || !emailSubject.trim() || !emailMessage.trim()
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    }`}
+                  >
+                    {isSendingEmail ? (
+                      <>
+                        <Loader size={16} className="animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send size={16} />
+                        Send Email
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

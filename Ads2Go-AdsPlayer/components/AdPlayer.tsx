@@ -766,6 +766,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Note: We don't pause the video - ads should continue playing
       
       console.log('🔒 [AdPlayer] Screen locked - user interaction disabled, ads continue playing');
+      console.log('🔒 [AdPlayer] Device remains ONLINE - admin can still monitor and unlock');
       console.log('🔒 [AdPlayer] New isLocked state:', true);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling lockdown:', error);
@@ -790,7 +791,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   };
 
   // Handle 8-hour completion stop command from server
-  const handleStop8Hours = (message: any) => {
+  const handleStop8Hours = async (message: any) => {
     try {
       console.log('🛑 [AdPlayer] Received 8-hour completion STOP command:', message);
       console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
@@ -813,9 +814,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       setIsPlaying(false);
       setIsPaused(true);
       
-      // 4. Lock the screen
+      // 4. Lock the screen and set device offline
       console.log('🔒 [AdPlayer] Locking ad player...');
       onLockStateChange?.(true);
+      
+      // Set device status to offline when locked for 8-hour completion
+      console.log('🔒 [AdPlayer] Setting device status to OFFLINE (8-hour completion)');
+      await tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 });
+      console.log('🔒 [AdPlayer] Device now appears OFFLINE in admin dashboard');
       
       // 5. Show completion alert
       Alert.alert(

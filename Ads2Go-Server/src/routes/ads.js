@@ -5,6 +5,7 @@ const Material = require('../models/Material');
 const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
 const CompanyAd = require('../models/CompanyAd'); // ✅ For company ad filler
+const OSMService = require('../services/osmService'); // ✅ Use existing geocoding service
 // QRScanTracking removed - QR scans are now handled directly in analytics collection
 
 // GET /ads/deployments - Get all deployments (for debugging) - MUST COME FIRST
@@ -50,38 +51,167 @@ router.get('/qr-scans', async (req, res) => {
   try {
     const { adId, materialId, startDate, endDate, limit = 100 } = req.query;
     
-    const query = {};
-    if (adId) query.adId = adId;
-    if (materialId) query.materialId = materialId;
+    // Validate required parameter
+    if (!adId) {
+      return res.status(400).json({
+        success: false,
+        data: [],
+        message: 'adId parameter is required'
+      });
+    }
+
+    console.log(`📊 [QR Scans] Fetching QR scans for ad: ${adId}, material: ${materialId || 'ALL'}`);
+
+    // Get the ad and populate materials to get materialId strings
+    const ad = await Ad.findById(adId).populate('materialId');
+    
+    if (!ad) {
+      return res.status(404).json({
+        success: false,
+        data: [],
+        message: 'Ad not found'
+      });
+    }
+
+    // Extract materialId strings from the populated material documents
+    let materialIdStrings = [];
+    if (ad.materialId && Array.isArray(ad.materialId)) {
+      materialIdStrings = ad.materialId.map(m => m.materialId).filter(Boolean);
+    }
+
+    console.log(`📊 [QR Scans] Ad "${ad.title}" has ${materialIdStrings.length} materials: ${materialIdStrings.join(', ')}`);
+
+    // If specific materialId filter is provided, use only that one
+    if (materialId) {
+      if (materialIdStrings.includes(materialId)) {
+        materialIdStrings = [materialId];
+        console.log(`📊 [QR Scans] Filtering by specific material: ${materialId}`);
+      } else {
+        return res.status(400).json({
+          success: false,
+          data: [],
+          message: `Material ${materialId} is not assigned to this ad`
+        });
+      }
+    }
+
+    if (materialIdStrings.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        total: 0,
+        message: 'No materials assigned to this ad',
+        metadata: {
+          adId,
+          adTitle: ad.title,
+          materials: []
+        }
+      });
+    }
+
+    // Build date query
+    const dateQuery = {};
     if (startDate && endDate) {
-      query.scanTimestamp = {
+      dateQuery['dailyData.date'] = {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
       };
     }
 
-    // QRScanTracking removed - using analytics collection instead
-    const scans = await Analytics.aggregate([
-      { $match: query },
-      { $unwind: '$qrScans' },
-      { $replaceRoot: { newRoot: '$qrScans' } },
-      { $sort: { scanTimestamp: -1 } },
-      { $limit: parseInt(limit) }
-    ]);
+    // Query DeviceDataHistoryV2 for these materials
+    const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+    const deviceHistoryRecords = await DeviceDataHistoryV2.find({
+      materialId: { $in: materialIdStrings },
+      ...dateQuery
+    })
+      .select('materialId carGroupId dailyData.date dailyData.qrScans dailyData.qrScansByAd')
+      .lean()
+      .maxTimeMS(30000);
+
+    console.log(`📊 [QR Scans] Found ${deviceHistoryRecords.length} device history records`);
+
+    // Extract and filter QR scans for this specific ad
+    const qrScans = [];
+    let totalScanCount = 0;
+
+    deviceHistoryRecords.forEach(device => {
+      if (device.dailyData && Array.isArray(device.dailyData)) {
+        device.dailyData.forEach(day => {
+          // Process individual QR scan records
+          if (day.qrScans && Array.isArray(day.qrScans)) {
+            const adQRScans = day.qrScans.filter(scan => scan.adId === adId);
+            
+            adQRScans.forEach(scan => {
+              qrScans.push({
+                id: scan._id || `${scan.adId}-${scan.scanTimestamp}`,
+                timestamp: scan.scanTimestamp,
+                scanTimestamp: scan.scanTimestamp,
+                scans: 1, // Individual scan = 1 count
+                adId: scan.adId,
+                userId: scan.userId,
+                adTitle: scan.adTitle,
+                materialId: scan.materialId,
+                slotNumber: scan.slotNumber,
+                qrCodeUrl: scan.qrCodeUrl,
+                website: scan.website,
+                redirectUrl: scan.redirectUrl,
+                deviceType: scan.deviceType,
+                browser: scan.browser,
+                operatingSystem: scan.operatingSystem,
+                location: scan.location ? {
+                  lat: scan.location.coordinates ? scan.location.coordinates[1] : null,
+                  lng: scan.location.coordinates ? scan.location.coordinates[0] : null,
+                  address: scan.address || (scan.city && scan.country ? `${scan.city}, ${scan.country}` : null)
+                } : null,
+                city: scan.city,
+                country: scan.country,
+                ipAddress: scan.ipAddress,
+                userAgent: scan.userAgent
+              });
+            });
+          }
+
+          // Also check aggregated counts for total
+          if (day.qrScansByAd && Array.isArray(day.qrScansByAd)) {
+            const adScanCount = day.qrScansByAd.find(s => s.adId === adId);
+            if (adScanCount) {
+              totalScanCount += adScanCount.scanCount || 0;
+            }
+          }
+        });
+      }
+    });
+
+    // Sort by timestamp descending (most recent first)
+    qrScans.sort((a, b) => new Date(b.scanTimestamp).getTime() - new Date(a.scanTimestamp).getTime());
+
+    // Apply limit
+    const limitedScans = qrScans.slice(0, parseInt(limit));
+
+    console.log(`📊 [QR Scans] Returning ${limitedScans.length} QR scans (out of ${qrScans.length} total)`);
 
     res.json({
       success: true,
-      scans: scans,
-      total: scans.length,
-      message: `Found ${scans.length} QR scans`
+      data: limitedScans, // ✅ Changed from 'scans' to 'data' to match client expectation
+      total: qrScans.length,
+      totalScanCount: totalScanCount || qrScans.length, // Aggregated count if available
+      message: `Found ${qrScans.length} QR scans`,
+      metadata: {
+        adId,
+        adTitle: ad.title,
+        materials: materialIdStrings,
+        dateRange: startDate && endDate ? { startDate, endDate } : null,
+        limit: parseInt(limit)
+      }
     });
 
   } catch (error) {
     console.error('Error fetching QR scans:', error);
     res.status(500).json({
       success: false,
-      scans: [],
-      message: 'Internal server error'
+      data: [], // ✅ Changed from 'scans' to 'data'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -91,81 +221,142 @@ router.get('/qr-scans/stats', async (req, res) => {
   try {
     const { adId, materialId, startDate, endDate } = req.query;
     
-    const query = {};
-    if (adId) query.adId = adId;
-    if (materialId) query.materialId = materialId;
+    if (!adId) {
+      return res.status(400).json({
+        success: false,
+        message: 'adId parameter is required'
+      });
+    }
+
+    console.log(`📊 [QR Stats] Fetching stats for ad: ${adId}`);
+
+    // Get the ad and populate materials
+    const ad = await Ad.findById(adId).populate('materialId');
+    
+    if (!ad) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ad not found'
+      });
+    }
+
+    // Extract materialId strings
+    let materialIdStrings = [];
+    if (ad.materialId && Array.isArray(ad.materialId)) {
+      materialIdStrings = ad.materialId.map(m => m.materialId).filter(Boolean);
+    }
+
+    // If specific materialId filter is provided, use only that one
+    if (materialId) {
+      if (materialIdStrings.includes(materialId)) {
+        materialIdStrings = [materialId];
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Material ${materialId} is not assigned to this ad`
+        });
+      }
+    }
+
+    // Build date query
+    const dateQuery = {};
     if (startDate && endDate) {
-      query.scanTimestamp = {
+      dateQuery['dailyData.date'] = {
         $gte: new Date(startDate),
         $lte: new Date(endDate)
       };
     }
 
-    // Get basic stats without material validation
-    // QRScanTracking removed - using analytics collection instead
-    const stats = await Analytics.aggregate([
-      { $match: { adId } },
-      { $unwind: '$qrScans' },
-      { $match: { 'qrScans.adId': adId } },
-      {
-        $group: {
-          _id: null,
-          totalScans: { $sum: 1 },
-          totalConversions: { $sum: { $cond: ['$qrScans.converted', 1, 0] } },
-          averageTimeOnPage: { $avg: '$qrScans.timeOnPage' }
-        }
-      }
-    ]);
-    
-    const topAds = await Analytics.aggregate([
-      { $unwind: '$qrScans' },
-      { $group: { _id: '$qrScans.adId', totalScans: { $sum: 1 } } },
-      { $sort: { totalScans: -1 } },
-      { $limit: 10 }
-    ]);
-    
-    // Only get location stats if materialId is provided and valid
-    let locationStats = [];
-    if (materialId) {
-      try {
-        // QRScanTracking removed - using analytics collection instead
-        locationStats = await Analytics.aggregate([
-          { $match: { materialId } },
-          { $unwind: '$qrScans' },
-          { $match: { 'qrScans.location.coordinates': { $exists: true } } },
-          {
-            $group: {
-              _id: '$qrScans.location.coordinates',
-              count: { $sum: 1 }
+    // Query DeviceDataHistoryV2 for these materials
+    const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+    const deviceHistoryRecords = await DeviceDataHistoryV2.find({
+      materialId: { $in: materialIdStrings },
+      ...dateQuery
+    })
+      .select('materialId dailyData.date dailyData.qrScans dailyData.qrScansByAd')
+      .lean()
+      .maxTimeMS(30000);
+
+    // Calculate statistics
+    let totalScans = 0;
+    let totalConversions = 0;
+    let totalTimeOnPage = 0;
+    let scanCount = 0;
+    const uniqueDevices = new Set();
+    const locationMap = new Map();
+
+    deviceHistoryRecords.forEach(device => {
+      uniqueDevices.add(device.materialId);
+      
+      if (device.dailyData && Array.isArray(device.dailyData)) {
+        device.dailyData.forEach(day => {
+          // Process individual QR scans
+          if (day.qrScans && Array.isArray(day.qrScans)) {
+            const adQRScans = day.qrScans.filter(scan => scan.adId === adId);
+            
+            adQRScans.forEach(scan => {
+              scanCount++;
+              totalTimeOnPage += scan.timeOnPage || 0;
+              if (scan.converted) totalConversions++;
+              
+              // Track locations
+              if (scan.location && scan.location.coordinates) {
+                const locKey = scan.location.coordinates.join(',');
+                locationMap.set(locKey, (locationMap.get(locKey) || 0) + 1);
+              }
+            });
+          }
+
+          // Also count from aggregated data
+          if (day.qrScansByAd && Array.isArray(day.qrScansByAd)) {
+            const adScanCount = day.qrScansByAd.find(s => s.adId === adId);
+            if (adScanCount) {
+              totalScans += adScanCount.scanCount || 0;
             }
           }
-        ]);
-      } catch (locationError) {
-        console.log('Could not get location stats for materialId:', materialId, locationError.message);
-        locationStats = [];
+        });
       }
-    }
+    });
+
+    // Use the higher count (individual scans or aggregated)
+    totalScans = Math.max(totalScans, scanCount);
+
+    // Convert location map to array
+    const locationStats = Array.from(locationMap.entries()).map(([coords, count]) => ({
+      _id: coords.split(',').map(Number),
+      count
+    }));
+
+    const stats = {
+      totalScans,
+      uniqueDevices: uniqueDevices.size,
+      totalConversions,
+      conversionRate: totalScans > 0 ? (totalConversions / totalScans) * 100 : 0,
+      averageTimeOnPage: scanCount > 0 ? totalTimeOnPage / scanCount : 0,
+      totalConversionValue: 0 // Not tracked yet
+    };
+
+    console.log(`📊 [QR Stats] Stats calculated: ${totalScans} total scans from ${uniqueDevices.size} devices`);
 
     res.json({
       success: true,
-      stats: stats[0] || {
-        totalScans: 0,
-        uniqueDevices: 0,
-        totalConversions: 0,
-        conversionRate: 0,
-        averageTimeOnPage: 0,
-        totalConversionValue: 0
-      },
-      topAds: topAds,
-      locationStats: locationStats,
-      message: 'QR scan statistics retrieved successfully'
+      stats,
+      locationStats,
+      message: 'QR scan statistics retrieved successfully',
+      metadata: {
+        adId,
+        adTitle: ad.title,
+        materials: materialIdStrings,
+        dateRange: startDate && endDate ? { startDate, endDate } : null
+      }
     });
 
   } catch (error) {
     console.error('Error fetching QR scan stats:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -459,11 +650,22 @@ router.post('/qr-scan', async (req, res) => {
 
     // Prepare location data
     let locationData = null;
+    let geocodedAddress = '';
     if (gpsData && gpsData.lat && gpsData.lng) {
       locationData = {
         type: 'Point',
         coordinates: [gpsData.lng, gpsData.lat] // GeoJSON format: [longitude, latitude]
       };
+      
+      // Geocode GPS coordinates to get human-readable address
+      try {
+        console.log(`🗺️ [QR Scan] Geocoding QR scan location: ${gpsData.lat}, ${gpsData.lng}`);
+        geocodedAddress = await OSMService.reverseGeocode(gpsData.lat, gpsData.lng);
+        console.log(`🗺️ [QR Scan] Geocoded address: ${geocodedAddress}`);
+      } catch (error) {
+        console.warn(`🗺️ [QR Scan] Geocoding failed, will store coordinates only:`, error.message);
+        geocodedAddress = `GPS: ${gpsData.lat.toFixed(6)}, ${gpsData.lng.toFixed(6)}`;
+      }
     }
 
     // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
@@ -496,7 +698,7 @@ router.post('/qr-scan', async (req, res) => {
     
     const userId = ad.userId.toString();
     
-    // Create QR scan data
+    // Create QR scan data with geocoded address
     const qrScanData = {
       adId: adId,
       userId: userId,
@@ -513,6 +715,7 @@ router.post('/qr-scan', async (req, res) => {
       country: country,
       city: city,
       location: locationData,
+      address: geocodedAddress, // ✅ Store geocoded address
       timeOnPage: 0,
       converted: false,
       conversionType: null,

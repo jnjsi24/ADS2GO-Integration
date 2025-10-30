@@ -6,13 +6,13 @@ import { router } from "expo-router/build/imperative-api";
 import * as ScreenOrientation from 'expo-screen-orientation';
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
-import deviceStatusService from '../../services/deviceStatusService';
-import offlineQueueService from '../../services/offlineQueueService';
-import AdPlayer from '../../components/AdPlayer';
+import tabletRegistrationService, { TabletRegistration } from '../services/tabletRegistration';
+import deviceStatusService from '../services/deviceStatusService';
+import offlineQueueService from '../services/offlineQueueService';
+import AdPlayer from '../components/AdPlayer';
 import { useFocusEffect } from '@react-navigation/native';
-import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
-import { configureCleanLogging } from '../../utils/loggerConfig';
+import { useDeviceStatus } from '../contexts/DeviceStatusContext';
+import { configureCleanLogging } from '../utils/loggerConfig';
 
 export default function HomeScreen() {
   const { status: deviceStatus } = useDeviceStatus();
@@ -37,8 +37,34 @@ export default function HomeScreen() {
     configureCleanLogging();
     initializeApp();
     
+    // Set up periodic check for rest period transitions (every minute)
+    const restPeriodCheckInterval = setInterval(async () => {
+      const lockCheck = await check8HourLock();
+      
+      // If currently locked but should be unlocked (rest period ended)
+      if (is8HourLocked && !lockCheck.isLocked) {
+        console.log('⏰ [Auto Check] Rest period ended, unlocking and going online...');
+        await initializeApp(); // Re-initialize to go online
+      }
+      // If currently unlocked but should be locked (rest period started)
+      else if (!is8HourLocked && lockCheck.isLocked) {
+        console.log('⏰ [Auto Check] Rest period started, locking and going offline...');
+        setIs8HourLocked(true);
+        setLockMessage(lockCheck.message || '');
+        
+        // Set device offline
+        const registration = await tabletRegistrationService.getRegistrationData();
+        if (registration) {
+          console.log('🔒 [Auto Check] Setting device status to OFFLINE');
+          await tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 });
+        }
+      }
+    }, 60000); // Check every minute
+    
     // Cleanup function to stop tracking when component unmounts
     return () => {
+      clearInterval(restPeriodCheckInterval);
+      
       if (isTracking) {
         console.log('Stopping location tracking on component unmount...');
         tabletRegistrationService.stopLocationTracking();
@@ -58,7 +84,7 @@ export default function HomeScreen() {
         console.error('❌ [Orientation] Error during cleanup unlock:', error);
       });
     };
-  }, []);
+  }, [is8HourLocked]);
 
   // Device status is now handled by DeviceStatusContext
 
@@ -187,6 +213,15 @@ export default function HomeScreen() {
       if (lockCheck.isLocked) {
         setIs8HourLocked(true);
         setLockMessage(lockCheck.message || '');
+        
+        // Set device status to offline during rest period / 8-hour completion
+        const registration = await tabletRegistrationService.getRegistrationData();
+        if (registration) {
+          console.log('🔒 [Rest Period] Setting device status to OFFLINE');
+          await tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 });
+          console.log('🔒 [Rest Period] Device now appears OFFLINE in admin dashboard');
+        }
+        
         setLoading(false);
         return; // Exit early, app is locked
       }

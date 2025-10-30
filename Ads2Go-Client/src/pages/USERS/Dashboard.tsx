@@ -940,7 +940,7 @@ const Dashboard = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Advertisement Locations</h2>
             <div className="text-xs sm:text-sm text-gray-500">
-              Live tracking • Updated every 30s
+              Live tracking • Updated every 2s
             </div>
           </div>
 
