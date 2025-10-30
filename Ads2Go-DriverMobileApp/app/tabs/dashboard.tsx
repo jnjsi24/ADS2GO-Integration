@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform, Modal } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
 import { LinearGradient, Circle } from 'react-native-svg';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import Svg from 'react-native-svg';
 import { router } from 'expo-router';
 
@@ -134,6 +133,7 @@ const Dashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
+  const [materialAssignedDate, setMaterialAssignedDate] = useState<string | null>(null); // ✅ Track assigned date
 
 
   useEffect(() => {
@@ -280,9 +280,7 @@ const Dashboard: React.FC = () => {
       if (!token) {
         throw new Error('No auth token found');
       }
-      if (!silent) {
-        console.log('✅ Auth token found');
-      }
+      // Auth token validated
 
       // Build API URL based on selected date
       // If today: Use 'realtime' to get today's data from DeviceTracking (devicetrackings collection)
@@ -301,12 +299,7 @@ const Dashboard: React.FC = () => {
         apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`;
       }
       
-      if (!silent) {
-        console.log('🌐 API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
-        console.log('🌐 Fetching from URL:', apiUrl);
-        console.log('📊 Selected date:', dateKey);
-        console.log('📊 Is today:', isToday);
-      }
+      // Fetching analytics data
       
       const dailyResponse = await fetch(apiUrl, {
         headers: {
@@ -318,27 +311,20 @@ const Dashboard: React.FC = () => {
       if (!dailyResponse.ok) {
         // Handle 404 gracefully - device may have been unregistered
         if (dailyResponse.status === 404) {
-          if (!silent) {
-            console.log('ℹ️ No device tracking found - device may not be registered yet or was unregistered');
-          }
+          // Device not registered - this is normal
           setAnalytics(null);
           setLoading(false);
           return;
         }
         
-        // For other errors, log but don't crash
-        if (!silent) {
-          console.warn(`⚠️ Analytics endpoint returned status: ${dailyResponse.status}`);
-        }
+        // Handle other errors
+        console.warn(`Analytics endpoint error: ${dailyResponse.status}`);
         setAnalytics(null);
         setLoading(false);
         return;
       }
 
       const screenTrackingData = await dailyResponse.json();
-      if (!silent) {
-        console.log('📊 ScreenTracking response:', screenTrackingData);
-      }
       
       if (screenTrackingData.success) {
         const data = screenTrackingData.data;
@@ -363,9 +349,7 @@ const Dashboard: React.FC = () => {
           
           const last7DaysUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${sevenDaysAgo.toISOString()}&endDate=${today.toISOString()}`;
           
-          if (!silent) {
-            console.log('📊 Fetching last 7 days data from:', last7DaysUrl);
-          }
+          // Fetching historical data
           
           const last7DaysResponse = await fetch(last7DaysUrl, {
             headers: {
@@ -386,15 +370,57 @@ const Dashboard: React.FC = () => {
                 dailyBreakdown: last7DaysResult.data.dailyData.dailyBreakdown || []
               };
               
-              if (!silent) {
-                console.log('📊 Last 7 days data fetched:', last7DaysData.dailyBreakdown.length, 'days');
-              }
+              // Historical data loaded
             }
           }
         } catch (last7DaysError) {
-          console.log('⚠️ Could not fetch last 7 days data:', last7DaysError);
-          // Continue without last 7 days data
+          // Historical data unavailable - continue without it
         }
+
+        // ✅ Save assigned date for date dropdown validation
+        // Try to get from screenTracking API first
+        let assignedDate = data.materialAssignedDate;
+        
+        // If not available, fetch from GraphQL (same as Profile tab)
+        if (!assignedDate) {
+          console.log('⚠️ [Dashboard] No materialAssignedDate in screenTracking API, fetching from GraphQL...');
+          try {
+            const materialsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                query: `
+                  query GetDriverMaterials($driverId: ID!) {
+                    getDriverMaterials(driverId: $driverId) {
+                      success
+                      materials {
+                        assignedDate
+                      }
+                    }
+                  }
+                `,
+                variables: { driverId },
+              }),
+            });
+            
+            const materialsResult = await materialsResponse.json();
+            if (materialsResult.data?.getDriverMaterials?.success) {
+              const materials = materialsResult.data.getDriverMaterials.materials;
+              if (materials && materials.length > 0 && materials[0].assignedDate) {
+                assignedDate = materials[0].assignedDate;
+                console.log('✅ [Dashboard] Got assigned date from GraphQL:', assignedDate);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ [Dashboard] Could not fetch from GraphQL:', error);
+          }
+        }
+        
+        console.log('📅 [Dashboard] Final Material Assigned Date:', assignedDate);
+        setMaterialAssignedDate(assignedDate || null);
 
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
@@ -466,9 +492,8 @@ const Dashboard: React.FC = () => {
         throw new Error(screenTrackingData.message || 'Failed to fetch analytics');
       }
     } catch (error) {
-      console.log('ℹ️ Could not fetch driver analytics - this is normal if device is not registered');
+      // Analytics fetch failed - device may not be registered
       setAnalytics(null);
-      // Don't show alert - this is expected behavior when device is unregistered
     } finally {
       if (silent) {
         setRefreshing(false);
@@ -784,37 +809,125 @@ const Dashboard: React.FC = () => {
             style={styles.datePickerButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Ionicons name="calendar-outline" size={20} color="#3674B5" style={styles.dateIcon} />
+            <Ionicons name="calendar" size={20} color="#3b82f6" />
             <Text style={styles.datePickerText}>
               {selectedDate.toLocaleDateString('en-US', { 
-                year: 'numeric', 
                 month: 'short', 
-                day: 'numeric' 
+                day: 'numeric', 
+                year: 'numeric' 
               })}
             </Text>
-            <Ionicons name="chevron-down-outline" size={20} color="#6b7280" />
+            <Ionicons name="chevron-down" size={16} color="#6b7280" />
           </TouchableOpacity>
-          {isSelectedDateToday() && (
-            <View style={styles.todayBadge}>
-              <Text style={styles.todayBadgeText}>Today</Text>
-            </View>
-          )}
+
+          <TouchableOpacity 
+            style={styles.todayButton}
+            onPress={() => {
+              const now = new Date();
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+              setSelectedDate(today);
+            }}
+          >
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity>
         </View>
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(event: any, date?: Date) => {
-              setShowDatePicker(Platform.OS === 'ios');
-              if (date) {
-                setSelectedDate(date);
-              }
-            }}
-            maximumDate={new Date()}
-          />
-        )}
+        {/* Date Picker Modal (matches Route Tab style) */}
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalOverlay} 
+            activeOpacity={1}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.dateList}>
+                {(() => {
+                  const now = new Date();
+                  now.setHours(0, 0, 0, 0);
+                  
+                  // ✅ Calculate days to show based on assigned date
+                  let daysToShow = 0; // Default to 0 (show nothing if no assigned date)
+                  
+                  if (materialAssignedDate) {
+                    const assignedDate = new Date(materialAssignedDate);
+                    assignedDate.setHours(0, 0, 0, 0);
+                    
+                    // Calculate days from assignment to today
+                    const daysSinceAssignment = Math.floor((now.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    daysToShow = daysSinceAssignment;
+                    
+                    console.log('📅 [Dashboard Date Dropdown] Calculated:', {
+                      assignedDate: assignedDate.toDateString(),
+                      today: now.toDateString(),
+                      daysSinceAssignment,
+                      daysToShow
+                    });
+                  } else {
+                    console.log('⚠️ [Dashboard Date Dropdown] No assigned date - showing no dates');
+                  }
+                  
+                  // If no dates to show, display a message
+                  if (daysToShow === 0) {
+                    return (
+                      <View style={styles.noDateContainer}>
+                        <Ionicons name="calendar-outline" size={48} color="#9ca3af" />
+                        <Text style={styles.noDateText}>No dates available</Text>
+                        <Text style={styles.noDateSubtext}>No material assigned yet</Text>
+                      </View>
+                    );
+                  }
+                  
+                  return Array.from({ length: daysToShow }, (_, i) => {
+                    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
+                    const isSelected = date.toDateString() === selectedDate.toDateString();
+                    
+                    return (
+                    <TouchableOpacity
+                      key={i}
+                      style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                      onPress={() => {
+                        setSelectedDate(date);
+                        setShowDatePicker(false);
+                      }}
+                    >
+                      <View style={styles.dateItemContent}>
+                        <Text style={[styles.dateItemText, isSelected && styles.dateItemTextSelected]}>
+                          {date.toLocaleDateString('en-US', { 
+                            weekday: 'short',
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric' 
+                          })}
+                        </Text>
+                        {i === 0 && (
+                          <View style={styles.todayBadgeInline}>
+                            <Text style={styles.todayBadgeInlineText}>Today</Text>
+                          </View>
+                        )}
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={20} color="#3b82f6" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                  });
+                })()}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         <View style={styles.metricSelector}>
           <TouchableOpacity
@@ -1430,37 +1543,130 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#ffffff',
-    borderRadius: 10,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 2,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    gap: 8,
   },
   datePickerText: {
     flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+    marginLeft: 4,
+  },
+  todayButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  todayButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Modal Styles (matches Route Tab)
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  dateList: {
+    maxHeight: 400,
+  },
+  dateItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  dateItemSelected: {
+    backgroundColor: '#eff6ff',
+  },
+  dateItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  dateItemText: {
     fontSize: 15,
     fontWeight: '500',
     color: '#1f2937',
-    marginLeft: 8,
   },
-  dateIcon: {
-    marginRight: 4,
-  },
-  todayBadge: {
-    backgroundColor: '#3674B5',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  todayBadgeText: {
-    color: '#ffffff',
-    fontSize: 12,
+  dateItemTextSelected: {
+    color: '#3b82f6',
     fontWeight: '600',
+  },
+  todayBadgeInline: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  todayBadgeInlineText: {
+    color: '#3b82f6',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  noDateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  noDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+  },
+  noDateSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 4,
   },
   metricSelector: {
     flexDirection: 'row',

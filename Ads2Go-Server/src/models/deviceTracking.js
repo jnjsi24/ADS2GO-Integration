@@ -257,6 +257,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
     date: { type: Date, required: true },
     startTime: { type: Date, required: true },
     endTime: { type: Date },
+    completedAt: { type: Date }, // ✅ NEW: When 8-hour requirement was completed
     totalHoursOnline: { type: Number, default: 0 }, // in hours
     totalDistanceTraveled: { type: Number, default: 0 }, // in km
     locationHistory: [LocationPointSchema],
@@ -909,12 +910,23 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         lat, lng
       );
       
-      // Only add distance if movement is significant (more than 10 meters)
-      // This filters out GPS noise when device is stationary
+      // ✅ IMPROVED FILTERING: Check GPS accuracy to prevent false distance from GPS drift
+      const currentAccuracy = accuracy || 0;
+      const previousAccuracy = prevLocation.accuracy || 0;
+      const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
+      
+      // Only add distance if:
+      // 1. Movement is significant (more than 10 meters) - filters stationary GPS noise
+      // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
       if (distance > 0.01) { // 0.01 km = 10 meters
-        distanceAdded = distance;
-        this.totalDistanceTraveled += distance;
-        console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+        // Check if both current and previous GPS readings are accurate enough
+        if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
+          distanceAdded = distance;
+          this.totalDistanceTraveled += distance;
+          console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (accuracy: curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m, total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+        } else {
+          console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
+        }
       } else {
         console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
       }
@@ -941,7 +953,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       $push: {
         locationHistory: {
           $each: [newLocation],
-          $slice: -4114 // Keep only last 4114 entries (8 hours at 7s intervals)
+          $slice: -14400 // Keep only last 14400 entries (8 hours at 2s intervals)
         }
       }
     },
@@ -1349,9 +1361,14 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   // Cap at 8 hours max per day
   this.currentSession.totalHoursOnline = Math.min(8, Math.max(0, this.currentSession.totalHoursOnline));
   
-  // Update compliance status
-  this.currentSession.complianceStatus = 
-    this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
+  // Update compliance status (only for ACTIVE sessions)
+  // For active sessions: COMPLIANT if >= 8 hours, otherwise PENDING (still working towards goal)
+  // For ended sessions: Status is set by endDailySession() method
+  if (this.currentSession.isActive) {
+    this.currentSession.complianceStatus = 
+      this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'PENDING';
+  }
+  // If session is not active, don't change the status (it was already set by endDailySession)
   
   // Always update total lifetime hours for the current day (not cumulative)
   this.totalHoursOnline = Math.round(this.currentSession.totalHoursOnline * 100) / 100;

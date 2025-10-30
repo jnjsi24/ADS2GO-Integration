@@ -8,8 +8,8 @@ export const GOOGLE_OAUTH_CONFIG = {
   includeGrantedScopes: true
 };
 
-// Debug: Log OAuth configuration (development only)
-if (process.env.NODE_ENV === 'development') {
+// Debug: Log OAuth configuration (only in verbose mode)
+if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_OAUTH === 'true') {
   console.log('🔍 OAuth Config:', {
     clientId: GOOGLE_OAUTH_CONFIG.clientId || 'EMPTY',
     redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,

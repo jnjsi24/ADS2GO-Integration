@@ -155,10 +155,7 @@ class GraphQLService {
     return { success: true, message: 'End screen session not implemented yet' };
   }
 
-  async trackAdPlayback(deviceId: string, adId: string, adTitle: string, adDuration: number): Promise<{ success: boolean; message: string }> {
-    // This would need to be implemented
-    return { success: true, message: 'Track ad playback not implemented yet' };
-  }
+  // ❌ REMOVED: trackAdPlayback() stub - not implemented, handled by AdPlayer directly
 
   async endAdPlayback(deviceId: string): Promise<{ success: boolean; message: string }> {
     // This would need to be implemented

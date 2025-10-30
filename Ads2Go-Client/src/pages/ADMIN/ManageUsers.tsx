@@ -20,7 +20,7 @@ interface User {
   address: string;
   contact: string;
   email: string;
-  status: 'active' | 'inactive';
+  status: 'verified' | 'unverified';
   city: string;
   ads: { id: string }[];
   isEmailVerified: boolean;
@@ -124,14 +124,14 @@ const ManageUsers: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
-  const cityFilterOptions = ['All Cities', ...cities];
+  const statusFilterOptions = ['All Status', 'Verified', 'Unverified'];
+  const sortByOptions = ['Newest First', 'Oldest First', 'Recently Active', 'Most Ads', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
 
-  const [showCityDropdown, setShowCityDropdown] = useState(false);
-  const [selectedCityFilter, setSelectedCityFilter] = useState('All Cities');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -182,7 +182,7 @@ const ManageUsers: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   // Dynamic margin based on sidebar state and screen size
-  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "pl-72";
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -216,8 +216,31 @@ const ManageUsers: React.FC = () => {
       const userData = usersData.getAllUsers;
       
       const transformedUsers: User[] = userData.map((user: any) => {
-        const addressParts = user.companyAddress?.split(',') || [];
-        const city = addressParts.length > 1 ? addressParts[addressParts.length - 1].trim() : 'Unknown';
+        // Try to extract city from houseAddress first (more reliable), then companyAddress
+        let city = 'Unknown';
+        
+        // Try houseAddress first
+        if (user.houseAddress) {
+          const houseAddressParts = user.houseAddress.split(',');
+          if (houseAddressParts.length > 1) {
+            city = houseAddressParts[houseAddressParts.length - 1].trim();
+          }
+        }
+        
+        // If still Unknown, try companyAddress
+        if (city === 'Unknown' && user.companyAddress) {
+          const companyAddressParts = user.companyAddress.split(',');
+          if (companyAddressParts.length > 1) {
+            city = companyAddressParts[companyAddressParts.length - 1].trim();
+          } else {
+            // If no commas, check if address contains known city names
+            const addressUpper = user.companyAddress.toUpperCase();
+            const cityMatch = cities.find(c => addressUpper.includes(c.toUpperCase()));
+            if (cityMatch) {
+              city = cityMatch;
+            }
+          }
+        }
         
         const lastLogin = parseDate(user.lastLogin);
         const createdAt = parseDate(user.createdAt) || new Date();
@@ -232,7 +255,7 @@ const ManageUsers: React.FC = () => {
           address: user.companyAddress || '',
           contact: user.contactNumber || '',
           email: user.email || '',
-          status: user.isEmailVerified ? 'active' : 'inactive',
+          status: user.isEmailVerified ? 'verified' : 'unverified',
           city: city,
           ads: user.ads || [],
           isEmailVerified: user.isEmailVerified || false,
@@ -326,12 +349,7 @@ const ManageUsers: React.FC = () => {
     setShowStatusDropdown(false);
   };
 
-  const handleCityFilterChange = (city: string) => {
-    setSelectedCityFilter(city);
-    setShowCityDropdown(false);
-  };
-
-  // Filter users based on search term, status, and city
+  // Filter and sort users based on search term, status, and sort option
   const filteredUsers = users.filter((user) => {
     const searchLower = searchTerm.toLowerCase();
     const fullName = `${user.firstName} ${user.middleName} ${user.lastName}`.toLowerCase();
@@ -342,9 +360,31 @@ const ManageUsers: React.FC = () => {
       user.contact.toLowerCase().includes(searchLower);
     
     const matchesStatus = selectedStatusFilter === 'All Status' || user.status.toLowerCase() === selectedStatusFilter.toLowerCase();
-    const matchesCity = selectedCityFilter === 'All Cities' || user.city.toLowerCase().includes(selectedCityFilter.toLowerCase());
     
-    return matchesSearch && matchesStatus && matchesCity;
+    return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    switch (selectedSortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Recently Active':
+        const aLogin = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+        const bLogin = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+        return bLogin - aLogin;
+      case 'Most Ads':
+        return b.ads.length - a.ads.length;
+      case 'Alphabetical (A-Z)':
+        const aName = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bName = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return aName.localeCompare(bName);
+      case 'Alphabetical (Z-A)':
+        const aNameZA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bNameZA = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return bNameZA.localeCompare(aNameZA);
+      default:
+        return 0;
+    }
   });
 
   // Pagination logic
@@ -356,7 +396,7 @@ const ManageUsers: React.FC = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedStatusFilter, selectedCityFilter]);
+  }, [searchTerm, selectedStatusFilter, selectedSortBy]);
 
   // View details in modal
   const handleViewDetails = (user: User) => {
@@ -485,24 +525,24 @@ const ManageUsers: React.FC = () => {
             <h1 className="text-2xl pt-4 lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
           )}
         
-        <div className="flex flex-col sm:flex-row gap-1 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
           {/* Search Input */}
           <div className="w-full lg:w-80">
             <input
               type="text"
-              className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
+              className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
               placeholder="Search advertisers by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             {/* STATUS Filter */}
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedStatusFilter}</span>
                 <ChevronDown
@@ -518,7 +558,7 @@ const ManageUsers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map((status) => (
                       <button
@@ -534,35 +574,38 @@ const ManageUsers: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            {/* CITY Filter */}
-            <div className="relative flex-1 sm:flex-none sm:w-32">
+            {/* SORT BY Filter */}
+            <div className="relative flex-1 sm:flex-none sm:w-40">
               <button
-                onClick={() => setShowCityDropdown(!showCityDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
-                <span className="truncate">{selectedCityFilter}</span>
+                <span className="truncate">{selectedSortBy}</span>
                 <ChevronDown
                   size={16}
-                  className={`flex-shrink-0 transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`}
                 />
               </button>
 
               <AnimatePresence>
-                {showCityDropdown && (
+                {showSortDropdown && (
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
                   >
-                    {cityFilterOptions.map((city) => (
+                    {sortByOptions.map((sortOption) => (
                       <button
-                        key={city}
-                        onClick={() => handleCityFilterChange(city)}
+                        key={sortOption}
+                        onClick={() => {
+                          setSelectedSortBy(sortOption);
+                          setShowSortDropdown(false);
+                        }}
                         className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
-                        {city}
+                        {sortOption}
                       </button>
                     ))}
                   </motion.div>
@@ -587,7 +630,7 @@ const ManageUsers: React.FC = () => {
           <div className="rounded-xl mb-4 overflow-hidden flex-1">
             {/* Table Header - Hidden on mobile */}
             {!isMobile && (
-              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-black">
+              <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-2 text-sm font-semibold text-black">
                 <div className="flex items-center gap-2 col-span-3">
                   <input
                     type="checkbox"
@@ -598,12 +641,12 @@ const ManageUsers: React.FC = () => {
                   />
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-3">Email</div>
-                <div className="col-span-2">Company</div>
+                <div className="col-span-3">Company</div>
                 <div className="col-span-1 flex items-center gap-1">
                   <span>Status</span>
                 </div>
-                <div className="col-span-2 pl-16">Last Access</div>
+                <div className="col-span-2">Created At</div>
+                <div className="col-span-2">Last Access</div>
                 <div className="col-span-1 text-center">Action</div>
               </div>
             )}
@@ -635,7 +678,11 @@ const ManageUsers: React.FC = () => {
                             {user.firstName} {user.lastName}
                           </div>
                           <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                            {user.email}
+                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : 'N/A'}
                           </div>
                         </div>
                       </div>
@@ -648,14 +695,14 @@ const ManageUsers: React.FC = () => {
                       </div>
                       <div>
                         <div className="font-medium">Last Access</div>
-                        <div>{formatLastAccess(user.lastLogin)}</div>
+                        <div>{formatDate(user.lastLogin)}</div>
                       </div>
                     </div>
                     
                     <div className="flex justify-end gap-2">
                     <span
                         className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          user.status === 'active'
+                          user.status === 'verified'
                             ? 'bg-green-200 text-green-800'
                             : 'bg-red-200 text-red-800'
                         }`}
@@ -675,7 +722,7 @@ const ManageUsers: React.FC = () => {
                   </div>
                 ) : (
                   // Desktop Card Layout
-                  <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg">
+                  <div className="grid grid-cols-12 gap-4 items-center px-6 py-3 text-sm transition-colors cursor-pointer rounded-lg">
                     <div className="col-span-3 gap-3 flex items-center">
                       <input
                         type="checkbox"
@@ -694,13 +741,12 @@ const ManageUsers: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-3 truncate">{user.email}</div>
-                    <div className="col-span-2 truncate">{user.company}</div>
+                    <div className="col-span-3 truncate">{user.company}</div>
 
                     <div className="col-span-1">
                       <span
                         className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          user.status === 'active'
+                          user.status === 'verified'
                             ? 'bg-green-200 text-green-800'
                             : 'bg-red-200 text-red-800'
                         }`}
@@ -709,8 +755,16 @@ const ManageUsers: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="col-span-2 truncate text-center">
-                      {formatLastAccess(user.lastLogin)}
+                    <div className="col-span-2 truncate">
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      }) : 'N/A'}
+                    </div>
+
+                    <div className="col-span-2 truncate">
+                      {formatDate(user.lastLogin)}
                     </div>
 
                     <div
@@ -788,8 +842,8 @@ const ManageUsers: React.FC = () => {
                     <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-800 truncate`}>
                       {selectedUser.firstName} {selectedUser.lastName}
                     </h2>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
-                      {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${selectedUser.status === 'verified' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                      {selectedUser.status === 'verified' ? 'Verified' : 'Unverified'}
                     </span>
                     {!isMobile && (
                       <span className="text-xs bg-gray-200 rounded-full px-2 py-1 text-gray-500">
@@ -826,8 +880,8 @@ const ManageUsers: React.FC = () => {
                       <span className="font-semibold text-gray-700 text-right truncate">{selectedUser.id}</span>
                     </div>
                     <div className="flex justify-between sm:border-b border-gray-300 pb-2">
-                      <span className="text-gray-600">City:</span>
-                      <span className="font-semibold text-gray-700">{selectedUser.city}</span>
+                      <span className="text-gray-600">Company Address:</span>
+                      <span className="font-semibold text-gray-700">{selectedUser.address}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Email Verified:</span>
@@ -878,10 +932,6 @@ const ManageUsers: React.FC = () => {
                   <div className="flex items-center gap-2 text-gray-600">
                     <Phone size={16} />
                     <span className="font-semibold text-gray-700">{selectedUser.contact}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-gray-600">
-                    <MapPin size={16} className="mt-0.5 flex-shrink-0" />
-                    <p className="break-words font-semibold text-gray-700">{selectedUser.address}</p>
                   </div>
                   {selectedUser.houseAddress && (
                     <div className="flex items-start gap-2 text-gray-600">

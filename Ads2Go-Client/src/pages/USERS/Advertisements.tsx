@@ -4,6 +4,7 @@ import { Search, ChevronDown, Plus, ChevronLeft, ChevronRight } from 'lucide-rea
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { useMyAdsStatic } from '../../hooks/useMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  paymentStatus?: string | null;
   createdAt: string;
   startTime: string;
   endTime: string;
@@ -84,7 +86,9 @@ const Advertisements: React.FC = () => {
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
-  const { data, loading, error } = useQuery(GET_MY_ADS);
+  
+  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed)
+  const { data, loading, error } = useMyAdsStatic();
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
   });
@@ -109,6 +113,8 @@ const Advertisements: React.FC = () => {
   });
   
   const ads: Ad[] = data?.getMyAds || [];
+  
+  // Debug payment status
   
   const formatDate = (dateValue: string | number) => {
     if (!dateValue) return 'N/A';
@@ -742,49 +748,56 @@ const Advertisements: React.FC = () => {
                     )}
                   </div>
                   
-                  <div className="p-4 flex flex-col flex-grow overflow-hidden h-full">
-                    {/* Upper content - takes available space */}
+                  <div className="p-4 flex flex-col flex-grow overflow-hidden">
+                    {/* Upper content */}
                     <div
-                      className="cursor-pointer overflow-hidden flex flex-col h-full"
+                      className="cursor-pointer flex flex-col flex-grow"
                       onClick={() => navigate(`/ad-details/${ad.id}`)}
                     >
-                      <h3 className="text-xl font-semibold text-black/80 truncate mb-2">
-                        {ad.title}
-                      </h3>
-                      <div className="flex-1 min-h-0">
-                        <p className="text-sm text-gray-600 h-full overflow-hidden text-ellipsis" 
-                          style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 4,
-                            WebkitBoxOrient: 'vertical'
-                          }}>
-                          {ad.description || "No description available"}
-                        </p>
-                      </div>
-                    </div>
+                      <h3 className="text-xl font-semibold text-black/80 truncate">{ad.title}</h3>
 
-                    {/* Bottom section (sticky at bottom) */}
-                    <div className="mt-auto pt-4">
-                      <div className="text-sm text-[#1B5087] font-medium">
+                      <div className="text-sm text-[#1B5087] mb-2 font-medium">
                         {ad.startTime && ad.endTime ? (
                           formatDateRange(ad.startTime, ad.endTime)
                         ) : (
                           <span className="text-gray-400">Campaign dates not available</span>
                         )}
                       </div>
-                      <div className="mt-3 pt-2 border-t border-gray-300">
+
+                      {/* Description */}
+                      <div className="flex-grow overflow-y-auto max-h-24">
+                        <p className="text-sm text-gray-600 break-words line-clamp-4">
+                          {ad.description || "No description available"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="mt-3 pt-2 gap-3 flex items-center justify-start">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/ad-details/${ad.id}`);
+                        }}
+                        className="text-white px-3 py-2 bg-[#3674B5] rounded-full hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
+                      >
+                        View Details
+                      </button>
+
+                      {ad.status === "APPROVED" && ad.paymentStatus === "PENDING" && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             navigate(`/ad-details/${ad.id}`);
                           }}
-                          className="w-full text-black/70 hover:underline hover:text-black text-xs font-medium py-2 transition-all duration-300"
+                          className="text-xs px-3 py-2 rounded-full border border-gray-400 text-black shadow-sm hover:border-gray-700 transition-colors duration-200 cursor-pointer"
                         >
-                          View Details
+                          Proceed to Pay
                         </button>
-                      </div>
+                      )}
                     </div>
                   </div>
+
 
                   <div className="absolute top-2 left-2">
                     <span
@@ -802,6 +815,7 @@ const Advertisements: React.FC = () => {
                     >
                       {formatStatus(ad.status)}
                     </span>
+                    
                     {ad.status === "REJECTED" && ad.reasonForReject && (
                       <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
                         {ad.reasonForReject}

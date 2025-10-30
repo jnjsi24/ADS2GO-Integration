@@ -44,23 +44,27 @@ const Settings: React.FC = () => {
   });
 
   // GraphQL hooks
-  const { data: notificationPreferencesData, loading: notificationPreferencesLoading, refetch: refetchNotifications } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
-    onCompleted: (data) => {
-      if (data?.getUserNotificationPreferences) {
-        setNotificationForm({
-          enableDesktopNotifications: data.getUserNotificationPreferences.enableDesktopNotifications,
-          enableNotificationBadge: data.getUserNotificationPreferences.enableNotificationBadge,
-          pushNotificationTimeout: data.getUserNotificationPreferences.pushNotificationTimeout,
-          communicationEmails: data.getUserNotificationPreferences.communicationEmails,
-          announcementsEmails: data.getUserNotificationPreferences.announcementsEmails,
-        });
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching notification preferences:', error);
+  const { data: notificationPreferencesData, loading: notificationPreferencesLoading, refetch: refetchNotifications, error: notificationPreferencesError } = useQuery(GET_USER_NOTIFICATION_PREFERENCES);
+
+  // Handle notification preferences data and errors using useEffect
+  useEffect(() => {
+    if (notificationPreferencesData?.getUserNotificationPreferences) {
+      setNotificationForm({
+        enableDesktopNotifications: notificationPreferencesData.getUserNotificationPreferences.enableDesktopNotifications,
+        enableNotificationBadge: notificationPreferencesData.getUserNotificationPreferences.enableNotificationBadge,
+        pushNotificationTimeout: notificationPreferencesData.getUserNotificationPreferences.pushNotificationTimeout,
+        communicationEmails: notificationPreferencesData.getUserNotificationPreferences.communicationEmails,
+        announcementsEmails: notificationPreferencesData.getUserNotificationPreferences.announcementsEmails,
+      });
+    }
+  }, [notificationPreferencesData]);
+
+  useEffect(() => {
+    if (notificationPreferencesError) {
+      console.error('Error fetching notification preferences:', notificationPreferencesError);
       addToast('Failed to load notification preferences', 'error');
     }
-  });
+  }, [notificationPreferencesError]);
 
   const [updateNotificationPreferences, { loading: updateLoading }] = useMutation(UPDATE_USER_NOTIFICATION_PREFERENCES, {
     onCompleted: (data) => {
@@ -82,16 +86,20 @@ const Settings: React.FC = () => {
   });
 
   // Query for queued email stats
-  const { data: queuedStatsData, loading: queuedStatsLoading, refetch: refetchQueuedStats } = useQuery(GET_QUEUED_EMAIL_STATS, {
-    onCompleted: (data) => {
-      if (data?.getQueuedEmailStats) {
-        setQueuedEmailStats(data.getQueuedEmailStats);
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching queued email stats:', error);
+  const { data: queuedStatsData, loading: queuedStatsLoading, refetch: refetchQueuedStats, error: queuedStatsError } = useQuery(GET_QUEUED_EMAIL_STATS);
+
+  // Handle queued stats data and errors using useEffect
+  useEffect(() => {
+    if (queuedStatsData?.getQueuedEmailStats) {
+      setQueuedEmailStats(queuedStatsData.getQueuedEmailStats);
     }
-  });
+  }, [queuedStatsData]);
+
+  useEffect(() => {
+    if (queuedStatsError) {
+      console.error('Error fetching queued email stats:', queuedStatsError);
+    }
+  }, [queuedStatsError]);
 
   // Handle form input changes for Notification Settings
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

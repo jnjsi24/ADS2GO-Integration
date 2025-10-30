@@ -27,14 +27,21 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
       setProgress(prev => {
         const newProgress = prev - decrement;
         if (newProgress <= 0) {
-          onRemove(toast.id);
           return 0;
         }
         return newProgress;
       });
     }, interval);
 
-    return () => clearInterval(timer);
+    // Separate timer for removal to avoid setState during render
+    const removalTimer = setTimeout(() => {
+      onRemove(toast.id);
+    }, duration);
+
+    return () => {
+      clearInterval(timer);
+      clearTimeout(removalTimer);
+    };
   }, [toast.id, toast.duration, onRemove]);
 
   const getToastStyles = () => {

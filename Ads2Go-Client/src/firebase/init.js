@@ -39,7 +39,6 @@ const firebaseConfig = {
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig);
-console.log("🔥 Firebase initialized successfully");
 
 // --- Initialize Services ---
 const auth = getAuth(app);
@@ -51,7 +50,6 @@ isSupported().then((analyticsSupported) => {
   if (analyticsSupported) {
     try {
       analytics = getAnalytics(app);
-      console.log("📊 Firebase Analytics initialized");
     } catch (error) {
       console.warn("⚠️ Firebase Analytics initialization failed:", error.message);
       analytics = null;
@@ -82,9 +80,9 @@ export const signInWithGoogle = async () => {
 // --- Monitor Auth State ---
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    console.log(`🔑 Firebase Auth: User ${user.uid} (${user.email}) is signed in`);
+    // User is signed in
   } else {
-    console.log("🔒 Firebase Auth: No user is signed in");
+    // No user signed in
   }
 });
 

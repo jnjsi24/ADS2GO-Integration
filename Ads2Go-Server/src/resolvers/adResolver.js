@@ -165,8 +165,24 @@ const adResolvers = {
         console.error('❌ Smart material selection failed, falling back to plan materials:', error.message);
         // Fallback to plan's materials if smart selection fails
         if (plan.materials && plan.materials.length > 0) {
-          selectedMaterial = plan.materials[0];
-          console.log(`⚠️ Fallback to plan material: ${selectedMaterial.materialId}`);
+          // ✅ ENHANCED: Validate that fallback material has a registered device
+          const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+          
+          for (const material of plan.materials) {
+            const deviceValidation = await validateMaterialHasDevice(material.materialId);
+            
+            if (deviceValidation.hasDevice) {
+              selectedMaterial = material;
+              console.log(`✅ Fallback to plan material with device: ${selectedMaterial.materialId}`);
+              break;
+            } else {
+              console.log(`⚠️ Skipping plan material ${material.materialId}: ${deviceValidation.reason}`);
+            }
+          }
+          
+          if (!selectedMaterial) {
+            throw new Error('No plan materials have registered devices available for ad deployment');
+          }
         } else {
           throw new Error('No materials assigned to this plan');
         }
@@ -207,20 +223,43 @@ const adResolvers = {
         // Don't fail the ad creation if notification fails
       }
 
-      // Update material availability when ad is created
+      // ✅ NEW: Reserve slot immediately upon ad creation (before payment)
       try {
-        console.log(`🔄 Updating material availability for ad: ${savedAd._id}`);
-        const availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
-        if (availability) {
-          availability.addAd(savedAd._id, startTime, endTime);
-          await availability.save();
-          console.log(`✅ Updated material availability: ${selectedMaterial.materialId} now has ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
-        } else {
-          console.warn(`⚠️ No availability record found for material: ${selectedMaterial.materialId}`);
+        console.log(`🔄 Reserving slot for ad: ${savedAd._id}`);
+        let availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
+        
+        // Create availability record if it doesn't exist
+        if (!availability) {
+          availability = new MaterialAvailability({
+            materialId: selectedMaterial._id,
+            totalSlots: 5,
+            occupiedSlots: 0,
+            availableSlots: 5,
+            currentAds: [],
+            scheduledAds: [],
+            status: 'AVAILABLE'
+          });
         }
+        
+        // Set reservation expiration (7 days from now)
+        const reservationExpires = new Date();
+        reservationExpires.setDate(reservationExpires.getDate() + 7);
+        
+        // Reserve slot for the ad
+        const slotNumber = availability.reserveSlot(savedAd._id, startTime, endTime, reservationExpires);
+        await availability.save();
+        
+        // Store reservation expiration in ad
+        savedAd.reservationExpires = reservationExpires;
+        await savedAd.save();
+        
+        console.log(`✅ Reserved slot ${slotNumber} for ad ${savedAd._id} (expires: ${reservationExpires.toISOString()})`);
+        console.log(`📊 Material ${selectedMaterial.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);
       } catch (availabilityError) {
-        console.error('❌ Error updating material availability:', availabilityError);
-        // Don't fail the ad creation if availability update fails
+        console.error('❌ Error reserving slot:', availabilityError);
+        // If slot reservation fails, delete the ad to prevent orphaned records
+        await Ad.findByIdAndDelete(savedAd._id);
+        throw new Error(`Cannot create ad: ${availabilityError.message}`);
       }
 
       // Note: Ad deployment is handled by the Ad model's post-save hook
@@ -275,6 +314,9 @@ const adResolvers = {
             ad.approveTime = new Date();
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            
+            // Set paymentStatus to PENDING when admin approves
+            ad.paymentStatus = 'PENDING';
             
             // Send approval notification to user
             try {

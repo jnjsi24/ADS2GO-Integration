@@ -47,6 +47,7 @@ module.exports = gql`
     category: MaterialCategory!
     driverId: String             # stored as system driverId (e.g. DRV-001), not ObjectId
     driver: DriverInfo           # Driver details if assigned
+    assignedDate: String         # When admin assigned driver to material
     mountedAt: String
     dismountedAt: String
     createdAt: String
@@ -90,6 +91,7 @@ module.exports = gql`
     driverId: ID
     mountedAt: String
     dismountedAt: String
+    materialCondition: MaterialCondition
   }
 
   type MaterialAssignmentResult {
@@ -113,6 +115,8 @@ module.exports = gql`
     uploadedAt: String!
     uploadedBy: String!
     adminNotes: String
+    reviewedBy: String
+    reviewedAt: String
   }
 
   type MaterialWithTracking {
@@ -157,6 +161,9 @@ extend type Query {
   
   # Get usage history for a specific material (Admin-only)
   getMaterialUsageHistory(materialId: ID!): MaterialUsageHistoryResponse!
+
+    # Get usage history for a specific driver (Admin-only)
+    getDriverUsageHistory(driverId: ID!): MaterialUsageHistoryResponse!
 }
 
   type Mutation {
@@ -171,6 +178,13 @@ extend type Query {
 
     # Driver photo upload
     uploadMonthlyPhoto(materialId: ID!, photoUrls: [String!]!, month: String!, description: String): MaterialPhotoUploadResult
+
+    # Admin moderation for monthly compliance photos
+    approveMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String, condition: MaterialCondition): PhotoModerationResult
+    rejectMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String): PhotoModerationResult
+
+    # Admin utility: Sync mountedAt dates from Material to MaterialUsageHistory
+    syncUsageHistoryMountedDates: SyncResult
   }
 
   type MaterialPhotoTracking {
@@ -190,6 +204,12 @@ extend type Query {
     materialTracking: MaterialPhotoTracking
   }
 
+  type PhotoModerationResult {
+    success: Boolean!
+    message: String!
+    materialTracking: MaterialPhotoTracking
+  }
+
   type AdminInfo {
     adminId: String!
     adminName: String!
@@ -199,6 +219,7 @@ extend type Query {
   type MaterialUsageHistory {
     id: ID!
     materialId: ID!
+    materialStringId: String
     driverId: String!
     driverInfo: DriverInfo!
     assignedAt: String!
@@ -221,5 +242,11 @@ extend type Query {
     success: Boolean!
     message: String!
     usageHistory: [MaterialUsageHistory!]!
+  }
+
+  type SyncResult {
+    success: Boolean!
+    message: String!
+    updatedCount: Int
   }
 `;

@@ -9,6 +9,8 @@ interface MaterialFiltersProps {
   onTypeChange: (value: 'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER') => void;
   statusFilter: 'All' | 'Used' | 'Available';
   onStatusChange: (value: 'All' | 'Used' | 'Available') => void;
+  sortBy: string;
+  onSortChange: (value: string) => void;
   onCreateClick: () => void;
 }
 
@@ -19,6 +21,8 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
   onTypeChange,
   statusFilter,
   onStatusChange,
+  sortBy,
+  onSortChange,
   onCreateClick,
 }) => {
   const materialOptions = [
@@ -36,8 +40,11 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
     { label: 'Available', value: 'Available' },
   ];
 
+  const sortByOptions = ['Newest First', 'Oldest First', 'ID: Low to High', 'ID: High to Low'];
+
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   // Detect mobile screen width
@@ -62,11 +69,11 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
         </h1>
 
         {/* Filters */}
-        <div className="flex flex-col md:flex-row gap-1 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
           {/* Search */}
           <input
             type="text"
-            className="text-xs text-black rounded-md pl-5 py-3 w-full md:w-80 shadow-md focus:outline-none bg-white"
+            className="text-xs text-black rounded-lg pl-5 py-3 w-full md:w-80 shadow-md focus:outline-none bg-white"
             placeholder="Search materials..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -74,87 +81,129 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
 
           {/* For mobile: status + material filters side by side */}
           {isMobile ? (
-            <div className="flex gap-2 w-full">
-              {/* Status Dropdown */}
-              <div className="relative flex-1">
-                <button
-                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
-                >
-                  {statusOptions.find((s) => s.value === statusFilter)?.label}
-                  <ChevronDown
-                    size={16}
-                    className={`transform transition-transform duration-200 ${
-                      showStatusDropdown ? 'rotate-180' : 'rotate-0'
-                    }`}
-                  />
-                </button>
-                <AnimatePresence>
-                  {showStatusDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-                    >
-                      {statusOptions.map((status) => (
-                        <button
-                          key={status.value}
-                          onClick={() => {
-                            onStatusChange(status.value as typeof statusFilter);
-                            setShowStatusDropdown(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
-                        >
-                          {status.label}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+            <>
+              <div className="flex gap-2 w-full">
+                {/* Status Dropdown */}
+                <div className="relative flex-1">
+                  <button
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    {statusOptions.find((s) => s.value === statusFilter)?.label}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showStatusDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {statusOptions.map((status) => (
+                          <button
+                            key={status.value}
+                            onClick={() => {
+                              onStatusChange(status.value as typeof statusFilter);
+                              setShowStatusDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            {status.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Material Dropdown */}
+                <div className="relative flex-1">
+                  <button
+                    onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    {materialOptions.find((m) => m.value === selectedType)?.label}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showMaterialDropdown ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showMaterialDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {materialOptions.map((mat) => (
+                          <button
+                            key={mat.value}
+                            onClick={() => {
+                              onTypeChange(mat.value as typeof selectedType);
+                              setShowMaterialDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
+                          >
+                            {mat.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
-              {/* Material Dropdown */}
-              <div className="relative flex-1">
+              {/* Sort Dropdown (Mobile) */}
+              <div className="relative w-full">
                 <button
-                  onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
-                  {materialOptions.find((m) => m.value === selectedType)?.label}
+                  <span className="truncate">{sortBy}</span>
                   <ChevronDown
                     size={16}
                     className={`transform transition-transform duration-200 ${
-                      showMaterialDropdown ? 'rotate-180' : 'rotate-0'
+                      showSortDropdown ? 'rotate-180' : 'rotate-0'
                     }`}
                   />
                 </button>
                 <AnimatePresence>
-                  {showMaterialDropdown && (
+                  {showSortDropdown && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                     >
-                      {materialOptions.map((mat) => (
+                      {sortByOptions.map((option) => (
                         <button
-                          key={mat.value}
+                          key={option}
                           onClick={() => {
-                            onTypeChange(mat.value as typeof selectedType);
-                            setShowMaterialDropdown(false);
+                            onSortChange(option);
+                            setShowSortDropdown(false);
                           }}
                           className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
                         >
-                          {mat.label}
+                          {option}
                         </button>
                       ))}
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
-            </div>
+            </>
           ) : (
             // Desktop Filters (unchanged)
             <>
@@ -162,7 +211,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
               <div className="relative w-full md:w-40">
                 <button
                   onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {materialOptions.find((mat) => mat.value === selectedType)?.label}
                   <ChevronDown
@@ -179,7 +228,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                     >
                       {materialOptions.map((mat) => (
                         <button
@@ -202,7 +251,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
               <div className="relative w-full md:w-40">
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {statusOptions.find((s) => s.value === statusFilter)?.label}
                   <ChevronDown
@@ -219,7 +268,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                     >
                       {statusOptions.map((status) => (
                         <button
@@ -237,6 +286,46 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Sort Dropdown (Desktop) */}
+              <div className="relative w-full md:w-40">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{sortBy}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${
+                      showSortDropdown ? 'rotate-180' : 'rotate-0'
+                    }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {sortByOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => {
+                            onSortChange(option);
+                            setShowSortDropdown(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </>
           )}
         </div>
@@ -246,7 +335,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
       <div className={`flex ${isMobile ? 'justify-end' : 'justify-center md:justify-end'}`}>
         <button
           onClick={onCreateClick}
-          className={`py-3 bg-[#feb011] text-xs text-white rounded-md ${
+          className={`py-3 bg-[#feb011] text-xs text-white rounded-lg ${
             isMobile ? 'w-36' : 'w-full md:w-40'
           } hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2`}
         >

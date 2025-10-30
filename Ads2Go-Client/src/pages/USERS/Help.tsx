@@ -172,16 +172,6 @@ const Help: React.FC = () => {
     acc[faq.category].push(faq);
     return acc;
   }, {});
-
-  // Debug logging
-  console.log('User Client FAQ Debug:', {
-    faqs: faqs.length,
-    categoryOrders: categoryOrders.length,
-    categoryOrdersData: categoryOrders,
-    faqsByCategory: Object.keys(faqsByCategory),
-    sortedCategories: getSortedCategories(faqsByCategory)
-  });
-
   // Group filtered FAQs by category
   const filteredFAQsByCategory = filteredFAQs.reduce((acc: any, faq: any) => {
     if (!acc[faq.category]) {

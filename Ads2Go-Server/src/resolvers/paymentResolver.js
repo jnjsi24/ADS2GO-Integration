@@ -174,15 +174,15 @@ async function triggerAdDeployment(ad) {
 const paymentResolvers = {
   Query: {
     getAllPayments: async (_, { paymentStatus }, { user }) => {
-    checkAdmin(user);
+      checkAdmin(user);
 
-    const filter = {};
-    if (paymentStatus) {
-      filter.paymentStatus = paymentStatus; // filter by status if provided
-    }
+      const filter = {};
+      if (paymentStatus) {
+        filter.paymentStatus = paymentStatus; // filter by status if provided
+      }
 
-    return await Payment.find(filter).sort({ createdAt: -1 });
-  },
+      return await Payment.find(filter).sort({ createdAt: -1 });
+    },
 
   
 
@@ -220,7 +220,6 @@ const paymentResolvers = {
       return results;
     },
 
-
     getPaymentById: async (_, { id }, { user }) => {
       checkAuth(user);
       const payment = await Payment.findById(id);
@@ -233,16 +232,29 @@ const paymentResolvers = {
     },
 
     getUserAdsWithPayments: async (_, __, { user }) => {
-      checkAuth(user);
-      const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
-      const payments = await Payment.find({
-        adsId: { $in: ads.map(ad => ad._id) },
-      });
+      try {
+        checkAuth(user);
+        console.log('🔍 getUserAdsWithPayments - User ID:', user.id);
+        
+        const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
+        console.log('🔍 getUserAdsWithPayments - Found ads:', ads.length);
+        
+        const payments = await Payment.find({
+          adsId: { $in: ads.map(ad => ad._id) },
+        });
+        console.log('🔍 getUserAdsWithPayments - Found payments:', payments.length);
 
-      return ads.map(ad => ({
-        ad,
-        payment: payments.find(p => p.adsId.toString() === ad._id.toString()) || null,
-      }));
+        const result = ads.map(ad => ({
+          ad,
+          payment: payments.find(p => p.adsId.toString() === ad._id.toString()) || null,
+        }));
+        
+        console.log('🔍 getUserAdsWithPayments - Returning result:', result.length);
+        return result;
+      } catch (error) {
+        console.error('❌ Error in getUserAdsWithPayments:', error);
+        throw error;
+      }
     },
   },
 
@@ -265,9 +277,9 @@ const paymentResolvers = {
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
       
-      // Check if ad is approved - ALL ads must be approved before payment
-      if (ad.status !== 'APPROVED') {
-        throw new Error('Ad must be approved first before you can make a payment');
+      // Check if ad is approved AND paymentStatus is PENDING
+      if (ad.status !== 'APPROVED' || ad.paymentStatus !== 'PENDING') {
+        throw new Error('Ad must be approved and payment must be pending before you can make a payment');
       }
 
       const existingPayment = await Payment.findOne({ adsId });
@@ -316,16 +328,40 @@ const paymentResolvers = {
             throw new Error(`Device ${deviceId} availability not found`);
           }
           
-          // Check if the ad is still in the reserved slots
-          const isReserved = availability.currentAds.some(adSlot => 
+          // ✅ IMPROVED: Check if the ad is in either currentAds OR scheduledAds
+          const isInCurrentAds = availability.currentAds.some(adSlot => 
             adSlot.adId.toString() === ad._id.toString()
           );
           
-          if (!isReserved) {
-            throw new Error(`Slots for device ${deviceId} are no longer reserved for this ad. They may have been taken by another user.`);
-          }
+          const isInScheduledAds = availability.scheduledAds.some(adSlot => 
+            adSlot.adId.toString() === ad._id.toString()
+          );
           
-          console.log(`✅ Slot validation passed for device ${deviceId}`);
+          if (!isInCurrentAds && !isInScheduledAds) {
+            // Reservation expired - check if we can re-reserve
+            console.log(`⚠️ Reservation expired for device ${deviceId}, attempting to re-reserve...`);
+            
+            // Check if slot is still available
+            if (availability.canAcceptAd(ad.startTime, ad.endTime)) {
+              // Re-reserve the slot
+              const slotNumber = availability.reserveSlot(
+                ad._id,
+                ad.startTime,
+                ad.endTime,
+                null // No expiration since payment is happening now
+              );
+              await availability.save();
+              console.log(`✅ Re-reserved slot ${slotNumber} for device ${deviceId}`);
+            } else {
+              // Slot is truly unavailable
+              throw new Error(
+                `Slots for device ${deviceId} are no longer available. They have been taken by another user. ` +
+                `Please create a new ad with different dates or materials.`
+              );
+            }
+          } else {
+            console.log(`✅ Slot validation passed for device ${deviceId}`);
+          }
         }
       }
 
@@ -348,18 +384,93 @@ const paymentResolvers = {
         await newPayment.save({ session });
         console.log('✅ Payment saved successfully to database with ID:', newPayment._id);
 
-        // Update the ad status to RUNNING and mark as PAID
-        ad.status = 'RUNNING';
+        // ✅ NEW: Set status based on start time
+        const now = new Date();
+        const adStartTime = new Date(ad.startTime);
+        
+        // If ad starts now or in the past, set to RUNNING
+        // If ad starts in the future, set to SCHEDULED
+        if (adStartTime <= now) {
+          ad.status = 'RUNNING';
+          console.log(`📅 Ad starts immediately or in the past (${adStartTime.toISOString()}), status set to RUNNING`);
+        } else {
+          ad.status = 'SCHEDULED';
+          console.log(`📅 Ad starts in the future (${adStartTime.toISOString()}), status set to SCHEDULED`);
+        }
+        
         ad.adStatus = 'ACTIVE';
         ad.paymentStatus = 'PAID';
         ad.paymentDate = new Date();
+        ad.reservationExpires = null; // ✅ Clear reservation expiration since payment is confirmed
         await ad.save({ session });
-        console.log('Ad status updated successfully');
+        console.log(`✅ Ad status updated to: ${ad.status}`);
 
         // Commit the transaction
         await session.commitTransaction();
         session.endSession();
         console.log('Transaction committed successfully');
+
+        // ✅ Send notification to user about payment confirmation and ad status
+        try {
+          const BaseNotificationService = require('../services/notifications/BaseNotificationService');
+          
+          let notificationTitle = '';
+          let notificationMessage = '';
+          let notificationCategory = '';
+          
+          if (ad.status === 'RUNNING') {
+            // Ad is running immediately
+            const endDate = new Date(ad.endTime).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            });
+            notificationTitle = '✅ Payment Confirmed - Your Ad is Now Running!';
+            notificationMessage = `Payment received! Your ad "${ad.title}" is now running and being displayed on the selected devices. It will run until ${endDate}.`;
+            notificationCategory = 'AD_STARTED';
+          } else if (ad.status === 'SCHEDULED') {
+            // Ad is scheduled for future
+            const startDate = new Date(ad.startTime).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            });
+            const endDate = new Date(ad.endTime).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            });
+            notificationTitle = '✅ Payment Confirmed - Ad Slot Secured!';
+            notificationMessage = `Payment received! Your ad "${ad.title}" is scheduled to run from ${startDate} to ${endDate}. We'll notify you when it starts.`;
+            notificationCategory = 'AD_SCHEDULED';
+          }
+          
+          if (notificationTitle) {
+            await BaseNotificationService.createNotification(
+              ad.userId,
+              notificationTitle,
+              notificationMessage,
+              'SUCCESS',
+              {
+                category: notificationCategory,
+                priority: 'HIGH',
+                adId: ad._id,
+                adTitle: ad.title,
+                data: {
+                  startTime: ad.startTime,
+                  endTime: ad.endTime,
+                  adId: ad._id.toString(),
+                  receiptId,
+                  action: 'VIEW_DETAILS'
+                }
+              }
+            );
+            console.log(`📧 Sent payment confirmation notification for ad ${ad._id}`);
+          }
+        } catch (notifError) {
+          console.error('❌ Error sending payment confirmation notification:', notifError);
+          // Don't fail the payment if notification fails
+        }
 
         // Trigger deployment after transaction is committed
         // This is done outside the transaction to avoid conflicts

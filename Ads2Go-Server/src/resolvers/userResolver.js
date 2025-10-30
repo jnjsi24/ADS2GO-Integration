@@ -78,10 +78,10 @@ const resolvers = {
       }
     },
 
-        getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
+        getUserAnalytics: async (_, { startDate, endDate, period, adId }, { user }) => {
           checkAuth(user);
           try {
-            console.log('🔍 getUserAnalytics called for user:', user.id, 'with period:', period, 'startDate:', startDate, 'endDate:', endDate);
+            console.log('🔍 getUserAnalytics called for user:', user.id, 'with period:', period, 'adId:', adId, 'startDate:', startDate, 'endDate:', endDate);
             
             // Use the new UserAnalytics system
             const UserAnalyticsService = require('../services/userAnalyticsService');
@@ -89,7 +89,8 @@ const resolvers = {
               user.id,
               startDate,
               endDate,
-              period
+              period,
+              adId
             );
             
             if (!analytics.success) {

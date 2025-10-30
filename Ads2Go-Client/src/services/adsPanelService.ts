@@ -2,10 +2,6 @@
 // Force correct API base URL for REST endpoints (not GraphQL)
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// Service initialization logging (development only)
-if (process.env.NODE_ENV === 'development') {
-  console.log('🔄 AdsPanelService V4 (REAL ADS) loaded at:', new Date().toISOString());
-}
 
 export interface ScreenData {
   deviceId: string;
@@ -88,6 +84,14 @@ export interface AdAnalytics {
 }
 
 class AdsPanelServiceV4 {
+  // ✨ OPTIMIZATION: Simple cache for analytics to reduce server load
+  private analyticsCache: {
+    data: AdAnalytics | null;
+    timestamp: number;
+    cacheKey: string;
+  } | null = null;
+  private readonly CACHE_TTL = 90000; // 90 seconds cache (longer than typical request time)
+
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     // Ensure no double slashes in URL construction
     const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -127,7 +131,9 @@ class AdsPanelServiceV4 {
       throw new Error(`API request failed: ${response.statusText}`);
     }
 
-    console.log('✅ API request successful:', url);
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_ADS === 'true') {
+      console.log('✅ API request successful:', url);
+    }
     return response.json();
   }
 
@@ -139,7 +145,9 @@ class AdsPanelServiceV4 {
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
     try {
       // Use the screens endpoint to get real-time screen data
-      console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_ADS === 'true') {
+        console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
+      }
       // Add cache-busting parameter to ensure fresh data
       const cacheBuster = `?t=${Date.now()}`;
       const response = await this.makeRequest(`/screenTracking/screens${cacheBuster}`);
@@ -272,7 +280,40 @@ class AdsPanelServiceV4 {
     if (userId) queryParams.append('userId', userId);
 
     const endpoint = `/screenTracking/adAnalytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
+    // ✨ OPTIMIZATION: Check cache first
+    const cacheKey = `${date || 'today'}-${materialId || 'all'}-${userId || 'all'}`;
+    const now = Date.now();
+    
+    console.log('🔍 [getAdAnalytics] Cache check:', {
+      requestedKey: cacheKey,
+      hasCache: !!this.analyticsCache,
+      cachedKey: this.analyticsCache?.cacheKey,
+      keyMatch: this.analyticsCache?.cacheKey === cacheKey,
+      cacheAge: this.analyticsCache ? Math.floor((now - this.analyticsCache.timestamp) / 1000) : 'N/A',
+      cacheTTL: this.CACHE_TTL / 1000,
+      hasData: !!this.analyticsCache?.data
+    });
+    
+    if (this.analyticsCache && 
+        this.analyticsCache.cacheKey === cacheKey && 
+        (now - this.analyticsCache.timestamp) < this.CACHE_TTL &&
+        this.analyticsCache.data) {
+      console.log('✅ [getAdAnalytics] Cache HIT! Returning cached analytics data (age:', Math.floor((now - this.analyticsCache.timestamp) / 1000), 'seconds)');
+      return this.analyticsCache.data;
+    }
+    
+    // Cache miss or expired - fetch fresh data
+    console.log('❌ [getAdAnalytics] Cache MISS - fetching fresh data');
     const response = await this.makeRequest(endpoint);
+    
+    // Update cache
+    this.analyticsCache = {
+      data: response.data,
+      timestamp: now,
+      cacheKey: cacheKey
+    };
+    
     return response.data;
   }
 
@@ -367,13 +408,7 @@ class AdsPanelServiceV4 {
     return response;
   }
 
-  async trackAdPlayback(deviceId: string, adId: string, adTitle: string, adDuration: number, viewTime?: number): Promise<{ success: boolean; message: string }> {
-    const response = await this.makeRequest('/screenTracking/trackAd', {
-      method: 'POST',
-      body: JSON.stringify({ deviceId, adId, adTitle, adDuration, viewTime }),
-    });
-    return response;
-  }
+  // ❌ REMOVED: trackAdPlayback() - no UI trigger, handled by AdPlayer directly via /deviceTracking/ad-playback
 
   async endAdPlayback(deviceId: string): Promise<{ success: boolean; message: string }> {
     const response = await this.makeRequest('/screenTracking/endAd', {

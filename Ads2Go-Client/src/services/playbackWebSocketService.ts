@@ -1,5 +1,5 @@
 interface PlaybackUpdate {
-  type: 'adPlaybackUpdate' | 'deviceUpdate' | 'deviceList';
+  type: 'adPlaybackUpdate' | 'deviceUpdate' | 'deviceList' | 'locationUpdate';
   deviceId: string;
   adId?: string;
   adTitle?: string;
@@ -7,10 +7,32 @@ interface PlaybackUpdate {
   currentTime?: number;
   duration?: number;
   progress?: number;
-  timestamp?: string;
+  startTime?: string; // ✅ FIXED: Real ad start time (not message timestamp)
+  timestamp?: string; // Message timestamp (when update was sent)
   isOnline?: boolean;
   lastSeen?: string;
   devices?: any[];
+  // GPS data from real-time WebSocket updates (NEW: included in adPlaybackUpdate)
+  gpsData?: {
+    lat: number;
+    lng: number;
+    speed: number;      // meters per second
+    heading: number;    // degrees (0-360)
+    accuracy: number;   // meters
+    altitude?: number;  // meters
+    timestamp: string;  // ISO string
+  };
+  // Legacy location field for backwards compatibility
+  location?: {
+    lat: number;
+    lng: number;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+    timestamp: string;
+    isOnline: boolean;
+  };
 }
 
 type PlaybackUpdateCallback = (update: PlaybackUpdate) => void;
@@ -35,8 +57,8 @@ class PlaybackWebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    // Playback WebSocket configuration logging (development only)
-    if (process.env.NODE_ENV === 'development') {
+    // Playback WebSocket configuration logging (only in verbose mode)
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
       console.log('🔧 Playback WebSocket Service Configuration:', {
         envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
         finalUrl: actualServerUrl,
@@ -49,24 +71,37 @@ class PlaybackWebSocketService {
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     const wsUrl = `${protocol}//${host}/ws/playback?admin=true`;
     
-    console.log('🔌 [WebSocket] Final WebSocket URL:', wsUrl);
+    // Only log WebSocket URL in verbose mode
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+      console.log('🔌 [WebSocket] Final WebSocket URL:', wsUrl);
+    }
     return wsUrl;
   }
 
   private connect(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('🔌 [Admin WebSocket] Already connected');
+      // Only log connection status in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        console.log('🔌 [Admin WebSocket] Already connected');
+      }
       return;
     }
 
     try {
       const wsUrl = this.getWebSocketUrl();
+      
+      // Skip WebSocket connection in development if server is not available
+      if (process.env.NODE_ENV === 'development' && this.reconnectAttempts > 5) {
+        console.log('🔌 [Admin WebSocket] Skipping connection attempts in development mode');
+        return;
+      }
+      
       console.log('🔌 [Admin WebSocket] Connecting to:', wsUrl);
 
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('🔌 [Admin WebSocket] Connected successfully to:', wsUrl);
+        console.log('✅ [Admin WebSocket] Connected successfully to:', wsUrl);
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.clearReconnectInterval();
@@ -78,14 +113,20 @@ class PlaybackWebSocketService {
           const message = JSON.parse(event.data);
           
           if (message.type === 'pong') {
-            console.log('🔌 [Admin WebSocket] Received pong');
+            // Only log pong in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('🔌 [Admin WebSocket] Received pong');
+            }
           } else if (message.type === 'adPlaybackUpdate') {
-            console.log('🎬 [Admin WebSocket] Received playback update:', {
-              deviceId: message.deviceId,
-              adTitle: message.adTitle,
-              state: message.state,
-              progress: message.progress
-            });
+            // Only log playback updates in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('🎬 [Admin WebSocket] Received playback update:', {
+                deviceId: message.deviceId,
+                adTitle: message.adTitle,
+                state: message.state,
+                progress: message.progress
+              });
+            }
             
             // Notify all callbacks
             this.callbacks.forEach(callback => {
@@ -96,7 +137,10 @@ class PlaybackWebSocketService {
               }
             });
           } else if (message.type === 'deviceUpdate') {
-            console.log('📱 [Admin WebSocket] Received device update:', message.device);
+            // Only log device updates in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('📱 [Admin WebSocket] Received device update:', message.device);
+            }
             
             // Forward device update to callbacks
             this.callbacks.forEach(callback => {
@@ -112,7 +156,10 @@ class PlaybackWebSocketService {
               }
             });
           } else if (message.type === 'deviceList') {
-            console.log('📋 [Admin WebSocket] Received device list:', message.devices);
+            // Only log device list in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('📋 [Admin WebSocket] Received device list:', message.devices);
+            }
             
             // Forward device list to callbacks
             this.callbacks.forEach(callback => {
@@ -123,6 +170,24 @@ class PlaybackWebSocketService {
                 });
               } catch (error) {
                 console.error('Error in device list callback:', error);
+              }
+            });
+          } else if (message.type === 'locationUpdate') {
+            console.log('📍 [Admin WebSocket] Received location update:', {
+              deviceId: message.deviceId,
+              location: message.location
+            });
+            
+            // Forward location update to callbacks
+            this.callbacks.forEach(callback => {
+              try {
+                callback({
+                  type: 'locationUpdate',
+                  deviceId: message.deviceId,
+                  location: message.location
+                });
+              } catch (error) {
+                console.error('Error in location update callback:', error);
               }
             });
           } else if (message.type === 'adPlaybackUpdate') {
@@ -152,7 +217,6 @@ class PlaybackWebSocketService {
       };
 
       this.ws.onclose = (event) => {
-        console.log('🔌 [Admin WebSocket] Connection closed:', event.code, event.reason);
         this.isConnected = false;
         this.ws = null;
         this.clearPingInterval();
@@ -160,14 +224,17 @@ class PlaybackWebSocketService {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
         } else {
-          console.error('🔌 [Admin WebSocket] Max reconnection attempts reached');
+          console.warn('🔌 [Admin WebSocket] Max reconnection attempts reached, giving up');
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('🔌 [Admin WebSocket] Connection error:', error);
-        console.error('🔌 [Admin WebSocket] WebSocket state:', this.ws?.readyState);
-        console.error('🔌 [Admin WebSocket] WebSocket URL:', wsUrl);
+        // Only log error details on first attempt to avoid spam
+        if (this.reconnectAttempts === 0) {
+          console.warn('❌ [Admin WebSocket] Connection failed, will retry...');
+          console.warn('Error details:', error);
+          console.warn('Target URL:', wsUrl);
+        }
         this.isConnected = false;
       };
 
@@ -180,7 +247,6 @@ class PlaybackWebSocketService {
     this.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
     
-    console.log(`🔌 [Admin WebSocket] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
     
     this.reconnectInterval = setTimeout(() => {
       this.connect();

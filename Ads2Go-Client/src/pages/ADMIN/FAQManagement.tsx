@@ -49,9 +49,12 @@ const FAQManagement: React.FC = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showCreateCategoryDropdown, setShowCreateCategoryDropdown] = useState(false); // New state for Create modal
   const [showEditCategoryDropdown, setShowEditCategoryDropdown] = useState(false); // New state for Edit modal
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
 
   const categoryFilterOptions = ['all', 'ADVERTISERS', 'DRIVERS', 'EVERYONE'];
   const statusFilterOptions = ['all', 'active', 'inactive'];
+  const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   const [createFormData, setCreateFormData] = useState<CreateFAQFormData>({
     question: '',
@@ -113,7 +116,21 @@ const FAQManagement: React.FC = () => {
       order: categoryOrder.order,
       faqs: [...filteredFAQs]
         .filter((faq: FAQ) => faq.category === categoryOrder.category)
-        .sort((a: FAQ, b: FAQ) => a.order - b.order)
+        .sort((a: FAQ, b: FAQ) => {
+          // Apply custom sorting
+          switch (sortBy) {
+            case 'Newest First':
+              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            case 'Oldest First':
+              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            case 'Alphabetical (A-Z)':
+              return a.question.localeCompare(b.question);
+            case 'Alphabetical (Z-A)':
+              return b.question.localeCompare(a.question);
+            default:
+              return a.order - b.order;
+          }
+        })
     }))
     .filter((group: any) => group.faqs.length > 0);
 
@@ -477,6 +494,39 @@ const FAQManagement: React.FC = () => {
                           className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                         >
                           {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className="relative w-36">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  {sortBy}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {sortByOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
+                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {option}
                         </button>
                       ))}
                     </motion.div>

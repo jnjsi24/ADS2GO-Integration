@@ -5,8 +5,10 @@ const adTypeDefs = gql`
     PENDING
     APPROVED
     REJECTED
+    SCHEDULED
     RUNNING
     ENDED
+    CANCELLED
   }
 
   enum AdType {
@@ -37,7 +39,7 @@ const adTypeDefs = gql`
     adType: AdType!
     status: AdStatus!
     adStatus: String!      # INACTIVE, ACTIVE, FINISHED
-    paymentStatus: String! # PENDING, PAID, FAILED, REFUNDED
+    paymentStatus: String # PENDING, PAID, FAILED (nullable)
     impressions: Int!
     reasonForReject: String
     approveTime: String

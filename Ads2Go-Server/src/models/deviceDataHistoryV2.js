@@ -108,7 +108,7 @@ const DailyDataSchema = new mongoose.Schema({
   // Hourly breakdown
   hourlyStats: [HourlyStatsSchema],
   
-  // Location data (limited to 4114 entries for 8 hours at 7s intervals)
+  // Location data (limited to 14400 entries for 8 hours at 2s intervals)
   locationHistory: [LocationPointSchema],
   
   // Ad performance
@@ -306,6 +306,10 @@ DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite 
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1, 'dailyData.date': 1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.qrScans.userId': 1, 'dailyData.date': 1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.userId': 1, 'dailyData.date': 1 });
+// ✅ NEW: Index for ad-specific analytics queries (CRITICAL for fast ad analytics)
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.adId': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScansByAd.adId': 1 });
+DeviceDataHistoryV2Schema.index({ materialId: 1, 'dailyData.adPlaybacks.adId': 1 }); // Compound for multi-material ad queries
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {
@@ -390,6 +394,19 @@ DeviceDataHistoryV2Schema.methods.addDailyData = function(dailyData) {
 
 DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
   if (this.dailyData && this.dailyData.length > 0) {
+    // ✅ FIXED: Calculate compliance rate based on days with 8+ hours
+    const compliantDays = this.dailyData.filter(day => {
+      // Check if day has hoursTracking with COMPLIANT status
+      if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+        return true;
+      }
+      // Fallback: check if totalHoursOnline >= 8
+      return (day.totalHoursOnline || 0) >= 8;
+    }).length;
+    
+    const totalDays = this.dailyData.length;
+    const compliancePercentage = totalDays > 0 ? (compliantDays / totalDays) * 100 : 0;
+    
     this.lifetimeTotals = {
       totalAdPlays: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlays || 0), 0),
       totalQRScans: this.dailyData.reduce((sum, day) => sum + (day.totalQRScans || 0), 0),
@@ -397,9 +414,9 @@ DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
       totalHoursOnline: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0),
       totalAdImpressions: this.dailyData.reduce((sum, day) => sum + (day.totalAdImpressions || 0), 0),
       totalAdPlayTime: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlayTime || 0), 0),
-      totalDays: this.dailyData.length,
-      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / this.dailyData.length,
-      complianceRate: this.dailyData.reduce((sum, day) => sum + (day.complianceData?.complianceRate || 0), 0) / this.dailyData.length
+      totalDays: totalDays,
+      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / totalDays,
+      complianceRate: Math.round(compliancePercentage * 100) / 100 // ✅ Fixed: % of days meeting 8-hour target
     };
   }
   
@@ -435,5 +452,19 @@ DeviceDataHistoryV2Schema.post('save', async function(doc) {
     console.error('❌ Error in DeviceDataHistoryV2 post-save hook:', error.message);
   }
 });
+
+// ⚡ PERFORMANCE INDEXES - Critical for fast analytics queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1 }); // Date range queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1 }); // User filter
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.adId': 1 }); // Ad filter
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1 
+}); // Compound: Date + User (most common query)
+DeviceDataHistoryV2Schema.index({ 
+  'dailyData.date': 1, 
+  'dailyData.adPerformance.userId': 1,
+  'dailyData.adPerformance.adId': 1
+}); // Compound: Date + User + Ad (filtered query)
 
 module.exports = mongoose.model('DeviceDataHistoryV2', DeviceDataHistoryV2Schema);

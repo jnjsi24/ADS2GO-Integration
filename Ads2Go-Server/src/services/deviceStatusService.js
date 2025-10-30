@@ -44,13 +44,12 @@ class DeviceStatusService {
     
     // Handle WebSocket upgrade
     server.on('upgrade', (request, socket, head) => {
-      logger.websocket(`🔌 WebSocket upgrade request received: ${request.url}`);
-      logger.websocket(`🔌 Headers:`, request.headers);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`WebSocket upgrade request: ${request.url}`);
+      }
       
       const url = new URL(request.url, `http://${request.headers.host}`);
       const pathname = url.pathname;
-      
-      logger.websocket(`🔌 Parsed URL - Pathname: ${pathname}, Search: ${url.search}`);
       
       if (pathname === '/ws/status') {
         // Get device ID from query params or headers
@@ -59,17 +58,16 @@ class DeviceStatusService {
         
         
         if (!deviceId) {
-          console.error('No device ID provided in WebSocket upgrade request');
-          console.log('Available headers:', request.headers);
-          console.log('Query params:', Object.fromEntries(url.searchParams));
+          logger.error('No device ID provided in WebSocket upgrade request');
           socket.destroy();
           return;
         }
         
-        console.log(`WebSocket upgrade request for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        if (process.env.DEBUG_WEBSOCKET === 'true') {
+          logger.debug(`WebSocket upgrade for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          console.log(`✅ WebSocket upgrade successful for device: ${deviceId}`);
           
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId;
@@ -100,19 +98,12 @@ class DeviceStatusService {
         
         
         if (!deviceId && !isAdmin) {
-          console.error('No device ID provided in WebSocket playback upgrade request');
+          logger.error('No device ID provided in WebSocket playback upgrade request');
           socket.destroy();
           return;
         }
         
-        if (isAdmin) {
-          logger.websocket(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
-        } else {
-          console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
-        }
-        
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          console.log(`✅ WebSocket playback upgrade successful for device: ${deviceId || 'ADMIN'}`);
           
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
@@ -137,9 +128,15 @@ class DeviceStatusService {
           this.handlePlaybackConnection(ws, request);
         });
       } else {
-        console.log(`Rejected WebSocket connection to unknown path: ${pathname}`);
+        console.log(`❌ Rejected WebSocket connection to unknown path: ${pathname}`);
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
       }
+    });
+    
+    // Add error handler for the upgrade event
+    server.on('error', (error) => {
+      console.error('❌ Server error:', error);
     });
     
     this.startPingInterval();
@@ -151,26 +148,15 @@ class DeviceStatusService {
     const deviceId = ws.deviceId || request.headers['device-id'];
     const materialId = ws.materialId || request.headers['material-id'];
     
-    console.log('handleConnection called with:');
-    console.log('- ws.deviceId:', ws.deviceId);
-    console.log('- ws.materialId:', ws.materialId);
-    console.log('- request.headers[device-id]:', request.headers['device-id']);
-    console.log('- request.headers[material-id]:', request.headers['material-id']);
-    console.log('- Final deviceId:', deviceId);
-    console.log('- Final materialId:', materialId);
-    
     if (!deviceId) {
-      console.error('No device ID provided in WebSocket connection');
+      logger.error('No device ID provided in WebSocket connection');
       ws.close(4001, 'Device ID is required');
       return;
     }
-    
-    console.log(`🔌 New WebSocket connection from device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
 
     // Clean up any existing connection for this device
     const existingConnection = this.activeConnections.get(deviceId);
     if (existingConnection && existingConnection !== ws) {
-      console.log(`Replacing existing connection for device: ${deviceId}`);
       existingConnection.terminate();
     }
 
@@ -181,8 +167,10 @@ class DeviceStatusService {
     
     // Broadcast updated device list to all clients
     this.broadcastDeviceList();
-    console.log(`Device connected: ${deviceId}`);
-    console.log(`📱 Online Device: ${this.activeConnections.size}`);
+    
+    if (process.env.DEBUG_WEBSOCKET === 'true') {
+      logger.debug(`Device connected: ${deviceId} (${this.activeConnections.size} online)`);
+    }
     
     // Update device status in the database
     this.updateDeviceStatus(deviceId, true).catch(err => {
@@ -214,11 +202,9 @@ class DeviceStatusService {
     }
 
     ws.on('close', (code, reason) => {
-      console.log(`🔌 [WebSocket] Device disconnected: ${deviceId} - Code: ${code}, Reason: ${reason}`);
-      
-      // Always handle disconnect regardless of activeConnections check
-      // The activeConnections check was preventing database updates
-      console.log(`🔄 [WebSocket] Processing disconnect for device: ${deviceId}`);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`Device disconnected: ${deviceId}`);
+      }
       
       this.removeConnection(deviceId);
       this.handleDisconnect(deviceId).catch(err => {
@@ -226,7 +212,6 @@ class DeviceStatusService {
       });
       
       // Update DeviceStatusManager with WebSocket disconnection
-      console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
       deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       
       // Immediately broadcast status update for real-time response
@@ -236,17 +221,12 @@ class DeviceStatusService {
       if (deviceId !== ws.materialId) {
         this.findFullDeviceId(deviceId, ws.materialId).then(fullDeviceId => {
           if (fullDeviceId && fullDeviceId !== deviceId) {
-            console.log(`🔄 [DeviceStatusManager] Also updating full device ID: ${fullDeviceId} as offline`);
             deviceStatusManager.setWebSocketStatus(fullDeviceId, false, new Date());
-          } else {
-            console.log(`⚠️ [DeviceStatusManager] No full device ID found for ${deviceId}`);
           }
         }).catch(err => {
-          console.error('Error finding full device ID on disconnect:', err);
+          logger.error('Error finding full device ID on disconnect:', err);
         });
       }
-      
-      console.log(`📱 Online Device: ${this.activeConnections.size}`);
     });
     
     // Handle ping/pong to detect dead connections
@@ -291,6 +271,21 @@ class DeviceStatusService {
       deviceId = 'ADMIN';
       materialId = null;
       slotNumber = null;
+      
+      // Send initial device status to admin connection
+      this.sendInitialDeviceStatusToAdmin(ws);
+      
+      // Set up periodic status updates for admin connection
+      const adminUpdateInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          this.sendPeriodicStatusUpdateToAdmin(ws);
+        } else {
+          clearInterval(adminUpdateInterval);
+        }
+      }, 10000); // Send updates every 10 seconds
+      
+      // Store the interval ID for cleanup
+      ws.adminUpdateInterval = adminUpdateInterval;
     } else {
       deviceId = ws.deviceId || request.headers['device-id'];
       materialId = ws.materialId || request.headers['material-id'];
@@ -374,6 +369,14 @@ class DeviceStatusService {
         } else if (message.type === 'syncRequest') {
           // Handle synchronization requests
           this.handleSyncRequest(deviceId, materialId, slotNumber, message);
+        } else if (message.type === 'displayData') {
+          // Handle display data from master (Slot 1) to broadcast to slave (Slot 2)
+          console.log(`📺 [WebSocket] Received displayData from Slot ${slotNumber}:`, {
+            materialId,
+            slotNumber,
+            data: message.data
+          });
+          this.broadcastDisplayData(materialId, slotNumber, message);
         }
       } catch (error) {
         console.error('Error processing WebSocket Playback Message:', error);
@@ -383,6 +386,12 @@ class DeviceStatusService {
     ws.on('close', (code, reason) => {
       logger.websocket(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
+        // Clean up admin update interval if this is an admin connection
+        if (ws.isAdmin && ws.adminUpdateInterval) {
+          clearInterval(ws.adminUpdateInterval);
+          console.log('🔧 [Admin WebSocket] Cleared admin update interval');
+        }
+        
         // Clean up slot connections before removing the main connection
         this.cleanupSlotConnections(deviceId, materialId, slotNumber);
         this.removeConnection(deviceId);
@@ -406,14 +415,27 @@ class DeviceStatusService {
 
   async handlePlaybackUpdate(deviceId, message) {
     try {
-      console.log(`🎬 [Playback Update] ${deviceId}:`, {
+      // Log playback update (with GPS info if available)
+      const logData = {
         adId: message.adId,
         adTitle: message.adTitle,
         state: message.state,
         currentTime: message.currentTime,
         duration: message.duration,
         progress: message.progress
-      });
+      };
+      
+      // Add GPS data to log if available
+      if (message.gpsData) {
+        logData.gps = {
+          lat: message.gpsData.lat,
+          lng: message.gpsData.lng,
+          speed: `${(message.gpsData.speed * 3.6).toFixed(1)} km/h`,
+          accuracy: `${message.gpsData.accuracy}m`
+        };
+      }
+      
+      console.log(`🎬 [Playback Update] ${deviceId}:`, logData);
 
       // Store current playback state for synchronization
       const connection = this.activeConnections.get(deviceId);
@@ -425,6 +447,7 @@ class DeviceStatusService {
           currentTime: message.currentTime,
           duration: message.duration,
           progress: message.progress,
+          gpsData: message.gpsData, // Store GPS data
           timestamp: new Date().toISOString()
         };
       }
@@ -432,11 +455,150 @@ class DeviceStatusService {
       // Update the database with current ad information
       await this.updateCurrentAd(deviceId, message);
 
+      // Process GPS data if available (real-time location tracking)
+      if (message.gpsData) {
+        await this.processGPSData(deviceId, message.gpsData, message.adDetails);
+      }
+
       // Broadcast the playback update to all admin clients
       this.broadcastPlaybackUpdate(deviceId, message);
 
     } catch (error) {
       console.error(`Error handling playback update for device ${deviceId}:`, error);
+    }
+  }
+
+  async processGPSData(deviceId, gpsData, adDetails) {
+    try {
+      const connection = this.activeConnections.get(deviceId);
+      const materialId = connection?.materialId || adDetails?.materialId;
+      const deviceSlot = connection?.slotNumber || adDetails?.slotNumber;
+
+      if (!materialId || !deviceSlot) {
+        // Skip GPS processing if we don't have materialId or slot
+        return;
+      }
+
+      // Validate GPS data
+      const { lat, lng, speed, heading, accuracy, altitude, timestamp } = gpsData;
+      
+      // Skip invalid GPS coordinates
+      if (!lat || !lng || lat === 0 && lng === 0) {
+        return;
+      }
+
+      // Log GPS processing only in debug mode
+      if (process.env.DEBUG_GPS === 'true') {
+        logger.debug(`GPS from ${deviceId}: ${lat.toFixed(6)}, ${lng.toFixed(6)}, ${(speed * 3.6).toFixed(1)} km/h`);
+      }
+
+      // Update device tracking with GPS data
+      const DeviceTracking = require('../models/deviceTracking');
+      let carTracking = await DeviceTracking.findByMaterialId(materialId);
+
+      if (!carTracking) {
+        // Device tracking record not found - skip GPS update
+        // The HTTP fallback will create the record if needed
+        return;
+      }
+
+      // Check if we should update the location (avoid excessive updates)
+      const shouldUpdate = await this.shouldUpdateGPSLocation(
+        carTracking,
+        lat,
+        lng,
+        accuracy,
+        timestamp
+      );
+
+      if (!shouldUpdate) {
+        return; // Skip this update
+      }
+
+      // Update current location
+      carTracking.currentLocation = {
+        type: 'Point',
+        coordinates: [lng, lat],
+        accuracy,
+        speed: speed || 0,
+        heading: heading || 0,
+        altitude: altitude || undefined,
+        timestamp: new Date(timestamp || Date.now())
+      };
+
+      // Add to location history (for route tracking)
+      if (!carTracking.locationHistory) {
+        carTracking.locationHistory = [];
+      }
+
+      carTracking.locationHistory.push({
+        type: 'Point',
+        coordinates: [lng, lat],
+        timestamp: new Date(timestamp || Date.now()),
+        speed: speed || 0,
+        heading: heading || 0,
+        accuracy
+      });
+
+      // Keep only last 1000 location points to avoid excessive storage
+      if (carTracking.locationHistory.length > 1000) {
+        carTracking.locationHistory = carTracking.locationHistory.slice(-1000);
+      }
+
+      // Update distance traveled
+      if (carTracking.currentSession && speed > 0) {
+        const timeDiff = Date.now() - new Date(carTracking.currentSession.lastOnlineUpdate).getTime();
+        const hours = timeDiff / (1000 * 60 * 60);
+        const distanceKm = (speed * 3.6) * hours; // speed in km/h * hours
+        
+        if (distanceKm > 0 && distanceKm < 10) { // Sanity check: less than 10km per update
+          carTracking.currentSession.totalDistanceTraveled += distanceKm;
+        }
+      }
+
+      // Save the updated tracking record
+      await carTracking.save();
+
+    } catch (error) {
+      console.error(`Error processing GPS data for device ${deviceId}:`, error);
+    }
+  }
+
+  async shouldUpdateGPSLocation(carTracking, lat, lng, accuracy, timestamp) {
+    try {
+      // Always update if no current location
+      if (!carTracking.currentLocation) {
+        return true;
+      }
+
+      const currentLoc = carTracking.currentLocation;
+      const [currentLng, currentLat] = currentLoc.coordinates || [0, 0];
+
+      // Calculate distance between current and new location (simple approximation)
+      const latDiff = lat - currentLat;
+      const lngDiff = lng - currentLng;
+      const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000; // Rough meters
+
+      // Update if moved more than 5 meters
+      if (distance > 5) {
+        return true;
+      }
+
+      // Update if accuracy improved significantly
+      if (accuracy < (currentLoc.accuracy || 999) * 0.7) {
+        return true;
+      }
+
+      // Update if more than 10 seconds have passed
+      const timeDiff = Date.now() - new Date(currentLoc.timestamp || 0).getTime();
+      if (timeDiff > 10000) {
+        return true;
+      }
+
+      return false; // Skip this update
+    } catch (error) {
+      console.error('Error in shouldUpdateGPSLocation:', error);
+      return false;
     }
   }
 
@@ -534,7 +696,27 @@ class DeviceStatusService {
     }
   }
 
-  broadcastPlaybackUpdate(deviceId, playbackData) {
+  async broadcastPlaybackUpdate(deviceId, playbackData) {
+    // ✅ NEW: Fetch session status to include in real-time updates
+    let sessionStatus = null;
+    try {
+      const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+      if (deviceTracking && deviceTracking.currentSession) {
+        sessionStatus = {
+          isActive: deviceTracking.currentSession.isActive || false,
+          startTime: deviceTracking.currentSession.startTime,
+          endTime: deviceTracking.currentSession.endTime,
+          currentHours: deviceTracking.currentSession.totalHoursOnline || 0,
+          targetHours: deviceTracking.currentSession.targetHours || 8,
+          remainingHours: Math.max(0, (deviceTracking.currentSession.targetHours || 8) - (deviceTracking.currentSession.totalHoursOnline || 0)),
+          progressPercent: Math.min(100, ((deviceTracking.currentSession.totalHoursOnline || 0) / (deviceTracking.currentSession.targetHours || 8)) * 100),
+          complianceStatus: deviceTracking.currentSession.complianceStatus || 'PENDING'
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching session status for ${deviceId}:`, error);
+    }
+    
     const updateMessage = {
       type: 'adPlaybackUpdate',
       deviceId: deviceId,
@@ -544,13 +726,39 @@ class DeviceStatusService {
       currentTime: playbackData.currentTime,
       duration: playbackData.duration,
       progress: playbackData.progress,
-      timestamp: new Date().toISOString()
+      startTime: playbackData.startTime || now.toISOString(), // ✅ FIXED: Send real ad start time
+      timestamp: new Date().toISOString(), // Current message timestamp (for update tracking)
+      gpsData: playbackData.gpsData || null,  // Include GPS data if available (real-time location)
+      sessionStatus: sessionStatus  // ✅ NEW: Include session status for real-time driver progress
     };
     
     // Broadcast to all connections (both status and playback connections)
     this.broadcast(updateMessage);
     
-    console.log(`📡 [Broadcast] Playback update for ${deviceId}: ${playbackData.adTitle} - ${playbackData.state} (${playbackData.progress}%)`);
+    // Enhanced logging with GPS and session info if available
+    const logData = {
+      adTitle: playbackData.adTitle,
+      state: playbackData.state,
+      progress: `${playbackData.progress}%`
+    };
+    
+    if (playbackData.gpsData) {
+      logData.gps = {
+        lat: playbackData.gpsData.lat.toFixed(6),
+        lng: playbackData.gpsData.lng.toFixed(6),
+        speed: `${(playbackData.gpsData.speed * 3.6).toFixed(1)} km/h`
+      };
+    }
+    
+    if (sessionStatus) {
+      logData.session = {
+        hours: `${sessionStatus.currentHours.toFixed(2)}/${sessionStatus.targetHours}`,
+        progress: `${sessionStatus.progressPercent.toFixed(1)}%`,
+        status: sessionStatus.complianceStatus
+      };
+    }
+    
+    console.log(`📡 [Broadcast] Playback update for ${deviceId}:`, logData);
   }
 
   removeConnection(deviceId) {
@@ -931,6 +1139,81 @@ class DeviceStatusService {
   }
 
   /**
+   * Send initial device status to admin connection
+   * @param {WebSocket} ws - Admin WebSocket connection
+   */
+  async sendInitialDeviceStatusToAdmin(ws) {
+    try {
+      console.log('🔧 [Admin WebSocket] Sending initial device status...');
+      
+      // Get all device statuses from DeviceStatusManager
+      const deviceStatusManager = require('./deviceStatusManager');
+      const allStatuses = deviceStatusManager.getAllDeviceStatuses();
+      
+      console.log(`📊 [Admin WebSocket] Found ${allStatuses.length} device statuses to send`);
+      
+      // Send device list first
+      const deviceList = allStatuses.map(status => ({
+        deviceId: status.deviceId,
+        isOnline: status.isOnline,
+        lastSeen: status.lastSeen,
+        source: status.source
+      }));
+      
+      ws.send(JSON.stringify({
+        type: 'deviceList',
+        devices: deviceList
+      }));
+      
+      console.log(`📋 [Admin WebSocket] Sent device list with ${deviceList.length} devices`);
+      
+      // Send individual device updates
+      for (const status of allStatuses) {
+        ws.send(JSON.stringify({
+          type: 'deviceUpdate',
+          deviceId: status.deviceId,
+          isOnline: status.isOnline,
+          lastSeen: status.lastSeen,
+          source: status.source
+        }));
+      }
+      
+      console.log(`📡 [Admin WebSocket] Sent ${allStatuses.length} individual device updates`);
+      
+    } catch (error) {
+      console.error('❌ [Admin WebSocket] Error sending initial device status:', error);
+    }
+  }
+
+  /**
+   * Send periodic status update to admin connection
+   * @param {WebSocket} ws - Admin WebSocket connection
+   */
+  async sendPeriodicStatusUpdateToAdmin(ws) {
+    try {
+      // Get all device statuses from DeviceStatusManager
+      const deviceStatusManager = require('./deviceStatusManager');
+      const allStatuses = deviceStatusManager.getAllDeviceStatuses();
+      
+      // Send device list update
+      const deviceList = allStatuses.map(status => ({
+        deviceId: status.deviceId,
+        isOnline: status.isOnline,
+        lastSeen: status.lastSeen,
+        source: status.source
+      }));
+      
+      ws.send(JSON.stringify({
+        type: 'deviceList',
+        devices: deviceList
+      }));
+      
+    } catch (error) {
+      console.error('❌ [Admin WebSocket] Error sending periodic status update:', error);
+    }
+  }
+
+  /**
    * Send unregister notification to a specific device
    * @param {string} deviceId - Device identifier
    */
@@ -982,9 +1265,23 @@ class DeviceStatusService {
       source: source
     };
     
+    // Send to all connections (including admin)
     this.broadcast({
       type: 'deviceUpdate',
       device: device
+    });
+    
+    // Also send individual device update format for admin connections
+    this.activeConnections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN && ws.isAdmin) {
+        ws.send(JSON.stringify({
+          type: 'deviceUpdate',
+          deviceId: deviceId,
+          isOnline: isOnline,
+          lastSeen: device.lastSeen,
+          source: source
+        }));
+      }
     });
     
     console.log(`📡 [Broadcast] Device ${deviceId} status: ${isOnline ? 'ONLINE' : 'OFFLINE'} (source: ${source})`);
@@ -995,6 +1292,30 @@ class DeviceStatusService {
       isOnline, 
       source === 'websocket' ? 'websocket_update' : 'database_update'
     );
+  }
+
+  broadcastLocationUpdate(deviceId, locationData) {
+    // Send location update to admin connections only
+    this.activeConnections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN && ws.isAdmin) {
+        ws.send(JSON.stringify({
+          type: 'locationUpdate',
+          deviceId: deviceId,
+          location: {
+            lat: locationData.lat,
+            lng: locationData.lng,
+            speed: locationData.speed,
+            heading: locationData.heading,
+            accuracy: locationData.accuracy,
+            address: locationData.address,
+            timestamp: locationData.timestamp,
+            isOnline: locationData.isOnline
+          }
+        }));
+      }
+    });
+    
+    console.log(`📍 [Broadcast] Location update for ${deviceId}: ${locationData.lat}, ${locationData.lng} (online: ${locationData.isOnline})`);
   }
 
   startPingInterval() {
@@ -1048,7 +1369,9 @@ class DeviceStatusService {
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       });
 
-      logger.websocket(`🔄 Real-Time Connection Check: ${this.activeConnections.size}`);
+      if (process.env.DEBUG_WEBSOCKET === 'true') {
+        logger.debug(`Real-Time Connection Check: ${this.activeConnections.size}`);
+      }
     }, 10000); // 10 seconds for faster real-time checking
   }
 
@@ -1194,6 +1517,43 @@ class DeviceStatusService {
           connection.ws.send(JSON.stringify(syncMessage));
         } catch (error) {
           console.error(`❌ [SlotSync] Error sending sync to slot ${slotNumber}:`, error);
+        }
+      }
+    });
+  }
+
+  // Broadcast display data from master (Slot 1) to slave (Slot 2)
+  broadcastDisplayData(materialId, sourceSlotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      console.log(`⚠️ [DisplayData] No material connections found for ${materialId}`);
+      return;
+    }
+
+    // Only broadcast if source is Slot 1 (master)
+    if (sourceSlotNumber !== 1) {
+      console.log(`⚠️ [DisplayData] Ignoring displayData from Slot ${sourceSlotNumber} - only Slot 1 can broadcast`);
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    const displayMessage = {
+      type: 'displayData',
+      sourceSlot: sourceSlotNumber,
+      materialId: materialId,
+      data: message.data,
+      timestamp: message.timestamp || new Date().toISOString()
+    };
+
+    console.log(`📺 [DisplayData] Broadcasting display data from Slot ${sourceSlotNumber} to slaves`);
+
+    // Send to all other slots (only Slot 2 should receive)
+    connections.forEach((ws) => {
+      if (ws.slotNumber !== sourceSlotNumber && ws.readyState === WebSocket.OPEN) {
+        console.log(`📺 [DisplayData] Sending display data to Slot ${ws.slotNumber}`);
+        try {
+          ws.send(JSON.stringify(displayMessage));
+        } catch (error) {
+          console.error(`❌ [DisplayData] Error sending to Slot ${ws.slotNumber}:`, error);
         }
       }
     });

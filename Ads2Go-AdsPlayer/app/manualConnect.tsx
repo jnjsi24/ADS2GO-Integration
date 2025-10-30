@@ -88,7 +88,16 @@ export default function ManualConnectScreen() {
           ]
         );
       } else {
-        Alert.alert('Registration Failed', result.message);
+        // ✅ Check if blocked due to 8-hour completion lock
+        if (result.blocked && result.reason === '8_HOUR_LOCK') {
+          Alert.alert(
+            '🔒 Ad Player Locked',
+            `You completed your 8-hour requirement yesterday.\n\nThe ad player is locked until 8:00 AM to prevent early starts.\n\nPlease try again after 8:00 AM.`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('Registration Failed', result.message);
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');

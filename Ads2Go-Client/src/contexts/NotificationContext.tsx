@@ -61,57 +61,65 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [deleteAllNotificationsMutation] = useMutation(DELETE_ALL_NOTIFICATIONS);
 
   // Fetch user notification preferences
-  const { data: preferencesData } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
+  const { data: preferencesData, error: preferencesError } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
     skip: !isAuthenticated || !user,
-    onCompleted: (data) => {
-      console.log('🔔 Notification preferences loaded:', data);
-      if (data?.getUserNotificationPreferences) {
-        setEnableNotificationBadge(data.getUserNotificationPreferences.enableNotificationBadge);
-      }
-    },
-    onError: (error) => {
-      console.error('❌ Error fetching notification preferences:', error);
-      // Keep default value (true) if there's an error
-    }
   });
 
+  // Handle notification preferences data
+  useEffect(() => {
+    if (preferencesData) {
+      if (preferencesData?.getUserNotificationPreferences) {
+        setEnableNotificationBadge(preferencesData.getUserNotificationPreferences.enableNotificationBadge);
+      }
+    }
+  }, [preferencesData]);
+
+  // Handle notification preferences error
+  useEffect(() => {
+    if (preferencesError) {
+      console.error('❌ Error fetching notification preferences:', preferencesError);
+      // Keep default value (true) if there's an error
+    }
+  }, [preferencesError]);
+
   // Debug user authentication
-  console.log('🔔 NotificationContext: User auth state:', { user, isAuthenticated });
+  // console.log('🔔 NotificationContext: User auth state:', { user, isAuthenticated });
 
   // Fetch notifications
   const { data, loading, error: queryError, refetch } = useQuery(GET_USER_NOTIFICATIONS, {
     fetchPolicy: 'cache-and-network',
     skip: !isAuthenticated || !user, // Skip if user is not authenticated
-    onCompleted: (data) => {
-      console.log('🔔 NotificationContext: Query completed with data:', data);
+  });
+
+  // Handle notifications data
+  useEffect(() => {
+    if (data) {
       if (data?.getUserNotifications) {
-        // Debug the createdAt values
-        data.getUserNotifications.forEach((notif: Notification, index: number) => {
-          console.log(`🔔 Notification ${index + 1} createdAt:`, notif.createdAt, typeof notif.createdAt);
-        });
         setNotifications(data.getUserNotifications);
-        console.log('🔔 NotificationContext: Set notifications:', data.getUserNotifications);
       } else {
-        console.log('🔔 NotificationContext: No notifications found');
         setNotifications([]);
       }
       setIsLoading(false);
-    },
-    onError: (error) => {
-      console.error('❌ NotificationContext: Error fetching notifications:', error);
-      console.error('❌ NotificationContext: Error details:', error);
-      setError(error.message);
+    }
+  }, [data]);
+
+  // Handle notifications error
+  useEffect(() => {
+    if (queryError) {
+      console.error('❌ NotificationContext: Error fetching notifications:', queryError);
+      console.error('❌ NotificationContext: Error details:', queryError);
+      setError(queryError.message);
       setIsLoading(false);
     }
-  });
+  }, [queryError]);
 
   // Debug the query state
-  console.log('🔔 NotificationContext: Query state:', { data, loading, error: queryError });
-  console.log('🔔 NotificationContext: User token check:', {
-    hasUserToken: !!localStorage.getItem('userToken'),
-    hasAdminToken: !!localStorage.getItem('adminToken'),
-    userToken: localStorage.getItem('userToken')?.substring(0, 20) + '...',
-  });
+  // console.log('🔔 NotificationContext: Query state:', { data, loading, error: queryError });
+  // console.log('🔔 NotificationContext: User token check:', {
+  //   hasUserToken: !!localStorage.getItem('userToken'),
+  //   hasAdminToken: !!localStorage.getItem('adminToken'),
+  //   userToken: localStorage.getItem('userToken')?.substring(0, 20) + '...',
+  // });
 
   // TODO: Add real-time notifications with WebSocket or polling
   // For now, notifications will be fetched on page load and refresh

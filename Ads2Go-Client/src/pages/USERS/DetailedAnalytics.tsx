@@ -502,14 +502,14 @@ const DetailedAnalytics: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
       {/* Background layer */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+        className="absolute inset-0 bg-cover bg-center bg-fixed blur-3xl brightness-90"
         style={{
           backgroundImage: "url('/image/bg.jpg')",
         }}
       />
       
       {/* Content layer */}
-      <div className="relative z-10 min-h-screen pl-64">
+      <div className="relative z-10 min-h-screen pl-64 mb-10">
         {/* Header */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-4 mt-12">

@@ -21,7 +21,8 @@ const getDriverFromToken = async (token) => {
     }
     
     if (!decoded.driverId) {
-      logger.error('❌ Driver Auth Error: No driverId in token');
+      // Only log this error in verbose mode to reduce spam
+      logger.verbose('❌ Driver Auth Error: No driverId in token');
       return null;
     }
 
@@ -83,7 +84,8 @@ const driverMiddleware = async ({ req }) => {
   if (driver) {
     console.log('✅ Driver authenticated:', driver.driverId, driver.accountStatus);
   } else if (token) {
-    logger.warn('⚠️  Driver token provided but authentication failed');
+    // Only log this warning in verbose mode to reduce spam
+    logger.verbose('⚠️  Driver token provided but authentication failed');
   }
   
   return { driver }; // can be null if not authenticated

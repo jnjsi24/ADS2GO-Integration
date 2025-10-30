@@ -55,7 +55,7 @@ const AdminNotifications: React.FC = () => {
 
   // Fetch general admin notifications (excluding device-specific notifications)
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
-    pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
     fetchPolicy: 'cache-and-network', // Ensure we get fresh data
   });
 

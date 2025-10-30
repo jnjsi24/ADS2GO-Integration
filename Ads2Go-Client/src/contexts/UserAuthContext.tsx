@@ -85,12 +85,8 @@ export const UserAuthProvider: React.FC<{
       const token = localStorage.getItem('userToken');
       const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
       const loginTimestamp = localStorage.getItem('loginTimestamp');
-      
-      console.log('🔍 UserAuthContext: Token from localStorage:', token ? 'Token exists' : 'No token');
-      console.log('🔍 UserAuthContext: Keep logged in:', keepLoggedIn);
 
       if (!token) {
-        console.log('❌ UserAuthContext: No token found, setting user to null');
         setUser(null);
         setUserEmail('');
         setIsLoading(false);
@@ -104,7 +100,6 @@ export const UserAuthProvider: React.FC<{
         const isExpired = Date.now() - parseInt(loginTimestamp) > thirtyDaysInMs;
         
         if (isExpired) {
-          console.log('❌ UserAuthContext: Persistent login expired, clearing data');
           localStorage.removeItem('userToken');
           localStorage.removeItem('keepLoggedIn');
           localStorage.removeItem('loginTimestamp');
@@ -122,7 +117,6 @@ export const UserAuthProvider: React.FC<{
           const isTokenExpired = Date.now() > tokenExpiry;
           
           if (isTokenExpired) {
-            console.log('❌ UserAuthContext: Token expired, clearing data');
             localStorage.removeItem('userToken');
             localStorage.removeItem('keepLoggedIn');
             localStorage.removeItem('loginTimestamp');
@@ -133,7 +127,6 @@ export const UserAuthProvider: React.FC<{
             return;
           }
         } catch (error) {
-          console.log('❌ UserAuthContext: Invalid token format, clearing data');
           localStorage.removeItem('userToken');
           localStorage.removeItem('keepLoggedIn');
           localStorage.removeItem('loginTimestamp');
@@ -146,19 +139,13 @@ export const UserAuthProvider: React.FC<{
       }
 
       try {
-        console.log('🔍 UserAuthContext: Decoding JWT token...');
         const decoded = jwtDecode<any>(token);
-        console.log('🔍 UserAuthContext: Decoded token:', decoded);
         if (!decoded?.email || decoded?.role !== 'USER') {
-          console.log('❌ UserAuthContext: Invalid token - email or role mismatch');
           throw new Error('Invalid user token');
         }
 
-        console.log('🔍 UserAuthContext: Fetching user details...');
         const { data } = await fetchUserDetails();
-        console.log('🔍 UserAuthContext: Raw response:', data);
         const freshUserRaw = data?.getOwnUserDetails;
-        console.log('🔍 UserAuthContext: User details:', freshUserRaw);
         
         if (!freshUserRaw) {
           throw new Error('User not found');
@@ -197,8 +184,6 @@ export const UserAuthProvider: React.FC<{
           contactNumber: freshUserRaw.contactNumber,
           profilePicture: getImageUrl(freshUserRaw.profilePicture),
         };
-
-        console.log('🔄 UserAuthContext: Setting user from initialization:', freshUser);
         setUser(freshUser);
         setUserEmail(freshUser.email);
         setIsLoading(false);
@@ -281,8 +266,6 @@ export const UserAuthProvider: React.FC<{
           contactNumber: userRaw.contactNumber,
           profilePicture: userRaw.profilePicture,
         };
-
-        console.log('🔄 UserAuthContext: Setting user from login:', user);
         setUser(user);
         setUserEmail(user.email);
 
@@ -291,9 +274,7 @@ export const UserAuthProvider: React.FC<{
           return user;
         }
 
-        console.log('🚀 Navigating to dashboard...');
         setTimeout(() => {
-          console.log('📍 Executing navigation to /dashboard');
           navigate('/dashboard');
         }, 0);
 

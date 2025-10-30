@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, CalendarPlus, ChevronLeft, ChevronRight, Clock, Monitor } from 'lucide-react';
 import { useQuery } from '@apollo/client';
-import { GET_ALL_ADS, type Ad } from '../../../../graphql/admin/ads';
+import { GET_ALL_ADS, GET_ALL_DEPLOYMENTS, type Ad, type AdDeployment } from '../../../../graphql/admin/ads';
 
 interface ScheduleTabProps {
   statusFilter: string;
@@ -23,6 +23,12 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
 
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all'
+  });
+
+  // Also query deployments to get scheduled slots
+  const { data: deploymentsData } = useQuery(GET_ALL_DEPLOYMENTS, {
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all'
   });
@@ -154,14 +160,102 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
   const groupedByMaterial = useMemo(() => {
     const source: Ad[] = filteredAds.length > 0 ? filteredAds : (data?.getAllAds ?? []);
     const map = new Map<string, Ad[]>();
-    source.forEach((ad) => {
-      const materialId = typeof ad.materialId === 'string' ? ad.materialId : (ad.materialId?.materialId || ad.materialId?.id || 'Unknown Material');
-      const current = map.get(materialId) ?? [];
-      current.push(ad);
-      map.set(materialId, current);
+    const now = new Date();
+    const processedAdIds = new Set<string>(); // Track which ads we've already added
+    
+    // ✅ FIRST: Check deployment slots for SCHEDULED slots (this takes priority)
+    const deployments: AdDeployment[] = deploymentsData?.getAllDeployments ?? [];
+    deployments.forEach((deployment) => {
+      deployment.lcdSlots?.forEach((slot) => {
+        // Only include SCHEDULED slots with future start times
+        if (slot.status !== 'SCHEDULED') return;
+        if (!slot.startTime) return;
+        
+        const slotStartTime = new Date(slot.startTime);
+        if (slotStartTime <= now) return; // Skip slots that already started
+        
+        const adId = slot.ad?.id || slot.adId;
+        if (processedAdIds.has(adId)) return; // Skip duplicates
+        
+        // Create a virtual Ad object from the slot
+        const virtualAd: Ad = {
+          id: adId,
+          title: slot.ad?.title || 'Unknown',
+          description: slot.ad?.description || '',
+          adType: 'DIGITAL',
+          adFormat: slot.ad?.adFormat || 'VIDEO',
+          status: 'SCHEDULED', // Use slot status
+          paymentStatus: 'PAID', // Assume paid since it's deployed
+          startTime: slot.startTime,
+          endTime: slot.endTime || '',
+          mediaFile: slot.ad?.mediaFile || slot.mediaFile || '',
+          price: 0,
+          totalPrice: 0,
+          durationDays: 0,
+          numberOfDevices: 0,
+          adLengthSeconds: 0,
+          playsPerDayPerDevice: 0,
+          totalPlaysPerDay: 0,
+          pricePerPlay: 0,
+          createdAt: slot.ad?.createdAt || '',
+          updatedAt: '',
+          userId: null,
+          materialId: null,
+          planId: null
+        };
+        
+        processedAdIds.add(adId);
+        
+        // Group by material (using deployment's materialId, not the ad's)
+        const materialId = deployment.materialId;
+        const current = map.get(materialId) ?? [];
+        current.push(virtualAd);
+        map.set(materialId, current);
+      });
     });
+    
+    // SECOND: Add ads from the Ad collection (only if not already in deployment slots)
+    // Note: In practice, all ads should already be in deployment slots since
+    // ad creation requires at least 1 device. This is just a safety fallback.
+    source.forEach((ad) => {
+      // Skip if already added from deployment slots
+      if (processedAdIds.has(ad.id)) {
+        return;
+      }
+      
+      // Filter 1: Only SCHEDULED status
+      if (ad.status !== 'SCHEDULED') {
+        return;
+      }
+      
+      // Filter 2: Only PAID payment status
+      if (ad.paymentStatus !== 'PAID') {
+        return;
+      }
+      
+      // Filter 3: Only ads waiting to start (startTime in future)
+      const startTime = parseDate(ad.startTime);
+      if (startTime && startTime <= now) {
+        return; // Skip ads that have already started
+      }
+      
+      // Only include ads that have a material assigned
+      // (Skip ads without materials since they shouldn't exist in the system)
+      const materialId = typeof ad.materialId === 'string' 
+        ? ad.materialId 
+        : (ad.materialId?.materialId || ad.materialId?.id || null);
+      
+      if (materialId) {
+        processedAdIds.add(ad.id);
+        const current = map.get(materialId) ?? [];
+        current.push(ad);
+        map.set(materialId, current);
+      }
+      // Note: Removed "Not Deployed" section since all ads must be deployed during creation
+    });
+    
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filteredAds, data]);
+  }, [filteredAds, data, deploymentsData]);
 
   const periodLabel = useMemo(() => {
     if (scheduleView === 'month') return cursorDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -245,6 +339,8 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
                             className={`px-3 py-1 rounded ${
                               ad.status === 'RUNNING'
                                 ? 'bg-green-100 text-green-700'
+                                : ad.status === 'SCHEDULED'
+                                ? 'bg-purple-100 text-purple-700'
                                 : ad.status === 'APPROVED'
                                 ? 'bg-blue-100 text-blue-700'
                                 : ad.status === 'PENDING'

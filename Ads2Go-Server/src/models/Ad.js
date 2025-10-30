@@ -76,9 +76,15 @@ const AdSchema = new mongoose.Schema({
   // Approval & tracking
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'SCHEDULED', 'RUNNING', 'ENDED', 'CANCELLED'],
     default: 'PENDING',
     required: true
+  },
+  
+  // ✅ NEW: Slot reservation expiration (for unpaid ads)
+  reservationExpires: {
+    type: Date,
+    default: null
   },
   adStatus: {
     type: String,
@@ -87,8 +93,8 @@ const AdSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
-    default: 'PENDING'
+    enum: [null, 'PENDING', 'PAID', 'FAILED'],
+    default: null
   },
 
   impressions: { type: Number, default: 0 },
@@ -271,12 +277,35 @@ AdSchema.post('save', async function (doc) {
       let deploymentSuccess = true;
       const deploymentResults = [];
       
+      // ✅ ENHANCED: Validate device availability before deployment
+      const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+      
       for (const material of targetMaterials) {
         if (!material.driverId) {
           console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: No driver assigned`);
           deploymentSuccess = false;
+          deploymentResults.push({
+            materialId: material.materialId,
+            success: false,
+            error: 'No driver assigned'
+          });
           continue;
         }
+        
+        // ✅ NEW: Validate that material has a registered device
+        const deviceValidation = await validateMaterialHasDevice(material.materialId);
+        if (!deviceValidation.hasDevice) {
+          console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: ${deviceValidation.reason}`);
+          deploymentSuccess = false;
+          deploymentResults.push({
+            materialId: material.materialId,
+            success: false,
+            error: deviceValidation.reason
+          });
+          continue;
+        }
+        
+        console.log(`✅ Device validation passed for ${material.materialId}: ${deviceValidation.reason}`);
 
         // Determine deployment method based on material type
         if (material.materialType === 'HEADDRESS') {

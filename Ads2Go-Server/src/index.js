@@ -86,6 +86,7 @@ const newsletterRoutes = require('./routes/newsletter');
 const cleanupRoutes = require('./routes/cleanup');
 const deviceHoursNotificationRoutes = require('./routes/deviceHoursNotification');
 const deviceOfflineNotificationRoutes = require('./routes/deviceOfflineNotification');
+const diagnosticDeviceHoursRoutes = require('./routes/diagnosticDeviceHours');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -98,8 +99,13 @@ if (!process.env.MONGODB_URI) {
 }
 
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
+  serverSelectionTimeoutMS: 30000, // Increased from 10000 to 30000
+  socketTimeoutMS: 75000, // Increased from 45000 to 75000
+  maxPoolSize: 10, // Maximum number of connections in the pool
+  minPoolSize: 2, // Minimum number of connections to maintain
+  maxIdleTimeMS: 30000, // Close idle connections after 30 seconds
+  retryWrites: true,
+  retryReads: true,
 })
   .then(() => logger.info('\n💾 MongoDB: Connected to Atlas'))
   .catch(err => {
@@ -200,7 +206,8 @@ async function startServer() {
 
       // In development, allow all origins for easier debugging
       if (process.env.NODE_ENV === 'development') {
-        logger.debug(`🔓 Development mode: Allowing origin ${origin}`);
+        // Only log CORS in verbose mode to reduce spam
+        logger.verbose(`🔓 Development mode: Allowing origin ${origin}`);
         return callback(null, true);
       }
 
@@ -288,9 +295,12 @@ app.use('/cron-test', require('./routes/cronTest'));
 app.use('/updateTracking', require('./routes/updateTracking'));
 app.use('/api/deviceDataHistoryV2', require('./routes/deviceDataHistoryV2'));
 app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
+app.use('/api/adAnalytics', require('./routes/adAnalytics'));
 app.use('/api/device-hours', deviceHoursNotificationRoutes);
 app.use('/api/device-offline', deviceOfflineNotificationRoutes);
+app.use('/api/diagnostic', diagnosticDeviceHoursRoutes);
 app.use('/api/cleanup-notifications', require('./routes/cleanupNotifications'));
+app.use('/api/admin', require('./routes/createIndexes'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

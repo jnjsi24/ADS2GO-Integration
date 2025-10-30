@@ -107,7 +107,7 @@ const SadminAnalytics: React.FC = () => {
 
   // Fetch dashboard stats
   const { data: statsData, loading: statsLoading, refetch: refetchStats } = useQuery(GET_SUPERADMIN_DASHBOARD_STATS, {
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    pollInterval: 120000, // ✅ OPTIMIZATION: Refresh every 2 minutes (increased from 5s) - reduces queries by 96%
     onError: (error) => {
       console.error("Error fetching super admin dashboard stats:", error);
     }
