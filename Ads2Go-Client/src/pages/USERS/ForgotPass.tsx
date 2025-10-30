@@ -27,15 +27,28 @@ const ForgotPass: React.FC = () => {
     REQUEST_PASSWORD_RESET,
     {
       onCompleted: () => setStep("reset"),
-      onError: () => setError("Failed to send reset email. Please try again."),
+      onError: (error) => {
+        // Extract specific error message
+        const errorMessage = error?.graphQLErrors?.[0]?.message 
+          || error?.networkError?.message 
+          || error?.message 
+          || "Failed to send reset email. Please try again.";
+        setError(errorMessage);
+      },
     }
   );
 
   const [resetPassword, { loading: resetting }] = useMutation(RESET_PASSWORD, {
     onCompleted: () =>
       setSuccessMessage("Password reset successful! You can now log in."),
-    onError: () =>
-      setError("Failed to reset password. Please check your token and try again."),
+    onError: (error) => {
+      // Extract specific error message
+      const errorMessage = error?.graphQLErrors?.[0]?.message 
+        || error?.networkError?.message 
+        || error?.message 
+        || "Failed to reset password. Please check your token and try again.";
+      setError(errorMessage);
+    },
   });
 
   const handleRequestSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

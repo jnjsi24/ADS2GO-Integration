@@ -96,6 +96,50 @@ const Dashboard: React.FC<DashboardProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Bulk Operations */}
+        {selectedScreens.length > 0 && (
+          <div className="bg-blue-50 p-4 rounded-lg mb-4">
+            <h4 className="font-medium mb-3">Bulk Operations ({selectedScreens.length} selected)</h4>
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={() => onBulkAction('play')}
+                className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
+              >
+                <Play className="w-4 h-4 inline mr-1" />
+                Play Selected
+              </button>
+              <button 
+                onClick={() => onBulkAction('pause')}
+                className="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-md text-sm hover:bg-yellow-200"
+              >
+                <Pause className="w-4 h-4 inline mr-1" />
+                Pause Selected
+              </button>
+              <button 
+                onClick={() => onBulkAction('lock')}
+                className="px-3 py-1 bg-orange-100 text-orange-600 rounded-md text-sm hover:bg-orange-200"
+              >
+                <Lock className="w-4 h-4 inline mr-1" />
+                Lock Selected
+              </button>
+              <button 
+                onClick={() => onBulkAction('unlock')}
+                className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
+              >
+                <Unlock className="w-4 h-4 inline mr-1" />
+                Unlock Selected
+              </button>
+              <button 
+                onClick={() => onBulkAction('sync')}
+                className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200"
+              >
+                <Monitor className="w-4 h-4 inline mr-1" />
+                Sync Selected
+              </button>
+            </div>
+          </div>
+        )}
         
         <div className="overflow-x-auto">
           {screens.length === 0 ? (
@@ -150,43 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                       </button>
                     </div>
-                    {selectedScreens.includes(screen.deviceId) ? (
-                      <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                        <button 
-                          onClick={() => onBulkAction('play')}
-                          className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
-                        >
-                          <Play className="w-4 h-4" />
-                          <span>Play</span>
-                        </button>
-
-                        <button 
-                          onClick={() => onBulkAction('pause')}
-                          className="flex items-center gap-1 px-3 py-1 bg-yellow-100 text-yellow-600 rounded-md text-sm hover:bg-yellow-200"
-                        >
-                          <Pause className="w-4 h-4" />
-                          <span>Pause</span>
-                        </button>
-
-                        <button 
-                          onClick={() => onBulkAction('stop')}
-                          className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-600 rounded-md text-sm hover:bg-red-200"
-                        >
-                          <Square className="w-4 h-4" />
-                          <span>Stop</span>
-                        </button>
-
-                        <button 
-                          onClick={() => onBulkAction('sync')}
-                          className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          <span>Sync</span>
-                        </button>
-                      </div>
-
-                    ) : (
-                      <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
+                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
                         {/* Individual Device Controls */}
                         <div className="relative group">
                           <button
@@ -291,7 +299,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                           </div>
                         </div>
                       </div>
-                    )}
                   </div>
 
                   {/* Middle Section: Status, Current Ad, Progress */}
@@ -388,50 +395,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
-
-      {/* Bulk Operations */}
-      {selectedScreens.length > 0 && (
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-3">Bulk Operations ({selectedScreens.length} selected)</h4>
-          <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={() => onBulkAction('play')}
-              className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
-            >
-              <Play className="w-4 h-4 inline mr-1" />
-              Play Selected
-            </button>
-            <button 
-              onClick={() => onBulkAction('pause')}
-              className="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-md text-sm hover:bg-yellow-200"
-            >
-              <Pause className="w-4 h-4 inline mr-1" />
-              Pause Selected
-            </button>
-            <button 
-              onClick={() => onBulkAction('lock')}
-              className="px-3 py-1 bg-orange-100 text-orange-600 rounded-md text-sm hover:bg-orange-200"
-            >
-              <Lock className="w-4 h-4 inline mr-1" />
-              Lock Selected
-            </button>
-            <button 
-              onClick={() => onBulkAction('unlock')}
-              className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
-            >
-              <Unlock className="w-4 h-4 inline mr-1" />
-              Unlock Selected
-            </button>
-            <button 
-              onClick={() => onBulkAction('sync')}
-              className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200"
-            >
-              <Monitor className="w-4 h-4 inline mr-1" />
-              Sync Selected
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
