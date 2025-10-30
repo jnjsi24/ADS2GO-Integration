@@ -3,9 +3,11 @@ import React from 'react';
 interface TermsOfServiceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onConfirm?: () => void;
+  confirmLabel?: string;
 }
 
-const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClose }) => {
+const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClose, onConfirm, confirmLabel = 'Agree' }) => {
   if (!isOpen) return null;
 
   return (
@@ -119,6 +121,33 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClo
                 <p>Address: Makati City, Metro Manila, Philippines 1200</p>
               </div>
             </section>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+            {onConfirm ? (
+              <>
+                <button
+                  className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={onClose}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  onClick={onConfirm}
+                >
+                  {confirmLabel}
+                </button>
+              </>
+            ) : (
+              <button
+                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                onClick={onClose}
+              >
+                I Understand
+              </button>
+            )}
           </div>
         </div>
       </div>
