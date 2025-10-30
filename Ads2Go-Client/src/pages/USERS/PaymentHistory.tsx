@@ -311,6 +311,9 @@ const PaymentHistory: React.FC = () => {
 
   {/* Main Content */}
   <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:pt-10 lg:p-8">
+
+    {/* ======= DESKTOP VIEW ======= */}
+    <div className="hidden lg:block">
     {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 pt-12 lg:pt-0">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Payment History</h1>
@@ -557,16 +560,8 @@ const PaymentHistory: React.FC = () => {
           </button>
         </div>
       </div>
-
-      {/* Payment modal */}
-      {isModalOpen && selectedPayment && (
-        <Payment
-          paymentItem={convertToPaymentItem(selectedPayment)}
-          paymentType={selectedPaymentType}
-          onClose={closeModal}
-          onSuccess={handlePaymentSuccess} // Added to refresh UI after payment
-        />
-      )}
+    </div>
+    {/* End Desktop View */}
 
     {/* ======= MOBILE VIEW ======= */}
     <div className="block lg:hidden relative z-10 min-h-screen bg-transparent px-4 py-6">
@@ -733,7 +728,21 @@ const PaymentHistory: React.FC = () => {
         </div>
       </div>
     </div>
-    </div>
+    {/* End Mobile View */}
+
+    {/* Payment modal - Shared between Desktop and Mobile */}
+    {isModalOpen && selectedPayment && (
+      <Payment
+        paymentItem={convertToPaymentItem(selectedPayment)}
+        paymentType={selectedPaymentType}
+        onClose={closeModal}
+        onSuccess={handlePaymentSuccess}
+      />
+    )}
+  </div>
+  {/* End Main Content */}
+  {/* End Main Container */}
+  </div>
   );
 };
 

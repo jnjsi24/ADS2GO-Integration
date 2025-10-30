@@ -1230,10 +1230,7 @@ const Reports: React.FC = () => {
 
           {/* Rows */}
           <div className="flex-1">
-            {filteredReports.length === 0 ? (
-              <div></div>
-            ) : (
-              paginatedReports.map((report: Report) => (
+            {paginatedReports.map((report: Report) => (
             <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
               {/* Mobile Card View */}
               <div className="md:hidden p-4">
