@@ -8,6 +8,7 @@ import 'leaflet-defaulticon-compatibility';
 import { AdminLoader } from "../../components/ProtectedRoute";
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import { screenComplianceService } from '../../services/screenComplianceService';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -21,7 +22,10 @@ import {
   XCircle,
   RefreshCw,
   Users,
-  Activity,
+  Activity, 
+  ChevronDown,
+  MapPin,
+  X,
   BarChart3
 } from 'lucide-react';
 
@@ -192,6 +196,16 @@ const ScreenTracking: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(true);
+  const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
+  const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
+  const [activeDetailTab, setActiveDetailTab] = useState<'device' | 'progress'>('device');
+  
+  // Enhanced route map controls
+  const [showSpeedColors, setShowSpeedColors] = useState(true);
+  const [showWaypoints, setShowWaypoints] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const toggleDropdown = () => setIsOpen((prev) => !prev);
   
   // Simplified route display - only road snapping enabled
   const snapToRoads = true;      // Always snap to roads for accurate route display
@@ -1057,9 +1071,6 @@ const ScreenTracking: React.FC = () => {
         </div>
       </div>
 
-             {/* Debug Info */}
-
-
       {/* Compliance Summary */}
       {complianceReport && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -1069,25 +1080,53 @@ const ScreenTracking: React.FC = () => {
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Users className="w-6 h-6 text-blue-600" />
                 </div>
-                               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Total Screens</p>
-                 <p className="text-2xl font-bold text-gray-900">{screens?.length || 0}</p>
-               </div>
-             </div>
-           </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Screens</p>
+                  <p className="text-2xl font-bold text-gray-900">{screens?.length || 0}</p>
+                </div>
+              </div>
+            </div>
 
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <Activity className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Online</p>
-                 <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isOnline).length || 0}</p>
-               </div>
-             </div>
-           </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Activity className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Online</p>
+                  <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isOnline).length || 0}</p>
+                </div>
+              </div>
+            </div>
 
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
+                  <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isCompliant).length || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-yellow-100 rounded-lg">
+                  <Clock className="w-6 h-6 text-yellow-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Avg Hours</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {screens && screens.length > 0 
+                      ? (screens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / screens.length).toFixed(1)
+                      : '0.0'
+                    }h
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1129,7 +1168,160 @@ const ScreenTracking: React.FC = () => {
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
                       </button>
                       
-                      {/* Road snapping works silently in background - no UI indicator needed */}
+                      {/* Enhanced Route Controls */}
+                      <div className="relative w-36 inline-block text-sm z-[9999]">
+                        {/* Dropdown Button */}
+                        <div
+                          onClick={toggleDropdown}
+                          className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                        >
+                          <span className="text-gray-700">Map Settings</span>
+                          <motion.div
+                            animate={{ rotate: isOpen ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                          </motion.div>
+                        </div>
+
+                        {/* Dropdown Menu */}
+                        <AnimatePresence>
+                          {isOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute mt-1 w-36 bg-white px-2 py-2 text-xs border border-gray-200 rounded-md shadow-lg z-10"
+                            >
+                              <div className="p-2 space-y-2">
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Speed Colors</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showSpeedColors}
+                                      onChange={(e) => setShowSpeedColors(e.target.checked)}
+                                      className="sr-only" // Hide the native checkbox
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showSpeedColors
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showSpeedColors ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showSpeedColors && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Waypoints</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showWaypoints}
+                                      onChange={(e) => setShowWaypoints(e.target.checked)}
+                                      className="sr-only"
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showWaypoints
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showWaypoints ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showWaypoints && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Metrics</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showMetrics}
+                                      onChange={(e) => setShowMetrics(e.target.checked)}
+                                      className="sr-only"
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showMetrics
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showMetrics ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showMetrics && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       
                       <div className="text-xs text-gray-500">
                         {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
@@ -1170,6 +1362,7 @@ const ScreenTracking: React.FC = () => {
                           setLoadingHistorical(isLoading);
                         }}
                       />
+                      
                       {/* Debug info */}
                       <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs z-[1000]">
                         <div>Selected Screen: {selectedScreen?.deviceId || 'N/A'}</div>

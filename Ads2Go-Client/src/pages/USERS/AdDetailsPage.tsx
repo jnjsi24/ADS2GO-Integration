@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { 
   ChevronLeft, 
+  ChevronRight,
   ChevronDown, 
   Truck, 
   Trophy, 
@@ -1222,8 +1223,7 @@ const AdDetailsPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 relative">
               <span
-                  className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
-
+                className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
                   ad.status === 'PENDING'
                     ? 'bg-yellow-100 text-yellow-800'
                     : ad.status === 'APPROVED'
@@ -1270,7 +1270,6 @@ const AdDetailsPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
             
             {/* Edit Button - Only show when ad is PENDING */}
             {ad.status === 'PENDING' && (
@@ -1410,7 +1409,7 @@ const AdDetailsPage: React.FC = () => {
               <button
                 onClick={() => setShowDeleteModal(true)}
                 disabled={deleteLoading || ad?.status !== 'PENDING'}
-                className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Ad'}
               </button>
@@ -1569,8 +1568,8 @@ const AdDetailsPage: React.FC = () => {
                   <h4 className="text-md font-semibold text-gray-800 mb-2">QR Code Scans</h4>
                   {qrImpressions.map((impression, index) => (
                     <div key={`${impression.id}-${index}`} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 shadow-md rounded-lg mb-2">
-                  <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
+                      <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
                         <p className="text-black/90 text-sm font-medium">
                           QR code scanned from {impression.materialId || 'Unknown Device'}
                         </p>
@@ -1582,9 +1581,9 @@ const AdDetailsPage: React.FC = () => {
                             </span>
                           )}
                         </p>
-                  </div>
-                </div>
-              ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1681,9 +1680,10 @@ const AdDetailsPage: React.FC = () => {
             <div className="flex flex-col space-y-4 flex-1">
               {/* Material Selection Dropdown */}
               <div className="relative mb-4 w-60 dropdown-container">
-            <button
-              onClick={() => setShowAdDropdown(!showAdDropdown)}
-              className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
+                <button
+                  onClick={() => setShowAdDropdown(!showAdDropdown)}
+                  className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"
+                >
                   <div className="flex flex-col items-start">
                     <div className="font-medium">
                       {selectedMaterialId 
@@ -1703,21 +1703,21 @@ const AdDetailsPage: React.FC = () => {
                           : '(Unknown Type)'}
                     </div>
                   </div>
-              <ChevronDown
-                size={16}
-                className={`transform transition-transform duration-200 ${
-                  showAdDropdown ? 'rotate-180' : 'rotate-0'
-                }`}
-              />
-            </button>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${
+                      showAdDropdown ? 'rotate-180' : 'rotate-0'
+                    }`}
+                  />
+                </button>
 
-            <AnimatePresence>
-              {showAdDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
+                <AnimatePresence>
+                  {showAdDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
                       className="absolute z-50 top-full mt-2 w-full shadow-lg bg-white/90 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
                     >
                       {adOptions.map((adOption, index) => {
@@ -1730,58 +1730,58 @@ const AdDetailsPage: React.FC = () => {
                             : null;
                         
                         return (
-                    <button
-                      key={adOption}
-                      onClick={() => {
-                        setSelectedAd(adOption);
+                          <button
+                            key={adOption}
+                            onClick={() => {
+                              setSelectedAd(adOption);
                               setSelectedMaterialId(materialId); // null for "All Materials", specific ID for individual materials
-                        setShowAdDropdown(false);
-                      }}
-                      className={`block w-full text-left px-4 py-2 ml-2 text-xs transition-colors duration-150 ${
-                        (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
-                          ? 'bg-blue-50 text-blue-700 font-medium'
-                          : 'text-gray-700 hover:bg-white/60'
-                      }`}
-                    >
-                      {adOption}
-                    </button>
+                              setShowAdDropdown(false);
+                            }}
+                            className={`block w-full text-left px-4 py-2 ml-2 text-xs transition-colors duration-150 ${
+                              (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
+                                ? 'bg-blue-50 text-blue-700 font-medium'
+                                : 'text-gray-700 hover:bg-white/60'
+                            }`}
+                          >
+                            {adOption}
+                          </button>
                         );
                       })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               <div className="max-h-64 overflow-y-auto">
-              {deviceLocations.map((location, index) => (
-                <div key={location.deviceId} className="flex items-start space-x-2">
-                  <div className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
-                    location.isOnline ? 'bg-green-500' : 'bg-red-500'
-                  }`}>
+                {deviceLocations.map((location, index) => (
+                  <div key={location.deviceId} className="flex items-start space-x-2">
+                    <div className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
+                      location.isOnline ? 'bg-green-500' : 'bg-red-500'
+                    }`}>
                       {index + 1}
                     </div>
                     <div className="flex flex-col">
                       <p className="text-xs text-black/90">
-                      {new Date(location.lastSeen).toLocaleTimeString()} | {location.totalDistance.toFixed(1)} km
+                        {new Date(location.lastSeen).toLocaleTimeString()} | {location.totalDistance.toFixed(1)} km
                       </p>
-                    <p className={`text-sm font-semibold px-2 py-1 rounded ${
-                      location.isOnline 
-                        ? 'text-green-600 bg-green-50' 
-                        : 'text-red-600 bg-red-50'
-                    }`}>
-                      {location.isOnline ? 'Online' : 'Offline'} • {location.currentHours.toFixed(1)}h today
-                    </p>
-                    <p className="text-xs text-gray-500">{location.address}</p>
+                      <p className={`text-sm font-semibold px-2 py-1 rounded ${
+                        location.isOnline 
+                          ? 'text-green-600 bg-green-50' 
+                          : 'text-red-600 bg-red-50'
+                      }`}>
+                        {location.isOnline ? 'Online' : 'Offline'} • {location.currentHours.toFixed(1)}h today
+                      </p>
+                      <p className="text-xs text-gray-500">{location.address}</p>
                     </div>
                   </div>
                 ))}
-              {deviceLocations.length === 0 && (
-                <div className="text-center text-black/90 py-10">
-                  <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  <p>No devices found for this ad.</p>
-                  <p className="text-xs text-gray-500 mt-1">Devices will appear here when they come online.</p>
-                </div>
-              )}
+                {deviceLocations.length === 0 && (
+                  <div className="text-center text-black/90 py-10">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p>No devices found for this ad.</p>
+                    <p className="text-xs text-gray-500 mt-1">Devices will appear here when they come online.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
