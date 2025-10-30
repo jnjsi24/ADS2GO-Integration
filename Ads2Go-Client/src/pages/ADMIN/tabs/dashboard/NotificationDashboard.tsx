@@ -226,7 +226,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
         await deleteAllNotifications();
       } else {
         // Delete selected notifications one by one
-        for (const notificationId of selectedNotifications) {
+        for (const notificationId of Array.from(selectedNotifications)) {
           await deleteNotification({
             variables: { notificationId }
           });
