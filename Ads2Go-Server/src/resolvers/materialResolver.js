@@ -396,7 +396,6 @@ const materialResolvers = {
 
       const material = new Material({
         ...input,
-        driverId: null, // unassigned on creation
       });
 
       console.log(`🔄 Creating material with input:`, input);

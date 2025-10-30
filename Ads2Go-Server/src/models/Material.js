@@ -53,7 +53,6 @@ const MaterialSchema = new mongoose.Schema({
   },
   driverId: {
     type: String,   // DRV-001, not ObjectId
-    default: null,
     index: true,
     sparse: true,
   },
@@ -166,7 +165,8 @@ MaterialSchema.index(
   { driverId: 1 },
   { 
     unique: true, 
-    partialFilterExpression: { driverId: { $exists: true } },
+    // Ensure uniqueness only when driverId has a non-null string value
+    partialFilterExpression: { driverId: { $exists: true, $type: 'string' } },
     name: 'driverId_unique_when_set'
   }
 );

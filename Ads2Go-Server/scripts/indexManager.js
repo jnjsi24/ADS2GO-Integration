@@ -28,6 +28,7 @@ const Ad = require('../src/models/Ad');
 const DeviceDataHistoryV2 = require('../src/models/deviceDataHistoryV2');
 const UserAnalytics = require('../src/models/userAnalytics');
 const DeviceTracking = require('../src/models/deviceTracking');
+const Material = require('../src/models/Material');
 
 // ANSI color codes for better output
 const colors = {
@@ -55,7 +56,8 @@ const MODELS = [
   { name: 'Ad', model: Ad, priority: 1 },
   { name: 'DeviceDataHistoryV2', model: DeviceDataHistoryV2, priority: 2 },
   { name: 'UserAnalytics', model: UserAnalytics, priority: 3 },
-  { name: 'DeviceTracking', model: DeviceTracking, priority: 4 }
+  { name: 'DeviceTracking', model: DeviceTracking, priority: 4 },
+  { name: 'Material', model: Material, priority: 5 }
 ];
 
 /**
