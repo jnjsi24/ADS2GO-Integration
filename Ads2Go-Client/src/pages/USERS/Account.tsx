@@ -55,6 +55,8 @@ const Account: React.FC = () => {
   const { user, setUser, logout } = useUserAuth();
   const [pos, setPos] = useState({ x: 50, y: 50 }); // for hover shine
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -116,7 +118,8 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const extension = file.name.split(".").pop()?.toLowerCase();
 
     if (!extension || !allowedExtensions.includes(extension)) {
-      alert("Unsupported file type. Allowed types: JPG, JPEG, PNG");
+      setErrorMessage("Unsupported file type. Allowed types: JPG, JPEG, PNG");
+      setSuccessMessage("");
       return;
     }
 
@@ -124,15 +127,21 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       // Upload the file to Firebase Storage
       const uploadedUrl = await uploadUserProfilePicture(file);
       setFormData(prev => ({ ...prev, profilePicture: uploadedUrl }));
+      setSuccessMessage("Profile picture uploaded successfully!");
+      setErrorMessage("");
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      alert('Error uploading profile picture. Please try again.');
+      setErrorMessage('Error uploading profile picture. Please try again.');
+      setSuccessMessage("");
     }
   }
 };
 
   const toggleEdit = async () => {
     if (isEditing) {
+      setErrorMessage("");
+      setSuccessMessage("");
+      
       try {
         const { data } = await updateUser({
           variables: {
@@ -151,7 +160,8 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         });
 
         if (data.updateUser.success) {
-          alert("Profile updated successfully!");
+          setSuccessMessage("Profile updated successfully!");
+          setErrorMessage("");
 
           // ✅ Update context AFTER save
           if (user) {
@@ -166,10 +176,23 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             });
           }
         } else {
-          alert("Update failed: " + data.updateUser.message);
+          setErrorMessage(data.updateUser.message || "Update failed. Please try again.");
+          setSuccessMessage("");
         }
       } catch (error: any) {
-        alert("Something went wrong: " + error.message);
+        // Extract specific error message
+        let errorMsg = "Something went wrong. Please try again.";
+        
+        if (error?.graphQLErrors && error.graphQLErrors.length > 0) {
+          errorMsg = error.graphQLErrors[0].message;
+        } else if (error?.networkError?.result?.errors && error.networkError.result.errors.length > 0) {
+          errorMsg = error.networkError.result.errors[0].message;
+        } else if (error?.message) {
+          errorMsg = error.message;
+        }
+        
+        setErrorMessage(errorMsg);
+        setSuccessMessage("");
       }
     }
     setIsEditing((prev) => !prev);
@@ -184,19 +207,36 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       const { data } = await deleteOwnAccount();
 
       if (data.deleteOwnAccount.success) {
-        alert(data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.");
+        setSuccessMessage(data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.");
+        setErrorMessage("");
         
-        // Log out the user
-        logout();
+        // Close modal first
+        setShowDeleteModal(false);
         
-        // Redirect to login page
-        navigate("/login");
+        // Wait a moment for user to see success message, then logout
+        setTimeout(() => {
+          logout();
+          navigate("/login");
+        }, 2000);
       } else {
-        alert("Failed to delete account: " + data.deleteOwnAccount.message);
+        setErrorMessage(data.deleteOwnAccount.message || "Failed to delete account. Please try again.");
+        setSuccessMessage("");
+        setShowDeleteModal(false);
       }
     } catch (error: any) {
-      alert("Error deleting account: " + (error.message || "Unknown error"));
-    } finally {
+      // Extract specific error message
+      let errorMsg = "Error deleting account. Please try again.";
+      
+      if (error?.graphQLErrors && error.graphQLErrors.length > 0) {
+        errorMsg = error.graphQLErrors[0].message;
+      } else if (error?.networkError?.result?.errors && error.networkError.result.errors.length > 0) {
+        errorMsg = error.networkError.result.errors[0].message;
+      } else if (error?.message) {
+        errorMsg = error.message;
+      }
+      
+      setErrorMessage(errorMsg);
+      setSuccessMessage("");
       setShowDeleteModal(false);
     }
   };
@@ -335,6 +375,32 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
         {/* Right Section */}
         <div className="flex-grow p-6 sm:p-8 space-y-6 sm:space-y-8 relative">
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+              <span className="block sm:inline">{errorMessage}</span>
+              <button
+                className="absolute top-0 bottom-0 right-0 px-4 py-3"
+                onClick={() => setErrorMessage("")}
+              >
+                <span className="text-xl">&times;</span>
+              </button>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {successMessage && (
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
+              <span className="block sm:inline">{successMessage}</span>
+              <button
+                className="absolute top-0 bottom-0 right-0 px-4 py-3"
+                onClick={() => setSuccessMessage("")}
+              >
+                <span className="text-xl">&times;</span>
+              </button>
+            </div>
+          )}
+
           <h3 className="text-base sm:text-lg font-bold text-black mb-4 sm:mb-6">Personal Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-6">
             {/* First Name & Middle Name */}

@@ -848,57 +848,6 @@ const Reports: React.FC = () => {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-md w-fit">
-          <button
-            onClick={() => {
-              setReportSource('users');
-              setCurrentPage(1);
-              setSelectedTypeFilter('All Types');
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-              reportSource === 'users'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Users size={18} />
-            <span className="font-medium">User Reports</span>
-          </button>
-          <button
-            onClick={() => {
-              setReportSource('drivers');
-              setCurrentPage(1);
-              setSelectedTypeFilter('All Types');
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-              reportSource === 'drivers'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Car size={18} />
-            <span className="font-medium">Driver Reports</span>
-          </button>
-          <button
-            onClick={() => {
-              setReportSource('messages');
-              setCurrentPage(1);
-              setSelectedTypeFilter('All Types');
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-              reportSource === 'messages'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <MessageSquare size={18} />
-            <span className="font-medium">General Inquiries</span>
-          </button>
-        </div>
-      </div>
-
       {/* Filters */}
       <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-6">
         <div className="flex flex-col items-end gap-3">
@@ -1072,6 +1021,30 @@ const Reports: React.FC = () => {
               <span
                 className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
                   reportSource === 'drivers' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`}
+              />
+            </button>
+
+            {/* GENERAL INQUIRIES BUTTON */}
+            <button
+              onClick={() => {
+                setReportSource('messages');
+                setCurrentPage(1);
+                setSelectedTypeFilter('All Types');
+              }}
+              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+                reportSource === 'messages'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <MessageSquare size={18} />
+              <span>General Inquiries</span>
+
+              {/* Animated underline */}
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                  reportSource === 'messages' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                 }`}
               />
             </button>

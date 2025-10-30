@@ -187,10 +187,10 @@ const DeviceDataHistoryV2: React.FC = () => {
 
   useEffect(() => {
     if (materials.length > 0) {
-      const deviceIds = [...new Set(materials.map(material => material.materialId))];
+      const deviceIds = Array.from(new Set(materials.map(material => material.materialId)));
       console.log('📱 Extracted devices from materials:', deviceIds);
       setDeviceFilterOptions(['All Device', ...deviceIds]);
-      console.log('Updated deviceFilterOptions:', ['All Device', ...deviceIds]); // Add this log
+      console.log('Updated deviceFilterOptions:', ['All Device', ...deviceIds]);
     }
   }, [materials]);
 
