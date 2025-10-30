@@ -393,13 +393,12 @@ const cancelDelete = () => {
       </div>
 
       {/* Table Header */}
-      <div className="hidden md:grid grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] text-gray-700 text-sm font-semibold px-6 pt-4 mb-4">
+      <div className="hidden md:grid grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr] text-gray-700 text-sm font-semibold px-6 pt-4 mb-4">
         <div>Image</div>
         <div>Title</div>
         <div>Price</div>
         <div>Status</div>
         <div>Date Created</div>
-        <div className="text-center">Actions</div>
       </div>
 
       {/* Ads List */}
@@ -419,7 +418,7 @@ const cancelDelete = () => {
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className={`grid md:grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] bg-white rounded-xl shadow-md px-4 md:px-6 py-4 items-center transition-shadow duration-200 hover:shadow-lg cursor-pointer`}
+                    className={`grid md:grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr] bg-white rounded-xl shadow-md px-4 md:px-6 py-4 items-center transition-shadow duration-200 hover:shadow-lg cursor-pointer`}
                     onClick={() => handleRowClick(ad.id)}
                   >
                     {/* Mobile Layout (Stacked Info) */}
@@ -454,49 +453,6 @@ const cancelDelete = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex justify-end items-center mt-3 gap-2">
-                        <span
-                          className={`px-3 py-1 text-xs font-medium rounded-full ${
-                            ad.status === "APPROVED" || ad.status === "RUNNING"
-                              ? "bg-green-200 text-green-800"
-                              : ad.status === "PENDING"
-                              ? "bg-yellow-200 text-yellow-800"
-                              : "bg-red-200 text-red-800"
-                          }`}
-                        >
-                          {capitalize(ad.status)}
-                        </span>
-                        <div
-                          className="flex items-center gap-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-
-                          
-                          {ad.status === "PENDING" && (
-                            <>
-                              <button
-                                onClick={() => handleApprove(ad.id)}
-                                className="bg-green-200 text-green-700 text-xs rounded-md px-2 py-1 hover:bg-green-300"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => handleReject(ad.id)}
-                                className="bg-red-200 text-red-700 text-xs rounded-md px-2 py-1 hover:bg-red-300"
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => handleDelete(ad.id)}
-                            className="flex items-center text-red-700 px-3 py-1 rounded border border-red-200 hover:bg-red-50"
-                          >
-                            <Trash size={14} className="mr-1" />
-                            <span className="text-xs">Delete</span>
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Desktop Columns */}
@@ -524,7 +480,7 @@ const cancelDelete = () => {
                     <div className="hidden md:block font-medium text-gray-800 truncate">
                       {ad.title}
                     </div>
-                    <div className="hidden md:block">${ad.price.toFixed(2)}</div>
+                    <div className="hidden md:block font-semibold">${ad.price.toFixed(2)}</div>
                     <div className="hidden md:block">
                       <span
                         className={`px-3 py-1 text-xs font-medium rounded-full ${
@@ -540,45 +496,6 @@ const cancelDelete = () => {
                     </div>
                     <div className="hidden md:block">
                       {new Date(ad.createdAt).toLocaleDateString()}
-                    </div>
-                    <div
-                      className="hidden md:flex items-center justify-center gap-1 w-[10rem]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {ad.status === "PENDING" && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(ad.id)}
-                            className="group flex items-center bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
-                          >
-                            <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                            <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                              Approve
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => handleReject(ad.id)}
-                            className="group flex items-center bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
-                          >
-                            <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                            <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
-                              Reject
-                            </span>
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                        onClick={() => handleDelete(ad.id)}
-                        title="Delete"
-                      >
-                        <Trash 
-                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                          size={16} />
-                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                          Delete
-                        </span>
-                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -658,13 +575,6 @@ const cancelDelete = () => {
                                   <div className="flex flex-col">
                                     <p>Ad Length</p>
                                     <p className="font-semibold">{ad.adLengthSeconds ? `${ad.adLengthSeconds}s` : 'N/A'}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Info size={16} className="text-gray-500" />
-                                  <div className="flex flex-col">
-                                    <p>Plan Name</p>
-                                    <p className="font-semibold">{ad.planId?.name || 'N/A'}</p>
                                   </div>
                                 </div>
                               </div>

@@ -102,7 +102,7 @@ const ForgotPass: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 font-semibold transition"
+              className="w-full bg-[#3674B5] hover:bg-[#3674B5]/80 text-white py-2 font-semibold transition"
               disabled={requesting}
             >
               {requesting ? "Sending..." : "Send Reset Token"}
@@ -170,7 +170,7 @@ const ForgotPass: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 font-semibold transition"
+              className="w-full bg-[#3674B5] hover:bg-[#3674B5]/80 text-white py-3 font-semibold transition"
               disabled={resetting}
             >
               {resetting ? "Resetting..." : "Reset Password"}

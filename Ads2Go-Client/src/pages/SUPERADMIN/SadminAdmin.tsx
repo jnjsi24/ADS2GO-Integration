@@ -449,7 +449,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
   }
 
   return (
-    <div className="min-h-screen ml-64 bg-gray-100 pb-5">
+  <div className="min-h-screen ml-60 bg-gray-50">
       {/* Header Section */}
       <AdminSearchHeader
         searchTerm={searchTerm}

@@ -319,7 +319,7 @@ const Dashboard = () => {
       className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}
     >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+      <div className="flex flex-col pt-2 sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h2 className="text-2xl pt-3 font-semibold text-gray-800">
             Welcome back, {adminName}!

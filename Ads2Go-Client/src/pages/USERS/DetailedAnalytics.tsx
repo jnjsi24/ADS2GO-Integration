@@ -10,10 +10,10 @@ import {
 } from 'recharts';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
-import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
-import { useMyAdsStatic } from '../../hooks/useMyAds';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
@@ -32,11 +32,13 @@ const DetailedAnalytics: React.FC = () => {
   const [directAnalyticsLoading, setDirectAnalyticsLoading] = useState(false);
 
   // Date Picker States
+  const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
+  const [isSelectingStart, setIsSelectingStart] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("Last 7 days");
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isCustomDateRange, setIsCustomDateRange] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState<string>('');
+
 
   // Device Dropdown States
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
@@ -45,13 +47,15 @@ const DetailedAnalytics: React.FC = () => {
   // Ad Selection States
   const [selectedAd, setSelectedAd] = useState<string>('all');
   const [showAdDropdown, setShowAdDropdown] = useState(false);
-  const [selectedAdLabel, setSelectedAdLabel] = useState("All Ads");
+  const [selectedAdLabel, setSelectedAdLabel] = useState("All Advertisement");
   const [availableAds, setAvailableAds] = useState<Array<{id: string, title: string}>>([]);
 
   // Refs for debouncing
   const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const deviceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const directFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [pos, setPos] = useState({ x: 50, y: 50 });
 
   // Helper functions for date handling
   const formatDateForAPI = (date: string) => {
@@ -66,26 +70,6 @@ const DetailedAnalytics: React.FC = () => {
     const date = new Date();
     date.setDate(date.getDate() - 7);
     return date.toISOString().split('T')[0];
-  };
-
-  // Initialize default custom dates
-  useEffect(() => {
-    if (!customStartDate) {
-      setCustomStartDate(getDefaultStartDate());
-    }
-    if (!customEndDate) {
-      setCustomEndDate(getDefaultEndDate());
-    }
-  }, [customStartDate, customEndDate]);
-
-  const handleCustomDateApply = () => {
-    if (customStartDate && customEndDate) {
-      setIsCustomDateRange(true);
-      const startDate = new Date(customStartDate).toLocaleDateString();
-      const endDate = new Date(customEndDate).toLocaleDateString();
-      setSelectedPeriodLabel(`${startDate} - ${endDate}`);
-      setShowDatePicker(false);
-    }
   };
 
   const handlePresetPeriodSelect = (period: '1d' | '7d' | '30d' | 'all', label: string) => {
@@ -110,13 +94,14 @@ const DetailedAnalytics: React.FC = () => {
     }
   });
 
-  // ✅ PERFORMANCE FIX: Reuse analyticsData for Top Performing Ads instead of separate query
-  // This eliminates a duplicate query with period='all' that was causing slow loading
-  const overallAnalyticsData = analyticsData;
-
-  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed here)
-  // Now shares cache with Dashboard and other components
-  const { data: myAdsData } = useMyAdsStatic();
+  // Fetch overall analytics data for Top Performing Ads (always uses 'all' period)
+  const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
+    variables: { 
+      period: 'all' // Always fetch overall data for Top Performing Ads
+    },
+    fetchPolicy: 'cache-first',
+    errorPolicy: 'all'
+  });
 
   // Get user's first name from UserAuthContext
   useEffect(() => {
@@ -125,67 +110,20 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [user]);
 
-  // Memoized device extraction - combines deployed devices with analytics data
+  // Memoized device extraction from analytics data
   const extractedDevices = useMemo(() => {
-    // Step 1: Get all deployed devices from user's ads (RUNNING or APPROVED status)
-    const deployedDevices = new Map<string, any>();
-    
-    if (myAdsData?.getMyAds) {
-      const runningAds = myAdsData.getMyAds.filter((ad: any) => 
-        ad.status === 'RUNNING' || ad.status === 'APPROVED'
-      );
-      
-      runningAds.forEach((ad: any) => {
-        if (ad.materialId && Array.isArray(ad.materialId)) {
-          ad.materialId.forEach((material: any) => {
-            if (material.materialId && !deployedDevices.has(material.materialId)) {
-              deployedDevices.set(material.materialId, {
-                id: material.materialId,
-                name: material.materialId,
-                materialId: material.materialId,
-                isOnline: false, // Default to offline, will be updated if we have analytics data
-                deviceStatus: null,
-                hasAnalyticsData: false // Flag to track if device has data
-              });
-            }
-          });
-        }
-      });
-    }
-    
-    // Step 2: Merge with analytics data (deviceStats) to get online status and data flag
     if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
-      directAnalyticsData.deviceStats.forEach((device: any) => {
-        if (device.materialId) {
-          if (deployedDevices.has(device.materialId)) {
-            // Update existing deployed device with analytics data
-            const existingDevice = deployedDevices.get(device.materialId);
-            deployedDevices.set(device.materialId, {
-              ...existingDevice,
-              isOnline: device.isOnline || false,
-              deviceStatus: device.deviceStatus || null,
-              hasAnalyticsData: true
-            });
-          } else {
-            // Add device that has analytics data but might not be in current deployment
-            // (could be from previous deployments)
-            deployedDevices.set(device.materialId, {
-              id: device.materialId,
-              name: device.materialId,
-              materialId: device.materialId,
-              isOnline: device.isOnline || false,
-              deviceStatus: device.deviceStatus || null,
-              hasAnalyticsData: true
-            });
-          }
-        }
-      });
+      const devices = directAnalyticsData.deviceStats.map((device: any, index: number) => ({
+        id: device.materialId || `device-${index}`,
+        name: device.materialId || `Vehicle ${index + 1}`,
+        materialId: device.materialId || `device-${index}`,
+        isOnline: device.isOnline || false,
+        deviceStatus: device.deviceStatus || null
+      }));
+      return devices;
     }
-    
-    // Convert Map to Array and sort (deployed devices first, then by name)
-    const devicesArray = Array.from(deployedDevices.values());
-    return devicesArray.sort((a, b) => a.name.localeCompare(b.name));
-  }, [analyticsData, directAnalyticsData, myAdsData]);
+    return [];
+  }, [analyticsData, directAnalyticsData]);
 
   // Memoized ad extraction from analytics data
   const extractedAds = useMemo(() => {
@@ -223,53 +161,101 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [searchParams, availableAds]);
 
+  const formatDisplayDate = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  // Get display text for the date input placeholder
+  const getDatePlaceholder = () => {
+    if (!dateRange.start && !dateRange.end) {
+      return "Select a date";
+    } else if (dateRange.start && !dateRange.end) {
+      return `${formatDisplayDate(dateRange.start)} - Select end date`;
+    } else if (dateRange.start && dateRange.end) {
+      return `${formatDisplayDate(dateRange.start)} - ${formatDisplayDate(dateRange.end)}`;
+    }
+    return "Select a date";
+  };
+
+  // Handle date selection
+  const handleDateSelect = (date: string) => {
+    if (isSelectingStart) {
+      setTempStartDate(date);
+      setDateRange({ start: date });
+      setIsSelectingStart(false);
+      // Keep the date picker open after selecting the first date
+    } else {
+      let finalStartDate = tempStartDate;
+      let finalEndDate = date;
+
+      // If second date is before start date, swap them
+      if (new Date(date) < new Date(tempStartDate)) {
+        finalStartDate = date;
+        finalEndDate = tempStartDate;
+      }
+
+      setDateRange({ 
+        start: finalStartDate, 
+        end: finalEndDate 
+      });
+      setIsCustomDateRange(true);
+      setSelectedPeriodLabel(`${formatDisplayDate(finalStartDate)} - ${formatDisplayDate(finalEndDate)}`);
+      setShowDatePicker(false); // Close picker only after selecting the second date
+      setIsSelectingStart(true); // Reset for next selection
+      setTempStartDate(''); // Clear temporary date
+    }
+  };
+
+  // Reset to selecting start date when clearing range
+  const handleClearRange = () => {
+    setDateRange({});
+    setIsSelectingStart(true);
+    setIsCustomDateRange(false);
+    setTempStartDate('');
+    setSelectedPeriodLabel("Last 7 days");
+    setSelectedPeriod("7d");
+  };
+
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
   const fetchDirectAnalytics = useCallback(async () => {
     if (!user?.userId) return;
-    
+
     if (directFetchTimeoutRef.current) {
       clearTimeout(directFetchTimeoutRef.current);
     }
-    
+
     directFetchTimeoutRef.current = setTimeout(async () => {
       try {
         setDirectAnalyticsLoading(true);
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-        
+
         let url;
         if (selectedDevice === 'all') {
-          // For "All Devices", use the direct endpoint
-          let currentPeriod = selectedPeriod;
-          
-          // If using custom date range, pass the dates as query parameters
-          if (isCustomDateRange && customStartDate && customEndDate) {
-            const startDateISO = formatDateForAPI(customStartDate);
-            const endDateISO = formatDateForAPI(customEndDate);
+          if (isCustomDateRange && dateRange.start && dateRange.end) {
+            const startDateISO = formatDateForAPI(dateRange.start);
+            const endDateISO = formatDateForAPI(dateRange.end);
             url = `${baseUrl}/analytics/user/${user.userId}/direct?startDate=${startDateISO}&endDate=${endDateISO}`;
           } else {
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
+            url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${selectedPeriod}`;
           }
         } else {
-          // For specific device, use the device-specific endpoint
-          if (isCustomDateRange && customStartDate && customEndDate) {
-            const startDateISO = formatDateForAPI(customStartDate);
-            const endDateISO = formatDateForAPI(customEndDate);
+          if (isCustomDateRange && dateRange.start && dateRange.end) {
+            const startDateISO = formatDateForAPI(dateRange.start);
+            const endDateISO = formatDateForAPI(dateRange.end);
             url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?startDate=${startDateISO}&endDate=${endDateISO}`;
           } else {
             url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}`;
           }
         }
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.success) {
           if (selectedDevice === 'all') {
-            // For "All Devices", store in directAnalyticsData
             setDirectAnalyticsData(data.data);
             setDeviceAnalytics(null);
           } else {
-            // For specific device, store in deviceAnalytics
             setDeviceAnalytics(data.data.deviceAnalytics);
             setDirectAnalyticsData(null);
           }
@@ -285,7 +271,7 @@ const DetailedAnalytics: React.FC = () => {
         setDirectAnalyticsLoading(false);
       }
     }, 300);
-  }, [selectedDevice, selectedPeriod, user?.userId, isCustomDateRange, customStartDate, customEndDate]);
+  }, [selectedDevice, selectedPeriod, user?.userId, isCustomDateRange, dateRange]);
 
   // Fetch analytics data when device selection changes
   useEffect(() => {
@@ -529,354 +515,396 @@ const DetailedAnalytics: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
       {/* Background layer */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+        className="absolute inset-0 bg-cover bg-center bg-fixed blur-3xl brightness-90"
         style={{
           backgroundImage: "url('/image/bg.jpg')",
         }}
       />
       
       {/* Content layer */}
-      <div className="relative z-10 min-h-screen">
+      <div className="relative z-10 min-h-screen pl-64 mb-10">
         {/* Header */}
-        <div className="bg-white/30 backdrop-blur-md border-b border-white/30 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center space-x-4 mt-12">
+            <Link 
+              to="/dashboard" 
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="font-medium">Back to Dashboard</span>
+            </Link>
+          </div>
+          {/* Header Section */}
+          <div className="mb-8">
+            {/* Header Row */}
             <div className="flex items-center justify-between h-20">
-              <div className="flex items-center space-x-4">
-                <Link 
-                  to="/dashboard" 
-                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-all duration-200 bg-white/40 hover:bg-white/60 px-4 py-2 rounded-lg shadow-sm"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                  <span className="font-medium">Back to Dashboard</span>
-                </Link>
+              {/* Left: Title */}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800 mt-5">Detailed Analytics</h1>
               </div>
-              <div className="text-center">
-                <h1 className="text-2xl font-bold text-gray-800 mb-1">
-                  📊 Detailed Analytics
-                </h1>
-                <p className="text-gray-600 text-sm">
-                  Welcome back, {userFirstName}
-                </p>
+
+              {/* Right: Filters */}
+              <div className="flex flex-wrap items-center gap-1">
+                {/* Date Picker */}
+                <div className="relative w-full sm:w-64 date-picker-container">
+                  <button
+                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <motion.span
+                        key={getDatePlaceholder()}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                      >
+                        {getDatePlaceholder()}
+                      </motion.span>
+                    </div>
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showDatePicker ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showDatePicker && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 right-0 top-full mt-2 w-[24rem] rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
+                      >
+                        <div className="p-4 grid grid-cols-[1.1fr_2fr] gap-6">
+                          {/* LEFT SIDE — Quick Ranges */}
+                          <div className="border-r pr-4">
+                            <div className="grid grid-cols-1 gap-2">
+                              {[
+                                { period: "1d", label: "Last 24 hours" },
+                                { period: "7d", label: "Last 7 days" },
+                                { period: "30d", label: "Last 30 days" },
+                                { period: "all", label: "All Time" },
+                              ].map(({ period, label }) => (
+                                <button
+                                  key={period}
+                                  onClick={() => handlePresetPeriodSelect(period as any, label)}
+                                  className={`block w-full text-left px-3 py-2 text-xs rounded transition-colors duration-150 ${
+                                    !isCustomDateRange && selectedPeriod === period
+                                      ? "bg-gray-100"
+                                      : "text-gray-700 hover:bg-gray-100 border border-transparent"
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* RIGHT SIDE — Custom Range */}
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                              Custom Range
+                            </h4>
+
+                            <div className="mb-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div
+                                  className={`w-3 h-3 rounded-full ${
+                                    isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
+                                  }`}
+                                ></div>
+                                <label className="block text-xs font-medium text-gray-600">
+                                  {isSelectingStart ? "Select Start Date" : "Start Date Selected"}
+                                </label>
+                              </div>
+                              {dateRange.start && (
+                                <div className="text-xs text-gray-500 mb-2 pl-5">
+                                  Start: {formatDisplayDate(dateRange.start)}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <div
+                                  className={`w-3 h-3 rounded-full ${
+                                    !isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
+                                  }`}
+                                ></div>
+                                <label className="block text-xs font-medium text-gray-600">
+                                  {!isSelectingStart ? "Select End Date" : "End Date"}
+                                </label>
+                              </div>
+                              <input
+                                type="date"
+                                onChange={(e) => handleDateSelect(e.target.value)}
+                                className="w-full px-4 py-1 border-b border-gray-300 text-sm focus:outline-none"
+                              />
+                            </div>
+                            <div className='flex justify-between'>
+                              <button
+                                onClick={() => setShowDatePicker(false)}
+                                className="w-10 mt-3 text-gray-600 hover:text-gray-800 text-sm transition-all duration-200 hover:bg-gray-50 rounded"
+                              >
+                                Close
+                              </button>
+                              {(dateRange.start || dateRange.end) && (
+                                <button
+                                  onClick={handleClearRange}
+                                  onMouseMove={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                                    setPos({ x, y });
+                                  }}
+                                  className="relative group inline-flex items-center justify-center overflow-hidden
+                                            w-32 px-4 py-2 mt-4 text-white text-sm border border-gray-300
+                                            bg-white font-medium transition-all duration-300 hover:scale-[1.03]"
+                                  style={{
+                                    backgroundImage: `linear-gradient(to right, #1B5087, #3674B5),
+                                                      radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0), rgba(255,255,255,0))`,
+                                  }}
+                                >
+                                  <span className="inline-flex items-center gap-2 px-2 z-10">Clear Range</span>
+
+                                  {/* Shining hover effect */}
+                                  <span
+                                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                                    style={{
+                                      background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.45), transparent 60%)`,
+                                    }}
+                                  />
+                                </button>
+                              )}
+
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Device Selection */}
+                <div className="relative w-full sm:w-40 device-dropdown-container">
+                  <button
+                    onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="">{selectedDeviceLabel}</span>
+                    </div>
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showDeviceDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showDeviceDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
+                      >
+                        <div className="p-3">
+                          {/* All Devices Option */}
+                          <button
+                            onClick={() => {
+                              setSelectedDevice("all");
+                              setSelectedDeviceLabel("All Devices");
+                              setShowDeviceDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md${
+                              selectedDevice === "all"
+                                ? ""
+                                : "hover:bg-gray-50 text-gray-700"
+                            }`}
+                          >
+                            <div>
+                              <div>All Devices</div>
+                            </div>
+                          </button>
+
+                          {/* Individual Devices */}
+                          {availableDevices.map((device) => (
+                            <button
+                              key={device.id}
+                              onClick={() => {
+                                setSelectedDevice(device.materialId);
+                                setSelectedDeviceLabel(device.name);
+                                setShowDeviceDropdown(false);
+                              }}
+                              className={`block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                                selectedDevice === device.materialId
+                                  ? ""
+                                  : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <div>
+                                    <div className="font-medium">{device.name}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <div
+                                    className={`w-2 h-2 rounded-full ${
+                                      device.isOnline ? "bg-green-500" : "bg-red-500"
+                                    }`}
+                                  ></div>
+                                  <span
+                                    className={`text-[10px] font-medium ${
+                                      device.isOnline ? "text-green-600" : "text-red-600"
+                                    }`}
+                                  >
+                                    {device.isOnline ? "ONLINE" : "OFFLINE"}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Ad Selection */}
+                <div className="relative w-full sm:w-44 ad-dropdown-container">
+                  <button
+                    onClick={() => setShowAdDropdown(!showAdDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="">{selectedAdLabel}</span>
+                    </div>
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showAdDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showAdDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
+                      >
+                        <div className="p-3">
+                          {/* All Ads Option */}
+                          <button
+                            onClick={() => {
+                              setSelectedAd("all");
+                              setSelectedAdLabel("All Advertisement");
+                              setShowAdDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md ${
+                              selectedAd === "all"
+                                ? ""
+                                : "hover:bg-gray-50 text-gray-700"
+                            }`}
+                          >
+                            <div>All Advertisement</div>
+                          </button>
+
+                          {/* Individual Ads */}
+                          {availableAds.map((ad) => (
+                            <button
+                              key={ad.id}
+                              onClick={() => {
+                                setSelectedAd(ad.id);
+                                setSelectedAdLabel(ad.title);
+                                setShowAdDropdown(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md mt-1 ${
+                                selectedAd === ad.id
+                                  ? ""
+                                  : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <div>{ad.title}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="flex items-center space-x-2 px-4 py-2 bg-white/60 hover:bg-white/80 text-gray-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
-                >
+            </div>
+
+            {/* Row 2: Refresh Button */}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => window.location.reload()}
+                onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setPos({ x, y });
+                }}
+                className="relative group flex items-center justify-center px-4 py-2 
+                          font-medium text-white shadow-md overflow-hidden
+                          transition-all duration-300 hover:scale-[1.05]"
+                style={{
+                  backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%)`,
+                }}
+              >
+                {/* Shining hover layer (always behind text/icons) */}
+                <span
+                  className="absolute inset-0 transition-opacity duration-300 opacity-0 group-hover:opacity-100 pointer-events-none z-0"
+                  style={{
+                    background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.35), transparent 60%)`,
+                  }}
+                />
+
+                {/* Content layer stays on top */}
+                <div className="relative z-10 flex items-center space-x-2">
                   <RefreshCw className="w-4 h-4" />
-                  <span className="font-medium">Refresh Data</span>
-                </button>
-              </div>
+                  <span>Refresh</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Device and Period Selection */}
-          <div className="mb-8">
-            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 relative z-10">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                <Filter className="w-5 h-5 mr-2" />
-                Filter Your Analytics
-              </h2>
-              <div className="flex flex-wrap items-center gap-4">
-                {/* Device Selection */}
-                <div className="relative device-dropdown-container">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    📱 Select Device
-                  </label>
-                  <button
-                    onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
-                    className="flex items-center space-x-2 px-4 py-3 bg-white/70 hover:bg-white/90 text-gray-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-white/30 min-w-[200px]"
-                  >
-                    <Monitor className="w-4 h-4" />
-                    <span className="font-medium">{selectedDeviceLabel}</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showDeviceDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-              
-                  {showDeviceDropdown && (
-                    <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-[9999] backdrop-blur-sm">
-                      <div className="p-3">
-                        <div className="text-xs font-medium text-gray-500 mb-2 px-2">Choose a device to analyze</div>
-                        <button
-                          onClick={() => {
-                            setSelectedDevice('all');
-                            setSelectedDeviceLabel('All Devices');
-                            setShowDeviceDropdown(false);
-                          }}
-                          className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-200 ${
-                            selectedDevice === 'all' 
-                              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                              : 'hover:bg-gray-50 border border-transparent'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <Monitor className="w-4 h-4" />
-                            <div>
-                              <div className="font-medium">All Devices</div>
-                              <div className="text-xs text-gray-500">View combined analytics</div>
-                            </div>
-                          </div>
-                        </button>
-                        {availableDevices.map((device) => (
-                          <button
-                            key={device.id}
-                            onClick={() => {
-                              setSelectedDevice(device.materialId);
-                              setSelectedDeviceLabel(device.name);
-                              setShowDeviceDropdown(false);
-                            }}
-                            className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-200 mt-1 ${
-                              selectedDevice === device.materialId 
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-3">
-                                <Monitor className="w-4 h-4" />
-                                <div>
-                                  <div className="font-medium">{device.name}</div>
-                                  <div className="text-xs text-gray-500">
-                                    {device.hasAnalyticsData ? 'Individual device analytics' : 'No data yet'}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <div className={`w-2 h-2 rounded-full ${device.isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                <span className={`text-xs font-medium ${device.isOnline ? 'text-green-600' : 'text-red-600'}`}>
-                                  {device.isOnline ? 'ONLINE' : 'OFFLINE'}
-                                </span>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-            </div>
-
-                {/* Ad Selection */}
-                <div className="relative ad-dropdown-container">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    🎯 Select Ad
-                  </label>
-                  <button
-                    onClick={() => setShowAdDropdown(!showAdDropdown)}
-                    className="flex items-center space-x-2 px-4 py-3 bg-white/70 hover:bg-white/90 text-gray-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-white/30 min-w-[200px]"
-                  >
-                    <Target className="w-4 h-4" />
-                    <span className="font-medium">{selectedAdLabel}</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showAdDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showAdDropdown && (
-                    <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-[9999] backdrop-blur-sm">
-                      <div className="p-4">
-                        <div className="text-xs font-medium text-gray-500 mb-2 px-2">Choose an ad to analyze</div>
-                        <button
-                          onClick={() => {
-                            setSelectedAd('all');
-                            setSelectedAdLabel('All Ads');
-                            setShowAdDropdown(false);
-                          }}
-                          className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-200 ${
-                            selectedAd === 'all' 
-                              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                              : 'hover:bg-gray-50 border border-transparent'
-                          }`}
-                        >
-                          <div className="flex items-center">
-                            <Target className="w-4 h-4 mr-3" />
-                            <div>
-                              <div className="font-medium">All Ads</div>
-                              <div className="text-xs text-gray-500">Combined performance of all ads</div>
-                            </div>
-                          </div>
-                        </button>
-
-                        {availableAds.map((ad) => (
-                          <button
-                            key={ad.id}
-                            onClick={() => {
-                              setSelectedAd(ad.id);
-                              setSelectedAdLabel(ad.title);
-                              setShowAdDropdown(false);
-                            }}
-                            className={`w-full text-left px-3 py-3 rounded-lg transition-all duration-200 mt-1 ${
-                              selectedAd === ad.id 
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                : 'hover:bg-gray-50 border border-transparent'
-                            }`}
-                          >
-                            <div className="flex items-center">
-                              <Target className="w-4 h-4 mr-3" />
-                              <div>
-                                <div className="font-medium">{ad.title}</div>
-                                <div className="text-xs text-gray-500">Individual ad analytics</div>
-                              </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Date Picker */}
-                <div className="relative date-picker-container">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    📅 Select Time Period
-                  </label>
-                  <button
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                    className="flex items-center space-x-2 px-4 py-3 bg-white/70 hover:bg-white/90 text-gray-700 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md border border-white/30 min-w-[200px]"
-                  >
-                    <Calendar className="w-4 h-4" />
-                    <span className="font-medium">{selectedPeriodLabel}</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
-                  </button>
-              
-                  {showDatePicker && (
-                    <div className="absolute top-full left-0 mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-[9999] backdrop-blur-sm">
-                      <div className="p-4">
-                        {/* Preset Periods */}
-                        <div className="mb-6">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                            <TrendingUp className="w-4 h-4 mr-2" />
-                            Quick Select
-                          </h4>
-                          <div className="grid grid-cols-1 gap-2">
-                            <button
-                              onClick={() => handlePresetPeriodSelect('1d', 'Last 24 hours')}
-                              className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 text-sm ${
-                                !isCustomDateRange && selectedPeriod === '1d' 
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                  : 'hover:bg-gray-50 border border-transparent'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">Last 24 hours</span>
-                                <span className="text-xs text-gray-500">Today</span>
-                              </div>
-                            </button>
-                            <button
-                              onClick={() => handlePresetPeriodSelect('7d', 'Last 7 days')}
-                              className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 text-sm ${
-                                !isCustomDateRange && selectedPeriod === '7d' 
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                  : 'hover:bg-gray-50 border border-transparent'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">Last 7 days</span>
-                                <span className="text-xs text-gray-500">This week</span>
-                              </div>
-                            </button>
-                            <button
-                              onClick={() => handlePresetPeriodSelect('30d', 'Last 30 days')}
-                              className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 text-sm ${
-                                !isCustomDateRange && selectedPeriod === '30d' 
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                  : 'hover:bg-gray-50 border border-transparent'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">Last 30 days</span>
-                                <span className="text-xs text-gray-500">This month</span>
-                              </div>
-                            </button>
-                            <button
-                              onClick={() => handlePresetPeriodSelect('all', 'All Time')}
-                              className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-200 text-sm ${
-                                !isCustomDateRange && selectedPeriod === 'all' 
-                                  ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                  : 'hover:bg-gray-50 border border-transparent'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">All Time</span>
-                                <span className="text-xs text-gray-500">Complete history</span>
-                              </div>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Custom Date Range */}
-                        <div className="border-t pt-4">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                            <Calendar className="w-4 h-4 mr-2" />
-                            Custom Range
-                          </h4>
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-2">Start Date</label>
-                              <input
-                                type="date"
-                                value={customStartDate}
-                                onChange={(e) => setCustomStartDate(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-2">End Date</label>
-                              <input
-                                type="date"
-                                value={customEndDate}
-                                onChange={(e) => setCustomEndDate(e.target.value)}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                              />
-                            </div>
-                            <button
-                              onClick={handleCustomDateApply}
-                              disabled={!customStartDate || !customEndDate || new Date(customStartDate) > new Date(customEndDate)}
-                              className="w-full px-4 py-3 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
-                            >
-                              Apply Custom Range
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Close button */}
-                        <div className="mt-4 pt-4 border-t">
-                          <button
-                            onClick={() => setShowDatePicker(false)}
-                            className="w-full px-4 py-2 text-gray-600 hover:text-gray-800 text-sm transition-all duration-200 hover:bg-gray-50 rounded-lg"
-                          >
-                            Close
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
           {/* Loading State */}
           {analyticsLoading && (
-            <div className="flex items-center justify-center py-16">
-              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-8 shadow-lg border border-white/20">
-                <div className="flex items-center space-x-4">
-                  <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-                  <div>
-                    <span className="text-lg font-medium text-gray-700">Loading Analytics...</span>
-                    <p className="text-sm text-gray-500 mt-1">Please wait while we fetch your data</p>
-                  </div>
+            <div className="flex items-center justify-center mb-16">
+              <div className="text-center">
+                <div className="flex items-center justify-center space-x-3">
+                  <LoaderCircle className="w-6 h-6 animate-spin text-blue-500" />
+                  <span className="text-lg font-medium text-black/90">Loading Analytics...</span>
                 </div>
+                <p className="text-sm text-black/80 mt-2">Please wait while we fetch your data</p>
               </div>
             </div>
           )}
 
           {/* Empty State */}
           {!analyticsLoading && (!analyticsData?.getUserAnalytics && !directAnalyticsData) && (
-            <div className="text-center py-12">
-              <div className="bg-white/60 p-8 rounded-lg shadow-md max-w-md mx-auto">
-                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">No Analytics Data</h3>
-                <div className="text-gray-600">
+            <div className="text-center mb-16">
+              <div>
+                <div className="flex items-center justify-center space-x-3 mb-2">
+                  <BarChart3 className="w-6 h-6 text-black/90" />
+                  <h3 className="text-lg font-semibold text-black/90">No Analytics Data</h3>
+                </div>
+                <div className="text-black/80">
                   <p>You don't have any analytics data yet. This is normal for new users or users without deployed ads.</p>
                   <p className="mt-1">Once you create and deploy ads, your detailed analytics will appear here.</p>
                 </div>
@@ -887,111 +915,132 @@ const DetailedAnalytics: React.FC = () => {
           {/* Simplified Analytics Dashboard */}
           <div className="space-y-6">
             {/* Key Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-0">
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Total Ad Plays</p>
-                    <div className="text-3xl font-bold text-gray-900">
-                      {analyticsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
-                      )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 relative z-0">
+              <div className="bg-white/50 backdrop-blur-sm p-6  shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex flex-col">
+                  {/* Row 1: Icon + Label */}
+                  <div className="flex items-center">
+                    <div
+                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-yellow-300/60 via-yellow-300/40 to-white/40 
+                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+                    >
+                      <Youtube className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Times your ads were displayed</p>
+                    <p className="text-sm text-black/70 font-medium ml-1">Total Ad Plays</p>
                   </div>
-                  <div className="p-4 bg-blue-100 rounded-full shadow-sm">
-                    <Play className="w-6 h-6 text-blue-600" />
-                  </div>
+
+                  {/* Row 2: Value */}
+                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                    {analyticsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : (
+                      (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
+                    )}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">QR Scans</p>
-                    <div className="text-3xl font-bold text-gray-900">
-                      {analyticsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        (analyticsSummary.totalQRScans || 0).toLocaleString()
-                      )}
+              {/* QR Scans */}
+              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex flex-col">
+                  {/* Row 1: Icon + Label */}
+                  <div className="flex items-center">
+                    <div
+                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
+                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+                    >
+                      <QrCode className="w-5 h-5 text-blue-700 drop-shadow-sm" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">QR codes scanned by users</p>
+                    <p className="text-sm text-black/70 font-medium ml-1">QR Scans</p>
                   </div>
-                  <div className="p-4 bg-green-100 rounded-full shadow-sm">
-                    <Target className="w-6 h-6 text-green-600" />
-                  </div>
+
+                  {/* Row 2: Value */}
+                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                    {analyticsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : (
+                      (analyticsSummary.totalQRScans || 0).toLocaleString()
+                    )}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Active Devices</p>
-                    <div className="text-3xl font-bold text-gray-900">
-                      {analyticsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        (analyticsSummary.totalMaterials || 0).toLocaleString()
-                      )}
+              {/* Active Devices */}
+              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex flex-col">
+                  <div className="flex items-center">
+                    <div
+                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-orange-300/60 via-orange-300/40 to-white/40 
+                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+                    >
+                      <MonitorSmartphone className="w-5 h-5 text-orange-700 drop-shadow-sm" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Devices showing your ads</p>
+                    <p className="text-sm text-black/70 font-medium ml-1">Active Devices</p>
                   </div>
-                  <div className="p-4 bg-orange-100 rounded-full shadow-sm">
-                    <Users className="w-6 h-6 text-orange-600" />
-                  </div>
+                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                    {analyticsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : (
+                      (analyticsSummary.totalMaterials || 0).toLocaleString()
+                    )}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Online Devices</p>
-                    <div className="text-3xl font-bold text-gray-900">
-                      {analyticsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        availableDevices.filter(device => device.isOnline).length
-                      )}
+              {/* Online Devices */}
+              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex flex-col">
+                  <div className="flex items-center">
+                    <div
+                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+                    >
+                      <MonitorSmartphone className="w-5 h-5 text-green-700 drop-shadow-sm" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Currently connected devices</p>
+                    <p className="text-sm text-black/70 font-medium ml-1">Online Devices</p>
                   </div>
-                  <div className="p-4 bg-green-100 rounded-full shadow-sm">
-                    <Monitor className="w-6 h-6 text-green-600" />
-                  </div>
+                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                    {analyticsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : (
+                      availableDevices.filter((device) => device.isOnline).length
+                    )}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1 font-medium">Completion Rate</p>
-                    <div className="text-3xl font-bold text-gray-900">
-                      {analyticsLoading ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                      ) : (
-                        `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
-                      )}
+              {/* Completion Rate */}
+              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex flex-col">
+                  <div className="flex items-center">
+                    <div
+                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 
+                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+                    >
+                      <TrendingUp className="w-5 h-5 text-purple-700 drop-shadow-sm" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Average ad completion</p>
+                    <p className="text-sm text-black/70 font-medium ml-1">Completion Rate</p>
                   </div>
-                  <div className="p-4 bg-purple-100 rounded-full shadow-sm">
-                    <TrendingUp className="w-6 h-6 text-purple-600" />
-                  </div>
+                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                    {analyticsLoading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    ) : (
+                      `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
+                    )}
+                  </p>
                 </div>
               </div>
+
             </div>
 
             {/* Performance Chart */}
-            <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20">
+            <div className="bg-white/20 backdrop-blur-sm p-6  shadow-lg border border-white/20">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-1">📈 Performance Over Time</h3>
-                  <p className="text-sm text-gray-600">Track your ad performance trends</p>
+                  <h3 className="text-lg font-semibold text-black/80 mb-1">Performance Over Time</h3>
+                  <p className="text-sm text-black/60">Track your ad performance trends</p>
                 </div>
-                <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                <div className="text-xs text-white bg-[#3674B5] px-3 py-2 rounded-full">
                   {selectedPeriodLabel}
                 </div>
               </div>
@@ -1042,11 +1091,11 @@ const DetailedAnalytics: React.FC = () => {
 
             {/* Top Performing Ads */}
             {topPerformingAds.length > 0 && (
-              <div className="bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/20">
+              <div className="bg-white/20 backdrop-blur-sm p-6  shadow-lg border border-white/20">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-1">🏆 Top Performing Ads</h3>
-                    <p className="text-sm text-gray-600">Your best performing advertisements</p>
+                    <h3 className="text-lg font-semibold text-black/80 mb-1">Top Performing Ads</h3>
+                    <p className="text-sm text-black/60">Your best performing advertisements</p>
                   </div>
                   <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                     Overall Performance
@@ -1054,7 +1103,7 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
                 <div className="space-y-4">
                   {topPerformingAds.slice(0, 5).map((ad: any, index: number) => (
-                    <div key={ad.adId} className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200">
+                    <div key={ad.adId} className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-gray-100  border border-gray-200 hover:shadow-md transition-all duration-200">
                       <div className="flex items-center space-x-4">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${
                           index === 0 ? 'bg-yellow-100 text-yellow-600' : 
@@ -1066,13 +1115,13 @@ const DetailedAnalytics: React.FC = () => {
                             {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                           </span>
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-lg">{ad.adTitle}</p>
+                        <div className="flex items-center space-x-4">
+                          <p className="font-semibold text-black/80 text-lg">{ad.adTitle}</p>
                           <div className="flex items-center space-x-4 mt-1">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-black/60">
                               📱 {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.totalMaterials || 0).toLocaleString()} {selectedDevice !== 'all' ? 'plays' : 'devices'}
                             </p>
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-black/60">
                               👁️ {(ad.totalAdImpressions || 0).toLocaleString()} views
                             </p>
                           </div>
@@ -1085,7 +1134,7 @@ const DetailedAnalytics: React.FC = () => {
                             (ad.totalQRScans || 0).toLocaleString()
                           }
                         </p>
-                        <p className="text-sm text-gray-500 font-medium">QR Scans</p>
+                        <p className="text-sm text-black/60 font-medium">QR Scans</p>
                       </div>
                     </div>
                   ))}
@@ -1096,8 +1145,8 @@ const DetailedAnalytics: React.FC = () => {
 
           {/* Error State */}
           {analyticsError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-red-800">Error loading analytics data: {analyticsError.message}</p>
+            <div className="p-4 mb-6">
+              <p className="text-red-600">Error loading analytics data: {analyticsError.message}</p>
             </div>
           )}
         </div>

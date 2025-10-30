@@ -280,7 +280,7 @@ const Login: React.FC = () => {
               Enter your email 
             </label>
             {validationErrors.email && (
-              <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+              <p className="text-red-300 text-xs mt-1">{validationErrors.email}</p>
             )}
           </div>
 
@@ -320,11 +320,11 @@ const Login: React.FC = () => {
               </button>
 
               {validationErrors.password && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
+                <p className="text-red-300 text-xs mt-1">{validationErrors.password}</p>
               )}
             </div>
 
-            {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
+            {error && <p className="text-red-300 text-sm mt-3">{error}</p>}
 
             <div className="flex justify-between items-center text-sm mt-5">
               {/* ✅ Animated checkbox with label */}
@@ -366,7 +366,7 @@ const Login: React.FC = () => {
             className={`w-full py-2 px-4 shadow-sm transition-colors ${
               isLoggingIn
                 ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-[#3674B5] hover:bg-[#3674B5]/80'
             } text-white font-semibold`}
           >
             {isLoggingIn ? (

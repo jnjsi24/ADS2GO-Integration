@@ -11,11 +11,11 @@ import {
   Clock, 
   Info,
   Users,
-  TrendingUp,
   DollarSign,
   CheckSquare,
   Square,
-  ArrowLeft
+  ArrowLeft,
+  ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -26,6 +26,7 @@ import {
   DELETE_NOTIFICATION,
   DELETE_ALL_ADMIN_NOTIFICATIONS
 } from '../../graphql/admin/queries';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface Notification {
   id: string;
@@ -49,6 +50,7 @@ const AdminNotifications: React.FC = () => {
   const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   // Processing states for double-click prevention
   const [markingAsReadId, setMarkingAsReadId] = useState<string | null>(null);
@@ -289,158 +291,244 @@ const AdminNotifications: React.FC = () => {
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen">
       {/* Header */}
       <div className="mb-8">
+        {/* Back button */}
         <div className="flex items-center gap-4 mb-4">
           <button
             onClick={() => navigate('/admin')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+            className="flex items-center gap-2 pt-4 text-gray-600 hover:text-gray-800 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back to Dashboard</span>
           </button>
         </div>
-        
-        <div className="flex items-center justify-between">
+
+        {/* Header Row */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Left: Title and Counts */}
           <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              Notifications
+            </h1>
             <p className="text-gray-600 mt-2">
               {notifications.length} total notifications • {unreadCount} unread
             </p>
+          </div>
+
+          {/* Right: Filter Dropdown + Refresh */}
+          <div className="flex items-center gap-2">
+            {/* Filter Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className="flex items-center justify-between text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2 min-w-[170px]"
+              >
+                <span className="truncate">
+                  {selectedFilter === 'all' && `All (${notifications.length})`}
+                  {selectedFilter === 'unread' && `Unread (${unreadCount})`}
+                  {selectedFilter === 'high' && `High Priority (${notifications.filter(n => n.priority === 'HIGH').length})`}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showFilterDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedFilter('all');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                        selectedFilter === 'all'
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      All ({notifications.length})
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedFilter('unread');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                        selectedFilter === 'unread'
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Unread ({unreadCount})
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setSelectedFilter('high');
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                        selectedFilter === 'high'
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      High Priority ({notifications.filter(n => n.priority === 'HIGH').length})
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center px-4 gap-2 py-3 text-white text-sm shadow-lg rounded-md bg-[#3674B5] hover:bg-[#3674B5]/80 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Filter buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedFilter('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedFilter === 'all'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All ({notifications.length})
-            </button>
-            <button
-              onClick={() => setSelectedFilter('unread')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedFilter === 'unread'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Unread ({unreadCount})
-            </button>
-            <button
-              onClick={() => setSelectedFilter('high')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedFilter === 'high'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              High Priority ({notifications.filter(n => n.priority === 'HIGH').length})
-            </button>
-          </div>
-
+      <div className="mb-6">
+        <div className="flex flex-wrap items-center justify-end gap-4">
           {/* Action buttons */}
           <div className="flex gap-2">
             {filteredNotifications.length > 0 && (
-              <>
-                <button
-                  onClick={() => setIsSelectMode(!isSelectMode)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                >
-                  {isSelectMode ? (
-                    <>
-                      <Square className="w-4 h-4" />
-                      <span>Cancel</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckSquare className="w-4 h-4" />
-                      <span>Select</span>
-                    </>
-                  )}
-                </button>
-                
-                {isSelectMode && (
-                  <>
-                    <button
+              <div className="flex items-center space-x-2">
+                {!isSelectMode ? (
+                  <button
+                    onClick={() => setIsSelectMode(true)}
+                    className="px-3 py-1 text-black rounded shadow-md hover:bg-gray-100 disabled:opacity-50 flex items-center gap-3"
+                  >
+                    <span>Select</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    {/* ✅ Animated Checkbox for Select All */}
+                    <motion.button
                       onClick={toggleSelectAll}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      className="flex items-center space-x-2 px-3 py-1 text-black/90 rounded text-sm shadow-md hover:bg-gray-100 disabled:opacity-50"
+                      initial={false}
+                      animate={{
+                        scale:
+                          selectedNotifications.size === filteredNotifications.length
+                            ? 1.05
+                            : 1,
+                      }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     >
-                      {selectedNotifications.size === filteredNotifications.length ? (
-                        <>
-                          <Square className="w-4 h-4" />
-                          <span>Deselect All</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckSquare className="w-4 h-4" />
-                          <span>Select All</span>
-                        </>
-                      )}
-                    </button>
-                    
-                    {selectedNotifications.size > 0 && (
-                      <button
-                        onClick={handleDeleteSelected}
-                        disabled={isDeletingSelected}
-                        className={`flex items-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors ${
-                          isDeletingSelected
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-red-600 hover:bg-red-700'
+                      <div
+                        className={`w-4 h-4 border-2 rounded flex items-center justify-center transition-colors duration-200 ${
+                          selectedNotifications.size === filteredNotifications.length
+                            ? ""
+                            : "border-gray-300 bg-white"
                         }`}
                       >
-                        {isDeletingSelected ? (
-                          <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                        <span>{isDeletingSelected ? 'Deleting...' : `Delete Selected (${selectedNotifications.size})`}</span>
-                      </button>
-                    )}
-                  </>
+                        <AnimatePresence>
+                          {selectedNotifications.size === filteredNotifications.length && (
+                            <motion.div
+                              key="check"
+                              initial={{ opacity: 0, scale: 0.6 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.6 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <Check className="w-3 h-3 text-black" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      <span>
+                        {selectedNotifications.size === filteredNotifications.length
+                          ? "Deselect All"
+                          : "Select All"}
+                      </span>
+                    </motion.button>
+
+                    {/* Delete Button with loading state */}
+                    <button
+                      onClick={() => {
+                        if (selectedNotifications.size === 0) {
+                          handleDeleteAll();
+                        } else {
+                          handleDeleteSelected();
+                        }
+                      }}
+                      disabled={isDeletingSelected}
+                      className={`flex items-center space-x-2 px-3 py-1 shadow-lg font-semibold rounded-md text-sm transition-colors ${
+                        isDeletingSelected
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-red-200 text-red-600 hover:bg-red-300'
+                      }`}
+                    >
+                      {isDeletingSelected ? (
+                        <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                      <span>
+                        {isDeletingSelected
+                          ? 'Deleting...'
+                          : selectedNotifications.size === 0
+                          ? "Delete All"
+                          : `Delete (${selectedNotifications.size})`}
+                      </span>
+                    </button>
+
+                    {/* Cancel Button */}
+                    <button
+                      onClick={() => {
+                        setIsSelectMode(false);
+                        setSelectedNotifications(new Set());
+                      }}
+                      className="flex items-center space-x-2 px-3 py-1 shadow-md border text-black/80 font-semibold rounded-md hover:text-black/60 text-sm transition-colors"
+                    >
+                      <span>Cancel</span>
+                    </button>
+                  </div>
                 )}
-              </>
+              </div>
             )}
-            
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center space-x-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1B5087] disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-            
+
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
                 disabled={isMarkingAllAsRead}
-                className={`flex items-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors ${
+                className={`flex items-center space-x-2 px-3 py-1 shadow-md font-semibold rounded-md text-sm transition-colors ${
                   isMarkingAllAsRead
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700'
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-black/90 hover:text-black/70'
                 }`}
               >
                 {isMarkingAllAsRead ? (
-                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                  <div className="w-4 h-4 animate-spin border-2 border-black border-t-transparent rounded-full" />
                 ) : (
                   <CheckCheck className="w-4 h-4" />
                 )}
                 <span>{isMarkingAllAsRead ? 'Processing...' : 'Mark All Read'}</span>
               </button>
             )}
+            
           </div>
         </div>
       </div>
 
       {/* Notifications List */}
-      <div className="bg-white rounded-2xl shadow-sm">
+      <div className="">
         {filteredNotifications.length === 0 ? (
           <div className="p-12 text-center">
             <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -459,26 +547,43 @@ const AdminNotifications: React.FC = () => {
             {filteredNotifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`p-6 border-l-4 ${getNotificationColor(notification.type)} ${
+                className={`p-6 mb-3 shadow-md rounded-md ${getNotificationColor(notification.type)} ${
                   !notification.read ? 'bg-blue-50' : 'bg-white'
                 } hover:bg-gray-50 transition-colors`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start space-x-4 flex-1">
-                    {/* Selection checkbox */}
                     {isSelectMode && (
-                      <button
+                      <motion.button
                         onClick={() => toggleSelectNotification(notification.id)}
-                        className="mt-1"
+                        className="mt-1 w-5 h-5 border-2 rounded flex items-center justify-center"
+                        initial={false}
+                        animate={{
+                          scale: selectedNotifications.has(notification.id) ? 1.1 : 1,
+                          borderColor: selectedNotifications.has(notification.id)
+                            ? "" // blue-600
+                            : "#d1d5db", // gray-300
+                          backgroundColor: selectedNotifications.has(notification.id)
+                            ? ""
+                            : "none",
+                        }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
                       >
-                        {selectedNotifications.has(notification.id) ? (
-                          <CheckSquare className="w-5 h-5 text-blue-600" />
-                        ) : (
-                          <Square className="w-5 h-5 text-gray-400" />
-                        )}
-                      </button>
+                        <AnimatePresence>
+                          {selectedNotifications.has(notification.id) && (
+                            <motion.div
+                              key="check"
+                              initial={{ opacity: 0, scale: 0.6 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.6 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <Check className="w-3.5 h-3.5 text-black" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.button>
                     )}
-                    
                     {/* Notification icon */}
                     <div className="flex-shrink-0 mt-1">
                       {getNotificationIcon(notification.category, notification.type)}
@@ -557,29 +662,44 @@ const AdminNotifications: React.FC = () => {
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
                           disabled={markingAsReadId === notification.id}
-                          className={`p-2 transition-colors ${
+                          className={`group flex items-center overflow-hidden h-8 w-8 hover:w-28 transition-[width] duration-300 ${
                             markingAsReadId === notification.id
-                              ? 'text-gray-300 cursor-not-allowed'
-                              : 'text-gray-400 hover:text-green-600'
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-green-700'
                           }`}
                           title={markingAsReadId === notification.id ? "Processing..." : "Mark as read"}
                         >
                           {markingAsReadId === notification.id ? (
-                            <div className="w-4 h-4 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                            <div className="w-4 h-4 mx-auto animate-spin border-2 border-green-700 border-t-transparent rounded-full" />
                           ) : (
-                            <Check className="w-4 h-4" />
+                            <>
+                              <Check
+                                className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                                size={16}
+                              />
+                              <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-3 whitespace-nowrap transition-all duration-300">
+                                Mark as Read
+                              </span>
+                            </>
                           )}
                         </button>
                       )}
+
                       <button
                         onClick={() => {
                           setNotificationToDelete(notification);
                           setShowDeleteModal(true);
                         }}
-                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                         title="Delete notification"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2
+                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          size={16}
+                        />
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Delete
+                        </span>
                       </button>
                     </div>
                   </div>

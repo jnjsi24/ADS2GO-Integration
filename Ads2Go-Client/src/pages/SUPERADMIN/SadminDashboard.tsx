@@ -80,14 +80,14 @@ const Dashboard = () => {
   ) || 1; // Avoid division by zero
 
   return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
+    <div className="p-8 ml-60 bg-gray-50 min-h-screen text-gray-800 font-sans">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center pt-3 mb-8">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800">
             Welcome back, {adminName}!
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-black/70">
             It is the best time to manage your finances
           </p>
         </div>
@@ -99,11 +99,6 @@ const Dashboard = () => {
           >
             <Bell className="h-5 w-5 mr-2 text-gray-500" />
             <span>Notifications</span>
-            {unreadCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
           </Link>
           
           {/* Calendar icon and 'This month' button */}
@@ -145,66 +140,65 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* LEFT SIDE: Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-  {[
-    { 
-      label: "Total Drivers", 
-      value: stats?.totalDrivers || 0, 
-      change: "Active drivers", 
-      color: "green", 
-      icon: "LifeBuoy" 
-    },
-    { 
-      label: "Total Ads", 
-      value: stats?.totalAds || 0, 
-      change: "All advertisements", 
-      color: "blue", 
-      icon: "Megaphone" 
-    },
-    { 
-      label: "Total Users", 
-      value: stats?.totalUsers || 0, 
-      change: "Registered users", 
-      color: "yellow", 
-      icon: "Users" 
-    },
-    { 
-      label: "Total Plans", 
-      value: stats?.totalPlans || 0, 
-      change: "Available plans", 
-      color: "purple", 
-      icon: "ClipboardList" 
-    },
-  ].map((stat, i) => {
-    const Icon =
-      {
-        LifeBuoy: require("lucide-react").LifeBuoy,
-        Megaphone: require("lucide-react").Megaphone,
-        Users: require("lucide-react").Users,
-        ClipboardList: require("lucide-react").ClipboardList,
-      }[stat.icon];
+          {[
+            { 
+              label: "Total Drivers", 
+              value: stats?.totalDrivers || 0, 
+              change: "Active drivers", 
+              color: "green", 
+              icon: "LifeBuoy" 
+            },
+            { 
+              label: "Total Ads", 
+              value: stats?.totalAds || 0, 
+              change: "All advertisements", 
+              color: "blue", 
+              icon: "Megaphone" 
+            },
+            { 
+              label: "Total Users", 
+              value: stats?.totalUsers || 0, 
+              change: "Registered users", 
+              color: "yellow", 
+              icon: "Users" 
+            },
+            { 
+              label: "Total Plans", 
+              value: stats?.totalPlans || 0, 
+              change: "Available plans", 
+              color: "purple", 
+              icon: "ClipboardList" 
+            },
+          ].map((stat, i) => {
+            const Icon =
+              {
+                LifeBuoy: require("lucide-react").LifeBuoy,
+                Megaphone: require("lucide-react").Megaphone,
+                Users: require("lucide-react").Users,
+                ClipboardList: require("lucide-react").ClipboardList,
+              }[stat.icon];
 
-    return (
-      <div
-        key={i}
-        className={`bg-${stat.color}-100 p-6 rounded-xl shadow-md border flex items-center justify-between`}
-      >
-        {/* Left side: Icon */}
-        <div>
-          <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+            return (
+              <div
+                key={i}
+                className={`p-6 rounded-xl shadow-md border flex items-center justify-between`}
+              >
+                {/* Left side: Icon */}
+                <div>
+                  <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+                </div>
+
+                {/* Right side: Label + Value */}
+                <div className="flex flex-col items-end text-right">
+                  <p className={`text-3xl font-bold`}>
+                    {stat.value.toLocaleString()}
+                  </p>
+                  <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+                </div>
+              </div>
+            );
+          })}
         </div>
-
-        {/* Right side: Label + Value */}
-        <div className="flex flex-col items-end text-right">
-          <p className={`text-3xl font-bold text-${stat.color}-600`}>
-            {stat.value.toLocaleString()}
-          </p>
-          <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
-        </div>
-      </div>
-    );
-  })}
-</div>
-
 
         {/* RIGHT SIDE: Analytics Panels */}
         <div className="space-y-6">

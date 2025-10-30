@@ -94,7 +94,7 @@ const AdminLogin: React.FC = () => {
               Enter your email
             </label>
             {validationErrors.email && (
-              <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+              <p className="text-red-300 text-xs mt-1">{validationErrors.email}</p>
             )}
           </div>
 
@@ -129,11 +129,11 @@ const AdminLogin: React.FC = () => {
               )}
             </button>
             {validationErrors.password && (
-              <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
+              <p className="text-red-300 text-xs mt-1">{validationErrors.password}</p>
             )}
           </div>
   
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-red-300 text-sm">{error}</p>}
   
           <button
             type="submit"

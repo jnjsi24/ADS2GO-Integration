@@ -19,6 +19,7 @@ interface PaymentProps {
     adLengthSeconds: number;
     status: Status;
     adStatus?: string; // Ad approval status
+    receiptId?: string; // Present when already paid
   };
   paymentType: string;
   onClose: () => void;
@@ -248,15 +249,18 @@ const Payment: React.FC<PaymentProps> = ({
   const isPending = paymentItem.status === "PENDING";
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-md shadow-xl p-8 ${isPending ? "w-full max-w-4xl" : "w-96"} relative`}>
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-        >
-          <X size={24} />
-        </button>
+  <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-2 md:p-4">
+    <div className={`bg-white rounded-md shadow-xl w-full max-w-[92vw] ${isPending ? "md:max-w-4xl" : "md:max-w-lg"} p-4 md:p-8 relative max-h-[90vh] overflow-y-auto`}>
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+      >
+        <X size={24} />
+      </button>
+
+      {/* Desktop View */}
+      <div className="hidden md:block">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* LEFT: Payment Method (Only show for Pending status) */}
           {isPending && (
@@ -579,11 +583,317 @@ const Payment: React.FC<PaymentProps> = ({
             )}
           </div>
         </div>
-        {/* Toast Notifications */}
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
+
+      {/* Mobile View */}
+      <div className="block md:hidden">
+        <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Payment Details - Always show */}
+          <div>
+            <h3 className="text-2xl font-bold text-gray-700 mb-2">
+              {paymentItem.productName}
+            </h3>
+            <div className="flex items-center">
+              <p className="text-md font-semibold text-gray-900">
+                ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
+              </p>
+              <span className="text-gray-400 mx-2">|</span>
+              <span
+                className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                  paymentItem.status
+                )}`}
+              >
+                {paymentItem.status}
+              </span>
+            </div>
+            <div className="w-full text-sm shadow-md rounded-md mt-5 p-4">
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Mode of Payment</span>
+                  <span className="text-gray-800 font-medium">{paymentType || "N/A"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ad Type</span>
+                  <span className="text-gray-800 font-medium">{paymentItem.adType || "N/A"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Duration</span>
+                  <span className="text-gray-800 font-medium">{paymentItem.durationDays} days</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ad Format</span>
+                  <span className="text-gray-800 font-medium">{paymentItem.adFormat || "N/A"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ad Length</span>
+                  <span className="text-gray-800 font-medium">{paymentItem.adLengthSeconds} seconds</span>
+                </div>
+                {/* Receipt ID - Only show when payment is PAID */}
+                {!isPending && paymentItem.receiptId && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Receipt ID</span>
+                    <span className="text-gray-800 font-medium">{paymentItem.receiptId}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Method (Only show for Pending status) */}
+          {isPending && (
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                Select Payment Method
+              </h3>
+              {/* 🔒 Security Message */}
+              <p className="text-sm text-gray-500 mb-4">
+                Please provide the required payment details based on your selected method.
+                Your information will remain private and securely processed.
+              </p>
+              {/* Dropdown */}
+              <div className="relative mb-4">
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full flex justify-between items-center border shadow-md rounded-md px-4 py-2 text-sm bg-white focus:outline-none"
+                >
+                  {methods.find(m => m.value === selectedMethod)?.label || "Choose Method"}
+                  <ChevronDown
+                    size={18}
+                    className={`transition-transform ${
+                      isDropdownOpen ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
+                </button>
+                {isDropdownOpen && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border shadow-md rounded-md">
+                    {methods.map((method) => (
+                      <div
+                        key={method.value}
+                        onClick={() => {
+                          setSelectedMethod(method.value);
+                          setIsDropdownOpen(false);
+                        }}
+                        className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
+                          selectedMethod === method.value ? "bg-gray-100" : ""
+                        }`}
+                      >
+                        {method.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Conditional Inputs */}
+              {selectedMethod === "CREDIT_CARD" && (
+                <div className="space-y-3">
+                  <input
+                    value={cardNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      if (value.length <= 19) setCardNumber(value);
+                    }}
+                    type="text"
+                    placeholder="Card Number"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <input
+                    value={cardHolder}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                      setCardHolder(value);
+                    }}
+                    type="text"
+                    placeholder="Card Holder Name"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <div className="flex gap-3">
+                    <input
+                      value={expiry}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/[^0-9/]/g, "");
+                        setExpiry(value);
+                      }}
+                      type="text"
+                      placeholder="Expiry (MM/YY)"
+                      className="flex-1 border rounded-md px-4 shadow-md py-2 text-sm focus:outline-none"
+                    />
+                    <input
+                      value={cvv}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        if (value.length <= 4) setCvv(value);
+                      }}
+                      type="text"
+                      placeholder="CVV"
+                      className="w-24 border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+              {selectedMethod === "GCASH" && (
+                <div className="space-y-3">
+                  <input
+                    value={gcashNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      if (value.length <= 11) setGcashNumber(value);
+                    }}
+                    type="text"
+                    placeholder="GCash Mobile Number"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <input
+                    value={gcashName}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                      setGcashName(value);
+                    }}
+                    type="text"
+                    placeholder="Registered Name"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                </div>
+              )}
+              {selectedMethod === "PAYPAL" && (
+                <div className="space-y-3">
+                  <input
+                    value={paypalNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      if (value.length <= 11) setPaypalNumber(value);
+                    }}
+                    type="text"
+                    placeholder="Paypal Mobile Number"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <input
+                    value={paypalName}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                      setPaypalName(value);
+                    }}
+                    type="text"
+                    placeholder="Registered Name"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                </div>
+              )}
+              {selectedMethod === "BANK_TRANSFER" && (
+                <div className="space-y-3">
+                  <input
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    type="text"
+                    placeholder="Bank Name"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <input
+                    value={bankAccountName}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                      setBankAccountName(value);
+                    }}
+                    type="text"
+                    placeholder="Account Name"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                  <input
+                    value={bankAccountNumber}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      if (value.length <= 16) setBankAccountNumber(value);
+                    }}
+                    type="text"
+                    placeholder="Account Number"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
+                  />
+                </div>
+              )}
+              {selectedMethod === "CASH" && (
+                <div className="mt-4 p-3 border text-sm text-gray-700">
+                  Please go to <strong>123 Main Street, Manila</strong> to complete your payment.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Mobile-specific layout continues... */}
+          {isPending && (
+            <div className="mt-6 flex justify-between text-base font-semibold">
+              <span>Due today</span>
+              <span className="text-gray-900 font-bold text-xl">
+                ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
+              </span>
+            </div>
+          )}
+          
+          {/* Approval Status Warning */}
+          {paymentItem.adStatus !== 'APPROVED' && isPending && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800 flex items-center gap-2">
+                <span className="text-yellow-500">⚠️</span>
+                <span><strong>Ad pending approval:</strong> Your ad must be approved by an admin before payment can be processed.</span>
+              </p>
+            </div>
+          )}
+          
+          {/* Pay Now Button (Only show for Pending status and non-CASH) */}
+          {isPending && selectedMethod !== "CASH" && (
+            <div className="flex justify-end">
+              <button
+                onClick={handlePayNow}
+                disabled={isButtonDisabled}
+                onMouseMove={(e) => {
+                  if (isButtonDisabled) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setPos({ x, y });
+                }}
+                className={`relative group inline-flex items-center justify-center overflow-hidden
+                            mt-6 py-2 rounded-md font-semibold text-white transition-all duration-300
+                            ${isButtonDisabled
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "hover:scale-105"
+                            }`}
+                style={isButtonDisabled ? {} : {
+                  backgroundImage: `linear-gradient(to right, #FFB877 0%, #FF9B45 100%),
+                                    radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+                }}
+              >
+                <span className="inline-flex items-center gap-2 px-6">
+                  {isProcessing ? "Processing..." : "Pay Now"}
+                </span>
+                {/* Light-blue shine that follows the mouse on hover */}
+                {!isButtonDisabled && (
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                    style={{
+                      background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                    }}
+                  />
+                )}
+              </button>
+            </div>
+          )}
+          {/* Show message for Paid/Failed status */}
+          {!isPending && (
+            <div className={`mt-6 p-2 rounded-md text-center ${paymentItem.status === "PAID" ? "" : "bg-red-100 text-red-500"}`}>
+              <p className="font-medium">
+                {paymentItem.status === "PAID"
+                  ? ""
+                  : "This payment has failed. Please contact support."}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
-  );
+  </div>
+);
 };
 
 export default Payment;

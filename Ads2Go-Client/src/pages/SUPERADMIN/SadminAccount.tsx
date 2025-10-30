@@ -331,7 +331,7 @@ const Account: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen pl-72 pr-5 flex items-center justify-center"
+      className="min-h-screen ml-60 pr-5 flex items-center justify-center"
     >
       {/* Outer Card */}
       <div className="rounded-xl shadow-lg flex flex-col lg:flex-row w-full max-w-6xl overflow-hidden min-h-[650px]">

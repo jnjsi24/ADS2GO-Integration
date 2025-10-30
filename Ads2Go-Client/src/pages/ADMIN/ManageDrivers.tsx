@@ -827,7 +827,7 @@ const ManageDrivers: React.FC = () => {
   return (
     <div
     className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-      isMobile ? 'px-10 pl-28' : 'ml-52'
+      isMobile ? 'px-10 pl-28' : 'ml-60'
     }`}
   >
       {/* Mobile Header */}
@@ -842,21 +842,21 @@ const ManageDrivers: React.FC = () => {
         {!isMobile && (
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Drivers Management</h1>
         )}
-        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row gap-1 w-full lg:w-auto">
           <div className="w-full lg:w-80">
             <input
               type="text"
               placeholder="Search by name or Driver ID..."
-              className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
+              className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedStatusFilter}</span>
                 <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`} />
@@ -868,7 +868,7 @@ const ManageDrivers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map(status => (
                       <button
@@ -886,7 +886,7 @@ const ManageDrivers: React.FC = () => {
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedMonth}</span>
                 <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showMonthDropdown ? 'rotate-180' : ''}`} />
@@ -898,7 +898,7 @@ const ManageDrivers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
                   >
                     {monthOptions.map(month => (
                       <button
@@ -916,7 +916,7 @@ const ManageDrivers: React.FC = () => {
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowYearDropdown(!showYearDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedYear}</span>
                 <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
@@ -928,7 +928,7 @@ const ManageDrivers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {yearOptions.map(year => (
                       <button

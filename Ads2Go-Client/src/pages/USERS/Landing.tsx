@@ -336,25 +336,25 @@ export default function Home() {
           <nav className="hidden md:flex space-x-6 md:space-x-8 z-[1003]">
             <button
               onClick={handleHomeClick}
-              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+              className="text-base md:text-lg text-black/90 hover:text-black/40 transition-colors duration-300"
             >
               Home
             </button>
             <button
               onClick={() => document.getElementById('about-us')?.scrollIntoView({ behavior: 'smooth' })}
-              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+              className="text-base md:text-lg text-black/90 hover:text-black/40 transition-colors duration-300"
             >
               About Us
             </button>
             <button
               onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
-              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+              className="text-base md:text-lg text-black/90 hover:text-black/40 transition-colors duration-300"
             >
               Services
             </button>
             <button
               onClick={() => document.getElementById('contact-us')?.scrollIntoView({ behavior: 'smooth' })}
-              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+              className="text-base md:text-lg text-black/90 hover:text-black/40 transition-colors duration-300"
             >
               Contact Us
             </button>
@@ -368,135 +368,59 @@ export default function Home() {
         className="section-hidden section-delay-1 relative pt-16 sm:pt-20 pb-12 sm:pb-20 px-4 text-white min-h-[70vh] sm:min-h-[90vh] flex items-center overflow-hidden"
       >
         <img
-          src="/image/landing.jpg"
+          src="/image/motors.png"
           alt="Hero background"
           className="absolute top-0 left-0 w-full h-full object-cover z-0"
         />
-        <div className="absolute inset-0 bg-black/40 z-0"></div>
         
         <div className="container mx-auto max-w-screen-xl relative z-10">
           <div className="max-w-full sm:max-w-4xl text-left px-4 sm:pl-8 md:pl-5">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 animate-fadeDown">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 text-white animate-fadeDown">
               Capture Attention Where It Counts — On the Move
             </h1>
-            <p className="text-sm sm:text-base md:text-lg mb-6 sm:mb-8 animate-fadeDown delay-100">
+            <p className="text-sm sm:text-base md:text-lg mb-6 sm:mb-8 animate-fadeDown delay-100 text-white">
               Boost your brand with mobile advertising that turns every ride into a powerful marketing opportunity. 
               Reach your audience wherever they go, ensuring your message travels farther than ever before. 
               Drive visibility, engagement, and measurable growth — anytime, anywhere.
             </p>
             <div className="flex flex-wrap gap-4">
               <Link to="/login">
-                <button className="px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold bg-[#3674B5] text-white hover:bg-[#1B5087] hover:scale-105 transition-all duration-300">
-                  + Register Ad Campaign
-                </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="about-us"
-        ref={(el) => (sectionRefs.current[1] = el)}
-        className="section-hidden section-delay-2 py-12 sm:py-16 px-4 bg-white"
-      >
-        <div className="container mx-auto max-w-screen-xl">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-4 animate-fadeDown text-gray-900 text-left">
-            Why Ads2Go?
-          </h2>
-          <h3 className="text-xl sm:text-2xl text-black mb-8 sm:mb-12 max-w-2xl text-left">
-            Perfect for your business
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 max-w-7xl mx-auto">
-            {[
-              {
-                title: "Cost-effective vs. billboards",
-                desc: "Get more exposure for less cost compared to traditional billboard advertising",
-                img: "/image/i1.gif",
-              },
-              {
-                title: "Targeted routes (GPS tracking)",
-                desc: "Reach your specific audience with precise GPS tracking and route optimization",
-                img: "/image/i2.gif",
-              },
-              {
-                title: "Boosts brand awareness fast",
-                desc: "See immediate results with mobile advertising that reaches thousands daily",
-                img: "/image/i3.gif",
-              },
-              {
-                title: "Extra income for drivers",
-                desc: "Drivers earn passive income by displaying ads on their vehicles",
-                img: "/image/i4.gif",
-              },
-              {
-                title: "Real-time analytics",
-                desc: "Track performance with detailed reports and route heatmaps",
-                img: "/image/i5.gif",
-              },
-            ].map((card, i) => (
-              <div
-                key={i}
-                className="p-4 sm:p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-gray-50 to-white relative flex flex-col items-center text-center"
+              <button
+                type="button"
+                disabled={newsletterStatus === 'loading'}
+                onMouseMove={(e) => {
+                  if (newsletterStatus === 'loading') return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - rect.left) / rect.width) * 100;
+                  const y = ((e.clientY - rect.top) / rect.height) * 100;
+                  setPos({ x, y });
+                }}
+                className={`relative group inline-flex items-center justify-center overflow-hidden 
+                            px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold text-white transition-all duration-300
+                            ${newsletterStatus === 'loading'
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "hover:scale-105"
+                            }`}
+                style={newsletterStatus === 'loading' ? {} : {
+                  backgroundImage: `linear-gradient(to right, #4D9AD1 0%, #7FAEDB 100%),
+                                    radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+                }}
               >
-                <div className="absolute top-4 left-4 w-12 sm:w-16 h-12 sm:h-16">
-                  <img
-                    src={card.img}
-                    alt={card.title}
-                    className="w-full h-full object-contain"
+                <span className="inline-flex items-center gap-2 px-4">
+                  {newsletterStatus === 'loading' ? "Processing..." : "+ Register Ad Campaign"}
+                </span>
+
+                {newsletterStatus !== 'loading' && (
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                    style={{
+                      background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                    }}
                   />
-                </div>
-                <div className="pt-12 sm:pt-16 pb-6 flex-1 flex flex-col items-center mt-5 justify-center">
-                  <h3 className="text-base sm:text-lg font-semibold mb-2 text-left text-gray-900">{card.title}</h3>
-                  <p className="text-[#475569] text-sm sm:text-base leading-relaxed text-left">{card.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+                )}
+              </button>
+            </Link>
 
-      <section
-        ref={(el) => (sectionRefs.current[2] = el)}
-        className="section-hidden section-delay-3 bg-gray-50 py-8"
-      >
-        <h2 className="text-2xl sm:text-3xl font-bold pt-2 text-center">Our Advertisers Partner</h2>
-        <div className="max-w-6xl mx-auto px-4">
-          <LogoLoop
-            logos={techLogos}
-            speed={40}
-            gap={60}
-            pauseOnHover={true}
-            fadeOut={true}
-            fadeOutColor="#f9fafb"
-          />
-        </div>
-      </section>
-
-      <section
-        ref={(el) => (sectionRefs.current[3] = el)}
-        className="section-hidden section-delay-4 py-12 sm:py-20 px-4 bg-white"
-      >
-        <div className="container mx-auto max-w-screen-xl">
-          <div className="flex flex-col md:flex-row-reverse gap-6 sm:gap-8">
-            <div className="md:w-1/2">
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-4 sm:mb-6">About Us</h3>
-              <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
-                At Ads2Go, we revolutionize advertising by bringing brands to the streets. Our mission is to create dynamic, 
-                mobile advertising solutions that connect businesses with their audiences in innovative ways. Using cutting-edge 
-                technology like GPS tracking and LCD displays, we ensure your message reaches the right people at the right time.
-              </p>
-              <p className="text-sm sm:text-md text-[#475569]">
-                Founded in the Philippines, we empower drivers to earn extra income while helping businesses amplify their reach. 
-                Join us in transforming the way advertising moves.
-              </p>
-            </div>
-            <div className="md:w-1/2">
-              <img
-                src="/image/about.jpg"
-                alt="About Ads2Go"
-                className="w-full h-64 sm:h-80 object-cover shadow-md"
-              />
             </div>
           </div>
         </div>
@@ -552,11 +476,169 @@ export default function Home() {
       </section>
 
       <section
+        id="about-us"
+        ref={(el) => (sectionRefs.current[1] = el)}
+        className="section-hidden section-delay-2 relative py-12 sm:py-16 px-4 text-white overflow-hidden"
+      >
+        {/* Background image */}
+        <img
+          src="/image/land1.png"
+          alt="About Us Background"
+          className="absolute top-0 left-0 w-full h-full object-cover z-0"
+        />
+
+        {/* Optional dark overlay for better text readability */}
+        <div className="absolute inset-0 bg-black/10 z-0"></div>
+
+        <div className="container mx-auto max-w-screen-xl relative z-10">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 animate-fadeDown text-black/80 text-left">
+            Why Ads2Go?
+          </h2>
+          <h3 className="text-lg sm:text-xl text-black/60 mb-8 sm:mb-12 max-w-2xl text-left">
+            Perfect for your business
+          </h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 max-w-7xl mx-auto">
+            {[
+              {
+                title: "Cost-effective vs. billboards",
+                desc: "Get more exposure for less cost compared to traditional billboard advertising",
+                img: "/image/i1.gif",
+              },
+              {
+                title: "Targeted routes (GPS tracking)",
+                desc: "Reach your specific audience with precise GPS tracking and route optimization",
+                img: "/image/i2.gif",
+              },
+              {
+                title: "Boosts brand awareness fast",
+                desc: "See immediate results with mobile advertising that reaches thousands daily",
+                img: "/image/i3.gif",
+              },
+              {
+                title: "Extra income for drivers",
+                desc: "Drivers earn passive income by displaying ads on their vehicles",
+                img: "/image/i4.gif",
+              },
+              {
+                title: "Real-time analytics",
+                desc: "Track performance with detailed reports and route heatmaps",
+                img: "/image/i5.gif",
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="p-4 sm:p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-white/70 to-gray-100/10 relative flex flex-col items-center text-center"
+              >
+                <div className="absolute top-4 left-4 w-12 sm:w-16 h-12 sm:h-16">
+                  <img
+                    src={card.img}
+                    alt={card.title}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="pt-12 sm:pt-16 pb-6 flex-1 flex flex-col items-center mt-5 justify-center">
+                  <h3 className="text-base sm:text-lg font-semibold mb-2 text-gray-900">
+                    {card.title}
+                  </h3>
+                  <p className="text-[#475569] text-sm sm:text-base leading-relaxed">
+                    {card.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
+        ref={(el) => (sectionRefs.current[3] = el)}
+        className="section-hidden section-delay-4 py-12 sm:py-20 px-4 bg-white relative overflow-hidden"
+      >
+        <div className="container mx-auto max-w-screen-xl">
+          <div className="flex flex-col md:flex-row-reverse gap-6 sm:gap-8 items-center">
+            {/* Text Section */}
+            <div className="md:w-1/2 relative z-10">
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-4 sm:mb-6 text-gray-800">
+                About Us
+              </h3>
+              <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
+                At Ads2Go, we revolutionize advertising by bringing brands to the streets. Our mission is to create dynamic,
+                mobile advertising solutions that connect businesses with their audiences in innovative ways. Using cutting-edge
+                technology like GPS tracking and LCD displays, we ensure your message reaches the right people at the right time.
+              </p>
+              <p className="text-sm sm:text-md text-[#475569]">
+                Founded in the Philippines, we empower drivers to earn extra income while helping businesses amplify their reach. 
+                Join us in transforming the way advertising moves.
+              </p>
+            </div>
+
+            {/* Image Section */}
+            <div className="relative flex justify-center items-center w-full md:w-1/2 py-8 md:py-0">
+              {/* Background image (about.jpg) */}
+              <img
+                src="/image/about.jpg"
+                alt="About Ads2Go Background"
+                className="absolute w-[90%] md:w-full sm:w-4/5 h-56 sm:h-72 md:h-80 object-cover transform -translate-x-6 
+                  translate-y-6 md:translate-y-1 shadow-md"
+              />
+
+              {/* Foreground image (about2.jpg) */}
+              <img
+                src="/image/about2.jpg"
+                alt="About Ads2Go Foreground"
+                className="relative w-1/2 sm:w-2/3 md:w-72 h-28 sm:h-40 md:h-48 object-cover shadow-lg transform translate-x-24 
+                  translate-y-24 sm:translate-x-10 sm:translate-y-20 md:translate-x-44 md:translate-y-24 transition-all duration-300"
+              />
+
+              {/* Floating Text Box */}
+              <div className="absolute bg-white/30 text-black backdrop-blur-md shadow-md px-4 py-2 sm:px-5 sm:py-3 
+                transform bottom-4 sm:bottom-6 left-1/2 -translate-x-36 translate-y-16 md:bottom-auto md:left-4 md:ml-11 
+                md:translate-x-72 md:-translate-y-3 whitespace-nowrap w-auto text-center">
+                <p className="text-xs sm:text-sm md:text-base font-semibold tracking-wide">
+                  Built the company since 2025
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section
+        ref={(el) => (sectionRefs.current[2] = el)}
+        className="section-hidden section-delay-3 relative py-12 sm:py-16 overflow-hidden text-black/80"
+      >
+
+        {/* Content */}
+        <div className="relative z-10 max-w-6xl mx-auto px-4">
+          <h2 className="text-2xl sm:text-3xl font-bold pt-2 text-center text-black/80">
+            Our Advertisers Partner
+          </h2>
+
+          <div className="mt-8">
+            <LogoLoop
+              logos={techLogos}
+              speed={40}
+              gap={60}
+              pauseOnHover={true}
+              fadeOut={true}
+              fadeOutColor="transparent"
+            />
+          </div>
+        </div>
+      </section>
+
+
+      
+
+      <section
         ref={(el) => (sectionRefs.current[5] = el)}
         className="section-hidden section-delay-6"
       >
         {/* Testimonials section removed - no real data available */}
       </section>
+
 
       <section
         id="contact-us"
@@ -689,8 +771,18 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="relative bg-gradient-to-br from-[#1B5087] to-[#3674B5] overflow-hidden text-white pt-6 px-4">
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-0"></div>
+      <footer className="relative overflow-hidden text-white pt-6 px-4">
+        {/* Background image */}
+        <img
+          src="/image/land1.png"
+          alt="Footer background"
+          className="absolute inset-0 w-full h-full object-cover z-0"
+        />
+
+        {/* Optional dark overlay for better readability */}
+        <div className="absolute inset-0 bg-black/10 z-0"></div>
+
+        {/* Content */}
         <div className="relative z-10 container mx-auto max-w-screen-xl">
           {/* Top Row: Logo + Description | Navigation Links */}
           <div className="flex flex-col lg:flex-row justify-between items-center lg:items-start gap-8 mb-6">
@@ -703,24 +795,24 @@ export default function Home() {
                   className="h-12 w-32"
                 />
               </div>
-              <p className="text-sm text-white/80 max-w-md mx-auto lg:mx-0">
+              <p className="text-sm text-black/80 max-w-md mx-auto lg:mx-0">
                 Transforming advertising through innovative digital solutions. Reach your audience wherever they go with our dynamic ad platform.
               </p>
             </div>
 
-            {/* Right: Navigation Links - Horizontally aligned with logo */}
+            {/* Right: Navigation Links */}
             <div className="flex items-center justify-center lg:justify-end">
               <div className="flex flex-col items-center lg:items-end gap-3">
                 {/* Navigation Links */}
                 <div className="flex flex-wrap justify-center lg:justify-end gap-4 mb-10">
-                  <button id="about-us" className="hover:text-white/70 text-lg">About</button>
-                  <button id="blog" className="hover:text-white/70 text-lg">Blog</button>
-                  <button id="help-center" className="hover:text-white/70 text-lg">Help Center</button>
-                  <button id="contact-us" className="hover:text-white/70 text-lg">Contact Us</button>
+                  <button id="about-us" className="hover:text-black/70 text-black/60 font-semibold text-lg">About</button>
+                  <button id="blog" className="hover:text-black/70 text-black/60 font-semibold text-lg">Blog</button>
+                  <button id="help-center" className="hover:text-black/70 text-black/60 font-semibold text-lg">Help Center</button>
+                  <button id="contact-us" className="hover:text-black/70 text-black/60 font-semibold text-lg">Contact Us</button>
                 </div>
 
-                {/* Copyright (below navigation) */}
-                <div className="text-sm text-white/70 text-center lg:text-right">
+                {/* Copyright */}
+                <div className="text-sm text-black/60 text-center lg:text-right">
                   Copyright © 2025 Ads2Go. All rights reserved.
                 </div>
               </div>
@@ -738,6 +830,7 @@ export default function Home() {
           </div>
         )}
       </footer>
+
     </div>
   );
 }
