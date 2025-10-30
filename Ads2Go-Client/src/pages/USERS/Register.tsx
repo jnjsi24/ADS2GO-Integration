@@ -123,7 +123,7 @@ const Register: React.FC = () => {
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-          return 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)';
+          return 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX (11 digits) or +639XXXXXXXXX (13 characters)';
         }
         return '';
       case 'email':
@@ -162,13 +162,50 @@ const Register: React.FC = () => {
   }, [validateField]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    const { name } = e.currentTarget;
+    const { name, value } = e.currentTarget;
     
-    // Only apply character restrictions to name fields
     if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
       const char = e.key;
       // Allow letters, spaces, and backspace/delete
       if (!/^[a-zA-Z\s]$/.test(char) && char !== 'Backspace' && char !== 'Delete' && char !== 'ArrowLeft' && char !== 'ArrowRight') {
+        e.preventDefault();
+      }
+    }
+    
+    if (name === 'contactNumber') {
+      const char = e.key;
+      
+      // Allow only numbers and + (only at the beginning)
+      if (!/^[0-9+]$/.test(char) && char !== 'Backspace' && char !== 'Delete' && char !== 'ArrowLeft' && char !== 'ArrowRight') {
+        e.preventDefault();
+        return;
+      }
+      
+      // If + is pressed but not at the beginning, prevent it
+      if (char === '+' && value.length > 0) {
+        e.preventDefault();
+        return;
+      }
+      
+      // If it starts with 09, limit to 11 digits total
+      if (value.startsWith('09') && /^[0-9]$/.test(char) && value.length >= 11) {
+        e.preventDefault();
+        return;
+      }
+      
+      // If it starts with +639, limit to 13 characters total (including +)
+      if (value.startsWith('+639') && /^[0-9]$/.test(char) && value.length >= 13) {
+        e.preventDefault();
+        return;
+      }
+      
+      // Don't allow typing if it would exceed the maximum length for the format
+      const currentValue = value + char;
+      if (currentValue.startsWith('+639') && currentValue.length > 13) {
+        e.preventDefault();
+      } else if (currentValue.startsWith('09') && currentValue.length > 11) {
+        e.preventDefault();
+      } else if (!currentValue.startsWith('+639') && !currentValue.startsWith('09') && currentValue.length > 11) {
         e.preventDefault();
       }
     }
@@ -319,7 +356,8 @@ const Register: React.FC = () => {
     onKeyPress, 
     error, 
     label, 
-    showPasswordToggle = false 
+    showPasswordToggle = false,
+    maxLength
   }: {
     id: string;
     name: string;
@@ -330,6 +368,7 @@ const Register: React.FC = () => {
     error?: string;
     label: string;
     showPasswordToggle?: boolean;
+    maxLength?: number;
   }) => (
     <div className="relative mt-8">
       <input
@@ -341,6 +380,7 @@ const Register: React.FC = () => {
         value={value}
         onChange={onChange}
         onKeyPress={onKeyPress}
+        maxLength={maxLength}
         className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
           error ? 'border-red-400' : 'border-gray-300'
         } text-white`}
@@ -395,9 +435,9 @@ const Register: React.FC = () => {
       </style>
       <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
-      <div className="relative z-10 p-8 sm:p-10 mb-5 mt-5
+      <div className="relative z-10 p-6 sm:p-10 mb-5 mt-5
                 rounded-md shadow-2xl w-full max-w-xl
-                bg-transparent backdrop-blur-lg border border-white/30">
+                bg-transparent backdrop-blur-lg bg-white/20 border border-white/30">
         {/* Ads2Go Logo */}
         <div className="flex justify-center mb-6">
           <img 
@@ -478,7 +518,7 @@ const Register: React.FC = () => {
                 disabled={!isCurrentStepValid()}
                 className={`w-full py-3 px-4 transition-colors mt-6 ${
                   isCurrentStepValid()
-                    ? 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
+                    ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
                     : 'bg-blue-400 cursor-not-allowed'
                 } text-white font-semibold`}
               >
@@ -530,7 +570,7 @@ const Register: React.FC = () => {
                   disabled={!isCurrentStepValid()}
                   className={`flex-1 py-3 px-4 text-white font-semibold transition-colors ${
                     isCurrentStepValid()
-                      ? 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
+                      ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
                       : 'bg-blue-400 cursor-not-allowed'
                   }`}
                 >
@@ -546,6 +586,7 @@ const Register: React.FC = () => {
                 id="contactNumber"
                 name="contactNumber"
                 type="tel"
+                maxLength={formData.contactNumber.startsWith('+639') ? 13 : 11}
                 value={formData.contactNumber}
                 onChange={handleChange}
                 error={errors.contactNumber}
@@ -710,7 +751,7 @@ const Register: React.FC = () => {
                           setChecked(true);
                           setShowTermsModal(false);
                         }}
-                        className="w-full px-6 py-2 bg-[#3674B5] hover:bg-[#3674B5]/80 text-white font-semibold transition"
+                        className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold transition"
                       >
                         Agree
                       </button>
@@ -736,12 +777,12 @@ const Register: React.FC = () => {
                   className={`flex-1 py-3 px-4 transition-colors ${
                     isSubmitting || !checked
                       ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
+                      : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
                   } text-white font-semibold`}
                 >
                   {isSubmitting ? (
                     <div className="flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin mr-2"></div>
+                      <div className="w-4 h-4 border-2 rounded-full border-white border-t-transparent animate-spin mr-2"></div>
                       Registering...
                     </div>
                   ) : (

@@ -1091,50 +1091,77 @@ const DetailedAnalytics: React.FC = () => {
 
             {/* Top Performing Ads */}
             {topPerformingAds.length > 0 && (
-              <div className="bg-white/20 backdrop-blur-sm p-6  shadow-lg border border-white/20">
+              <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h3 className="text-lg font-semibold text-black/80 mb-1">Top Performing Ads</h3>
                     <p className="text-sm text-black/60">Your best performing advertisements</p>
                   </div>
-                  <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                    Overall Performance
-                  </div>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {topPerformingAds.slice(0, 5).map((ad: any, index: number) => (
-                    <div key={ad.adId} className="flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-gray-100  border border-gray-200 hover:shadow-md transition-all duration-200">
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${
-                          index === 0 ? 'bg-yellow-100 text-yellow-600' : 
-                          index === 1 ? 'bg-gray-100 text-gray-600' : 
-                          index === 2 ? 'bg-orange-100 text-orange-600' : 
-                          'bg-blue-100 text-blue-600'
-                        }`}>
-                          <span className="text-sm font-bold">
+                    <div 
+                      key={ad.adId} 
+                      className="flex items-center justify-between p-4 bg-white/70 rounded-md shadow-sm hover:shadow-md transition-all duration-200"
+                    >
+                      
+                      {/* LEFT SECTION: Position and Ad Title */}
+                      <div className="flex items-center space-x-4"> {/* <-- CHANGED: items-start to items-center */}
+                        {/* Position/Medal Icon */}
+                        <div className={`
+                          w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center font-bold shadow-md
+                          ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 
+                            index === 1 ? 'bg-gray-100 text-gray-600' : 
+                            index === 2 ? 'bg-orange-100 text-orange-600' : 
+                            'bg-blue-50 text-black/60'}
+                        `}>
+                          <span className="text-sm">
                             {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-4">
-                          <p className="font-semibold text-black/80 text-lg">{ad.adTitle}</p>
-                          <div className="flex items-center space-x-4 mt-1">
-                            <p className="text-sm text-black/60">
-                              📱 {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.totalMaterials || 0).toLocaleString()} {selectedDevice !== 'all' ? 'plays' : 'devices'}
-                            </p>
-                            <p className="text-sm text-black/60">
-                              👁️ {(ad.totalAdImpressions || 0).toLocaleString()} views
-                            </p>
-                          </div>
+                        
+                        {/* Ad Title */}
+                        {/* <-- WRAPPER DIV IS OPTIONAL HERE BUT GOOD PRACTICE --> */}
+                        <div> 
+                            <p className="font-semibold text-black/90 text-lg">{ad.adTitle}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-green-600">
-                          {selectedDevice !== 'all' ? 
-                            (deviceAnalytics?.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0).toLocaleString() : 
-                            (ad.totalQRScans || 0).toLocaleString()
-                          }
-                        </p>
-                        <p className="text-sm text-black/60 font-medium">QR Scans</p>
+                      
+                      {/* RIGHT SECTION: Performance Metrics */}
+                      <div className="flex items-center space-x-6 text-right">
+                        
+                        {/* Plays / Devices */}
+                        <div className="w-20"> 
+                          <p className="text-base font-bold text-black/70">
+                            {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.totalMaterials || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
+                            {selectedDevice !== 'all' ? 'Plays' : 'Devices'}
+                          </p>
+                        </div>
+                        
+                        {/* Views */}
+                        <div className="w-20">
+                          <p className="text-base font-bold text-black/70">
+                            {(ad.totalAdImpressions || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
+                            Views
+                          </p>
+                        </div>
+
+                        {/* QR Scans (Highlighted) */}
+                        <div className="w-20 ml-6 pl-4 border-l border-gray-200">
+                          <p className="text-xl font-extrabold text-green-600">
+                            {selectedDevice !== 'all' ? 
+                              (deviceAnalytics?.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0).toLocaleString() : 
+                              (ad.totalQRScans || 0).toLocaleString()
+                            }
+                          </p>
+                          <p className="text-xs text-green-700 font-bold leading-none mt-0.5">
+                            QR Scans
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}

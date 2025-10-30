@@ -24,6 +24,7 @@ const SideNavbar: React.FC = () => {
   const [isDropupOpen, setIsDropupOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const dropupRef = useRef<HTMLDivElement>(null);
+  const mobileDropupRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -41,7 +42,13 @@ const SideNavbar: React.FC = () => {
   // Close dropup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropupRef.current && !dropupRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+      const isClickInsideDropup = dropupRef.current?.contains(target);
+      const isClickInsideMobileDropup = mobileDropupRef.current?.contains(target);
+      const isClickOnProfileButton = target.closest('[data-profile-toggle]');
+      const isClickOnNotificationButton = target.closest('button[title="View notifications"]');
+      
+      if (!isClickInsideDropup && !isClickInsideMobileDropup && !isClickOnProfileButton && !isClickOnNotificationButton) {
         closeDropup();
       }
     };
@@ -53,7 +60,7 @@ const SideNavbar: React.FC = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropupOpen]);
+  }, [isDropupOpen, closeDropup]);
 
   const getInitials = useCallback((firstName?: string, lastName?: string) => {
     if (!firstName && !lastName) return '?';
@@ -169,15 +176,115 @@ const SideNavbar: React.FC = () => {
       {/* Mobile Hamburger Button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="hamburger-button fixed top-4 left-4 z-[1100] p-2 lg:hidden hover:bg-gray-100 transition-colors"
+        className="hamburger-button absolute top-4 left-4 z-[1100] p-2 lg:hidden transition-colors"
         aria-label="Toggle menu"
       >
-        {isMobileMenuOpen ? <X size={24} className="text-gray-800" /> : <Menu size={24} className="text-gray-800" />}
+        {!isMobileMenuOpen && <Menu size={24} className="text-gray-800" />}
       </button>
+
+      {/* Mobile User Profile & Dropup Menu - Fixed Top Right */}
+      <div className="absolute top-4 right-4 z-[1100] lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/notifications')}
+            className="relative p-2 text-gray-800 hover:text-gray-900 transition-all duration-300 ease-out"
+            title="View notifications"
+          >
+            <Bell size={20} />
+            {displayBadgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {displayBadgeCount > 99 ? '99+' : displayBadgeCount}
+              </span>
+            )}
+          </button>
+          
+          <div className="relative">
+            <div
+              data-profile-toggle
+              className="cursor-pointer p-2 transition-all duration-300 ease-out"
+              onClick={toggleDropup}
+            >
+              <div className="w-8 h-8 rounded-full flex border border-black/30 items-center justify-center relative overflow-hidden">
+                {user?.profilePicture ? (
+                  <img
+                    src={user.profilePicture}
+                    alt={`${user.firstName} ${user.lastName}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const initialsSpan = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (initialsSpan) initialsSpan.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <span 
+                  className="text-black/70 font-semibold flex items-center justify-center w-full h-full text-xs"
+                  style={{ display: user?.profilePicture ? 'none' : 'flex' }}
+                >
+                  {user ? getInitials(user.firstName, user.lastName) : '...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Dropup Menu for Mobile */}
+            <div 
+              ref={mobileDropupRef}
+              className={`absolute top-12 right-0 w-32
+                        bg-white backdrop-blur-md border border-gray-200 rounded-lg shadow-lg
+                        transition-all duration-300 ease-in-out transform ${
+                          isDropupOpen 
+                            ? 'opacity-100 translate-y-0 scale-100' 
+                            : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+                        }`}
+            >
+              <div className="py-2">
+                <button
+                  onClick={() => {
+                    navigate('/account');
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <User size={18} />
+                  <span>Profile</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    navigate('/settings');
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <Settings size={18} />
+                  <span>Settings</span>
+                </button>
+                
+                <hr className="my-1" />
+                
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:text-red-400 transition-colors"
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       
       {/* Static navbar with smooth animations - Desktop */}
       <div 
-        className={`mobile-menu h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out shadow-xl bg-white/10
+        className={`mobile-menu h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out shadow-xl bg-white lg:bg-white/10
                   ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{
           willChange: 'auto',
@@ -211,10 +318,11 @@ const SideNavbar: React.FC = () => {
         </ul>
       </div>
 
-      {/* User Profile & Dropup Menu - Static */}
-      <div className="p-6 relative">
+      {/* User Profile & Dropup Menu - Desktop Only */}
+      <div className="p-6 relative hidden lg:block">
         <div className="flex items-center justify-between mb-4">
           <div
+            data-profile-toggle
             className="flex items-center space-x-3 cursor-pointer hover:bg-black/10 flex-1 rounded-lg p-2 transition-all duration-300 ease-out"
             onClick={toggleDropup}
           >
@@ -268,7 +376,7 @@ const SideNavbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Dropup Menu */}
+        {/* Dropup Menu - Desktop Only */}
         <div 
           ref={dropupRef}
           className={`absolute bottom-24 left-2 w-56

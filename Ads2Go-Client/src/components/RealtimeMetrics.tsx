@@ -303,75 +303,85 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
   const totalDevices = devicesWithAds; // Total should match devices with ads assigned
 
   return (
-    <div className={`bg-white rounded-lg shadow-lg p-6 ${className}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Real-Time Ad Metrics</h3>
-          <p className="text-sm text-gray-500">
-            Last updated: {lastUpdate.toLocaleTimeString()}
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-500' : 
-            connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-          }`}></div>
-          <span className="text-sm text-gray-600">
-            {connectionStatus === 'connected' ? 'Live' : 
-             connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
-          </span>
-        </div>
-      </div>
-
+    <div className={`${className}`}>
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
         {/* Total Ads */}
-        <div className="bg-blue-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Ads</p>
-              <p className="text-2xl font-bold text-blue-900">{adsLoading ? '...' : totalAds}</p>
-              <p className="text-xs text-blue-500">All ad campaigns</p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+              border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+            >
+              <Monitor className="w-5 h-5 text-green-700 drop-shadow-sm" />
             </div>
-            <Monitor className="w-8 h-8 text-blue-500" />
+            <p className="text-sm text-black/70 font-medium ml-1">Total Ads</p>
+          </div>
+
+          {/* Row 2: Value + Subtitle */}
+          <div className="mt-1 ml-12">
+            <p className="text-3xl font-semibold text-gray-900">
+              {adsLoading ? '...' : totalAds}
+            </p>
           </div>
         </div>
 
         {/* Deployed Devices (Devices with Ads Assigned) */}
-        <div className="bg-blue-50 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Deployed Devices</p>
-              <p className="text-2xl font-bold text-blue-900">{adsLoading ? '...' : devicesWithAds}</p>
-              <p className="text-xs text-blue-500">Devices with ads deployed</p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
+              border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+            >
+              <Monitor className="w-5 h-5 text-blue-700 drop-shadow-sm" />
             </div>
-            <Monitor className="w-8 h-8 text-blue-500" />
+            <p className="text-sm text-black/70 font-medium ml-1">Deployed Devices</p>
+          </div>
+
+          {/* Row 2: Value + Subtitle */}
+          <div className="mt-1 ml-12">
+            <p className="text-3xl font-semibold text-gray-900">
+              {adsLoading ? '...' : devicesWithAds}
+            </p>
           </div>
         </div>
 
         {/* Online Devices */}
-        <div className={`rounded-lg p-4 ${onlineDevices > 0 ? 'bg-emerald-50' : 'bg-orange-50'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm font-medium ${onlineDevices > 0 ? 'text-emerald-600' : 'text-orange-600'}`}>
-                Online Devices
-              </p>
-              <p className={`text-2xl font-bold ${onlineDevices > 0 ? 'text-emerald-900' : 'text-orange-900'}`}>
-                {onlineDevices}/{totalDevices}
-              </p>
-              <p className={`text-xs ${onlineDevices > 0 ? 'text-emerald-500' : 'text-orange-500'}`}>
-                {onlineDevices > 0 ? 'Ready to play ads' : 'No devices online'}
-              </p>
+        <div className="flex flex-col bg-white p-4">
+          {/* Row 1: Icon + Label */}
+          <div className="flex items-center">
+            <div
+              className={`p-2 mr-2 rounded-full bg-gradient-to-br ${
+                onlineDevices > 0
+                  ? 'from-emerald-300/60 via-emerald-300/40 to-white/40'
+                  : 'from-orange-300/60 via-orange-300/40 to-white/40'
+              } border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center`}
+            >
+              <Monitor
+                className={`w-5 h-5 drop-shadow-sm ${
+                  onlineDevices > 0 ? 'text-emerald-700' : 'text-orange-700'
+                }`}
+              />
             </div>
-            <Monitor className={`w-8 h-8 ${onlineDevices > 0 ? 'text-emerald-500' : 'text-orange-500'}`} />
+            <p className="text-sm font-medium ml-1 text-black/70">Online Devices</p>
           </div>
-        </div>
-      </div>
 
-      {/* Additional Info */}
-      <div className="mt-4 text-xs text-gray-500 text-center">
-        Data updates automatically via WebSocket connection
+          {/* Row 2: Value + Subtitle (side by side) */}
+          <div className="mt-1 ml-12 flex items-baseline space-x-2">
+            <p className="text-3xl font-semibold text-gray-900">{onlineDevices}</p>
+            <span className="text-xl">/ {totalDevices}</span>
+          </div>
+
+          {/* Optional Subtitle */}
+          <p
+            className={`ml-12 text-xs mt-1 ${
+              onlineDevices > 0 ? 'text-emerald-500' : 'text-orange-500'
+            }`}
+          >
+          </p>
+        </div>
       </div>
     </div>
   );

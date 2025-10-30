@@ -530,11 +530,6 @@ const Dashboard = () => {
           </div>
         </div>
         
-        {/* Real-Time Metrics */}
-        <div className="mb-6">
-          <RealtimeMetrics />
-        </div>
-
         {/* No Analytics Data Message */}
         {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -568,214 +563,30 @@ const Dashboard = () => {
           </div>
         )}
         {/* Metrics Section */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-3 mb-6">
           {/* Column 1: Ad Performance Overview */}
-          <div
-            className="relative p-4 sm:p-6 shadow-xl md:col-span-2 text-white cursor-pointer
-                       bg-[#1b5087]/60 backdrop-blur-md border border-white/20
-                       hover:bg-[#1b5087]/70 transition-all duration-300"
-            onClick={() => window.location.href = '/detailed-analytics'}
-          >
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-              <span className="text-base sm:text-lg font-semibold">Ad Performance Overview</span>
-              <div className="relative w-28 sm:w-32" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => setShowAnalyticsPeriodDropdown(!showAnalyticsPeriodDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-                >
-                  {analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}
-                  <ChevronDown
-                    size={16}
-                    className={`transform transition-transform duration-200 ${showAnalyticsPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
-                  />
-                </button>
-                <AnimatePresence>
-                  {showAnalyticsPeriodDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-                    >
-                      {analyticsPeriodOptions.map((period) => (
-                        <button
-                          key={period}
-                          onClick={() => handleAnalyticsPeriodChange(period === 'Daily' ? '1d' : period === 'Weekly' ? '7d' : '30d')}
-                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                        >
-                          {period}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={150}>
-              <AreaChart data={analyticsData?.getUserAnalytics?.dailyStats || []} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  stroke="white"
-                  tick={{ fontSize: 10 }}
-                  interval="preserveStartEnd"
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#2D3748', border: 'none', borderRadius: '8px' }}
-                  labelStyle={{ color: '#E2E8F0' }}
-                  itemStyle={{ color: '#A8FF35' }}
-                  labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                  formatter={(value, name) => [
-                    name === 'impressions' ? value.toLocaleString() :
-                    name === 'adsPlayed' ? value.toLocaleString() : value,
-                    name === 'impressions' ? 'Impressions' :
-                    name === 'adsPlayed' ? 'Ads Played' : 'Display Time'
-                  ]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="impressions"
-                  stroke="#A18FF35"
-                  fill="#2876c7"
-                  fillOpacity={0.6}
-                  name="impressions"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="adsPlayed"
-                  stroke="#4FD1C7"
-                  fill="#2876c7"
-                  fillOpacity={0.6}
-                  name="adsPlayed"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-            <div className="mt-6 mb-4">
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-white/90">Currently Playing</h4>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                    <span className="text-xs text-white/70">LIVE</span>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="w-16 h-12 bg-white/20 flex items-center justify-center">
-                    <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z"/>
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="text-sm font-medium text-white truncate">Summer Sale Campaign</h5>
-                    <p className="text-xs text-white/60">Duration: 30s • Views: 1,234</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-white/60">Next in</p>
-                    <p className="text-sm font-medium text-white">15s</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
-              <div className="bg-[#1b5087]/60 p-3">
-                <p className="text-xl sm:text-2xl font-bold">
-                  {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
-                </p>
-                <p className="text-xs sm:text-sm text-gray-300">Total Airtime (Minutes)</p>
-                <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
-              </div>
-              <div className="bg-[#2876c7]/60 p-3">
-                <p className="text-xl sm:text-2xl font-bold">
-                  {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
-                </p>
-                <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
-                <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
-              </div>
-              <div className="bg-[#1b5087]/60 p-3">
-                <p className="text-xl sm:text-2xl font-bold">
-                  {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
-                </p>
-                <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
-                <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
-              </div>
-            </div>
-          </div>
-          {/* Column 2: QR Impressions */}
-          <div
-            className="relative p-4 shadow-xl cursor-pointer
-                      bg-white backdrop-blur-md border border-white/20
-                      hover:bg-white transition-all duration-300
-                      flex flex-col"
-            onClick={() => (window.location.href = '/detailed-analytics')}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-gray-800">QR Impressions</h2>
-                {analyticsLoading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
-                )}
-              </div>
-              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                {/* Ad Selection Dropdown */}
-                <div className="relative w-32">
+          <div className="lg:col-span-2">
+            <div
+              className="relative p-4 sm:p-6 shadow-xl md:col-span-2 text-white cursor-pointer
+                        bg-[#1b5087]/60 backdrop-blur-md border border-white/20
+                        hover:bg-[#1b5087]/70 transition-all duration-300"
+              onClick={() => window.location.href = '/detailed-analytics'}
+            >
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                <span className="text-base sm:text-lg font-semibold">Ad Performance Overview</span>
+                <div className="relative w-28 sm:w-32" onClick={(e) => e.stopPropagation()}>
                   <button
-                    onClick={() => setShowQrAdDropdown(!showQrAdDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-3 pr-2 py-3 shadow-md focus:outline-none bg-white gap-1"
+                    onClick={() => setShowAnalyticsPeriodDropdown(!showAnalyticsPeriodDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                   >
-                    <span className="truncate">
-                      {selectedAdId 
-                        ? adOptions.find(ad => ad.id === selectedAdId)?.title || 'All Ads'
-                        : 'All Ads'}
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`transform transition-transform duration-200 flex-shrink-0 ${showQrAdDropdown ? 'rotate-180' : 'rotate-0'}`}
-                    />
-                  </button>
-                  <AnimatePresence>
-                    {showQrAdDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute z-20 top-full mt-2 w-56 rounded-md shadow-lg bg-white overflow-hidden max-h-64 overflow-y-auto"
-                      >
-                        {adOptions.map((ad) => (
-                          <button
-                            key={ad.id || 'all'}
-                            onClick={() => handleQrAdChange(ad.id)}
-                            className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
-                              ad.id === selectedAdId
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            <div className="font-medium truncate">{ad.title}</div>
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* Period Selection Dropdown */}
-                <div className="relative w-24">
-                  <button
-                    onClick={() => setShowQrPeriodDropdown(!showQrPeriodDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-                  >
-                    {qrSelectedPeriod}
+                    {analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}
                     <ChevronDown
                       size={16}
-                      className={`transform transition-transform duration-200 ${showQrPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
+                      className={`transform transition-transform duration-200 ${showAnalyticsPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
                     />
                   </button>
                   <AnimatePresence>
-                    {showQrPeriodDropdown && (
+                    {showAnalyticsPeriodDropdown && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -783,11 +594,11 @@ const Dashboard = () => {
                         transition={{ duration: 0.2 }}
                         className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                       >
-                        {qrPeriodOptions.map((period) => (
+                        {analyticsPeriodOptions.map((period) => (
                           <button
                             key={period}
-                            onClick={() => handleQrPeriodChange(period as 'Weekly' | 'Daily' | 'Monthly')}
-                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                            onClick={() => handleAnalyticsPeriodChange(period === 'Daily' ? '1d' : period === 'Weekly' ? '7d' : '30d')}
+                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                           >
                             {period}
                           </button>
@@ -797,141 +608,329 @@ const Dashboard = () => {
                   </AnimatePresence>
                 </div>
               </div>
-            </div>
-
-            {/* Chart */}
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={getQrChartData()}>
+              <ResponsiveContainer width="100%" height={210}>
+                <AreaChart data={analyticsData?.getUserAnalytics?.dailyStats || []} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
                   <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    label={{ value: 'QR Scans', angle: -90, position: 'insideLeft' }}
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    stroke="white"
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   />
                   <Tooltip
-                    formatter={(value, name) => [value + ' scans', 'QR Scans']}
-                    labelFormatter={(label) => `Period: ${label}`}
+                    contentStyle={{ backgroundColor: '#2D3748', border: 'none', borderRadius: '8px' }}
+                    labelStyle={{ color: '#E2E8F0' }}
+                    itemStyle={{ color: '#A8FF35' }}
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                    formatter={(value, name) => [
+                      name === 'impressions' ? value.toLocaleString() :
+                      name === 'adsPlayed' ? value.toLocaleString() : value,
+                      name === 'impressions' ? 'Impressions' :
+                      name === 'adsPlayed' ? 'Ads Played' : 'Display Time'
+                    ]}
                   />
-                  <Line
+                  <Area
                     type="monotone"
-                    dataKey="value"
-                    stroke="#0E2A47"
-                    strokeWidth={3}
-                    dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
-                    activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                    dataKey="impressions"
+                    stroke="#A18FF35"
+                    fill="#2876c7"
+                    fillOpacity={0.6}
+                    name="impressions"
                   />
-                </LineChart>
+                  <Area
+                    type="monotone"
+                    dataKey="adsPlayed"
+                    stroke="#4FD1C7"
+                    fill="#2876c7"
+                    fillOpacity={0.6}
+                    name="adsPlayed"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
-            </div>
-
-
-            {/* View Analytics at the bottom */}
-            <div className="mt-auto pt-6 items-center justify-center">
-              <Link
-                to="/advertisements"
-                className="text-white bg-[#1b5087]/90 text-sm font-medium px-6 py-3 flex items-center justify-center gap-2 hover:bg-[#3674B5] transition-all duration-300"
-              >
-                View Analytics →
-              </Link>
+              <div className="mt-6 mb-4">
+                <div className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-white/90">Currently Playing</h4>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                      <span className="text-xs text-white/70">LIVE</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-16 h-12 bg-white/20 flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h5 className="text-sm font-medium text-white truncate">Summer Sale Campaign</h5>
+                      <p className="text-xs text-white/60">Duration: 30s • Views: 1,234</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-white/60">Next in</p>
+                      <p className="text-sm font-medium text-white">15s</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
+                <div className="bg-[#1b5087]/60 p-3">
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-300">Total Airtime (Minutes)</p>
+                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+                </div>
+                <div className="bg-[#2876c7]/60 p-3">
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
+                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+                </div>
+                <div className="bg-[#1b5087]/60 p-3">
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
+                  </p>
+                  <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
+                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Column 3: Total Ad Played and Notification List */}
-          <div className="flex flex-col space-y-3">
-            {/* Total Ad Played */}
-            <div className="min-h-[268px] bg-white backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
-              {/* Header */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-3">
+          {/* RealtimeMetrics at the top */}
+            <div className="sm:col-span-2">
+              <RealtimeMetrics />
+            </div>
+            {/* Column 2: QR Impressions */}
+            <div
+              className="relative p-4 shadow-xl cursor-pointer
+                        bg-white backdrop-blur-md border border-white/20
+                        hover:bg-white transition-all duration-300
+                        flex flex-col"
+              onClick={() => (window.location.href = '/detailed-analytics')}
+            >
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-800 text-lg font-semibold">Total Ad Played</span>
+                  <h2 className="text-lg font-semibold text-black">QR Impressions</h2>
                   {analyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
                 </div>
-                {/* Period Dropdown */}
-                <div className="relative" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => setShowTotalAdPlayedPeriodDropdown(!showTotalAdPlayedPeriodDropdown)}
-                    className="flex items-center justify-between w-24 text-xs text-black rounded-md px-3 py-2 shadow-md focus:outline-none bg-white gap-1"
-                  >
-                    <span>{analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}</span>
-                    <ChevronDown
-                      size={14}
-                      className={`transform transition-transform duration-200 ${showTotalAdPlayedPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
-                    />
-                  </button>
-                  <AnimatePresence>
-                    {showTotalAdPlayedPeriodDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute right-0 top-full mt-2 w-28 bg-white border border-gray-200 rounded-md shadow-lg z-50 overflow-hidden"
-                      >
-                        {[
-                          { value: '1d', label: 'Daily' },
-                          { value: '7d', label: 'Weekly' },
-                          { value: '30d', label: 'Monthly' }
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            onClick={() => {
-                              handleAnalyticsPeriodChange(option.value as '1d' | '7d' | '30d');
-                              setShowTotalAdPlayedPeriodDropdown(false);
-                            }}
-                            className={`w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors ${
-                              analyticsPeriod === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+              </div>
+              <div className='mb-3'>
+                <div className="flex gap-2 justify-between" onClick={(e) => e.stopPropagation()}>
+                  {/* Ad Selection Dropdown */}
+                  <div className="relative w-full">
+                    <button
+                      onClick={() => setShowQrAdDropdown(!showQrAdDropdown)}
+                      className="flex items-center font-medium justify-between w-full text-xs text-black rounded-md pl-3 pr-2 py-3 shadow-md focus:outline-none bg-white gap-1"
+                    >
+                      <span className="truncate">
+                        {selectedAdId 
+                          ? adOptions.find(ad => ad.id === selectedAdId)?.title || 'All Ads'
+                          : 'All Ads'}
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`transform transition-transform duration-200 flex-shrink-0 ${showQrAdDropdown ? 'rotate-180' : 'rotate-0'}`}
+                      />
+                    </button>
+                    <AnimatePresence>
+                      {showQrAdDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute z-20 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-64 overflow-y-auto"
+                        >
+                          {adOptions.map((ad) => (
+                            <button
+                              key={ad.id || 'all'}
+                              onClick={() => handleQrAdChange(ad.id)}
+                              className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                                ad.id === selectedAdId
+                                  ? 'bg-blue-50 text-blue-700 font-medium'
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <div className="truncate">{ad.title}</div>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Period Selection Dropdown */}
+                  <div className="relative w-24">
+                    <button
+                      onClick={() => setShowQrPeriodDropdown(!showQrPeriodDropdown)}
+                      className="flex items-center justify-between w-full text-xs text-black rounded- pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                    >
+                      {qrSelectedPeriod}
+                      <ChevronDown
+                        size={16}
+                        className={`transform transition-transform duration-200 ${showQrPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
+                      />
+                    </button>
+                    <AnimatePresence>
+                      {showQrPeriodDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                        >
+                          {qrPeriodOptions.map((period) => (
+                            <button
+                              key={period}
+                              onClick={() => handleQrPeriodChange(period as 'Weekly' | 'Daily' | 'Monthly')}
+                              className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                            >
+                              {period}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
 
-              {/* Content */}
-              <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
-                <p className="text-3xl font-bold text-[#1b5087] pl-4">
-                  {analyticsSummary.totalAdsPlayed.toLocaleString()}
-                </p>
-                <p className="text-sm pt-2 pl-4">
-                  <span className="text-green-600">
-                    {selectedAdId 
-                      ? adOptions.find(ad => ad.id === selectedAdId)?.title || 'Selected Ad'
-                      : 'All Ads'}
-                  </span>
-                  <span className="text-gray-800"> • {analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</span>
-                </p>
-                {selectedAdId && (
-                  <p className="text-xs pt-1 pl-4 text-blue-600">
-                    🔍 Filtered by selected ad in QR Impressions
-                  </p>
-                )}
+              {/* Chart */}
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={getQrChartData()}>
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      label={{ value: 'QR Scans', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip
+                      formatter={(value, name) => [value + ' scans', 'QR Scans']}
+                      labelFormatter={(label) => `Period: ${label}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#0E2A47"
+                      strokeWidth={3}
+                      dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
+                      activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
 
-              {/* Divider + Button (sticks to bottom) */}
-              <div className="mt-auto pt-6">
+
+              {/* View Analytics at the bottom */}
+              <div className="mt-auto pt-6 flex justify-center items-center">
                 <Link
-                  to="/detailed-analytics"
-                  className="text-white bg-[#1b5087]/90 text-sm font-medium px-6 py-3 flex items-center justify-center gap-2 hover:bg-[#3674B5] transition-all duration-300"
-                >
+                  to="/advertisements"
+                  className="w-full text-center text-white px-4 py-2 bg-[#3674B5] rounded hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
+                  >
                   View Analytics →
                 </Link>
               </div>
             </div>
-            {/* Notification List */}
-            <div>
-              <NotificationList />
+
+            {/* Column 3: Total Ad Played and Notification List */}
+            <div className="flex flex-col space-y-3">
+              {/* Total Ad Played */}
+              <div className="min-h-[100px] bg-white backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-black text-lg font-semibold">Total Ad Played</span>
+                    {analyticsLoading && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
+                    )}
+                  </div>
+                </div>
+                <div className='flex justify-end'>
+                  {/* Period Dropdown */}
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setShowTotalAdPlayedPeriodDropdown(!showTotalAdPlayedPeriodDropdown)}
+                      className="flex items-center justify-between w-24 text-xs text-black rounded-md px-3 py-2 shadow-md focus:outline-none bg-white gap-1"
+                    >
+                      <span>{analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}</span>
+                      <ChevronDown
+                        size={14}
+                        className={`transform transition-transform duration-200 ${showTotalAdPlayedPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
+                      />
+                    </button>
+                    <AnimatePresence>
+                      {showTotalAdPlayedPeriodDropdown && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ duration: 0.2 }}
+                          className="absolute right-0 top-full mt-2 w-24 bg-white rounded-md shadow-lg z-50 overflow-hidden"
+                        >
+                          {[
+                            { value: '1d', label: 'Daily' },
+                            { value: '7d', label: 'Weekly' },
+                            { value: '30d', label: 'Monthly' }
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => {
+                                handleAnalyticsPeriodChange(option.value as '1d' | '7d' | '30d');
+                                setShowTotalAdPlayedPeriodDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors ${
+                                analyticsPeriod === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                  <p className="text-3xl font-bold text-[#1b5087] pl-4">
+                    {analyticsSummary.totalAdsPlayed.toLocaleString()}
+                  </p>
+                  {selectedAdId && (
+                    <p className="text-xs pt-3 pl-4 font-italic">
+                      This is filtered by selected advertisement in QR Impressions
+                    </p>
+                  )}
+                </div>
+
+                {/* Divider + Button (sticks to bottom) */}
+                <div className="mt-auto pt-6 flex justify-center items-center">
+                  <Link
+                    to="/detailed-analytics"
+                    className="w-full text-center text-white px-4 py-2 bg-[#3674B5] rounded hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
+                    >
+                    View Analytics →
+                  </Link>
+                </div>
+              </div>
+              {/* Notification List */}
+              <div>
+                <NotificationList />
+              </div>
             </div>
           </div>
         </div>
