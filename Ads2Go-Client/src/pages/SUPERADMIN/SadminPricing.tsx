@@ -588,14 +588,14 @@ const SadminPricing: React.FC = () => {
                   htmlFor="maxDevices"
                   className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                 >
-                  Max Devices
+                  Maximum Number of Vehicles This Pricing Covers
                 </label>
+                <span className="text-xs text-blue-500 mt-1 block">
+                  For example, if maximum is 3, this price applies if you advertise on up to 3 vehicles.
+                </span>
                 {validationErrors.maxDevices && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.maxDevices}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  Maximum: {formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10} devices
-                </p>
               </div>
             </div>
 
@@ -684,6 +684,9 @@ const SadminPricing: React.FC = () => {
                       >
                         Price per Play
                       </label>
+                      <span className="text-xs text-gray-500 mt-1 block">
+                        This is the fee charged each time an ad is played on a single device. For example, if Price per Play is ₱1 and your ad gets 1000 plays in a day, you pay ₱1,000 per day.
+                      </span>
                       {validationErrors[`pricePerPlay_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors[`pricePerPlay_${index}`]}</p>
                       )}
@@ -706,6 +709,9 @@ const SadminPricing: React.FC = () => {
                       >
                         Ad Length Multiplier
                       </label>
+                      <span className="text-xs text-gray-500 mt-1 block">
+                        This adjusts price based on ad length. Example: 1.0 = regular price, 1.5 = 50% more.
+                      </span>
                       {validationErrors[`adLengthMultiplier_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors[`adLengthMultiplier_${index}`]}</p>
                       )}

@@ -94,12 +94,16 @@ const typeDefs = gql`
     address: String
     licenseNumber: String
     licensePictureURL: String
+    licenseFrontURL: String
+    licenseBackURL: String
     vehiclePlateNumber: String
     vehicleType: VehicleType!
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
     orCrPictureURL: String
+    orPictureURL: String
+    crPictureURL: String
     accountStatus: DriverAccountStatus!
     dateJoined: String!
     currentBalance: Float!
@@ -204,13 +208,21 @@ const typeDefs = gql`
     password: String!
     address: String!
     licenseNumber: String!
+    # Legacy single license image (kept for backward compatibility)
     licensePicture: Upload  # Changed from String to Upload
+    # New split license images
+    licenseFront: Upload
+    licenseBack: Upload
     vehiclePlateNumber: String!
     vehicleType: VehicleType!
     vehicleModel: String!
     vehicleYear: Int!
     vehiclePhoto: Upload    # Changed from String to Upload
+    # Legacy combined OR/CR (kept for backward compatibility)
     orCrPicture: Upload     # Changed from String to Upload
+    # New separate OR and CR
+    orPicture: Upload
+    crPicture: Upload
     preferredMaterialType: [MaterialTypeEnum!]!
     profilePicture: Upload  # Changed from String to Upload
   }
@@ -225,12 +237,16 @@ const typeDefs = gql`
     profilePicture: Upload  # Changed from String to Upload
     licenseNumber: String
     licensePicture: Upload  # Changed from String to Upload
+    licenseFront: Upload
+    licenseBack: Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhoto: Upload    # Changed from String to Upload
     orCrPicture: Upload     # Changed from String to Upload
+    orPicture: Upload
+    crPicture: Upload
     preferredMaterialType: [MaterialTypeEnum!]
     reason: String!
   }
@@ -245,12 +261,16 @@ const typeDefs = gql`
     address: String
     licenseNumber: String
     licensePictureURL: String
+    licenseFrontURL: String
+    licenseBackURL: String
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
     orCrPictureURL: String
+    orPictureURL: String
+    crPictureURL: String
     accountStatus: DriverAccountStatus
     installedMaterialType: InstalledMaterialType
     preferredMaterialType: [MaterialTypeEnum!]
@@ -266,13 +286,21 @@ const typeDefs = gql`
     password: String
     address: String
     licenseNumber: String
+    # Legacy single license
     licensePicture: Upload  # Changed from String to Upload
+    # New split license uploads
+    licenseFront: Upload
+    licenseBack: Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhoto: Upload    # Changed from String to Upload
+    # Legacy combined OR/CR
     orCrPicture: Upload     # Changed from String to Upload
+    # New separate OR and CR
+    orPicture: Upload
+    crPicture: Upload
     preferredMaterialType: [MaterialTypeEnum!]
     profilePicture: Upload  # Changed from String to Upload
   }

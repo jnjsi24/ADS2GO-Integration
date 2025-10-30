@@ -640,12 +640,16 @@ const Reports: React.FC = () => {
                 address
                 licenseNumber
                 licensePictureURL
+                licenseFrontURL
+                licenseBackURL
                 vehiclePlateNumber
                 vehicleModel
                 vehicleType
                 vehicleYear
                 vehiclePhotoURL
                 orCrPictureURL
+                orPictureURL
+                crPictureURL
                 profilePicture
               }
             }
@@ -696,8 +700,16 @@ const Reports: React.FC = () => {
         // Map field keys to actual driver fields
         if (fieldKey === 'vehiclePhoto') {
           updateInput.vehiclePhotoURL = change.newValue;
-        } else if (fieldKey === 'orCrDocument') {
+        } else if (fieldKey === 'orCrDocument') { // legacy single field
           updateInput.orCrPictureURL = change.newValue;
+        } else if (fieldKey === 'orPicture') {
+          updateInput.orPictureURL = change.newValue;
+        } else if (fieldKey === 'crPicture') {
+          updateInput.crPictureURL = change.newValue;
+        } else if (fieldKey === 'licenseFront') {
+          updateInput.licenseFrontURL = change.newValue;
+        } else if (fieldKey === 'licenseBack') {
+          updateInput.licenseBackURL = change.newValue;
         } else if (fieldKey === 'profilePicture') {
           updateInput.profilePicture = change.newValue;
         } else if (change.newValue && change.newValue !== 'See attachment') {

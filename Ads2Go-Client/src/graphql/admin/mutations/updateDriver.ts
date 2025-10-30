@@ -15,13 +15,17 @@ export const UPDATE_DRIVER = gql`
         contactNumber
         address
         licenseNumber
-        licensePictureURL
+      licensePictureURL
+      licenseFrontURL
+      licenseBackURL
         vehiclePlateNumber
         vehicleModel
         vehicleType
         vehicleYear
         vehiclePhotoURL
-        orCrPictureURL
+      orCrPictureURL
+      orPictureURL
+      crPictureURL
         profilePicture
       }
     }
