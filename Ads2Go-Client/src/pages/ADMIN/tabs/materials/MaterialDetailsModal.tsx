@@ -436,10 +436,20 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
               </div>
             </div>
 
-            {/* Mounted Date */}
+            {/* Mounted Date - Read-only (automatically set when tablet connects) */}
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
+              </div>
+              <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                {formatDate(material.mountedAt)}
+              </div>
+            </div>
+
+            {/* Dismounted Date */}
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
                 {!editingDates[material.id] && (
                   <button
                     onClick={() => onStartEditingDates(material.id, material)}
@@ -457,8 +467,8 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                   <div className="relative mt-1">
                     <input
                       type="datetime-local"
-                      value={editingDates[material.id].mountedAt || ''}
-                      onChange={(e) => onUpdateEditingDate(material.id, 'mountedAt', e.target.value)}
+                      value={editingDates[material.id].dismountedAt || ''}
+                      onChange={(e) => onUpdateEditingDate(material.id, 'dismountedAt', e.target.value)}
                       className="w-full text-sm px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
                     />
                   </div>
@@ -479,38 +489,6 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                     </button>
                   </div>
                 </>
-              ) : (
-                <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                  {formatDate(material.mountedAt)}
-                </div>
-              )}
-            </div>
-
-            {/* Dismounted Date */}
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
-                {!editingDates[material.id] && (
-                  <button
-                    onClick={() => onStartEditingDates(material.id, material)}
-                    className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
-                  >
-                    <Calendar className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                      Edit
-                    </span>
-                  </button>
-                )}
-              </div>
-              {editingDates[material.id] ? (
-                <div className="relative mt-1">
-                  <input
-                    type="datetime-local"
-                    value={editingDates[material.id].dismountedAt || ''}
-                    onChange={(e) => onUpdateEditingDate(material.id, 'dismountedAt', e.target.value)}
-                    className="w-full text-sm px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
-                  />
-                </div>
               ) : (
                 <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
                   {formatDate(material.dismountedAt)}

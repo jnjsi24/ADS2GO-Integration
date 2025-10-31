@@ -36,6 +36,7 @@ const CreateAdvertisement: React.FC = () => {
   const { toasts, addToast, removeToast } = useToast();
   const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false);
   const [pricingCalculation, setPricingCalculation] = useState<FlexiblePricingCalculation | null>(null);
+  const [pricingCalculationError, setPricingCalculationError] = useState<string | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showVehicleTypeDropdown, setShowVehicleTypeDropdown] = useState(false);
@@ -103,6 +104,10 @@ const CreateAdvertisement: React.FC = () => {
         formData.category && 
         allowedAdLengths.includes(formData.adLengthSeconds)) {
       calculatePricingAsync();
+    } else {
+      // Clear pricing and error if required fields are not valid
+      setPricingCalculation(null);
+      setPricingCalculationError(null);
     }
   }, [formData.materialType, formData.vehicleType, formData.category, formData.durationDays, formData.adLengthSeconds, formData.numberOfDevices]);
 
@@ -126,6 +131,7 @@ const CreateAdvertisement: React.FC = () => {
 
   const calculatePricingAsync = async () => {
     setIsCalculating(true);
+    setPricingCalculationError(null); // Clear previous errors
     try {
       const result = await calculatePricing({
         variables: {
@@ -139,10 +145,21 @@ const CreateAdvertisement: React.FC = () => {
       });
       if (result.data) {
         setPricingCalculation(result.data.calculateFlexiblePricing);
+        setPricingCalculationError(null); // Clear error on success
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error calculating pricing:', error);
       setPricingCalculation(null);
+      
+      // Extract error message
+      const errorMessage = error?.message || error?.graphQLErrors?.[0]?.message || 'Failed to calculate pricing. Please try again.';
+      
+      // Check if it's a missing pricing configuration error
+      if (errorMessage.includes('No pricing configuration found')) {
+        setPricingCalculationError(`⚠️ ${errorMessage}. Please contact the administrator to set up pricing for this configuration.`);
+      } else {
+        setPricingCalculationError(`❌ ${errorMessage}`);
+      }
     } finally {
       setIsCalculating(false);
     }
@@ -437,11 +454,19 @@ const CreateAdvertisement: React.FC = () => {
       return;
     }
     if (!pricingCalculation) {
-      addToast({ 
-        title: 'Error!', 
-        message: 'Please wait for pricing calculation to complete.', 
-        type: 'error' 
-      });
+      if (pricingCalculationError) {
+        addToast({ 
+          title: 'Error!', 
+          message: pricingCalculationError, 
+          type: 'error' 
+        });
+      } else {
+        addToast({ 
+          title: 'Error!', 
+          message: 'Please wait for pricing calculation to complete or check your configuration.', 
+          type: 'error' 
+        });
+      }
       return;
     }
 
@@ -1403,6 +1428,31 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <div className="flex justify-between font-semibold">
                 <span>Total Price:</span>
                 <span className="text-xl text-[#3674B5]">{formatCurrency(pricingCalculation.totalPrice)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : pricingCalculationError ? (
+        <div className="p-6 mb-6 mt-6 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-red-900 mb-2">Pricing Calculation Error</h3>
+              <p className="text-red-800">{pricingCalculationError}</p>
+              <div className="mt-4 p-3 bg-red-100 rounded-md">
+                <p className="text-sm text-red-700 font-medium mb-1">Current Configuration:</p>
+                <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
+                  <li>Vehicle Type: {formData.vehicleType || 'Not selected'}</li>
+                  <li>Material Type: {formData.materialType || 'Not selected'}</li>
+                  <li>Category: {formData.category || 'Not selected'}</li>
+                  <li>Duration: {formData.durationDays} days</li>
+                  <li>Ad Length: {formData.adLengthSeconds} seconds</li>
+                  <li>Number of Devices: {formData.numberOfDevices}</li>
+                </ul>
               </div>
             </div>
           </div>

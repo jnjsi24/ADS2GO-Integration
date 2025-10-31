@@ -29,21 +29,42 @@ export const DeviceStatusBar: React.FC = () => {
 
   let statusText: string;
   let iconName: keyof typeof MaterialIcons.glyphMap = 'wifi-off';
-  let backgroundColor = '#f8d7da'; // Light red
-  let textColor = '#721c24'; // Dark red
+  let backgroundColor = '#fff3cd'; // Light yellow (default for offline)
+  let textColor = '#856404'; // Dark yellow
   
   // Set status based on online status and errors
-  if (error) {
-    statusText = `Error: ${error}`;
+  // Unregistered devices and offline status are informational, not errors
+  if (error && (
+    error.includes('unregistered') || 
+    error.includes('not registered') || 
+    error.includes('No registered device') ||
+    error.includes('Device has been') ||
+    error.includes('Material ID is required') ||
+    error.includes('Please register') ||
+    error.includes('Registration required') ||
+    error.includes('Registration Required') ||
+    error.includes('registration')
+  )) {
+    // Unregistered device - show as informational (not error)
+    statusText = error.includes('unregistered') || error.includes('Device has been') || error.includes('No registered device')
+      ? 'No Registered Device' 
+      : 'Registration Required';
+    iconName = 'info';
+    backgroundColor = '#d1ecf1'; // Light blue (informational)
+    textColor = '#0c5460'; // Dark blue
+  } else if (error && !error.includes('Unable to establish connection')) {
+    // Only show errors for connection issues after max attempts
+    statusText = 'Connection Issue';
     iconName = 'error';
-    backgroundColor = '#f8d7da';
-    textColor = '#721c24';
+    backgroundColor = '#f8d7da'; // Light red
+    textColor = '#721c24'; // Dark red
   } else if (isOnline) {
     statusText = 'Online';
     iconName = 'wifi';
     backgroundColor = '#d4edda'; // Light green
     textColor = '#155724'; // Dark green
   } else {
+    // Normal offline - show as informational status (not error)
     statusText = 'Offline';
     iconName = 'wifi-off';
     backgroundColor = '#fff3cd'; // Light yellow

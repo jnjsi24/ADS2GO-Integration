@@ -109,7 +109,7 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClo
                 If you have any questions about these Terms of Service, please contact us at:
               </p>
               <div>
-                <h1><span className="font-bold">Email:</span> <span className="text-black font-normal">legal@ads2go.com</span></h1>
+                <h1><span className="font-bold">Email:</span> <span className="text-black font-normal">advertisements2go@gmail.com</span></h1>
                 <h1><span className="font-bold">Phone:</span> <span className="text-black font-normal">+63 2 1234 5678</span></h1>
                 <h1><span className="font-bold">Address:</span> <span className="text-black font-normal">Makati City, Metro Manila, Philippines 1200</span></h1>
               </div>

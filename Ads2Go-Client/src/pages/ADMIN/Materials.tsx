@@ -1046,10 +1046,8 @@ const Materials: React.FC = () => {
     try {
       const input: any = {};
       
-      // Always send mountedAt if it's in the edit data (even if empty to clear it)
-      if (editData.mountedAt !== undefined) {
-        input.mountedAt = editData.mountedAt ? new Date(editData.mountedAt).toISOString() : null;
-      }
+      // Mounted date is automatically set when tablet connects - don't allow manual editing
+      // (Removed mountedAt editing - it's set automatically in backend when device registers)
       
       // Always send dismountedAt if it's in the edit data (even if empty to clear it)
       if (editData.dismountedAt !== undefined) {

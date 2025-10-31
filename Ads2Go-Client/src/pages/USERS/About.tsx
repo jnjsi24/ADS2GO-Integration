@@ -5,7 +5,6 @@ import {
   Info, 
   Target, 
   Users, 
-  Lightbulb, 
   MapPin, 
   Award, 
   TrendingUp, 
@@ -14,10 +13,6 @@ import {
   Heart,
   CheckCircle,
   ArrowRight,
-  Star,
-  BarChart3,
-  Zap,
-  Clock,
   Loader2
 } from 'lucide-react';
 

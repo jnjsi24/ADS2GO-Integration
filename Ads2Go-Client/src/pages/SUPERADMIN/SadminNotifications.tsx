@@ -12,8 +12,6 @@ import {
   Clock, 
   Info,
   Users,
-  TrendingUp,
-  DollarSign,
   CheckSquare,
   Square
 } from 'lucide-react';
@@ -45,7 +43,7 @@ const SadminNotifications: React.FC = () => {
   });
 
   // Fetch user counts by plan
-  const { data: planData, loading: planLoading } = useQuery(GET_USER_COUNTS_BY_PLAN, {
+  const { data: planData } = useQuery(GET_USER_COUNTS_BY_PLAN, {
     onError: (error) => {
       console.error('Error fetching user counts by plan:', error);
     }

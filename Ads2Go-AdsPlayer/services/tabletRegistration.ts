@@ -7,6 +7,7 @@ import offlineQueueService from './offlineQueueService';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
 import { log } from '../utils/logger';
+import requestManager from './requestManager';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -146,6 +147,8 @@ export class TabletRegistrationService {
   private isReregistering = false; // Prevent concurrent re-registration attempts
   private lastServerVerification: number = 0; // Track last server verification time
   private serverVerificationInterval: number = 60000; // Verify with server only once per minute
+  private lastLocationUpdate: number = 0; // Track last location update time
+  private locationUpdateThrottle: number = 2000; // Minimum 2 seconds between location updates to server (matches check interval)
   
   // Speed violation tracking
   private currentSpeedLimit: number = 50; // Default urban speed limit
@@ -476,7 +479,8 @@ export class TabletRegistrationService {
 
       // Skip GPS data if coordinates are [0,0] (GPS still initializing)
       const validGps = gps && !(gps.lat === 0 && gps.lng === 0) ? gps : undefined;
-      if (gps && !validGps) {
+      // Only log GPS skip occasionally (not every update) to reduce log noise
+      if (gps && !validGps && Math.random() < 0.05) {
         console.log('⏳ Skipping GPS data in status update - coordinates are [0,0]');
       }
 
@@ -509,39 +513,27 @@ export class TabletRegistrationService {
         
         return true;
       } else {
-        // Handle "Tablet not found" error (expected when device is unregistered)
+        // Handle "Tablet not found" error (expected when device is unregistered by admin)
         if (result.message === 'Tablet not found') {
-          // Check if re-registration is already in progress
-          if (this.isReregistering) {
-            console.log('⏳ Re-registration already in progress, skipping duplicate attempt');
-            return false;
-          }
+          console.log('❌ [UpdateStatus] Device not found - tablet was unregistered by admin');
+          console.log('🧹 [UpdateStatus] Clearing registration data and navigating to registration page...');
           
-          console.log('ℹ️ Device not found in database - will re-register');
-          this.isReregistering = true;
+          // Clear registration data (don't try to auto re-register with old data)
+          await this.clearRegistration();
           
-          try {
-            const reRegisterResult = await this.registerTablet({
-              materialId: this.registration.materialId,
-              slotNumber: this.registration.slotNumber,
-              carGroupId: this.registration.carGroupId
-            });
-            
-            if (reRegisterResult.success) {
-              console.log('✅ Device re-registered successfully');
-              this.isReregistering = false;
-              // Retry the status update with valid GPS data
-              return await this.updateTabletStatus(isOnline, validGps);
-            } else {
-              console.log('⚠️ Re-registration failed:', reRegisterResult.message);
-              this.isReregistering = false;
-              return false;
+          // Navigate to registration page
+          // Using setTimeout to ensure state updates are processed first
+          setTimeout(() => {
+            try {
+              const { router } = require('expo-router');
+              router.replace('/registration?force=true');
+              console.log('✅ [UpdateStatus] Navigated to registration page');
+            } catch (navError) {
+              console.error('❌ [UpdateStatus] Error navigating to registration page:', navError);
             }
-          } catch (error) {
-            this.isReregistering = false;
-            console.log('⚠️ Re-registration error:', error);
-            return false;
-          }
+          }, 500);
+          
+          return false;
         }
         
         // For other errors, log as error
@@ -629,8 +621,9 @@ export class TabletRegistrationService {
       }
 
       // Send to device tracking endpoint (unified location tracking)
+      // Use requestManager for cancellation, deduplication, and queuing
       try {
-        const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
+        const deviceTrackingResponse = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -646,6 +639,9 @@ export class TabletRegistrationService {
             heading: locationUpdate.heading,
             accuracy: locationUpdate.accuracy
           }),
+          timeout: 10000, // 10 second timeout
+          priority: 1, // Lower priority (can be queued)
+          allowDuplicate: false, // Prevent duplicate location updates
         });
 
         if (!deviceTrackingResponse.ok) {
@@ -666,6 +662,11 @@ export class TabletRegistrationService {
           return false;
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.warn('⏱️ Location tracking request timed out - will retry via offline queue');
+          // The location update is already queued above, so we can safely return false
+          return false;
+        }
         console.error('❌ Error sending to device tracking:', error);
         return false;
       }
@@ -724,15 +725,21 @@ export class TabletRegistrationService {
           console.log('App is going to background, stopping location tracking');
           await this.stopLocationTracking();
           
-          // Update server that we're going offline
+          // Cancel all pending requests when going to background
+          requestManager.cancelAllRequests();
+          
+          // Update server that we're going offline (with priority)
           if (this.registration) {
             await this.updateTabletStatus(false);
           }
         } else if (nextAppState === 'active') {
           console.log('App is active, restarting location tracking if needed');
           if (this.registration) {
-            await this.updateTabletStatus(true);
-            await this.startLocationTracking();
+            // Small delay to let app stabilize
+            setTimeout(async () => {
+              await this.updateTabletStatus(true);
+              await this.startLocationTracking();
+            }, 500);
           }
         }
       });
@@ -772,6 +779,13 @@ export class TabletRegistrationService {
 
           const { latitude, longitude, speed, heading, accuracy } = location.coords;
 
+          // Throttle location updates to prevent too many requests
+          const now = Date.now();
+          if (now - this.lastLocationUpdate < this.locationUpdateThrottle) {
+            // Skip this update - too soon since last one
+            return;
+          }
+
           // Only use updateLocationTracking (includes all GPS data: speed, heading, accuracy)
           // Don't call updateTabletStatus here to avoid duplicate location sends
           await this.updateLocationTracking(
@@ -781,6 +795,8 @@ export class TabletRegistrationService {
             heading || 0, 
             accuracy || 0
           );
+
+          this.lastLocationUpdate = now;
 
           // Only log location updates occasionally to reduce noise
           if (Math.random() < 0.1) { // Log ~10% of location updates
@@ -1020,18 +1036,16 @@ export class TabletRegistrationService {
     try {
       console.log('Checking server accessibility at:', API_BASE_URL);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      const response = await fetch(`${API_BASE_URL}/tablet/health`, {
+      // Use requestManager for better handling
+      const response = await requestManager.fetch(`${API_BASE_URL}/tablet/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: controller.signal,
+        timeout: 5000, // 5 second timeout
+        priority: 2, // Medium priority
+        allowDuplicate: false, // Prevent duplicate health checks
       });
-      
-      clearTimeout(timeoutId);
 
       if (response.ok) {
         console.log('Server is accessible');
@@ -1041,6 +1055,14 @@ export class TabletRegistrationService {
         return false;
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn('⏱️ Server accessibility check timed out - server may be slow or unreachable');
+        return false;
+      }
+      if (error instanceof Error && error.message.includes('background')) {
+        console.warn('⚠️ Server accessibility check skipped - app in background');
+        return false;
+      }
       console.error('Server accessibility check failed:', error);
       console.error('Please ensure:');
       console.error('1. Backend server is running (npm start in Ads2Go-Server)');
@@ -1342,11 +1364,15 @@ export class TabletRegistrationService {
         finalMaterialId = await this.convertObjectIdToMaterialId(materialId);
       }
 
-      const response = await fetch(`${API_BASE_URL}/ads/${finalMaterialId}/${slotNumber}`, {
+      // Use requestManager for better error handling
+      const response = await requestManager.fetch(`${API_BASE_URL}/ads/${finalMaterialId}/${slotNumber}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        timeout: 15000, // 15 second timeout for ad fetching (can be slower)
+        priority: 2, // Medium priority (ads are important but not critical)
+        allowDuplicate: false, // Prevent duplicate ad fetches
       });
 
       const result: AdsResponse = await response.json();

@@ -104,17 +104,38 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
-    // ✅ TIME-BASED LOCK: Block ALL registrations between 12:00 AM - 7:59 AM (regardless of 8hr completion)
+    // Find the tablet document for this material (need to check if device has been connected before)
+    // Try to find by materialId first (string format)
+    let tablet = await Tablet.findOne({ materialId });
+    
+    // If not found and materialId looks like an ObjectId, try finding by ObjectId
+    if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
+      console.log('Tablet not found by materialId, trying ObjectId:', materialId);
+      tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
+    }
+    
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'No tablet configuration found for this material'
+      });
+    }
+
+    // ✅ Check if material has an ad deployment
+    // Time lock only applies to devices that have an existing ad deployment to that device/material
+    const existingDeployment = await AdsDeployment.findOne({ materialId });
+    
     const now = new Date();
     const currentHour = now.getHours(); // 0-23
-    
-    // Check if current time is between 12:00 AM (0) and 7:59 AM (7)
     const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
     
-    if (isBeforeEightAM) {
+    // ✅ TIME-BASED LOCK: Only apply if material has ad deployment
+    // If material has no ad deployment, allow registration regardless of time
+    if (existingDeployment && isBeforeEightAM) {
       console.log(`🔒 [Registration Blocked] ${materialId} cannot start before 8:00 AM`);
       console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
       console.log(`   Reason: Drivers are not allowed to work between 12:00 AM - 7:59 AM`);
+      console.log(`   Material has ad deployment: ${existingDeployment.adDeploymentId || existingDeployment._id}`);
       
       return res.status(403).json({
         success: false,
@@ -133,28 +154,16 @@ router.post('/registerTablet', async (req, res) => {
     // ✅ Clear completedAt when device registers at or after 8 AM (start of allowed work period)
     const DeviceTracking = require('../models/deviceTracking');
     const existingTracking = await DeviceTracking.findOne({ materialId });
-    
     if (existingTracking && existingTracking.currentSession && existingTracking.currentSession.completedAt) {
       console.log(`🔓 [Registration Unlocked] ${materialId} registering at ${currentHour}:00 - clearing completedAt from previous day`);
       existingTracking.currentSession.completedAt = undefined;
       await existingTracking.save();
     }
 
-    // Find the tablet document for this material
-    // Try to find by materialId first (string format)
-    let tablet = await Tablet.findOne({ materialId });
-    
-    // If not found and materialId looks like an ObjectId, try finding by ObjectId
-    if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
-      console.log('Tablet not found by materialId, trying ObjectId:', materialId);
-      tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
-    }
-    
-    if (!tablet) {
-      return res.status(404).json({
-        success: false,
-        message: 'No tablet configuration found for this material'
-      });
+    // ✅ If material has no ad deployment, log that we're allowing first-time registration
+    if (!existingDeployment) {
+      console.log(`✅ [First Time Registration - No Ad Deployment] ${materialId} has no ad deployment - allowing registration regardless of time`);
+      console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
     }
 
     // Validate car group ID

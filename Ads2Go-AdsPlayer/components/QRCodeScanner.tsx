@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, Modal, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -19,10 +19,18 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
   const [showManualInput, setShowManualInput] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  
+  // ✅ Use ref to prevent duplicate scans (refs update synchronously, unlike state)
+  const isProcessingRef = useRef(false);
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
-    if (scanned) return;
+    // ✅ Use ref check first (synchronous) to prevent duplicate scans
+    if (isProcessingRef.current || scanned) {
+      return;
+    }
     
+    // ✅ Set ref immediately (synchronous) to block any subsequent rapid calls
+    isProcessingRef.current = true;
     setScanned(true);
     
     try {
@@ -30,13 +38,27 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
       
       // Validate the scanned data
       if (!connectionDetails.materialId || !connectionDetails.slotNumber || !connectionDetails.carGroupId) {
+        // ✅ Reset ref on validation error so user can try again
+        isProcessingRef.current = false;
         Alert.alert(
           'Invalid QR Code',
           'The QR code data does not contain valid connection details.',
           [
-            { text: 'Try Again', onPress: () => setScanned(false) },
-            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-            { text: 'Cancel', onPress: onClose }
+            { text: 'Try Again', onPress: () => {
+                isProcessingRef.current = false;
+                setScanned(false);
+              }
+            },
+            { text: 'Manual Input', onPress: () => {
+                isProcessingRef.current = false;
+                setShowManualInput(true);
+              }
+            },
+            { text: 'Cancel', onPress: () => {
+                isProcessingRef.current = false;
+                onClose();
+              }
+            }
           ]
         );
         return;
@@ -47,10 +69,15 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
         'QR Code Scanned Successfully!',
         `Material ID: ${connectionDetails.materialId}\nSlot: ${connectionDetails.slotNumber}\nCar Group: ${connectionDetails.carGroupId}`,
         [
-          { text: 'Cancel', style: 'cancel', onPress: () => setScanned(false) },
+          { text: 'Cancel', style: 'cancel', onPress: () => {
+              isProcessingRef.current = false;
+              setScanned(false);
+            }
+          },
           { 
             text: 'Use These Details', 
             onPress: () => {
+              isProcessingRef.current = false;
               onScanSuccess(connectionDetails);
               onClose();
             }
@@ -58,13 +85,27 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
         ]
       );
     } catch (error) {
+      // ✅ Reset ref on error so user can try again
+      isProcessingRef.current = false;
       Alert.alert(
         'Invalid QR Code',
         'The QR code data could not be parsed. Please check the format and try again.',
         [
-          { text: 'Try Again', onPress: () => setScanned(false) },
-          { text: 'Manual Input', onPress: () => setShowManualInput(true) },
-          { text: 'Cancel', onPress: onClose }
+          { text: 'Try Again', onPress: () => {
+              isProcessingRef.current = false;
+              setScanned(false);
+            }
+          },
+          { text: 'Manual Input', onPress: () => {
+              isProcessingRef.current = false;
+              setShowManualInput(true);
+            }
+          },
+          { text: 'Cancel', onPress: () => {
+              isProcessingRef.current = false;
+              onClose();
+            }
+          }
         ]
       );
     }
@@ -72,7 +113,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
 
   const handleQRCodeInput = () => {
     if (!qrCodeData.trim()) {
-      Alert.alert('Error', 'Please enter QR code data');
+      Alert.alert('Information Required', 'Please enter QR code data to continue');
       return;
     }
 
@@ -199,7 +240,7 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
             <CameraView
               style={styles.scanner}
               facing="back"
-              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              onBarcodeScanned={(scanned || isProcessingRef.current) ? undefined : handleBarCodeScanned}
               barcodeScannerSettings={{
                 barcodeTypes: ['qr'],
               }}
@@ -210,7 +251,10 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
               {scanned && (
                 <TouchableOpacity
                   style={styles.scanAgainButton}
-                  onPress={() => setScanned(false)}
+                  onPress={() => {
+                    isProcessingRef.current = false;
+                    setScanned(false);
+                  }}
                 >
                   <Text style={styles.scanAgainText}>Tap to Scan Again</Text>
                 </TouchableOpacity>

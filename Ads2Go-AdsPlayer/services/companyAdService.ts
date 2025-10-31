@@ -1,6 +1,7 @@
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
 import { log } from '../utils/logger';
+import requestManager from './requestManager';
 
 export interface CompanyAd {
   id: string;
@@ -42,7 +43,8 @@ class CompanyAdService {
     try {
       log.adPlayback('Fetching active company ads...');
       
-      const response = await fetch(`${API_BASE_URL}/graphql`, {
+      // Use requestManager for better error handling
+      const response = await requestManager.fetch(`${API_BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,6 +75,9 @@ class CompanyAdService {
             }
           `,
         }),
+        timeout: 15000, // 15 second timeout for GraphQL queries
+        priority: 2, // Medium priority (company ads are important)
+        allowDuplicate: false, // Prevent duplicate company ad fetches
       });
 
       if (!response.ok) {
@@ -115,7 +120,8 @@ class CompanyAdService {
     try {
       console.log('🎲 Fetching random company ad...');
       
-      const response = await fetch(`${API_BASE_URL}/graphql`, {
+      // Use requestManager for better error handling
+      const response = await requestManager.fetch(`${API_BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,6 +148,9 @@ class CompanyAdService {
             }
           `,
         }),
+        timeout: 15000, // 15 second timeout for GraphQL queries
+        priority: 2, // Medium priority
+        allowDuplicate: false,
       });
 
       if (!response.ok) {
@@ -262,7 +271,8 @@ class CompanyAdService {
     try {
       console.log(`📊 Incrementing play count for company ad: ${adId}`);
       
-      const response = await fetch(`${API_BASE_URL}/graphql`, {
+      // Use requestManager for better error handling
+      const response = await requestManager.fetch(`${API_BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -281,6 +291,9 @@ class CompanyAdService {
             id: adId,
           },
         }),
+        timeout: 10000, // 10 second timeout
+        priority: 1, // Lower priority (play count is not critical)
+        allowDuplicate: false,
       });
 
       if (!response.ok) {

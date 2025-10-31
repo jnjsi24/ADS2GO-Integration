@@ -122,10 +122,33 @@ const SadminDriverSalary: React.FC = () => {
   useEffect(() => {
     if (formData.materialType === 'LCD' || formData.materialType === 'HEADDRESS') {
       setFormData(prev => ({ ...prev, category: 'DIGITAL' }));
-    } else if (['BANNER', 'STICKER', 'POSTER'].includes(formData.materialType)) {
+    } else if (['STICKER', 'POSTER'].includes(formData.materialType)) {
       setFormData(prev => ({ ...prev, category: 'NON_DIGITAL' }));
     }
   }, [formData.materialType]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      // Close all dropdowns if clicking outside any dropdown button or menu
+      if (
+        !target.closest('.dropdown-button') &&
+        !target.closest('.dropdown-menu')
+      ) {
+        setShowVehicleDropdown(false);
+        setShowMaterialDropdown(false);
+        setShowCategoryDropdown(false);
+      }
+    };
+
+    if (showVehicleDropdown || showMaterialDropdown || showCategoryDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showVehicleDropdown, showMaterialDropdown, showCategoryDropdown]);
 
   // Event handlers
   const handleCreatePricing = () => {
@@ -185,27 +208,6 @@ const SadminDriverSalary: React.FC = () => {
       style: 'currency',
       currency: 'PHP'
     }).format(amount);
-  };
-
-  const getAvailableMaterialTypes = (vehicleType: string, category: string) => {
-    const materialMap = {
-      DIGITAL: {
-        CAR: ['LCD', 'HEADDRESS'],
-        MOTORCYCLE: ['LCD'],
-        BUS: ['LCD'],
-        JEEP: ['LCD'],
-        E_TRIKE: ['LCD']
-      },
-      NON_DIGITAL: {
-        CAR: ['BANNER', 'STICKER'],
-        MOTORCYCLE: ['BANNER', 'STICKER'],
-        BUS: ['BANNER', 'STICKER'],
-        JEEP: ['BANNER', 'STICKER'],
-        E_TRIKE: ['BANNER', 'STICKER']
-      }
-    };
-    
-    return materialMap[category as keyof typeof materialMap]?.[vehicleType as keyof typeof materialMap.DIGITAL] || [];
   };
 
   if (loading) {
@@ -366,7 +368,7 @@ const SadminDriverSalary: React.FC = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {pricing.materialType} {pricing.vehicleType}
+                          {pricing.materialType} {pricing.vehicleType === 'E_TRIKE' ? 'E TRIKE' : pricing.vehicleType}
                         </h3>
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium border ${
@@ -378,7 +380,7 @@ const SadminDriverSalary: React.FC = () => {
                           {pricing.isActive ? "Active" : "Inactive"}
                         </span>
                       </div>
-                      <p className="text-gray-600 text-sm">{pricing.category}</p>
+                      <p className="text-gray-600 text-sm">{pricing.category === 'NON_DIGITAL' ? 'NON DIGITAL' : pricing.category}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -475,10 +477,15 @@ const SadminDriverSalary: React.FC = () => {
                   <div className="relative w-full">
                     <button
                       type="button"
-                      onClick={() => setShowVehicleDropdown(!showVehicleDropdown)}
+                      onClick={() => {
+                        // Close other dropdowns when opening this one
+                        setShowMaterialDropdown(false);
+                        setShowCategoryDropdown(false);
+                        setShowVehicleDropdown(!showVehicleDropdown);
+                      }}
                       disabled={!!editingPricing}
-                      className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                      {formData.vehicleType || 'Select vehicle type'}
+                      className="dropdown-button flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                      {formData.vehicleType === 'E_TRIKE' ? 'E TRIKE' : formData.vehicleType || 'Select vehicle type'}
                       <ChevronDown
                         size={16}
                         className={`transform transition-transform duration-200 ${showVehicleDropdown ? "rotate-180" : "rotate-0"}`}
@@ -491,7 +498,7 @@ const SadminDriverSalary: React.FC = () => {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
+                          className="dropdown-menu absolute z-20 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
                         >
                           {['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'].map((option) => (
                             <button
@@ -503,7 +510,7 @@ const SadminDriverSalary: React.FC = () => {
                               }}
                               className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                             >
-                              {option}
+                              {option === 'E_TRIKE' ? 'E TRIKE' : option}
                             </button>
                           ))}
                         </motion.div>
@@ -515,48 +522,18 @@ const SadminDriverSalary: React.FC = () => {
                   )}
                 </div>
 
-                {/* Category Dropdown */}
+                {/* Category - Auto-determined (Read-only) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Category
                   </label>
                   <div className="relative w-full">
-                    <button
-                      type="button"
-                      onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                      disabled={!!editingPricing}
-                      className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                      {formData.category || 'Select category'}
-                      <ChevronDown
-                        size={16}
-                        className={`transform transition-transform duration-200 ${showCategoryDropdown ? "rotate-180" : "rotate-0"}`}
-                      />
-                    </button>
-                    <AnimatePresence>
-                      {showCategoryDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
-                        >
-                          {['DIGITAL', 'NON_DIGITAL'].map((option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => {
-                                setFormData(prev => ({ ...prev, category: option as any }));
-                                setShowCategoryDropdown(false);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                            >
-                              {option}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <div className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md bg-gray-50 border border-gray-300">
+                      {formData.category === 'NON_DIGITAL' ? 'NON DIGITAL' : formData.category || 'Will be determined automatically'}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Category is automatically determined based on material type
+                    </p>
                   </div>
                   {validationErrors.category && (
                     <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
@@ -571,9 +548,14 @@ const SadminDriverSalary: React.FC = () => {
                   <div className="relative w-full">
                     <button
                       type="button"
-                      onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
-                      disabled={!!editingPricing || !formData.vehicleType || !formData.category}
-                      className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                      onClick={() => {
+                        // Close other dropdowns when opening this one
+                        setShowVehicleDropdown(false);
+                        setShowCategoryDropdown(false);
+                        setShowMaterialDropdown(!showMaterialDropdown);
+                      }}
+                      disabled={!!editingPricing || !formData.vehicleType}
+                      className="dropdown-button flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                       {formData.materialType || 'Select material type'}
                       <ChevronDown
                         size={16}
@@ -587,21 +569,44 @@ const SadminDriverSalary: React.FC = () => {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
+                          className="dropdown-menu absolute z-20 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
                         >
-                          {getAvailableMaterialTypes(formData.vehicleType, formData.category).map((option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => {
-                                setFormData(prev => ({ ...prev, materialType: option as any }));
-                                setShowMaterialDropdown(false);
-                              }}
-                              className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                            >
-                              {option}
-                            </button>
-                          ))}
+                          {(() => {
+                            // Define material types based on vehicle type
+                            // For MOTORCYCLE and E_TRIKE: Only non-digital materials (POSTER, STICKER)
+                            // For CAR, BUS, JEEP: All materials (LCD, HEADDRESS, STICKER, POSTER)
+                            const vehicleType = formData.vehicleType;
+                            
+                            let availableMaterials: string[];
+                            
+                            if (vehicleType === 'MOTORCYCLE' || vehicleType === 'E_TRIKE') {
+                              // Only non-digital materials for MOTORCYCLE and E_TRIKE
+                              availableMaterials = ['POSTER', 'STICKER'];
+                            } else if (vehicleType === 'CAR') {
+                              // CAR can have all materials
+                              availableMaterials = ['LCD', 'HEADDRESS', 'STICKER', 'POSTER'];
+                            } else if (vehicleType === 'BUS' || vehicleType === 'JEEP') {
+                              // BUS and JEEP can have all except HEADDRESS
+                              availableMaterials = ['LCD', 'STICKER', 'POSTER'];
+                            } else {
+                              // Default: no materials available
+                              availableMaterials = [];
+                            }
+                            
+                            return availableMaterials.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, materialType: option as any }));
+                                  setShowMaterialDropdown(false);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                              >
+                                {option}
+                              </button>
+                            ));
+                          })()}
                         </motion.div>
                       )}
                     </AnimatePresence>

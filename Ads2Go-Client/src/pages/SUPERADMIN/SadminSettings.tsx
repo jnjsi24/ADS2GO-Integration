@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Lock, Bell, ChevronDown, CheckCircle, Eye, EyeOff, AlertTriangle, User } from 'lucide-react';
+import { Lock, Bell, ChevronDown, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CHANGE_SUPERADMIN_PASSWORD } from '../../graphql/superadmin/mutations/changeSuperAdminPassword';
@@ -9,7 +9,7 @@ import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSupe
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
 import { UPDATE_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/mutations/updateSuperAdminNotificationPreferences';
 import { GET_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/queries/getSuperAdminNotificationPreferences';
-import { useToast, ToastContainer, Toast } from '../../components/ToastNotification';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -28,7 +28,6 @@ const SadminSettings: React.FC = () => {
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const { toasts, addToast, removeToast } = useToast();
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Security and Privacy');
   const [showTimeoutDropdown, setShowTimeoutDropdown] = useState(false);
   const [selectedTimeoutOption, setSelectedTimeoutOption] = useState('10 Minutes');
@@ -68,10 +67,6 @@ const SadminSettings: React.FC = () => {
     disableNotificationSounds: true,
   });
   
-  
-  // State to toggle form editability
-  const [isFormEditable, setIsFormEditable] = useState(false);
-
   // Tab configuration
   const tabs = [
     { id: 'Security and Privacy', label: 'Security and Privacy', icon: Lock },
@@ -85,7 +80,7 @@ const SadminSettings: React.FC = () => {
   const [updateNotificationPreferences] = useMutation(UPDATE_SUPERADMIN_NOTIFICATION_PREFERENCES);
 
   // GraphQL queries
-  const { data: notificationData, loading: notificationLoading, refetch: refetchNotifications } = useQuery(GET_SUPERADMIN_NOTIFICATION_PREFERENCES);
+  const { data: notificationData, refetch: refetchNotifications } = useQuery(GET_SUPERADMIN_NOTIFICATION_PREFERENCES);
 
   // Update notification form when data is loaded
   React.useEffect(() => {
@@ -101,34 +96,6 @@ const SadminSettings: React.FC = () => {
       });
     }
   }, [notificationData]);
-
-  // Dropdown options for Field
-  const fieldOptions = [
-    'Finance',
-    'Marketing',
-    'Human Resources',
-    'Information Technology',
-    'Operations',
-    'Sales',
-    'Customer Service',
-    'Research and Development',
-    'Legal',
-    'Others',
-  ];
-
-  // Dropdown options for Branch (Philippine cities/areas)
-  const branchOptions = [
-    'Quezon City',
-    'Makati City',
-    'Manila',
-    'Pasig City',
-    'Taguig City',
-    'Cebu City',
-    'Davao City',
-    'Parañaque City',
-    'Las Piñas City',
-    'Mandaluyong City',
-  ];
 
   const handleTimeoutChange = (option: string) => {
     setSelectedTimeoutOption(option);
@@ -163,20 +130,6 @@ const SadminSettings: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
-  };
-
-
-  const handleToggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-  };
-
-  const handleManageUsers = () => {
-    addToast({
-      type: 'success',
-      title: 'Success!',
-      message: 'Navigating to Manage Users page (feature not implemented in this component).',
-      duration: 5000
-    });
   };
 
   const handleTabChange = (tab: string) => {
@@ -384,16 +337,6 @@ const SadminSettings: React.FC = () => {
         message: err.message || 'Failed to deactivate account. Please try again.'
       });
     }
-  };
-
-  // Toggle form editability
-  const toggleFormEditable = () => {
-    setIsFormEditable(!isFormEditable);
-  };
-
-  // Handle Back button click
-  const handleBack = () => {
-    setIsFormEditable(false);
   };
 
   return (

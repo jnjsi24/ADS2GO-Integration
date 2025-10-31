@@ -1,7 +1,5 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { Pencil } from "lucide-react";
-import { BellIcon } from '@heroicons/react/24/outline';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useMutation } from "@apollo/client";
 import { toast } from 'sonner';
@@ -45,7 +43,6 @@ const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const navigate = useNavigate();
   const { admin, setAdmin } = useAdminAuth() as { admin: AdminData | null; setAdmin: (admin: AdminData | null) => void };
   
   const [formData, setFormData] = useState<FormData>({

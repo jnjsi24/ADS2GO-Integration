@@ -17,6 +17,7 @@ interface LocationAutocompleteProps {
   label?: string;
   required?: boolean;
   error?: string;
+  addressPlaceholder?: string;
 }
 
 // Convert JSON data to flat array for easier searching
@@ -62,7 +63,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   placeholder = "Select location...",
   label,
   required = false,
-  error
+  error,
+  addressPlaceholder = "Enter your house number and street..."
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [filteredOptions, setFilteredOptions] = useState<LocationOption[]>([]);
@@ -87,13 +89,20 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
   // Extract location parts and user address from value when component mounts or value changes
   useEffect(() => {
+    // Don't extract if user is actively editing the address field
+    if (isEditingAddress) {
+      return;
+    }
+    
     if (value) {
       const locationPart = getLocationPart();
       
       // If we have a complete location selected and the value contains it
       if (locationPart && value.includes(locationPart)) {
         // Extract user address (house number and street) - part before the location
-        const addressPart = value.replace(locationPart, '').replace(/,\s*$/, '').trim();
+        // Only trim leading/trailing spaces, preserve internal spaces
+        let addressPart = value.replace(locationPart, '').replace(/,\s*$/, '');
+        addressPart = addressPart.trimStart().trimEnd();
         if (addressPart && addressPart !== userAddress) {
           setUserAddress(addressPart);
         }
@@ -130,7 +139,9 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               
               // Extract user address
               const extractedLocationPart = `${foundBarangay.name}${foundBarangay.postalCode ? ` (${foundBarangay.postalCode})` : ''}, ${foundCity.name}, ${foundRegion.name}`;
-              const addressPart = value.replace(extractedLocationPart, '').replace(/,\s*$/, '').trim();
+              // Only trim leading/trailing spaces, preserve internal spaces
+              let addressPart = value.replace(extractedLocationPart, '').replace(/,\s*$/, '');
+              addressPart = addressPart.trimStart().trimEnd();
               if (addressPart && addressPart !== userAddress) {
                 setUserAddress(addressPart);
               }
@@ -139,7 +150,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         }
       }
     }
-  }, [value]); // Only depend on value, not userAddress
+  }, [value, isEditingAddress]); // Only depend on value, not userAddress
 
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -432,6 +443,10 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               type="text"
               value={userAddress}
               onChange={handleAddressChange}
+              onBlur={() => {
+                // Reset editing flag after a short delay to allow useEffect to extract if needed
+                setTimeout(() => setIsEditingAddress(false), 100);
+              }}
               placeholder=""
               className="peer w-full px-0 pt-10 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition text-white border-gray-300"
               style={{ backgroundColor: 'transparent' }}
@@ -443,7 +458,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                   : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-sm md:peer-placeholder-shown:text-base peer-placeholder-shown:text-white'
               } peer-focus:top-3 peer-focus:text-xs md:peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
             >
-              Enter your house number and street...
+              {addressPlaceholder}
             </label>
           </div>
         )}

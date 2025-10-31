@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, FileUp, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
 import { uploadUserProfilePicture } from "../../utils/fileUpload";
