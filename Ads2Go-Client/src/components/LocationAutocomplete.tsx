@@ -395,15 +395,17 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onBlur={handleInputBlur}
             onClick={handleInputClick}
             placeholder=""
-            className={`peer w-full px-0 pt-5 pb-2 pr-20 border-b focus:outline-none bg-transparent text-white placeholder-transparent transition ${
-              error ? 'border-red-300' : 'border-gray-300'
+            className={`peer w-full px-0 pt-5 pb-2 pr-20 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition text-white ${
+              error ? 'border-red-400' : 'border-gray-300'
             }`}
             style={{ backgroundColor: 'transparent' }}
           />
           <label
             className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
-              (getLocationDisplay() || value) ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base'
-            } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+              (getLocationDisplay() || value)
+                ? '-top-2 text-xs md:text-sm text-white/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm md:peer-placeholder-shown:text-base peer-placeholder-shown:text-white'
+            } peer-focus:-top-2 peer-focus:text-xs md:peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
           >
             {label}
           </label>
@@ -431,13 +433,15 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               value={userAddress}
               onChange={handleAddressChange}
               placeholder=""
-              className="peer w-full px-0 pt-10 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
+              className="peer w-full px-0 pt-10 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition text-white border-gray-300"
               style={{ backgroundColor: 'transparent' }}
             />
             <label
               className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
-                userAddress ? 'top-3 text-sm font-bold' : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-base'
-              } peer-focus:top-3 peer-focus:text-sm peer-focus:font-bold`}
+                userAddress
+                  ? 'top-3 text-xs md:text-sm text-white/70 font-bold'
+                  : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-sm md:peer-placeholder-shown:text-base peer-placeholder-shown:text-white'
+              } peer-focus:top-3 peer-focus:text-xs md:peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
             >
               Enter your house number and street...
             </label>
@@ -515,7 +519,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
       )}
 
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-xs text-red-400">{error}</p>
       )}
       </div>
     </>

@@ -16,16 +16,9 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClo
       onClick={onClose}
     >
       <div 
-        className="relative bg-white rounded-lg p-8 w-[90vw] sm:w-[80vw] md:w-[70vw] lg:w-[60vw] xl:w-[50vw] max-h-[80vh] overflow-y-auto transition-all duration-300 transform"
+        className="relative bg-white/90 rounded-md p-8 w-[90vw] sm:w-[80vw] md:w-[70vw] lg:w-[60vw] xl:w-[36vw] max-h-[90vh] overflow-y-auto transition-all duration-300 transform"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="absolute top-4 right-4 text-gray-600 hover:text-gray-800 transition-colors duration-200 hover:scale-110 text-2xl"
-          onClick={onClose}
-        >
-          ✕
-        </button>
-        
         <div className="space-y-6">
           <h2 className="text-3xl font-bold text-[#3674B5] mb-6">Terms of Service</h2>
           <p className="text-sm text-gray-500">Last updated: January 2025</p>
@@ -115,26 +108,26 @@ const TermsOfServiceModal: React.FC<TermsOfServiceModalProps> = ({ isOpen, onClo
               <p className="mb-3">
                 If you have any questions about these Terms of Service, please contact us at:
               </p>
-              <div className="bg-gray-50 p-4 rounded">
-                <p>Email: legal@ads2go.com</p>
-                <p>Phone: +63 2 1234 5678</p>
-                <p>Address: Makati City, Metro Manila, Philippines 1200</p>
+              <div>
+                <h1><span className="font-bold">Email:</span> <span className="text-black font-normal">legal@ads2go.com</span></h1>
+                <h1><span className="font-bold">Phone:</span> <span className="text-black font-normal">+63 2 1234 5678</span></h1>
+                <h1><span className="font-bold">Address:</span> <span className="text-black font-normal">Makati City, Metro Manila, Philippines 1200</span></h1>
               </div>
             </section>
           </div>
 
           {/* Footer Actions */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-between gap-3 pt-4 border-t border-gray-200">
             {onConfirm ? (
               <>
                 <button
-                  className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:shadow-md transition-colors"
                   onClick={onClose}
                 >
                   Cancel
                 </button>
                 <button
-                  className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  className="w-full px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
                   onClick={onConfirm}
                 >
                   {confirmLabel}

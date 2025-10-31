@@ -416,300 +416,645 @@ const Register: React.FC = () => {
     </div>
   ), [showPassword, showConfirmPassword]);
 
+  // Mobile-specific Floating Input component to match Login mobile placeholder/label behavior
+  const FloatingInputMobile = React.useCallback(({ 
+    id, 
+    name, 
+    type, 
+    value, 
+    onChange, 
+    onKeyPress, 
+    error, 
+    label, 
+    showPasswordToggle = false,
+    maxLength
+  }: {
+    id: string;
+    name: string;
+    type: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+    error?: string;
+    label: string;
+    showPasswordToggle?: boolean;
+    maxLength?: number;
+  }) => (
+    <div className="relative mt-6">
+      <input
+        id={id}
+        name={name}
+        type={showPasswordToggle ? (name === 'password' ? (showPassword ? 'text' : type) : (showConfirmPassword ? 'text' : type)) : type}
+        placeholder=" "
+        required
+        value={value}
+        onChange={onChange}
+        onKeyPress={onKeyPress}
+        maxLength={maxLength}
+        className={`peer w-full ${showPasswordToggle ? 'pr-8' : ''} pt-5 pb-2 text-white border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition text-sm ${error ? 'border-red-400' : 'border-gray-300'}`}
+        style={{ backgroundColor: 'transparent' }}
+      />
+      <label
+        htmlFor={id}
+        className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
+          value
+            ? '-top-2 text-xs text-white/70 font-bold'
+            : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm peer-placeholder-shown:text-white'
+        } peer-focus:-top-2 peer-focus:text-xs peer-focus:text-white/70 peer-focus:font-bold`}
+      >
+        {label}
+      </label>
+
+      {showPasswordToggle && (
+        <button
+          type="button"
+          onClick={() => name === 'password' ? setShowPassword((prev) => !prev) : setShowConfirmPassword((prev) => !prev)}
+          className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+        >
+          {(name === 'password' ? showPassword : showConfirmPassword) ? (
+            <EyeIcon className="h-5 w-5 text-white" />   
+          ) : (
+            <EyeSlashIcon className="h-5 w-5 text-white" />
+          )}
+        </button>
+      )}
+
+      {error && (
+        <p className="text-red-400 text-xs mt-1">{error}</p>
+      )}
+    </div>
+  ), [showPassword, showConfirmPassword]);
+
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center"
-      style={{ backgroundImage: "url('/image/signup.png')" }}
-    >
+    <div className="min-h-screen pb-5 pt-5 flex items-center justify-center relative overflow-hidden" style={{ minHeight: '100vh' }}>
       <style>
         {`
           input:-webkit-autofill,
           input:-webkit-autofill:hover,
           input:-webkit-autofill:focus,
           input:-webkit-autofill:active {
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: white;
+            -webkit-text-fill-color: white !important;
             transition: background-color 5000s ease-in-out 0s;
-            box-shadow: inset 0 0 20px 20px transparent !important;
+            caret-color: white;
+            box-shadow: 0 0 0px 1000px transparent inset !important;
+          }
+
+          input:-webkit-autofill ~ label,
+          input:-webkit-autofill:hover ~ label,
+          input:-webkit-autofill:focus ~ label,
+          input:-webkit-autofill:active ~ label {
+            color: rgba(255, 255, 255, 0.7) !important;
+            font-weight: bold !important;
           }
         `}
       </style>
-      <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
-      <div className="relative z-10 p-6 sm:p-10 mb-5 mt-5
-                rounded-md shadow-2xl w-full max-w-xl
-                bg-transparent backdrop-blur-lg bg-white/20 border border-white/30">
-        {/* Ads2Go Logo */}
-        <div className="flex justify-center mb-6">
-          <img 
-            src="/image/Ads2GoLogoText.png" 
-            alt="Ads2Go Logo" 
-            className="h-12 w-auto object-contain"
-          />
-        </div>
-        
-        {/* Login Title */}
-        <h1 className="text-5xl font-bold text-center mb-6 text-white">
-          Sign up
-        </h1>
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center z-0"
+        style={{ 
+          backgroundImage: "url('/image/signup.png')",
+          minWidth: '100%',
+          minHeight: '100%',
+          width: '100%',
+          height: '100%',
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          zIndex: -1
+        }}
+      />
 
-        {registrationError && (
-          <div className="bg-red-50/80 backdrop-blur-sm border-l-4 border-red-500 p-4 mb-4 rounded">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-red-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
+      {/* Dark overlay */}
+      <div className="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
+
+      {/* Mobile View */}
+      <div className="relative z-10 w-full px-4 py-6 md:hidden">
+        <div className="max-w-md mx-auto">
+          <div className="bg-white/20 backdrop-blur-lg border border-white/30 rounded-md p-6 shadow-2xl">
+            <div className="flex justify-center mb-4">
+              <img 
+                src="/image/Ads2GoLogoText.png" 
+                alt="Ads2Go Logo" 
+                className="h-10 w-auto object-contain"
+              />
+            </div>
+
+            <h1 className="text-3xl font-bold text-center mb-6 text-white">Sign up</h1>
+
+            {registrationError && (
+              <div className="bg-red-50/80 backdrop-blur-sm border-l-4 border-red-500 p-4 mb-4 rounded">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-red-500"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-700">{registrationError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} noValidate>
+              {step === 1 && (
+                <div className="space-y-4">
+                  <FloatingInputMobile
+                    id="firstName"
+                    name="firstName"
+                    type="text"
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    onKeyPress={handleKeyPress}
+                    error={errors.firstName}
+                    label="First Name"
                   />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{registrationError}</p>
-              </div>
+
+                  <FloatingInputMobile
+                    id="middleName"
+                    name="middleName"
+                    type="text"
+                    value={formData.middleName}
+                    onChange={handleChange}
+                    onKeyPress={handleKeyPress}
+                    error={errors.middleName}
+                    label="Middle Name (Optional)"
+                  />
+
+                  <FloatingInputMobile
+                    id="lastName"
+                    name="lastName"
+                    type="text"
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    onKeyPress={handleKeyPress}
+                    error={errors.lastName}
+                    label="Last Name"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={!isCurrentStepValid()}
+                    className={`w-full py-2 px-4 text-xs shadow-sm transition-colors rounded-md mt-4 ${
+                      isCurrentStepValid()
+                        ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                        : 'bg-blue-400 cursor-not-allowed'
+                    } text-white font-semibold text-base`}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="space-y-4">
+                  <FloatingInputMobile
+                    id="companyName"
+                    name="companyName"
+                    type="text"
+                    value={formData.companyName}
+                    onChange={handleChange}
+                    error={errors.companyName}
+                    label="Company/Business Name"
+                  />
+
+                  <LocationAutocomplete
+                    label="Company/Business Address"
+                    value={formData.companyAddress}
+                    onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                    placeholder="Select company location or enter address..."
+                    required
+                    error={errors.companyAddress}
+                  />
+                  <LocationAutocomplete
+                    label="House Address"
+                    value={formData.houseAddress}
+                    onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                    placeholder="Select house location or enter address..."
+                    required
+                    error={errors.houseAddress}
+                  />
+
+                  <div className="flex justify-between gap-3 mt-6">
+                    <button
+                      type="button"
+                      onClick={handlePrevious}
+                      className="w-32 text-xs text-white/80 font-semibold rounded-md bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      disabled={!isCurrentStepValid()}
+                      className={`flex-1 py-2 px-4 text-xs text-white rounded-md font-semibold transition-colors ${
+                        isCurrentStepValid()
+                          ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                          : 'bg-blue-400 cursor-not-allowed'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-4">
+                  <FloatingInputMobile
+                    id="contactNumber"
+                    name="contactNumber"
+                    type="tel"
+                    maxLength={formData.contactNumber.startsWith('+639') ? 13 : 11}
+                    value={formData.contactNumber}
+                    onChange={handleChange}
+                    error={errors.contactNumber}
+                    label="Contact Number"
+                  />
+
+                  <FloatingInputMobile
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    error={errors.email}
+                    label="Email Address"
+                  />
+
+                  <FloatingInputMobile
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    error={errors.password}
+                    label="Password"
+                    showPasswordToggle={true}
+                  />
+
+                  <FloatingInputMobile
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    error={errors.confirmPassword}
+                    label="Confirm Password"
+                    showPasswordToggle={true}
+                  />
+
+                  <div className="flex items-center text-xs mt-4">
+                    <div
+                      className="flex items-center space-x-2 cursor-pointer"
+                      onClick={() => setShowTermsModal(true)}
+                    >
+                      <div className="relative w-4 h-4 border border-white/30 hover:border-white/50 flex items-center justify-center transition-colors duration-200">
+                        <AnimatePresence>
+                          {checked && (
+                            <motion.div
+                              key="check"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0, opacity: 0 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                              className="absolute text-white"
+                            >
+                              <Check size={8} strokeWidth={3} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      <span className="text-white select-none">I agree to the terms and conditions</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-5">
+                    <button
+                      type="button"
+                      onClick={handlePrevious}
+                      disabled={isSubmitting}
+                      className={`w-32 text-xs text-white/80 rounded-md font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center ${
+                        isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+                      }`}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !checked}
+                      className={`flex-1 py-2 px-4 text-xs rounded-md transition-colors ${
+                        isSubmitting || !checked
+                          ? 'bg-blue-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                      } text-white font-semibold`}
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center justify-center">
+                          <div className="w-4 h-4 border-2 rounded-full border-white border-t-transparent animate-spin mr-2"></div>
+                          Registering...
+                        </div>
+                      ) : (
+                        'Register'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </form>
+
+            <div className="my-5 flex justify-center">
+              <span className="text-white text-xs text-center">or continue with</span>
+            </div>
+
+            <div className="flex justify-center">
+              <button type="button" className="p-3 border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+                <img src="/image/g.png" alt="Google logo" className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="text-center mt-5 text-sm">
+              <span className="text-white/70">Already have an account?</span>
+              <Link to="/login" className="text-blue-300 ml-1 underline hover:font-semibold">Login</Link>
             </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} noValidate>
-          {step === 1 && (
-            <div className="space-y-6">
-              <FloatingInput
-                id="firstName"
-                name="firstName"
-                type="text"
-                value={formData.firstName}
-                onChange={handleChange}
-                onKeyPress={handleKeyPress}
-                error={errors.firstName}
-                label="First Name"
-              />
+      {/* Desktop View */}
+      <div className="relative z-10 p-8 sm:p-10 hidden md:flex rounded-md shadow-2xl w-full max-w-xl bg-white/20 backdrop-blur-lg border border-white/30">
+        <div className="w-full">
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/image/Ads2GoLogoText.png" 
+              alt="Ads2Go Logo" 
+              className="h-12 w-auto object-contain"
+            />
+          </div>
 
-              <FloatingInput
-                id="middleName"
-                name="middleName"
-                type="text"
-                value={formData.middleName}
-                onChange={handleChange}
-                onKeyPress={handleKeyPress}
-                error={errors.middleName}
-                label="Middle Name (Optional)"
-              />
+          <h1 className="text-5xl font-bold text-center mb-8 text-white">Sign up</h1>
 
-              <FloatingInput
-                id="lastName"
-                name="lastName"
-                type="text"
-                value={formData.lastName}
-                onChange={handleChange}
-                onKeyPress={handleKeyPress}
-                error={errors.lastName}
-                label="Last Name"
-              />
-
-              <button
-                type="button"
-                onClick={handleNext}
-                disabled={!isCurrentStepValid()}
-                className={`w-full py-3 px-4 transition-colors mt-6 ${
-                  isCurrentStepValid()
-                    ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
-                    : 'bg-blue-400 cursor-not-allowed'
-                } text-white font-semibold`}
-              >
-                Next
-              </button>
+          {registrationError && (
+            <div className="bg-red-50/80 backdrop-blur-sm border-l-4 border-red-500 p-4 mb-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-red-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{registrationError}</p>
+                </div>
+              </div>
             </div>
           )}
 
-          {step === 2 && (
-            <div className="space-y-6">
-              <FloatingInput
-                id="companyName"
-                name="companyName"
-                type="text"
-                value={formData.companyName}
-                onChange={handleChange}
-                error={errors.companyName}
-                label="Company/Business Name"
-              />
+          <form className="space-y-4" onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} noValidate>
+            {step === 1 && (
+              <div className="space-y-6">
+                <FloatingInput
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  onKeyPress={handleKeyPress}
+                  error={errors.firstName}
+                  label="First Name"
+                />
 
-              <LocationAutocomplete
-                label="Company/Business Address"
-                value={formData.companyAddress}
-                onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
-                placeholder="Select company location or enter address..."
-                required
-                error={errors.companyAddress}
-              />
-              <LocationAutocomplete
-                label="House Address"
-                value={formData.houseAddress}
-                onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
-                placeholder="Select house location or enter address..."
-                required
-                error={errors.houseAddress}
-              />
+                <FloatingInput
+                  id="middleName"
+                  name="middleName"
+                  type="text"
+                  value={formData.middleName}
+                  onChange={handleChange}
+                  onKeyPress={handleKeyPress}
+                  error={errors.middleName}
+                  label="Middle Name (Optional)"
+                />
 
-              <div className="flex justify-between gap-4 mt-6">
-                <button
-                  type="button"
-                  onClick={handlePrevious}
-                  className="w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
-                >
-                  Back
-                </button>
+                <FloatingInput
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  onKeyPress={handleKeyPress}
+                  error={errors.lastName}
+                  label="Last Name"
+                />
+
                 <button
                   type="button"
                   onClick={handleNext}
                   disabled={!isCurrentStepValid()}
-                  className={`flex-1 py-3 px-4 text-white font-semibold transition-colors ${
+                  className={`w-full py-2 px-4 shadow-sm transition-colors rounded-md ${
                     isCurrentStepValid()
-                      ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                      ? 'bg-blue-600 hover:bg-blue-700'
                       : 'bg-blue-400 cursor-not-allowed'
-                  }`}
+                  } text-white font-semibold text-lg`}
                 >
                   Next
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {step === 3 && (
-            <div className="space-y-6">
-              <FloatingInput
-                id="contactNumber"
-                name="contactNumber"
-                type="tel"
-                maxLength={formData.contactNumber.startsWith('+639') ? 13 : 11}
-                value={formData.contactNumber}
-                onChange={handleChange}
-                error={errors.contactNumber}
-                label="Contact Number"
-              />
+            {step === 2 && (
+              <div className="space-y-6">
+                <FloatingInput
+                  id="companyName"
+                  name="companyName"
+                  type="text"
+                  value={formData.companyName}
+                  onChange={handleChange}
+                  error={errors.companyName}
+                  label="Company/Business Name"
+                />
 
-              <FloatingInput
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                error={errors.email}
-                label="Email Address"
-              />
+                <LocationAutocomplete
+                  label="Company/Business Address"
+                  value={formData.companyAddress}
+                  onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                  placeholder="Select company location or enter address..."
+                  required
+                  error={errors.companyAddress}
+                />
+                <LocationAutocomplete
+                  label="House Address"
+                  value={formData.houseAddress}
+                  onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                  placeholder="Select house location or enter address..."
+                  required
+                  error={errors.houseAddress}
+                />
 
-              <FloatingInput
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                error={errors.password}
-                label="Password"
-                showPasswordToggle={true}
-              />
-
-              <FloatingInput
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                error={errors.confirmPassword}
-                label="Confirm Password"
-                showPasswordToggle={true}
-              />
-
-              {/* Terms Checkbox */}
-              <div className="flex items-center text-sm mt-6">
-                <div
-                  className="flex items-center space-x-2 cursor-pointer"
-                  onClick={() => setShowTermsModal(true)} // 🔹 Opens modal instead of toggling
-                >
-                  <div className="relative w-5 h-5 border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-colors duration-200">
-                    <AnimatePresence>
-                      {checked && (
-                        <motion.div
-                          key="check"
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0, opacity: 0 }}
-                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                          className="absolute text-white"
-                        >
-                          <Check size={12} strokeWidth={3} />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                  <span className="text-white select-none">I agree to the terms and conditions</span>
+                <div className="flex justify-between gap-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={handlePrevious}
+                    className="w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={!isCurrentStepValid()}
+                    className={`flex-1 py-2 px-4 text-white font-semibold transition-colors ${
+                      isCurrentStepValid()
+                        ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                        : 'bg-blue-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Terms modal now handled by reusable component at the root */}
+            {step === 3 && (
+              <div className="space-y-6">
+                <FloatingInput
+                  id="contactNumber"
+                  name="contactNumber"
+                  type="tel"
+                  maxLength={formData.contactNumber.startsWith('+639') ? 13 : 11}
+                  value={formData.contactNumber}
+                  onChange={handleChange}
+                  error={errors.contactNumber}
+                  label="Contact Number"
+                />
 
-              <div className="flex gap-4 mt-6">
-                <button
-                  type="button"
-                  onClick={handlePrevious}
-                  disabled={isSubmitting}
-                  className={`w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center ${
-                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
-                  }`}
-                >
-                  Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !checked}
-                  className={`flex-1 py-3 px-4 transition-colors ${
-                    isSubmitting || !checked
-                      ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
-                  } text-white font-semibold`}
-                >
-                  {isSubmitting ? (
-                    <div className="flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 rounded-full border-white border-t-transparent animate-spin mr-2"></div>
-                      Registering...
+                <FloatingInput
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  error={errors.email}
+                  label="Email Address"
+                />
+
+                <FloatingInput
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  error={errors.password}
+                  label="Password"
+                  showPasswordToggle={true}
+                />
+
+                <FloatingInput
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  error={errors.confirmPassword}
+                  label="Confirm Password"
+                  showPasswordToggle={true}
+                />
+
+                <div className="flex items-center text-sm mt-6">
+                  <div
+                    className="flex items-center space-x-2 cursor-pointer"
+                    onClick={() => setShowTermsModal(true)}
+                  >
+                    <div className="relative w-5 h-5 border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-colors duration-200">
+                      <AnimatePresence>
+                        {checked && (
+                          <motion.div
+                            key="check"
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                            className="absolute text-white"
+                          >
+                            <Check size={12} strokeWidth={3} />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                  ) : (
-                    'Register'
-                  )}
-                </button>
+                    <span className="text-white select-none">I agree to the terms and conditions</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={handlePrevious}
+                    disabled={isSubmitting}
+                    className={`w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center ${
+                      isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+                    }`}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !checked}
+                    className={`flex-1 py-2 px-4 transition-colors ${
+                      isSubmitting || !checked
+                        ? 'bg-blue-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                    } text-white font-semibold`}
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center justify-center">
+                        <div className="w-4 h-4 border-2 rounded-full border-white border-t-transparent animate-spin mr-2"></div>
+                        Registering...
+                      </div>
+                    ) : (
+                      'Register'
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </form>
+            )}
+          </form>
 
-        <div className="my-6 flex justify-center">
-          <span className="text-white text-sm text-center">
-            or continue with
-          </span>
-        </div>
+          <div className="my-6 flex justify-center">
+            <span className="text-white text-sm text-center">or continue with</span>
+          </div>
 
+          <div className="flex justify-center space-x-4">
+            <button type="button" className="p-3 border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+              <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+            </button>
+          </div>
 
-        <div className="flex justify-center space-x-4">
-          <button type="button" className="p-2 border border-white/50 rounded-full hover:bg-gray-100/20 transition-colors">
-            <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
-          </button>
-        </div>
-
-        <div className="text-center mt-6 text-sm">
-          <span className="text-white">Already have an account?</span>
-          <Link to="/login" className="text-blue-300 ml-1 underline hover:font-semibold">
-            Login
-          </Link>
+          <div className="text-center mt-6 text-sm">
+            <span className="text-white/70">Already have an account?</span>
+            <Link to="/login" className="text-blue-300 ml-1 underline hover:font-semibold">Login</Link>
+          </div>
         </div>
       </div>
 
-      {/* Terms and Conditions Modal */}
+      {/* Terms Modal (root) */}
       <TermsAndConditionsModal
         isOpen={showTermsModal}
         onClose={() => setShowTermsModal(false)}

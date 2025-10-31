@@ -104,18 +104,18 @@ const ForgotPass: React.FC = () => {
               />
               <label
                 htmlFor="email"
-                className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${email
-                  ? '-top-2 text-sm text-black/70 font-bold'
-                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${email
+                  ? '-top-2 text-sm text-white/70 font-bold'  
+                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
               >
                 Enter your email
               </label>
-              {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+              {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
             </div>
 
             <button
               type="submit"
-              className="w-full bg-[#3674B5] hover:bg-[#3674B5]/80 text-white py-2 font-semibold transition"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 font-semibold transition"
               disabled={requesting}
             >
               {requesting ? "Sending..." : "Send Reset Token"}

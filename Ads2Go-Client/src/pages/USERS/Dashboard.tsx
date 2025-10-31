@@ -111,24 +111,29 @@ function NotificationList() {
         <div className="size-5 rounded-full bg-gray-400 dark:bg-gray-600 text-white text-xs flex items-center justify-center font-medium">
           {allNotifications.length}
         </div>
-        <span className="grid">
+
+        {/* Animated label */}
+        <div className="relative h-5 flex items-center">
+          {/* 'Notifications' text */}
           <motion.span
-            className="text-sm font-medium text-gray-600 dark:text-gray-300 row-start-1 col-start-1"
+            className="absolute inset-0 flex items-center text-sm font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap"
             variants={notificationTextVariants}
             transition={textSwitchTransition}
           >
             Notifications
           </motion.span>
-          <Link to="/notifications">
+
+          {/* 'View all' link */}
+          <Link to="/notifications" className="absolute inset-0 flex items-center whitespace-nowrap">
             <motion.span
-              className="text-sm font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
+              className="text-sm font-medium text-gray-600 hover:text-black/80 dark:text-gray-300 flex items-center gap-1 cursor-pointer select-none"
               variants={viewAllTextVariants}
               transition={textSwitchTransition}
             >
-              View all <ArrowUpRight className="size-4" />
+              View all <ArrowUpRight className="size-4 flex-shrink-0" />
             </motion.span>
           </Link>
-        </span>
+        </div>
       </div>
     </motion.div>
   );

@@ -205,6 +205,28 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      <style>
+        {`
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus,
+          input:-webkit-autofill:active {
+            -webkit-text-fill-color: white !important;
+            transition: background-color 5000s ease-in-out 0s;
+            caret-color: white;
+            box-shadow: 0 0 0px 1000px transparent inset !important;
+          }
+
+          input:-webkit-autofill ~ label,
+          input:-webkit-autofill:hover ~ label,
+          input:-webkit-autofill:focus ~ label,
+          input:-webkit-autofill:active ~ label {
+            color: rgba(255, 255, 255, 0.7) !important;
+            font-weight: bold !important;
+          }
+        `}
+      </style>
+
       {/* Video Background */}
       {!videoError && (
         <video
@@ -551,7 +573,7 @@ const Login: React.FC = () => {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className={`w-full py-3 px-4 shadow-sm transition-colors rounded-md ${
+              className={`w-full py-2 px-4 shadow-sm transition-colors rounded-md ${
                 isLoggingIn
                   ? 'bg-blue-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700'
