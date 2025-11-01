@@ -31,26 +31,26 @@ export default function ManualConnectScreen() {
 
   const validateInputs = (): boolean => {
     if (!materialId.trim()) {
-      Alert.alert('Error', 'Please enter Material ID');
+      Alert.alert('Information Required', 'Please enter Material ID to continue');
       return false;
     }
     if (!slotNumber.trim()) {
-      Alert.alert('Error', 'Please enter Slot Number');
+      Alert.alert('Information Required', 'Please enter Slot Number to continue');
       return false;
     }
     if (!carGroupId.trim()) {
-      Alert.alert('Error', 'Please enter Car Group ID');
+      Alert.alert('Information Required', 'Please enter Car Group ID to continue');
       return false;
     }
     
     const slotNum = parseInt(slotNumber);
     if (isNaN(slotNum) || slotNum < 1 || slotNum > 2) {
-      Alert.alert('Error', 'Slot Number must be 1 or 2');
+      Alert.alert('Invalid Slot Number', 'Slot Number must be 1 or 2');
       return false;
     }
 
     if (existingConnection) {
-      Alert.alert('Error', 'Another tablet is already connected to this material and slot combination. Please choose different details.');
+      Alert.alert('Device Already Connected', 'Another tablet is already connected to this material and slot combination. Please choose different details.');
       return false;
     }
     
@@ -82,7 +82,7 @@ export default function ManualConnectScreen() {
             {
               text: 'OK',
               onPress: () => {
-                router.push('/(tabs)');
+                router.replace('/');
               }
             }
           ]
@@ -96,11 +96,11 @@ export default function ManualConnectScreen() {
             [{ text: 'OK' }]
           );
         } else {
-          Alert.alert('Registration Failed', result.message);
+          Alert.alert('Registration Unsuccessful', result.message || 'Unable to register device. Please verify the connection details and try again.');
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      Alert.alert('Unable to Connect', 'An unexpected issue occurred. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }

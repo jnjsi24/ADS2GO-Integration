@@ -207,13 +207,21 @@ const useDeviceStatus = (materialId: string) => {
       };
       
       ws.onerror = (error: Event) => {
-        console.error('[useDeviceStatus] WebSocket error:', error);
-        setStatus(prev => ({
-          ...prev,
-          isConnected: false,
-          isOnline: false,
-          error: 'Connection error',
-        }));
+        // Don't log as error during reconnection - it's normal
+        if (reconnectAttemptsRef.current === 0) {
+          console.log('[useDeviceStatus] Connection issue detected - will attempt to reconnect');
+        }
+        // Don't set error for normal connection issues during reconnection
+        // Only set error if we've exhausted reconnection attempts
+        setStatus(prev => {
+          const hasExhaustedAttempts = prev.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS;
+          return {
+            ...prev,
+            isConnected: false,
+            isOnline: false,
+            error: hasExhaustedAttempts ? 'Unable to establish connection' : null,
+          };
+        });
       };
       
       ws.onclose = (event: CloseEvent) => {
@@ -243,13 +251,18 @@ const useDeviceStatus = (materialId: string) => {
             console.log(`[useDeviceStatus] Not reconnecting - code: ${event.code}, attempts: ${newReconnectAttempts}/${maxReconnectAttempts}`);
           }
           
+          // Only set error for abnormal disconnections or exhausted reconnection attempts
+          // Normal disconnections (code 1000, 1001, 1006) should not show as error
+          const isNormalDisconnection = event.code === 1000 || event.code === 1001 || event.code === 1006;
+          const hasExhaustedAttempts = newReconnectAttempts >= maxReconnectAttempts;
+          
           return {
             ...prev,
             isConnected: false,
             isOnline: false,
             reconnectAttempts: newReconnectAttempts,
-            error: newReconnectAttempts >= maxReconnectAttempts ? 'Max reconnection attempts reached' : 
-                   event.code === 1000 ? 'Connection closed normally' : prev.error,
+            error: hasExhaustedAttempts ? 'Unable to establish connection' : 
+                   isNormalDisconnection ? null : prev.error, // Don't set error for normal disconnections
           };
         });
       };
@@ -261,7 +274,7 @@ const useDeviceStatus = (materialId: string) => {
         ...prev,
         isConnected: false,
         isOnline: false,
-        error: 'Failed to connect',
+        error: 'Unable to establish connection',
       }));
     }
   }, [cleanup, sendStatusUpdate]);

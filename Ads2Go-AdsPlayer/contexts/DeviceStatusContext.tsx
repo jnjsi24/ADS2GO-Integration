@@ -144,8 +144,8 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           console.error('Error getting registration data:', error);
         }
         
-        // If still no material ID, show error
-        setStatus({ isOnline: false, error: 'Please register the tablet to set a material ID' });
+        // If still no material ID, show informational message (not error)
+        setStatus({ isOnline: false, error: 'Registration required', unregistered: true });
       };
       
       checkForMaterialId();
@@ -178,10 +178,11 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const connectionTimeout = setTimeout(() => {
       console.log('WebSocket connection timeout, checking status...');
       setStatus(prev => {
+        // Only update if still in connecting state - timeout is normal if device is offline
         if (prev.error === 'Connecting...') {
           return {
             ...prev,
-            error: 'Connection timeout - WebSocket server may be unavailable'
+            error: 'Unable to establish connection - server may be unavailable'
           };
         }
         return prev;
@@ -208,7 +209,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         clearTimeout(connectionTimeout);
         setStatus({
           isOnline: false,
-          error: error instanceof Error ? error.message : 'Failed to connect'
+          error: error instanceof Error ? error.message : 'Unable to establish connection'
         });
       }
     };
@@ -219,7 +220,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
         if (!isRegistered) {
           console.log('Device not registered, skipping WebSocket initialization');
-          setStatus({ isOnline: false, error: 'Device not registered. Please register the tablet first.' });
+          setStatus({ isOnline: false, error: 'No registered device', unregistered: true });
           return;
         }
         

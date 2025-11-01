@@ -91,12 +91,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         const registered = await tabletRegistrationService.checkRegistrationStatus();
         setIsRegistered(registered);
         if (!registered) {
-          setError('Device not registered. Please register the tablet first.');
+          // Don't set error for unregistered - it's informational, not an error
           setLoading(false);
         }
       } catch (error) {
         console.error('Error checking registration status:', error);
-        setError('Failed to verify registration status');
+        setError('Unable to verify registration status');
         setLoading(false);
       }
     };
@@ -986,12 +986,16 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Send to analytics endpoint (handles both online and tracks properly)
       if (!isOffline) {
         try {
-          const analyticsResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
+          const requestManager = (await import('../services/requestManager')).default;
+          const analyticsResponse = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(analyticsData),
+            timeout: 10000,
+            priority: 2, // Medium priority
+            allowDuplicate: false,
           });
           
           if (analyticsResponse.ok) {
@@ -1133,12 +1137,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('📤 Redirect URL in QR scan data:', qrScanData.redirectUrl);
 
       // Send to QR scan tracking endpoint
-      const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
+      // Use requestManager for better error handling
+      const requestManager = (await import('../services/requestManager')).default;
+      const response = await requestManager.fetch(`${API_BASE_URL}/ads/qr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(qrScanData),
+        timeout: 10000,
+        priority: 3, // High priority (QR scans are important)
+        allowDuplicate: false,
       });
 
       if (response.ok) {
@@ -1262,7 +1271,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('QR display data to send:', qrDisplayData);
 
       // Send to device tracking endpoint (new daily staging system)
-      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
+      // Use requestManager for better error handling
+      const requestManager = (await import('../services/requestManager')).default;
+      const deviceTrackingResponse = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1272,6 +1283,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           deviceSlot: adSlotNumber,
           qrScanData: qrDisplayData
         }),
+        timeout: 10000,
+        priority: 3, // High priority (QR display tracking is important)
+        allowDuplicate: false,
       });
 
       if (deviceTrackingResponse.ok) {
@@ -1281,12 +1295,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       }
 
       // Also send to existing QR scan tracking endpoint for backward compatibility
-      const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
+      const response = await requestManager.fetch(`${API_BASE_URL}/ads/qr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(qrDisplayData),
+        timeout: 10000,
+        priority: 3, // High priority (QR scans are important)
+        allowDuplicate: false,
       });
 
       if (response.ok) {
@@ -1595,7 +1612,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Validate video URL before attempting playback
   const validateVideoUrl = async (url: string): Promise<boolean> => {
     try {
-      const response = await fetch(url, { method: 'HEAD' });
+      const requestManager = (await import('../services/requestManager')).default;
+      const response = await requestManager.fetch(url, { 
+        method: 'HEAD',
+        timeout: 5000,
+        priority: 1,
+        allowDuplicate: false,
+      });
       return response.ok;
     } catch (error) {
       console.log('Video URL validation failed:', url, error);
@@ -1659,7 +1682,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           setLoading(false);
           return;
         } else {
-          setError('No internet connection and no cached ads available');
+          setError('Device is offline and no cached content is available');
           setLoading(false);
           return;
         }
@@ -1710,7 +1733,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         setIsDeviceOffline(true);
         console.log('Using cached ads in offline mode');
       } else {
-        const errorMessage = 'Failed to fetch ads and no cached ads available';
+        const errorMessage = 'Unable to fetch ads and no cached content available';
         setError(errorMessage);
         if (onAdError) {
           onAdError(errorMessage);
@@ -1795,6 +1818,51 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
     return () => subscription?.remove();
   }, []);
+
+  // ✅ Automatic polling for new ads when no ads are available
+  useEffect(() => {
+    // Only poll if:
+    // 1. Device is registered
+    // 2. No ads available (ads.length === 0 and error is set, or just no ads)
+    // 3. Not currently loading
+    // 4. Device is online (not in offline mode)
+    if (isRegistered === false || isRegistered === null) {
+      return; // Don't poll if not registered
+    }
+
+    if (ads.length > 0 && !error) {
+      return; // Don't poll if we already have ads
+    }
+
+    if (loading) {
+      return; // Don't poll while already fetching
+    }
+
+    if (isDeviceOffline) {
+      return; // Don't poll if device is offline
+    }
+
+    console.log('🔄 [AdPlayer] No ads available - starting automatic polling every 30 seconds...');
+    
+    // Poll every 30 seconds for new ads
+    const pollingInterval = setInterval(() => {
+      // Double-check conditions before fetching
+      if (ads.length === 0 && !loading && !isDeviceOffline && isRegistered === true) {
+        console.log('🔄 [AdPlayer] Polling for new ads...');
+        fetchAds();
+        fetchCompanyAds(); // Also check for company ads
+      } else if (ads.length > 0) {
+        // Ads found, stop polling
+        console.log('✅ [AdPlayer] Ads found - stopping polling');
+        clearInterval(pollingInterval);
+      }
+    }, 30000); // Check every 30 seconds
+
+    return () => {
+      console.log('🧹 [AdPlayer] Cleaning up ad polling interval');
+      clearInterval(pollingInterval);
+    };
+  }, [isRegistered, ads.length, loading, error, isDeviceOffline, materialId, slotNumber]);
 
   // Failover Detection for Slot 2: Monitor master connection
   useEffect(() => {
@@ -2053,11 +2121,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     console.error('Video playback error:', error);
     
     // Try to get more specific error information
-    let errorMessage = 'Failed to play video';
+    let errorMessage = 'Unable to play video';
     if (error && error.error && error.error.message) {
-      errorMessage = `Video error: ${error.error.message}`;
+      errorMessage = `Video playback issue: ${error.error.message}`;
     } else if (error && error.message) {
-      errorMessage = `Video error: ${error.message}`;
+      errorMessage = `Video playback issue: ${error.message}`;
     }
     
     console.log('Ad Player Error:', errorMessage);
@@ -2127,14 +2195,18 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     );
   }
 
-  // Show error if device is not registered
+  // Show informational message if device is not registered (not an error)
   if (isRegistered === false) {
     return (
       <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>Device Not Registered</Text>
-          <Text style={styles.errorText}>
+        <View style={styles.infoContainer}>
+          <Ionicons name="information-circle" size={48} color="#3498db" />
+          <Text style={styles.infoTitle}>No Registered Device</Text>
+          <Text style={styles.infoText}>
             This tablet needs to be registered before it can display advertisements.
+          </Text>
+          <Text style={styles.infoSubtext}>
+            Please use the registration screen to connect this device.
           </Text>
         </View>
       </View>
@@ -2195,11 +2267,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           </View>
         </TouchableOpacity>
         
-        {/* Error indicator */}
-        <View style={styles.offlineIndicator}>
-          <Ionicons name="alert-circle" size={16} color="#e74c3c" />
-          <Text style={styles.offlineText}>Using fallback ad - {error}</Text>
-        </View>
+        {/* Error indicator - show only if there's a real error, not just normal offline */}
+        {error && error !== 'No ads available' && (
+          <View style={styles.offlineIndicator}>
+            <Ionicons name="information-circle" size={16} color="#f39c12" />
+            <Text style={styles.offlineText}>Using fallback content - {error.replace(/^Error: /i, '')}</Text>
+          </View>
+        )}
       </View>
     );
   }
@@ -2211,7 +2285,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           <Ionicons name="alert-circle" size={48} color="#e74c3c" />
           <Text style={styles.errorTitle}>No Ads Available</Text>
           <Text style={styles.errorText}>
-            {error || 'No advertisements are currently scheduled for this slot.'}
+            {error && !error.includes('No ads') ? error.replace(/^Error: /i, '') : 'No advertisements are currently scheduled for this slot.'}
           </Text>
           <Text style={styles.errorSubtext}>
             This could be due to:
@@ -2220,7 +2294,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             • No ads scheduled for this time slot
           </Text>
           <Text style={styles.errorSubtext}>
-            • Network connectivity issues
+            • Device is currently offline (this is normal)
           </Text>
           <Text style={styles.errorSubtext}>
             • Invalid material ID or slot number
@@ -2665,6 +2739,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 4,
+  },
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    padding: 20,
+  },
+  infoTitle: {
+    color: '#3498db',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  infoText: {
+    color: '#bdc3c7',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  infoSubtext: {
+    color: '#95a5a6',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
   refreshButton: {
     flexDirection: 'row',

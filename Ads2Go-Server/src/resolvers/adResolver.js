@@ -192,6 +192,10 @@ const adResolvers = {
         }
       }
 
+      // ✅ Set reservation expiration BEFORE creating the ad (7 days from now)
+      const reservationExpires = new Date();
+      reservationExpires.setDate(reservationExpires.getDate() + 7);
+
       const ad = new Ad({
         ...input,
         userId: user.id,
@@ -213,6 +217,7 @@ const adResolvers = {
         reasonForReject: null,
         approveTime: null,
         rejectTime: null,
+        reservationExpires: reservationExpires // ✅ Set reservation expiration at creation
       });
 
       const savedAd = await ad.save();
@@ -245,17 +250,14 @@ const adResolvers = {
           });
         }
         
-        // Set reservation expiration (7 days from now)
-        const reservationExpires = new Date();
-        reservationExpires.setDate(reservationExpires.getDate() + 7);
+        // ✅ reservationExpires was already set before ad creation, so we can use it from savedAd
+        const reservationExpires = savedAd.reservationExpires;
         
         // Reserve slot for the ad
         const slotNumber = availability.reserveSlot(savedAd._id, startTime, endTime, reservationExpires);
         await availability.save();
         
-        // Store reservation expiration in ad
-        savedAd.reservationExpires = reservationExpires;
-        await savedAd.save();
+        // ✅ No second save needed - reservationExpires was already set before the first save
         
         console.log(`✅ Reserved slot ${slotNumber} for ad ${savedAd._id} (expires: ${reservationExpires.toISOString()})`);
         console.log(`📊 Material ${selectedMaterial.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);

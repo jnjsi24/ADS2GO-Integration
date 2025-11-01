@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
+import { UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface AdminSearchHeaderProps {
   searchTerm: string;

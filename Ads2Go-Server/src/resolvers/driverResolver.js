@@ -12,6 +12,7 @@ const EmailService = require('../utils/emailService');
 const validator = require('validator');
 const { GraphQLUpload } = require('graphql-upload');
 const { uploadToFirebase, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } = require('../utils/firebaseStorage');
+const DriverSalaryService = require('../services/driverSalaryService');
 
 // ===== VEHICLE MATERIAL MAP =====
 const VEHICLE_MATERIAL_MAP = {
@@ -698,6 +699,23 @@ createDriver: async (_, { input }) => {
 
     // Assign the first available material first to ensure it's available
     const materialToAssign = availableMaterials[0];
+
+    // ✅ Validate salary pricing configuration before approving driver
+    try {
+      await DriverSalaryService.validatePricingConfiguration(
+        driver.vehicleType,
+        materialToAssign.category,
+        materialToAssign.materialType
+      );
+      console.log(`✅ Salary pricing validated for driver ${driver.driverId}: ${materialToAssign.materialType} (${materialToAssign.category}) on ${driver.vehicleType}`);
+    } catch (pricingError) {
+      console.error(`❌ Salary pricing validation failed for driver ${driver.driverId}:`, pricingError.message);
+      return { 
+        success: false, 
+        message: `Cannot approve driver. ${pricingError.message}. Please create a salary pricing configuration for ${materialToAssign.materialType} (${materialToAssign.category}) on ${driver.vehicleType} before approving this driver.`,
+        driver 
+      };
+    }
     materialToAssign.driverId = driver.driverId;
     materialToAssign.assignedDate = new Date(); // ✅ Set assignedDate on FIRST assignment (driver approval)
     materialToAssign.mountedAt = null; // Will be set by admin when actually mounted

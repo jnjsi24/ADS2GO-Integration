@@ -16,6 +16,7 @@ class DeviceStatusService {
     this.onStatusChange = null;
     this.isConnected = false;
     this.backgroundTimeout = null;
+    this.lastAppState = null; // Track app state to reduce logging
   }
 
   initialize = async ({ materialId, onStatusChange, forceReconnect = false }) => {
@@ -39,7 +40,8 @@ class DeviceStatusService {
           if (this.onStatusChange) {
             this.onStatusChange({ 
               isOnline: false, 
-              error: 'Device not registered. Please register the tablet first.' 
+              error: 'No registered device', // Informational message, not error
+              unregistered: true
             });
           }
           return;
@@ -50,7 +52,8 @@ class DeviceStatusService {
         if (this.onStatusChange) {
           this.onStatusChange({ 
             isOnline: false, 
-            error: 'Device not registered. Please register the tablet first.' 
+            error: 'No registered device', // Informational message, not error
+            unregistered: true
           });
         }
         return;
@@ -60,7 +63,7 @@ class DeviceStatusService {
       if (this.onStatusChange) {
         this.onStatusChange({ 
           isOnline: false, 
-          error: 'Failed to verify registration status' 
+          error: 'Unable to verify registration status' 
         });
       }
       return;
@@ -77,7 +80,8 @@ class DeviceStatusService {
       if (this.onStatusChange) {
         this.onStatusChange({ 
           isOnline: false, 
-          error: 'Material ID is required for connection' 
+          error: 'Registration required', // Informational, not error
+          unregistered: true
         });
       }
     }
@@ -219,10 +223,14 @@ class DeviceStatusService {
             errorMessage = 'TLS handshake';
           }
           
+          // Only set error for real errors, not normal disconnections
+          // Normal offline (code 1000, 1001) should not show as error
+          const isNormalDisconnection = e.code === 1000 || e.code === 1001 || e.code === 1006;
+          
           this.onStatusChange({ 
             isOnline: false, 
             isConnected: false,
-            error: errorMessage,
+            error: isNormalDisconnection ? null : errorMessage, // Only set error for abnormal disconnections
             shouldReconnect: shouldReconnect,
             closeCode: e.code,
             closeReason: e.reason
@@ -233,13 +241,22 @@ class DeviceStatusService {
       this.ws.onerror = (error) => {
         // Only log connection errors if we're not in a reconnection attempt
         if (this.reconnectAttempts === 0) {
-          console.log('[WebSocket] Connection error - will attempt to reconnect');
+          console.log('[WebSocket] Connection issue detected - will attempt to reconnect');
         }
-        if (this.onStatusChange) {
+        // Don't set error for connection issues during reconnection - it's normal
+        // Only set error if we've exhausted reconnection attempts
+        if (this.onStatusChange && this.reconnectAttempts >= this.maxReconnectAttempts) {
           this.onStatusChange({ 
             isOnline: false, 
             isConnected: false,
-            error: 'Connection failed'
+            error: 'Unable to establish connection'
+          });
+        } else if (this.onStatusChange) {
+          // Normal connection issue - don't show as error, just update status
+          this.onStatusChange({ 
+            isOnline: false, 
+            isConnected: false,
+            error: null
           });
         }
         this.handleDisconnect(error);
@@ -264,11 +281,12 @@ class DeviceStatusService {
             this.cleanup();
             
             // Notify through status change callback
+            // Unregistered is informational, not an error
             if (this.onStatusChange) {
               this.onStatusChange({
                 isOnline: false,
                 isConnected: false,
-                error: 'Device has been unregistered by administrator',
+                error: 'Device has been unregistered', // Informational message
                 unregistered: true
               });
             }
@@ -471,7 +489,9 @@ class DeviceStatusService {
   };
 
   handleAppStateChange = (nextAppState) => {
-    console.log(`[AppState] Changed to: ${nextAppState}`);
+    // Track previous state to only log meaningful changes
+    const previousState = this.lastAppState;
+    this.lastAppState = nextAppState;
     
     if (nextAppState === 'active') {
       // App came to foreground
@@ -485,13 +505,17 @@ class DeviceStatusService {
         console.log('[AppState] App is active, reconnecting WebSocket...');
         this.reconnectAttempts = 0;
         this.connect();
-      } else {
-        console.log('[AppState] App is active, WebSocket already connected');
+      } else if (previousState && previousState !== 'active') {
+        // Only log when transitioning from background/inactive to active
+        // console.log('[AppState] App is active, WebSocket already connected');
       }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       // App went to background or is inactive
       // Don't close WebSocket immediately - let it try to maintain connection
-      console.log('[AppState] App is in background, maintaining WebSocket connection...');
+      // Only log first time going to background/inactive
+      if (!previousState || (previousState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive'))) {
+        // console.log('[AppState] App is in background, maintaining WebSocket connection...');
+      }
       // Only close if we've been in background for too long
       if (this.backgroundTimeout) {
         clearTimeout(this.backgroundTimeout);

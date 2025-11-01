@@ -1,37 +1,27 @@
 // src/pages/AdDetailsPage.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useMutation } from '@apollo/client';
 import { 
   ChevronLeft, 
-  ChevronRight,
   ChevronDown, 
-  Truck, 
-  Trophy, 
   XCircle, 
-  Loader2, 
   X,
   Wifi, 
   WifiOff, 
   Target, 
   AlertTriangle, 
-  CheckCircle, 
-  Smartphone, 
-  Bell,
   QrCode,
   MapPin,
   Activity,
   Info,
-  CreditCard,
   RefreshCw,
   Calendar,
   Edit
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import RouteMap from '../../components/RouteMap';
 import MapView from '../../components/MapView';
 import Payment from './Payment';
 import EditAdModal from '../../components/EditAdModal';
@@ -140,119 +130,14 @@ type MaterialSlotInfo = {
 
 // Real-time QR scan data will be fetched from API
 
-// Ad type (updated to include startTime and endTime)
-type Ad = {
-  id: string;
-  title: string;
-  description: string;
-  adFormat: string;
-  mediaFile?: string;
-  adType: string;
-  vehicleType: string;
-  price: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
-  paymentStatus?: string | null;
-  reasonForReject?: string;
-  createdAt: string;
-  updatedAt: string;
-  startTime: string;  // Campaign start date
-  endTime: string;    // Campaign end date
-  planId: {
-    id: string;
-    name: string;
-    durationDays: number;
-    playsPerDayPerDevice: number;
-    numberOfDevices: number;
-    adLengthSeconds: number;
-    pricePerPlay: number;
-    totalPrice: number;
-  };
-  // Server returns an array of materials; keep type aligned with actual data shape
-  materialId: Array<{
-  id: string;
-  materialId: string;
-  materialType: string;
-  category: string;
-  description: string;
-  mountedAt: string;
-  dismountedAt: string;
-  }>;
-  // Additional fields for display
-  drivers?: number;
-  plan?: string;
-  format?: string;
-  imagePath?: string;
-};
-
-
-
-// Type for notifications
-type Notification = {
-  id: number;
-  driverName: string;
-  type: 'avail' | 'on_the_move' | 'completed' | 'cancelled';
-  timestamp: string;
-};
-
-// Sample notification data
-const sampleNotifications: Notification[] = [
-  { id: 1, driverName: 'Jose Pascual', type: 'avail', timestamp: '2024-07-20 10:00 AM' },
-  // ... rest of the notifications
-];
-
-// Utility function to mask the name
-const maskName = (fullName: string): string => {
-  const parts = fullName.split(' ');
-  if (parts.length === 0) return '';
-
-  const maskedParts = parts.map((part, index) => {
-    if (part.length <= 1) return part; // Don't mask single character parts (e.g., "A")
-
-    if (index === 0) { // First name masking (e.g., "Jose" -> "Jo**")
-      if (part.length <= 2) return part; // Names like "Jo" remain "Jo"
-      return part.substring(0, 2) + '*'.repeat(part.length - 2);
-    } else { // Subsequent names (e.g., last name: "Pascual" -> "P***al")
-      // This is a specific masking pattern based on the example
-      if (part.length < 3) { // For names like "Li" (2 chars)
-          return part.substring(0, 1) + '*'.repeat(part.length - 1); // "Li" -> "L*"
-      }
-      if (part.length === 3) { // For names like "Lee" (3 chars)
-          return part.substring(0, 1) + '**'; // "Lee" -> "L**"
-      }
-      // For names 4 chars or longer, apply the "P***al" style
-      // First char + fixed 3 asterisks + last 2 chars
-      const firstChar = part.substring(0, 1);
-      const lastTwoChars = part.substring(part.length - 2);
-      return firstChar + '***' + lastTwoChars; // Hardcoding 3 asterisks
-    }
-  });
-  return maskedParts.join(' ');
-};
-
-// Helper function to generate notification text
-const getNotificationText = (notification: Notification) => {
-  const maskedDriverName = maskName(notification.driverName); // Mask the driver's name
-  switch (notification.type) {
-    case 'avail':
-      return `Driver ${maskedDriverName} has availed this ad.`;
-    case 'on_the_move':
-      return `Driver ${maskedDriverName} is on the move.`;
-    case 'completed':
-      return `Driver ${maskedDriverName} has completed the ad task.`;
-    case 'cancelled':
-      return `Driver ${maskedDriverName} cancelled the ad task.`;
-    default:
-      return '';
-  }
-};
+// Ad type structure (not explicitly typed, using any)
+// Server returns an array of materials; keep type aligned with actual data shape
 
 const AdDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [selectedAd, setSelectedAd] = useState("Loading...");
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [showRejectionToast, setShowRejectionToast] = useState(true);
   
   // Payment modal state
@@ -286,6 +171,7 @@ const AdDetailsPage: React.FC = () => {
   
   // Initialize adOptions with default value
   const [adOptions, setAdOptions] = useState<string[]>(["Loading..."]);
+  const [selectedAd, setSelectedAd] = useState<string>("Loading...");
   
   // Material filtering state
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
@@ -312,8 +198,6 @@ const AdDetailsPage: React.FC = () => {
   const [deviceLocations, setDeviceLocations] = useState<DeviceLocation[]>([]);
   const [materialSlots, setMaterialSlots] = useState<MaterialSlotInfo[]>([]); // Track slots for each material
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [dataLoading, setDataLoading] = useState(true);
   
   // ✅ OPTIMIZATION: Use shared hook (static variant - fetches once, then uses cache)
   // Removed inline query definition, now imports from centralized location
@@ -444,11 +328,6 @@ const AdDetailsPage: React.FC = () => {
 
   const shouldShowRejectionToast = ad?.status === 'REJECTED' && ad?.reasonForReject && showRejectionToast;
   
-  // Set fallback device ID directly (no API call needed)
-  const setFallbackDeviceId = () => {
-    setDeviceId('TABLET-21G93-1758642873206');
-  };
-
   // Fetch QR scan data for this ad
   const fetchQRScans = useCallback(async (adId: string) => {
     try {
@@ -592,9 +471,6 @@ const AdDetailsPage: React.FC = () => {
       //   planName: ad.planId?.name
       // });
       
-      // Set fallback device ID directly (no API call needed)
-      setFallbackDeviceId();
-
       // Fetch real-time data for this ad (initial fetch)
       if (ad.id) {
         fetchQRScans(ad.id);
@@ -878,18 +754,8 @@ const AdDetailsPage: React.FC = () => {
     }
   }, [ad, deviceNotifications]);
   
-
-  // State for selected period filter (for chart)
-  const [selectedPeriod, setSelectedPeriod] = useState<'Weekly' | 'Daily'>('Daily');
   // State for active tab
   const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity' | 'TabletActivity' | 'Analytics'>('Details');
-  
-  // Analytics state
-  const [analyticsData, setAnalyticsData] = useState<any>(null);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [analyticsCacheTime, setAnalyticsCacheTime] = useState<number | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState(0);
   
   // Fixed format date function to handle both timestamp strings and date strings
   const formatDate = (dateValue: string | number) => {
@@ -923,114 +789,6 @@ const AdDetailsPage: React.FC = () => {
       return 'Invalid Date';
     }
   };
-
-  // Format date range for display
-  const formatDateRange = (startDate: string, endDate: string) => {
-    if (!startDate || !endDate) return 'Dates not set';
-    try {
-      const start = formatDate(startDate);
-      const end = formatDate(endDate);
-      if (start === 'Invalid Date' || end === 'Invalid Date') return 'Invalid Date Range';
-      return `${start} - ${end}`;
-    } catch (error) {
-      return 'Invalid Date Range';
-    }
-  };
-
-  // Fetch analytics data from DeviceDataHistoryV2 (following ScreenTracking.tsx pattern)
-  const fetchAnalytics = useCallback(async (skipCache = false) => {
-    if (!id) {
-      console.log('❌ No ad ID, skipping analytics fetch');
-      return;
-    }
-    
-    // Check cache first (5 minute expiry)
-    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    const now = Date.now();
-    
-    if (!skipCache && analyticsData && analyticsCacheTime && (now - analyticsCacheTime < CACHE_DURATION)) {
-      const timeLeft = Math.round((CACHE_DURATION - (now - analyticsCacheTime)) / 1000);
-      console.log(`📊 [Analytics] Using cached data (${timeLeft}s remaining)`);
-      return;
-    }
-    
-    setAnalyticsLoading(true);
-    setAnalyticsError(null);
-    setLoadingProgress(0);
-    
-    // Simulate progress (since backend doesn't send progress)
-    const progressInterval = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 90) return prev; // Stop at 90% until real data arrives
-        return prev + 10;
-      });
-    }, 3000); // Update every 3 seconds
-    
-    try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const url = `${baseUrl}/api/adAnalytics/${id}`;
-      
-      console.log('📊 [Analytics] Fetching from:', url);
-      
-      // Get auth token from localStorage
-      const token = localStorage.getItem('token');
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('📊 [Analytics] Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ [Analytics] Fetch failed:', response.status, errorText);
-        
-        // Try to parse error message
-        try {
-          const errorJson = JSON.parse(errorText);
-          setAnalyticsError(errorJson.message || `Failed to fetch analytics (${response.status})`);
-        } catch (e) {
-          setAnalyticsError(`Failed to fetch analytics: ${response.status}`);
-        }
-        return;
-      }
-      
-      const result = await response.json();
-      console.log('📊 [Analytics] Result received:', {
-        success: result.success,
-        hasData: !!result.data,
-        totalPlays: result.data?.totalPlays
-      });
-      
-      if (result.success) {
-        setAnalyticsData(result.data);
-        setAnalyticsCacheTime(Date.now()); // Cache the data
-        setLoadingProgress(100);
-        console.log('✅ [Analytics] Data loaded successfully and cached');
-      } else {
-        setAnalyticsError(result.message || 'Failed to load analytics');
-        console.error('❌ [Analytics] Error:', result.message);
-      }
-    } catch (error: any) {
-      console.error('❌ [Analytics] Exception:', error);
-      
-      // Check for network/timeout errors
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        setAnalyticsError('Network error. Please check your connection and try again.');
-      } else if (error.message.includes('timeout')) {
-        setAnalyticsError('Request timeout. The server took too long to respond. Please try again.');
-      } else {
-        setAnalyticsError(error.message || 'Failed to load analytics data');
-      }
-    } finally {
-      clearInterval(progressInterval);
-      setAnalyticsLoading(false);
-      console.log('📊 [Analytics] Loading finished');
-    }
-  }, [id, analyticsData, analyticsCacheTime]);
 
 
   // Calculate duration in days between start and end dates
@@ -1078,10 +836,6 @@ const AdDetailsPage: React.FC = () => {
     );
   }
 
-  const handlePeriodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPeriod(event.target.value as 'Weekly' | 'Daily');
-  };
-
   if (!ad) {
     return (
       <div className="relative flex-1 pl-60 p-6 h-screen flex items-center justify-center overflow-hidden">
@@ -1109,29 +863,6 @@ const AdDetailsPage: React.FC = () => {
       </div>
     );
   }
-  
-  // Function to generate mock profit data based on selected period
-  const getChartData = () => {
-    const baseProfit = ad.price * 0.7; // Assume profit is 70% of the price for demonstration
-    const data = [];
-
-    switch (selectedPeriod) {
-      case 'Daily':
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        for (let i = 0; i < 7; i++) {
-          const profitVariation = (Math.random() - 0.5) * (baseProfit * 0.2); // +/- 10% variation
-          data.push({ day: days[i], profit: parseFloat((baseProfit + profitVariation).toFixed(2)) });
-        }
-        break;
-      case 'Weekly':
-        for (let i = 1; i <= 5; i++) { // 5 weeks of data
-          const profitVariation = (Math.random() - 0.5) * (baseProfit * 0.3); // +/- 15% variation
-          data.push({ week: `Week ${i}`, profit: parseFloat((baseProfit * 4 + profitVariation).toFixed(2)) }); // Scale for weekly
-        }
-        break;
-    }
-    return data;
-  };
 
   return (
     <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-5 pt-20 lg:pt-5">

@@ -333,8 +333,11 @@ class OfflineQueueService {
       });
     }
     
+    // Import requestManager dynamically
+    const requestManager = (await import('./requestManager')).default;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {
+      const response = await requestManager.fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -347,6 +350,9 @@ class OfflineQueueService {
           adDuration: item.adDuration,
           viewTime: item.viewTime
         }),
+        timeout: 10000, // 10 second timeout
+        priority: 2, // Medium priority (ad playback is important)
+        allowDuplicate: false, // Prevent duplicate ad playback tracking
       });
 
       if (!response.ok) {
@@ -374,6 +380,10 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent ad playback: ${item.adTitle}`);
              }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`⏱️ [OfflineQueue] Request timed out for ad playback ${item.id} - will retry later`);
+        throw error;
+      }
       console.error(`❌ [OfflineQueue] Failed to send ad playback ${item.id}:`, error);
       throw error;
     }
@@ -387,8 +397,11 @@ class OfflineQueueService {
     const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
     const registration = await tabletRegistrationService.getRegistrationData();
     
+    // Import requestManager dynamically
+    const requestManager = (await import('./requestManager')).default;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
+      const response = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -404,6 +417,9 @@ class OfflineQueueService {
           heading: item.heading,
           accuracy: item.accuracy
         }),
+        timeout: 10000, // 10 second timeout
+        priority: 1, // Lower priority (can be queued)
+        allowDuplicate: false, // Prevent duplicate location updates
       });
 
       if (!response.ok) {
@@ -427,6 +443,11 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent location data: ${item.lat}, ${item.lng}`);
              }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`⏱️ [OfflineQueue] Request timed out for location data ${item.id} - will retry later`);
+        // Don't throw for timeout - let it be retried by the queue system
+        throw error;
+      }
       console.error(`❌ [OfflineQueue] Failed to send location data ${item.id}:`, error);
       throw error;
     }
@@ -440,8 +461,11 @@ class OfflineQueueService {
     const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
     const registration = await tabletRegistrationService.getRegistrationData();
     
+    // Import requestManager dynamically
+    const requestManager = (await import('./requestManager')).default;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/deviceTracking/status-update`, {
+      const response = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/status-update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -458,6 +482,9 @@ class OfflineQueueService {
           },
           networkStatus: item.isOnline ? 'online' : 'offline'
         }),
+        timeout: 10000, // 10 second timeout
+        priority: 2, // Medium priority (status updates are important)
+        allowDuplicate: false, // Prevent duplicate status updates
       });
 
       if (!response.ok) {
@@ -488,6 +515,10 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent device status: ${item.isOnline ? 'ONLINE' : 'OFFLINE'}`);
              }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`⏱️ [OfflineQueue] Request timed out for device status ${item.id} - will retry later`);
+        throw error;
+      }
       console.error(`❌ [OfflineQueue] Failed to send device status ${item.id}:`, error);
       throw error;
     }
@@ -497,8 +528,11 @@ class OfflineQueueService {
   private async sendQueuedQRScan(item: QueuedQRScan) {
     const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
     
+    // Import requestManager dynamically
+    const requestManager = (await import('./requestManager')).default;
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
+      const response = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -510,6 +544,9 @@ class OfflineQueueService {
           isOffline: item.isOffline,
           queuedTimestamp: item.timestamp
         }),
+        timeout: 10000, // 10 second timeout
+        priority: 3, // High priority (QR scans are important)
+        allowDuplicate: false,
       });
 
       if (!response.ok) {
@@ -518,6 +555,10 @@ class OfflineQueueService {
 
       console.log(`✅ [OfflineQueue] Successfully sent QR scan: ${item.adTitle}`);
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`⏱️ [OfflineQueue] Request timed out for QR scan ${item.id} - will retry later`);
+        throw error;
+      }
       console.error(`❌ [OfflineQueue] Failed to send QR scan ${item.id}:`, error);
       throw error;
     }

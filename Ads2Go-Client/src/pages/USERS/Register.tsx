@@ -634,6 +634,7 @@ const Register: React.FC = () => {
                     value={formData.companyAddress}
                     onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
                     placeholder="Select company location or enter address..."
+                    addressPlaceholder="Enter your Company/Business Address number and street..."
                     required
                     error={errors.companyAddress}
                   />
@@ -642,6 +643,7 @@ const Register: React.FC = () => {
                     value={formData.houseAddress}
                     onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
                     placeholder="Select house location or enter address..."
+                    addressPlaceholder="Enter your house number and street..."
                     required
                     error={errors.houseAddress}
                   />
@@ -897,6 +899,7 @@ const Register: React.FC = () => {
                   value={formData.companyAddress}
                   onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
                   placeholder="Select company location or enter address..."
+                  addressPlaceholder="Enter your Company/Business Address number and street..."
                   required
                   error={errors.companyAddress}
                 />
@@ -905,6 +908,7 @@ const Register: React.FC = () => {
                   value={formData.houseAddress}
                   onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
                   placeholder="Select house location or enter address..."
+                  addressPlaceholder="Enter your house number and street..."
                   required
                   error={errors.houseAddress}
                 />

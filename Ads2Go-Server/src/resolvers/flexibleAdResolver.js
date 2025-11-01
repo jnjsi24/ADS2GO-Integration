@@ -278,6 +278,10 @@ module.exports = {
         throw error;
       }
 
+      // ✅ Set reservation expiration BEFORE creating the ad (7 days from now)
+      const reservationExpires = new Date();
+      reservationExpires.setDate(reservationExpires.getDate() + 7);
+
       // Create a single ad that handles multiple devices
       const ad = new Ad({
         title,
@@ -306,16 +310,14 @@ module.exports = {
         userId: user.id,
         materialType,
         vehicleType,
-        category
+        category,
+        reservationExpires: reservationExpires // ✅ Set reservation expiration at creation
       });
 
       const savedAd = await ad.save();
 
       // ✅ NEW: Reserve slots for all target devices with expiration
       try {
-        // Set reservation expiration (7 days from now)
-        const reservationExpires = new Date();
-        reservationExpires.setDate(reservationExpires.getDate() + 7);
         
         for (const material of selectedMaterials) {
           let availability = await MaterialAvailability.findOne({ materialId: material._id });
@@ -346,9 +348,7 @@ module.exports = {
           console.log(`📊 Material ${material.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);
         }
         
-        // Store reservation expiration in ad
-        savedAd.reservationExpires = reservationExpires;
-        await savedAd.save();
+        // ✅ No second save needed - reservationExpires was already set before the first save
         
       } catch (availabilityError) {
         console.error('❌ Error reserving slots:', availabilityError);

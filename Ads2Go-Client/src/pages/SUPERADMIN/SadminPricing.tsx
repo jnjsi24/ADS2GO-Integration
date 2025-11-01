@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign, Settings } from 'lucide-react';
+import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
   PricingConfig, 
@@ -44,7 +44,7 @@ const SadminPricing: React.FC = () => {
   const { admin } = useAdminAuth();
 
   // GraphQL Hooks
-  const { data, loading, error, refetch } = useQuery(GET_ALL_PRICING_CONFIGS, {
+  const { data, loading, refetch } = useQuery(GET_ALL_PRICING_CONFIGS, {
     skip: !admin || admin.role !== 'SUPERADMIN',
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
@@ -275,10 +275,6 @@ const SadminPricing: React.FC = () => {
           <div className="flex space-x-1 rounded-lg p-1">
             {["active", "inactive"].map((tab) => {
               const isActive = activeTab === tab;
-              const count =
-                tab === "active"
-                  ? configs.filter((c) => c.isActive).length
-                  : configs.filter((c) => !c.isActive).length;
 
               return (
                 <button
