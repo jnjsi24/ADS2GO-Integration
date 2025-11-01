@@ -1059,6 +1059,48 @@ createDriver: async (_, { input }) => {
       }
     },
 
+    restoreDriver: async (_, { driverId }, { user }) => {
+      try {
+        checkAdmin(user);
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { 
+            success: false, 
+            message: "Driver not found" 
+          };
+        }
+
+        if (!driver.isArchived) {
+          return {
+            success: false,
+            message: 'Driver is not archived'
+          };
+        }
+
+        console.log(`✅ Restoring driver: ${driverId} (${driver.fullName})`);
+
+        driver.isArchived = false;
+        driver.archivedAt = null;
+        driver.scheduledDeletionDate = null;
+        driver.tokenVersion += 1; // Invalidate all sessions
+        
+        await driver.save();
+
+        console.log(`✅ Driver ${driverId} restored successfully`);
+
+        return { 
+          success: true, 
+          message: "Driver restored successfully." 
+        };
+      } catch (error) {
+        console.error('restoreDriver error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to restore driver'
+        };
+      }
+    },
+
     unassignAndReassignMaterials: async (_, { driverId }, { user }) => {
       try {
         checkAdmin(user);

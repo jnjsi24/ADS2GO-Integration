@@ -23,6 +23,10 @@ module.exports = gql`
     materials: [Material!]!
     createdAt: String
     updatedAt: String
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input AdsPlanInput {
@@ -119,6 +123,7 @@ module.exports = gql`
     createAdsPlan(input: AdsPlanInput!): AdsPlan
     updateAdsPlan(id: ID!, input: AdsPlanUpdateInput!): AdsPlan
     deleteAdsPlan(id: ID!): String
+    restoreAdsPlan(id: ID!): String
     startAdsPlan(id: ID!): AdsPlan
     endAdsPlan(id: ID!): AdsPlan
   }

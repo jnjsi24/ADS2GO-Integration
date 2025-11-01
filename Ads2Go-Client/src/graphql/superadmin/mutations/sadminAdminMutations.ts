@@ -69,6 +69,22 @@ export const DELETE_ADMIN = gql`
   }
 `;
 
+// Restore Admin mutation
+export const RESTORE_ADMIN = gql`
+  mutation RestoreAdmin($id: ID!) {
+    restoreAdmin(id: $id) {
+      success
+      message
+      admin {
+        id
+        firstName
+        lastName
+        email
+      }
+    }
+  }
+`;
+
 // Type definitions for the mutations
 export interface CreateAdminInput {
   firstName: string;

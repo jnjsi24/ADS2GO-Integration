@@ -28,6 +28,20 @@ const faqSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
     index: true
+  },
+  
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -35,6 +49,8 @@ const faqSchema = new mongoose.Schema({
 
 // Index for efficient queries
 faqSchema.index({ category: 1, isActive: 1, order: 1 });
+faqSchema.index({ isArchived: 1 }); // Archive filter for queries
+faqSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Virtual for formatted timestamps
 faqSchema.virtual('createdAtFormatted').get(function() {

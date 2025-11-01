@@ -68,6 +68,11 @@ const adsDeploymentTypeDefs = gql`
     material: Material  
     driver: Driver
     removedByUser: User
+    
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   # LCD Management Response Types
@@ -155,6 +160,7 @@ const adsDeploymentTypeDefs = gql`
     
     # Delete deployment (Admin only - only SCHEDULED/CANCELLED)
     deleteDeployment(id: ID!): Boolean!
+    restoreDeployment(id: ID!): Boolean!
   }
 `;
 

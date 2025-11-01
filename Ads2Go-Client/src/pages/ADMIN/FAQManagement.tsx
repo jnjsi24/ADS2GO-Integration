@@ -1020,6 +1020,7 @@ const FAQManagement: React.FC = () => {
           confirmButtonClass="bg-red-600 hover:bg-red-700"
           isProcessing={isDeleting}
         />
+
       </div>
     </div>
   );

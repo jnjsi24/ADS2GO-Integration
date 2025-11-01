@@ -190,8 +190,57 @@ module.exports = {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can delete ads plans');
       }
-      await AdsPlan.findByIdAndDelete(id);
-      return 'Ads plan deleted successfully.';
+      
+      const plan = await AdsPlan.findById(id);
+      if (!plan) throw new Error('Ads plan not found');
+      
+      // Check if already archived
+      if (plan.isArchived) {
+        throw new Error('Ads plan is already archived');
+      }
+      
+      console.log(`🗑️ Archiving ads plan: ${plan.name} (ID: ${id}) - 30-day deferred deletion`);
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      plan.isArchived = true;
+      plan.archivedAt = now;
+      plan.scheduledDeletionDate = deletionDate;
+      plan.isActive = false; // Deactivate immediately
+      
+      await plan.save();
+      
+      console.log(`✅ Ads plan ${plan.name} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
+      return 'Ads plan archived successfully. Scheduled for deletion in 30 days.';
+    },
+
+    restoreAdsPlan: async (_, { id }, { user }) => {
+      if (!user || user.role !== 'SUPERADMIN') {
+        throw new Error('Unauthorized: Only SUPERADMIN can restore ads plans');
+      }
+      
+      const plan = await AdsPlan.findById(id);
+      if (!plan) throw new Error('Ads plan not found');
+      
+      if (!plan.isArchived) {
+        throw new Error('Ads plan is not archived');
+      }
+      
+      console.log(`✅ Restoring ads plan: ${plan.name} (ID: ${id})`);
+      
+      plan.isArchived = false;
+      plan.archivedAt = null;
+      plan.scheduledDeletionDate = null;
+      
+      await plan.save();
+      
+      console.log(`✅ Ads plan ${plan.name} restored successfully`);
+      
+      return plan.id;
     },
 
     startAdsPlan: async (_, { id }, { user }) => {

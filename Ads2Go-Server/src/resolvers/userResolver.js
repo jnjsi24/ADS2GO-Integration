@@ -707,6 +707,48 @@ const resolvers = {
       }
     },
 
+    restoreOwnAccount: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const userRecord = await User.findById(user.id);
+        
+        if (!userRecord) {
+          return {
+            success: false,
+            message: 'User not found'
+          };
+        }
+        
+        if (!userRecord.isArchived) {
+          return {
+            success: false,
+            message: 'Account is not archived'
+          };
+        }
+        
+        userRecord.isArchived = false;
+        userRecord.archivedAt = null;
+        userRecord.scheduledDeletionDate = null;
+        userRecord.tokenVersion += 1; // Invalidate all sessions
+        
+        await userRecord.save();
+        
+        console.log(`✅ User ${userRecord.email} restored their own account successfully`);
+        
+        return {
+          success: true,
+          message: 'Your account has been restored successfully. You have been logged out.'
+        };
+      } catch (error) {
+        console.error('Error restoring own account:', error);
+        return {
+          success: false,
+          message: 'Failed to restore account: ' + error.message
+        };
+      }
+    },
+
     requestPasswordReset: async (_, { email }) => {
       const user = await User.findOne({ email: email.toLowerCase().trim() });
       if (!user) throw new Error("No user found with this email");

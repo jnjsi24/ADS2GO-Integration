@@ -707,24 +707,55 @@ const materialResolvers = {
     deleteMaterial: async (_, { id }, { user }) => {
       checkAdmin(user);
 
-      const deleted = await Material.findByIdAndDelete(id);
-      if (!deleted) throw new Error('Material not found or already deleted');
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found or already deleted');
       
-      console.log(`🗑️ Deleting material: ${deleted.materialId} (ID: ${id})`);
+      // Check if already archived
+      if (material.isArchived) {
+        throw new Error('Material is already archived');
+      }
       
-      // Clean up all related records
-      const cleanupResults = await cleanupMaterialRelatedRecords(id, deleted.materialId);
+      console.log(`🗑️ Archiving material: ${material.materialId} (ID: ${id}) - 30-day deferred deletion`);
       
-      // Log cleanup summary
-      const cleanedRecords = Object.entries(cleanupResults)
-        .filter(([_, cleaned]) => cleaned)
-        .map(([record, _]) => record)
-        .join(', ');
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
       
-      console.log(`🎯 Material deletion completed: ${deleted.materialId}`);
-      console.log(`🧹 Cleaned up records: ${cleanedRecords || 'none found'}`);
+      material.isArchived = true;
+      material.archivedAt = now;
+      material.scheduledDeletionDate = deletionDate;
+      material.status = 'RETIRED'; // Change status so it won't be used
       
-      return 'Material and all related records deleted successfully.';
+      await material.save();
+      
+      console.log(`✅ Material ${material.materialId} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      console.log(`📌 Related records will be cleaned up after 30 days`);
+      
+      return 'Material archived successfully. Scheduled for deletion in 30 days.';
+    },
+
+    restoreMaterial: async (_, { id }, { user }) => {
+      checkAdmin(user);
+
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+      
+      if (!material.isArchived) {
+        throw new Error('Material is not archived');
+      }
+      
+      console.log(`✅ Restoring material: ${material.materialId} (ID: ${id})`);
+      
+      material.isArchived = false;
+      material.archivedAt = null;
+      material.scheduledDeletionDate = null;
+      
+      await material.save();
+      
+      console.log(`✅ Material ${id} restored successfully`);
+      
+      return material.materialId;
     },
 
     assignMaterialToDriver: async (_, { driverId, materialId }, { user }) => {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight, Menu, Archive, Users, RotateCcw } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
-import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
+import { DELETE_USER, RESTORE_USER } from '../../graphql/admin/mutations/manageUsers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
@@ -30,6 +30,9 @@ interface User {
   role: string;
   profilePicture: string | null;
   houseAddress: string | null;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 const cities = ['Manila', 'Quezon City', 'Cebu', 'Davao', 'Iloilo', 'Baguio', 'Makati', 'Mandaluyong', 'Taguig', 'Pasig', 'Parañaque'];
@@ -122,6 +125,7 @@ const formatLastAccess = (date: Date | null): string => {
 
 const ManageUsers: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const statusFilterOptions = ['All Status', 'Verified', 'Unverified'];
@@ -141,6 +145,8 @@ const ManageUsers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [userToRestore, setUserToRestore] = useState<User | null>(null);
   
   // Processing states for double-click prevention
   const [isDeletingUser, setIsDeletingUser] = useState(false);
@@ -198,6 +204,9 @@ const ManageUsers: React.FC = () => {
 
   // Delete user mutation
   const [deleteUser] = useMutation(DELETE_USER);
+  
+  // Restore user mutation
+  const [restoreUser] = useMutation(RESTORE_USER);
 
   // Check screen size and setup responsive behavior
   useEffect(() => {
@@ -271,7 +280,10 @@ const ManageUsers: React.FC = () => {
           updatedAt,
           role: user.role || 'USER',
           profilePicture: user.profilePicture || null,
-          houseAddress: user.houseAddress || null
+          houseAddress: user.houseAddress || null,
+          isArchived: user.isArchived || false,
+          archivedAt: user.archivedAt || null,
+          scheduledDeletionDate: user.scheduledDeletionDate || null
         };
       });
       
@@ -358,6 +370,54 @@ const ManageUsers: React.FC = () => {
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setUserToDelete(null);
+  };
+
+  const handleRestore = (user: User) => {
+    setUserToRestore(user);
+    setShowRestoreModal(true);
+  };
+
+  const confirmRestore = async () => {
+    if (!userToRestore) return;
+    
+    try {
+      const result = await restoreUser({
+        variables: { id: userToRestore.id },
+      });
+      
+      if (result.data?.restoreUser?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Advertiser restored successfully',
+          duration: 5000
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Failed to restore advertiser: ' + (result.data?.restoreUser?.message || 'Unknown error'),
+          duration: 5000
+        });
+      }
+      setShowRestoreModal(false);
+      setUserToRestore(null);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Error restoring advertiser: ' + (err.message || 'Unknown error'),
+        duration: 5000
+      });
+      console.error('Error restoring advertiser:', err);
+      setShowRestoreModal(false);
+      setUserToRestore(null);
+    }
+  };
+
+  const cancelRestore = () => {
+    setShowRestoreModal(false);
+    setUserToRestore(null);
   };
 
   // Bulk action handlers
@@ -471,6 +531,11 @@ const ManageUsers: React.FC = () => {
 
   // Filter and sort users based on search term, status, and sort option
   const filteredUsers = users.filter((user) => {
+    // Filter by archive status based on active tab
+    const isArchivedMatch = activeTab === 'archived' ? user.isArchived === true : user.isArchived !== true;
+    
+    if (!isArchivedMatch) return false;
+    
     const searchLower = searchTerm.toLowerCase();
     const fullName = `${user.firstName} ${user.middleName} ${user.lastName}`.toLowerCase();
     const matchesSearch = 
@@ -639,6 +704,40 @@ const ManageUsers: React.FC = () => {
           </div>
         )}
 
+        {/* Tabs Section */}
+        <div className="mb-4">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Active Advertisers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Archive className="w-4 h-4 mr-2" />
+              Archived Advertisers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </nav>
+        </div>
+
         {/* Header with Title and Filters */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
           {!isMobile && (
@@ -783,7 +882,9 @@ const ManageUsers: React.FC = () => {
           <div className="rounded-xl mb-4 overflow-hidden flex-1">
             {/* Table Header - Hidden on mobile */}
             {!isMobile && (
-              <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-2 text-sm font-semibold text-black">
+              <div className={`hidden md:grid gap-4 px-6 py-2 text-sm font-semibold text-black ${
+                activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+              }`}>
                 <div className="flex items-center gap-2 col-span-3">
                   <input
                     type="checkbox"
@@ -794,12 +895,13 @@ const ManageUsers: React.FC = () => {
                   />
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-3">Company</div>
+                <div className="col-span-2">Company</div>
                 <div className="col-span-1 flex items-center gap-1">
                   <span>Status</span>
                 </div>
                 <div className="col-span-2">Created At</div>
                 <div className="col-span-2">Last Access</div>
+                {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
                 <div className="col-span-1 text-center">Action</div>
               </div>
             )}
@@ -862,20 +964,34 @@ const ManageUsers: React.FC = () => {
                       >
                         {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </span>
-                      <button
-                        className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(user.id);
-                        }}
-                      >
-                        <Trash size={14} />
-                      </button>
+                      {activeTab === 'archived' ? (
+                        <button
+                          className="flex items-center text-green-700 px-1 py-1 rounded shadow-md hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRestore(user);
+                          }}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(user.id);
+                          }}
+                        >
+                          <Trash size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
                   // Desktop Card Layout
-                  <div className="grid grid-cols-12 gap-4 items-center px-6 py-3 text-sm transition-colors cursor-pointer rounded-lg">
+                  <div className={`grid items-center px-6 py-3 text-sm transition-colors cursor-pointer rounded-lg ${
+                    activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+                  }`}>
                     <div className="col-span-3 gap-3 flex items-center">
                       <input
                         type="checkbox"
@@ -894,7 +1010,7 @@ const ManageUsers: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-3 truncate">{user.company}</div>
+                    <div className="col-span-2 truncate">{user.company}</div>
 
                     <div className="col-span-1">
                       <span
@@ -920,10 +1036,30 @@ const ManageUsers: React.FC = () => {
                       {formatDate(user.lastLogin)}
                     </div>
 
+                    {activeTab === 'archived' && (
+                      <div className="col-span-1 text-sm text-red-600 font-medium">
+                        {user.scheduledDeletionDate ? formatDate(new Date(user.scheduledDeletionDate)) : 'N/A'}
+                      </div>
+                    )}
+
                     <div
                       className="col-span-1 flex items-center justify-center"
                       onClick={(e) => e.stopPropagation()}
                     >
+                    {activeTab === 'archived' ? (
+                      <button
+                        className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        onClick={() => handleRestore(user)}
+                        title="Restore"
+                      >
+                        <RotateCcw 
+                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Restore
+                        </span>
+                      </button>
+                    ) : (
                       <button
                         className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                         onClick={() => handleDelete(user.id)}
@@ -936,6 +1072,7 @@ const ManageUsers: React.FC = () => {
                           Delete
                         </span>
                       </button>
+                    )}
                     </div>
                   </div>
                 )}
@@ -1188,6 +1325,43 @@ const ManageUsers: React.FC = () => {
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isBulkDeleting}
       />
+
+      {/* Restore Confirmation Modal */}
+      {showRestoreModal && userToRestore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Restore Advertiser</h2>
+              <button
+                onClick={cancelRestore}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to restore this advertiser?
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelRestore}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRestore}
+                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <RotateCcw size={16} />
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />

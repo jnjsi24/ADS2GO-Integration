@@ -107,6 +107,7 @@ const adTypeDefs = gql`
     createAd(input: CreateAdInput!): Ad!
     updateAd(id: ID!, input: UpdateAdInput!): Ad!
     deleteAd(id: ID!): Boolean!
+    restoreAd(id: ID!): Boolean!
   }
 `;
 

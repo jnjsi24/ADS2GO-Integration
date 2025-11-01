@@ -20,7 +20,9 @@ import {
   XCircle,
   RefreshCw,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useLocation } from 'react-router-dom';
@@ -33,6 +35,7 @@ import {
   GET_ALL_ADS,
   UPDATE_AD,
   DELETE_AD,
+  RESTORE_AD,
   type Ad,
   type User
 } from '../../graphql/admin/ads';
@@ -48,7 +51,11 @@ const ManageAds: React.FC = () => {
   const location = useLocation();
   
   // Tab management
-  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'company-ads'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'archived' | 'schedule' | 'deployment' | 'company-ads'>('ads');
+  
+  // Restore state
+  const [adToRestore, setAdToRestore] = useState<string | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
@@ -211,6 +218,27 @@ const ManageAds: React.FC = () => {
         type: 'error',
         title: 'Deletion Failed',
         message: `Error deleting ad: ${error.message}`,
+        duration: 6000
+      });
+    }
+  });
+
+  const [restoreAd] = useMutation(RESTORE_AD, {
+    onCompleted: () => {
+      refetch();
+      addToast({
+        type: 'success',
+        title: 'Restore Successful',
+        message: 'Advertisement restored successfully',
+        duration: 5000
+      });
+    },
+    onError: (error) => {
+      console.error('Error restoring ad:', error);
+      addToast({
+        type: 'error',
+        title: 'Restore Failed',
+        message: `Error restoring ad: ${error.message}`,
         duration: 6000
       });
     }
@@ -548,6 +576,7 @@ const ManageAds: React.FC = () => {
   // Tab management functions
   const tabs = [
     { id: 'ads', label: 'All Ads', icon: Monitor },
+    { id: 'archived', label: 'Archived Ads', icon: Archive },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'deployment', label: 'Deployment', icon: PlayCircle },
     { id: 'company-ads', label: 'Company Ads', icon: Building2 }
@@ -555,6 +584,11 @@ const ManageAds: React.FC = () => {
 
   // Filter and sort functions
   const filteredAds = (data?.getAllAds?.filter((ad: Ad) => {
+    // Filter by archive status based on active tab
+    const isArchivedMatch = activeTab === 'archived' ? ad.isArchived === true : ad.isArchived !== true;
+    
+    if (!isArchivedMatch) return false;
+
     const matchesSearch =
       ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -950,6 +984,22 @@ const ManageAds: React.FC = () => {
                         </span>
                       </div>
                       <div className="col-span-2 flex items-center justify-center gap-1">
+                      {activeTab === 'archived' ? (
+                        /* Restore button for archived tab */
+                        <button
+                          className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                          onClick={(e) => { e.stopPropagation(); setAdToRestore(ad.id); setShowRestoreModal(true); }}
+                          title="Restore"
+                        >
+                          <RotateCcw 
+                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                            size={16} />
+                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                            Restore
+                          </span>
+                        </button>
+                      ) : (
+                        <>
                       {ad.status === 'PENDING' && ( <>
                         {/* APPROVE BUTTON */}
                         <button
@@ -1006,6 +1056,8 @@ const ManageAds: React.FC = () => {
                             Delete
                           </span>
                         </button>
+                        </>
+                      )}
                       </div>
                     </div>
                   </div>
@@ -1420,6 +1472,59 @@ const ManageAds: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
+
+      {/* Restore Confirmation Modal */}
+      {showRestoreModal && adToRestore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Restore Advertisement</h2>
+              <button
+                onClick={() => {
+                  setShowRestoreModal(false);
+                  setAdToRestore(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to restore this advertisement?
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRestoreModal(false);
+                  setAdToRestore(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (adToRestore) {
+                    try {
+                      await restoreAd({ variables: { id: adToRestore } });
+                      setShowRestoreModal(false);
+                      setAdToRestore(null);
+                    } catch (error) {
+                      console.error('Error restoring ad:', error);
+                    }
+                  }
+                }}
+                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <RotateCcw size={16} />
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Date Filter Modal */}
       <DateFilter

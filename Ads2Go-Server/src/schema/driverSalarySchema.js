@@ -32,6 +32,10 @@ const typeDefs = gql`
     displayName: String!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type SalaryCalculationPeriod {
@@ -217,6 +221,7 @@ const typeDefs = gql`
     createDriverSalaryPricing(input: CreateDriverSalaryPricingInput!): DriverSalaryPricingResponse!
     updateDriverSalaryPricing(id: ID!, input: UpdateDriverSalaryPricingInput!): DriverSalaryPricingResponse!
     deleteDriverSalaryPricing(id: ID!): DriverSalaryPricingResponse!
+    restoreDriverSalaryPricing(id: ID!): DriverSalaryPricingResponse!
     
     createDriverSalaryCalculation(input: CreateDriverSalaryCalculationInput!): DriverSalaryCalculationResponse!
     updateDriverSalaryCalculation(id: ID!, input: UpdateDriverSalaryCalculationInput!): DriverSalaryCalculationResponse!

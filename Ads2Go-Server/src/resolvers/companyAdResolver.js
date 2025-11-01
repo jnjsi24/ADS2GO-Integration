@@ -135,22 +135,63 @@ const companyAdResolvers = {
         if (!companyAd) {
           throw new Error('Company ad not found');
         }
-
-        // Delete media file from Firebase if it exists
-        if (companyAd.mediaFile) {
-          try {
-            await deleteFromFirebase(companyAd.mediaFile);
-          } catch (firebaseError) {
-            console.warn('Failed to delete media file from Firebase:', firebaseError);
-            // Continue with deletion even if Firebase deletion fails
-          }
+        
+        // Check if already archived
+        if (companyAd.isArchived) {
+          throw new Error('Company ad is already archived');
         }
 
-        await CompanyAd.findByIdAndDelete(id);
+        console.log(`🗑️ Archiving company ad: ${id} (${companyAd.title}) - 30-day deferred deletion`);
+        
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+        
+        companyAd.isArchived = true;
+        companyAd.archivedAt = now;
+        companyAd.scheduledDeletionDate = deletionDate;
+        companyAd.isActive = false; // Deactivate immediately
+        
+        await companyAd.save();
+        
+        console.log(`✅ Company ad ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        console.log(`📌 Media file will be deleted from Firebase after 30 days`);
+        
         return true;
       } catch (error) {
-        console.error('Error deleting company ad:', error);
-        throw new Error('Failed to delete company ad: ' + error.message);
+        console.error('Error archiving company ad:', error);
+        throw new Error('Failed to archive company ad: ' + error.message);
+      }
+    },
+
+    restoreCompanyAd: async (_, { id }, { user }) => {
+      checkAdmin(user);
+      
+      try {
+        const companyAd = await CompanyAd.findById(id);
+        if (!companyAd) {
+          throw new Error('Company ad not found');
+        }
+        
+        if (!companyAd.isArchived) {
+          throw new Error('Company ad is not archived');
+        }
+
+        console.log(`✅ Restoring company ad: ${id} (${companyAd.title})`);
+        
+        companyAd.isArchived = false;
+        companyAd.archivedAt = null;
+        companyAd.scheduledDeletionDate = null;
+        
+        await companyAd.save();
+        
+        console.log(`✅ Company ad ${id} restored successfully`);
+        
+        return true;
+      } catch (error) {
+        console.error('Error restoring company ad:', error);
+        throw new Error('Failed to restore company ad: ' + error.message);
       }
     },
 

@@ -838,12 +838,53 @@ const adsDeploymentResolvers = {
       checkAdmin(user);
       const deployment = await AdsDeployment.findById(id);
       if (!deployment) throw new Error('Deployment not found');
+      
+      // Check if already archived
+      if (deployment.isArchived) {
+        throw new Error('Deployment is already archived');
+      }
 
       if (['RUNNING','COMPLETED'].includes(deployment.currentStatus)) {
         throw new Error('Cannot delete running or completed deployments');
       }
+      
+      console.log(`🗑️ Archiving deployment: ${id} - 30-day deferred deletion`);
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      deployment.isArchived = true;
+      deployment.archivedAt = now;
+      deployment.scheduledDeletionDate = deletionDate;
+      
+      await deployment.save();
+      
+      console.log(`✅ Deployment ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
+      return true;
+    },
 
-      await AdsDeployment.findByIdAndDelete(id);
+    restoreDeployment: async (_, { id }, { user }) => {
+      checkAdmin(user);
+      const deployment = await AdsDeployment.findById(id);
+      if (!deployment) throw new Error('Deployment not found');
+      
+      if (!deployment.isArchived) {
+        throw new Error('Deployment is not archived');
+      }
+      
+      console.log(`✅ Restoring deployment: ${id}`);
+      
+      deployment.isArchived = false;
+      deployment.archivedAt = null;
+      deployment.scheduledDeletionDate = null;
+      
+      await deployment.save();
+      
+      console.log(`✅ Deployment ${id} restored successfully`);
+      
       return true;
     }
   },

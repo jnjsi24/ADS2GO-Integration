@@ -83,6 +83,19 @@ const MaterialSchema = new mongoose.Schema({
   nextInspectionDue: {
     type: Date,
     default: null
+  },
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, { 
   timestamps: true,
@@ -170,5 +183,7 @@ MaterialSchema.index(
     name: 'driverId_unique_when_set'
   }
 );
+MaterialSchema.index({ isArchived: 1 }); // Archive filter for queries
+MaterialSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 module.exports = mongoose.models.Material || mongoose.model('Material', MaterialSchema);

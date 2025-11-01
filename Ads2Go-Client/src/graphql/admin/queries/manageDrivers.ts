@@ -37,6 +37,9 @@ export const GET_ALL_DRIVERS = gql`
         category
         description
       }
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;

@@ -141,6 +141,19 @@ const SuperAdminSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  // Soft delete / Archive fields (30-day deferred deletion like Facebook)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -175,6 +188,8 @@ SuperAdminSchema.pre('save', function(next) {
 
 // Ensure email uniqueness (case-insensitive)
 SuperAdminSchema.index({ email: 1 }, { unique: true });
+SuperAdminSchema.index({ isArchived: 1 }); // Archive filter for queries
+SuperAdminSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 const SuperAdmin = mongoose.model('SuperAdmin', SuperAdminSchema);
 

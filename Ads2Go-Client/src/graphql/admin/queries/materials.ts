@@ -29,6 +29,9 @@ export const GET_ALL_MATERIALS = gql`
       dismountedAt
       createdAt
       updatedAt
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;

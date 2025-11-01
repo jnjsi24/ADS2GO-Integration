@@ -21,6 +21,9 @@ export const GET_ALL_USERS = gql`
       ads {
         id
       }
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;

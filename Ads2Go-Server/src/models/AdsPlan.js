@@ -21,6 +21,24 @@ const AdsPlanSchema = new mongoose.Schema({
   materials: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Material' }],
 
   isActive: { type: Boolean, default: true },
+  
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
+  }
 }, { timestamps: true });
+
+// Indexes for archive functionality
+AdsPlanSchema.index({ isArchived: 1 }); // Archive filter for queries
+AdsPlanSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 module.exports = mongoose.model('AdsPlan', AdsPlanSchema);

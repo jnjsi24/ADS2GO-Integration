@@ -704,6 +704,45 @@ const adResolvers = {
         console.error('❌ Error archiving ad:', error);
         throw new Error(`Failed to archive ad: ${error.message}`);
       }
+    },
+
+    restoreAd: async (_, { id }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const ad = await Ad.findById(id);
+        if (!ad) {
+          throw new Error('Ad not found');
+        }
+
+        const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const isOwner = ad.userId.toString() === user.id;
+
+        if (!isAdmin && !isOwner) {
+          throw new Error('Not authorized to restore this advertisement');
+        }
+
+        if (!ad.isArchived) {
+          throw new Error('Ad is not archived');
+        }
+
+        console.log(`✅ Restoring ad: ${id} (${ad.title})`);
+
+        ad.isArchived = false;
+        ad.archivedAt = null;
+        ad.scheduledDeletionDate = null;
+        ad.status = 'PENDING'; // Reset to pending status
+        
+        await ad.save();
+
+        console.log(`✅ Ad ${id} restored successfully`);
+
+        return true;
+
+      } catch (error) {
+        console.error('❌ Error restoring ad:', error);
+        throw new Error(`Failed to restore ad: ${error.message}`);
+      }
     }
   },
 

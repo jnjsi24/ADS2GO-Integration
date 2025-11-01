@@ -291,12 +291,61 @@ const resolvers = {
 
       const superAdminToDelete = await SuperAdmin.findById(id);
       if (!superAdminToDelete) throw new Error('SuperAdmin not found');
-
-      await SuperAdmin.findByIdAndDelete(id);
+      
+      // Check if already archived
+      if (superAdminToDelete.isArchived) {
+        return {
+          success: false,
+          message: 'SuperAdmin is already archived'
+        };
+      }
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      superAdminToDelete.isArchived = true;
+      superAdminToDelete.archivedAt = now;
+      superAdminToDelete.scheduledDeletionDate = deletionDate;
+      superAdminToDelete.tokenVersion += 1; // Invalidate all sessions
+      
+      await superAdminToDelete.save();
+      
+      console.log(`✅ SuperAdmin ${superAdminToDelete.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
       return { 
         success: true, 
-        message: 'SuperAdmin deleted successfully',
-        superAdmin: superAdminToDelete
+        message: 'SuperAdmin deleted successfully'
+      };
+    },
+
+    restoreSuperAdmin: async (_, { id }, { superAdmin }) => {
+      checkAuth(superAdmin);
+      
+      const superAdminToRestore = await SuperAdmin.findById(id);
+      if (!superAdminToRestore) throw new Error('SuperAdmin not found');
+      
+      if (!superAdminToRestore.isArchived) {
+        return {
+          success: false,
+          message: 'SuperAdmin is not archived'
+        };
+      }
+      
+      superAdminToRestore.isArchived = false;
+      superAdminToRestore.archivedAt = null;
+      superAdminToRestore.scheduledDeletionDate = null;
+      superAdminToRestore.tokenVersion += 1; // Invalidate all sessions
+      
+      await superAdminToRestore.save();
+      
+      console.log(`✅ SuperAdmin ${superAdminToRestore.email} restored successfully`);
+      
+      return {
+        success: true,
+        message: 'SuperAdmin restored successfully',
+        superAdmin: superAdminToRestore
       };
     },
 
@@ -578,12 +627,64 @@ const resolvers = {
 
       const adminToDelete = await Admin.findById(id);
       if (!adminToDelete) throw new Error('Admin not found');
-
-      await Admin.findByIdAndDelete(id);
+      
+      // Check if already archived
+      if (adminToDelete.isArchived) {
+        return {
+          success: false,
+          message: 'Admin is already archived'
+        };
+      }
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      adminToDelete.isArchived = true;
+      adminToDelete.archivedAt = now;
+      adminToDelete.scheduledDeletionDate = deletionDate;
+      adminToDelete.tokenVersion += 1; // Invalidate all sessions
+      
+      await adminToDelete.save();
+      
+      console.log(`✅ Admin ${adminToDelete.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
       return { 
         success: true, 
-        message: 'Admin deleted successfully',
-        admin: adminToDelete
+        message: 'Admin deleted successfully'
+      };
+    },
+
+    restoreAdmin: async (_, { id }, { superAdmin }) => {
+      checkAuth(superAdmin);
+      if (superAdmin.role !== 'SUPERADMIN') {
+        throw new Error('Not authorized to restore admins');
+      }
+
+      const adminToRestore = await Admin.findById(id);
+      if (!adminToRestore) throw new Error('Admin not found');
+      
+      if (!adminToRestore.isArchived) {
+        return {
+          success: false,
+          message: 'Admin is not archived'
+        };
+      }
+      
+      adminToRestore.isArchived = false;
+      adminToRestore.archivedAt = null;
+      adminToRestore.scheduledDeletionDate = null;
+      adminToRestore.tokenVersion += 1; // Invalidate all sessions
+      
+      await adminToRestore.save();
+      
+      console.log(`✅ Admin ${adminToRestore.email} restored successfully`);
+      
+      return {
+        success: true,
+        message: 'Admin restored successfully',
+        admin: adminToRestore
       };
     },
 

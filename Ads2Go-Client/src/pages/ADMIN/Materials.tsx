@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Trash, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Trash, ChevronLeft, ChevronRight, Pencil, Archive, RotateCcw, X } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -10,6 +10,7 @@ import {
 import { 
   CREATE_MATERIAL, 
   DELETE_MATERIAL, 
+  RESTORE_MATERIAL,
   ASSIGN_MATERIAL_TO_DRIVER, 
   UPDATE_MATERIAL, 
   UNREGISTER_TABLET, 
@@ -68,6 +69,10 @@ interface Material {
   photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
   lastInspectionDate?: string;
   nextInspectionDue?: string;
+  // Archive fields
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 interface CreateMaterialInput {
@@ -125,6 +130,7 @@ interface TabletConnectionStatus {
 
 const Materials: React.FC = () => {
   const { toasts, addToast, removeToast } = useToast();
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Used' | 'Available'>('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,6 +139,8 @@ const Materials: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMaterialDetails, setSelectedMaterialDetails] = useState<Material | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [materialToRestore, setMaterialToRestore] = useState<string | null>(null);
 
   // State for date editing
   const [editingDates, setEditingDates] = useState<{[key: string]: {mountedAt: string, dismountedAt: string}}>({});
@@ -279,6 +287,31 @@ const Materials: React.FC = () => {
         type: 'error',
         title: 'Error!',
         message: `Error deleting material: ${error.message}`,
+        duration: 5000
+      });
+    }
+  });
+
+  const [restoreMaterial] = useMutation(RESTORE_MATERIAL, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    onCompleted: () => {
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Material restored successfully.',
+        duration: 4000
+      });
+      refetch();
+    },
+    onError: (error) => {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error restoring material: ${error.message}`,
         duration: 5000
       });
     }
@@ -698,6 +731,11 @@ const Materials: React.FC = () => {
 
   // Filter and sort materials
   const filtered = materials.filter((material) => {
+    // Filter by archive status based on active tab
+    const isArchivedMatch = activeTab === 'archived' ? material.isArchived === true : material.isArchived !== true;
+    
+    if (!isArchivedMatch) return false;
+
     const typeMatch = selectedType === 'All' || material.materialType === selectedType;
     const searchMatch =
       material.materialId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1161,6 +1199,40 @@ const Materials: React.FC = () => {
   return (
     <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}>
       <div className="flex-1 flex flex-col">
+        {/* Tabs Section */}
+        <div className="mb-4">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <span className="w-4 h-4 mr-2 rounded-full bg-blue-500"></span>
+              Active Materials
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Archive className="w-4 h-4 mr-2" />
+              Archived Materials
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </nav>
+        </div>
+
         {/* Header with Filters */}
         <MaterialFilters
           searchTerm={searchTerm}
@@ -1216,7 +1288,9 @@ const Materials: React.FC = () => {
         {/* Table */}
         <div className="rounded-xl mb-5 overflow-hidden">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
+          <div className={`grid gap-4 px-5 py-3 text-sm font-semibold text-gray-500 ${
+            activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+          }`}>
             <div className="flex items-center gap-6 col-span-2">
               <input
                 type="checkbox"
@@ -1227,7 +1301,8 @@ const Materials: React.FC = () => {
               <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
             </div>
             <div className="col-span-2">ID</div>
-            <div className="col-span-2 pl-16">Status</div>
+            <div className="col-span-1 pl-16">Status</div>
+            {activeTab === 'archived' && <div className="col-span-1 pl-8">Deletion Date</div>}
             <div className="col-span-2 pl-12">Driver Name</div>
             <div className="col-span-2 pl-24">Vehicle Plate</div>
             <div className="col-span-1 ml-28">Action</div>
@@ -1244,7 +1319,9 @@ const Materials: React.FC = () => {
                 return (
                   <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
                     <div
-                      className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                      className={`grid items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer ${
+                        activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+                      }`}
                       onClick={() => handleRowClick(material)}
                     >
                       <div className="col-span-2 flex items-center gap-2">
@@ -1262,7 +1339,7 @@ const Materials: React.FC = () => {
 
                       <div className="col-span-2 pl-1">{material.materialId}</div>
 
-                      <div className="col-span-2 text-center">
+                      <div className="col-span-1 text-center">
                         <span
                           className={`px-2 py-1 rounded-full text-xs font-medium ${
                             status === 'Used'
@@ -1273,11 +1350,36 @@ const Materials: React.FC = () => {
                           {status}
                         </span>
                       </div>
+                      
+                      {activeTab === 'archived' && (
+                        <div className="col-span-1 text-sm text-red-600 font-medium">
+                          {material.scheduledDeletionDate ? formatDate(material.scheduledDeletionDate) : 'N/A'}
+                        </div>
+                      )}
 
                       <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                      <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                      <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
                       <div className="col-span-1 flex justify-center gap-1 ml-">
+                      {activeTab === 'archived' ? (
+                        /* Restore button for archived tab */
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMaterialToRestore(material.id);
+                            setShowRestoreModal(true);
+                          }}
+                          className="group flex items-center text-green-700 overflow-hidden h-8 w-5 hover:w-20 transition-[width] duration-300"
+                        >
+                          <RotateCcw 
+                            className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                            size={16} />
+                          <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                            Restore
+                          </span>
+                        </button>
+                      ) : (
+                        <>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1307,6 +1409,8 @@ const Materials: React.FC = () => {
                             Delete
                           </span>
                         </button>
+                        </>
+                      )}
                       </div>
                     </div>
                   </div>
@@ -1461,6 +1565,59 @@ const Materials: React.FC = () => {
       cancelText="Cancel"
       confirmButtonClass="bg-red-600 hover:bg-red-700"
     />
+    
+    {/* Restore Confirmation Modal */}
+    {showRestoreModal && materialToRestore && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Restore Material</h2>
+            <button
+              onClick={() => {
+                setShowRestoreModal(false);
+                setMaterialToRestore(null);
+              }}
+              className="text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <p className="text-gray-600 mb-6">
+            Are you sure you want to restore this material?
+          </p>
+
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => {
+                setShowRestoreModal(false);
+                setMaterialToRestore(null);
+              }}
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (materialToRestore) {
+                  try {
+                    await restoreMaterial({ variables: { id: materialToRestore } });
+                    setShowRestoreModal(false);
+                    setMaterialToRestore(null);
+                  } catch (error) {
+                    console.error('Error restoring material:', error);
+                  }
+                }
+              }}
+              className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <RotateCcw size={16} />
+              Restore
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     
     {/* Remove from Driver Confirmation Modal */}
     {showRemoveModal && (

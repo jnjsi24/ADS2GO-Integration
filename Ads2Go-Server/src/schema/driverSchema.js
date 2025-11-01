@@ -352,6 +352,7 @@ const typeDefs = gql`
     createDriver(input: DriverInput!): DriverResponse!
     updateDriver(driverId: ID!, input: UpdateDriverInput!): DriverResponse!
     deleteDriver(driverId: ID!): DriverResponse!
+    restoreDriver(driverId: ID!): DriverResponse!
 
     loginDriver(email: String!, password: String!, deviceInfo: DeviceInfoInput!): LoginDriverPayload!
     verifyDriverEmail(code: String!): DriverResponse!

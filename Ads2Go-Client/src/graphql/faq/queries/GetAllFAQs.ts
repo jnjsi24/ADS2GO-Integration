@@ -14,6 +14,9 @@ export const GET_ALL_FAQS = gql`
         isActive
         createdAt
         updatedAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
       }
       totalCount
       categoryOrders {

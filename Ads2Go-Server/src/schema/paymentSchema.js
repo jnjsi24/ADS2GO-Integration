@@ -53,6 +53,10 @@ const paymentTypeDefs = gql`
     paymentStatus: PaymentStatus!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input CreatePaymentInput {
@@ -88,6 +92,7 @@ const paymentTypeDefs = gql`
     createPayment(input: CreatePaymentInput!): PaymentResponse!
     updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse!
     deletePayment(id: ID!): PaymentResponse!
+    restorePayment(id: ID!): PaymentResponse!
   }
 `;
 

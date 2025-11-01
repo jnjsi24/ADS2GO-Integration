@@ -604,13 +604,59 @@ const paymentResolvers = {
       if (!payment) throw new Error('Payment not found');
       if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
       if (payment.paymentStatus === 'PAID') throw new Error('Cannot delete a paid payment');
-
-      await Payment.findByIdAndDelete(id);
+      
+      // Check if already archived
+      if (payment.isArchived) {
+        throw new Error('Payment is already archived');
+      }
+      
+      console.log(`🗑️ Archiving payment: ${id} - 30-day deferred deletion`);
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      payment.isArchived = true;
+      payment.archivedAt = now;
+      payment.scheduledDeletionDate = deletionDate;
+      
+      await payment.save();
+      
+      console.log(`✅ Payment ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
 
       return {
         success: true,
-        message: 'Payment deleted successfully',
+        message: 'Payment archived successfully. Scheduled for deletion in 30 days.',
         payment: null,
+      };
+    },
+
+    restorePayment: async (_, { id }, { user }) => {
+      checkAuth(user);
+
+      const payment = await Payment.findById(id);
+      if (!payment) throw new Error('Payment not found');
+      if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
+      
+      if (!payment.isArchived) {
+        throw new Error('Payment is not archived');
+      }
+      
+      console.log(`✅ Restoring payment: ${id}`);
+      
+      payment.isArchived = false;
+      payment.archivedAt = null;
+      payment.scheduledDeletionDate = null;
+      
+      await payment.save();
+      
+      console.log(`✅ Payment ${id} restored successfully`);
+
+      return {
+        success: true,
+        message: 'Payment restored successfully.',
+        payment: payment,
       };
     },
 
