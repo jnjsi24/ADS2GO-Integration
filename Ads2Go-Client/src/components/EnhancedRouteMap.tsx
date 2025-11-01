@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { snapPointsToRoads } from '../utils/roadSnapping';
 
 // Fix for default markers in development
 if (process.env.NODE_ENV === 'development') {
@@ -79,29 +80,7 @@ const getSpeedColor = (speed: number): string => {
   return '#00ff88';                     // Green - very fast
 };
 
-// Create speed-colored polyline segments
-const createSpeedSegments = (route: RoutePoint[]) => {
-  const segments: Array<{
-    positions: [number, number][];
-    color: string;
-    weight: number;
-    opacity: number;
-  }> = [];
-  
-  for (let i = 0; i < route.length - 1; i++) {
-    const current = route[i];
-    const next = route[i + 1];
-    
-    segments.push({
-      positions: [[current.lat, current.lng], [next.lat, next.lng]] as [number, number][],
-      color: getSpeedColor(current.speed),
-      weight: 4,
-      opacity: 0.8
-    });
-  }
-  
-  return segments;
-};
+// Speed-based color function (like Strava) - kept for markers
 
 const EnhancedRouteMap: React.FC<EnhancedRouteMapProps> = ({
   deviceId,
@@ -217,8 +196,101 @@ const EnhancedRouteMap: React.FC<EnhancedRouteMapProps> = ({
   }
 
   const { route, metrics } = routeData;
-  const polylineCoords = route.map(point => [point.lat, point.lng] as [number, number]);
-  const speedSegments = createSpeedSegments(route);
+  
+  // Create raw polyline coordinates
+  const rawPolylineCoords = useMemo(() => {
+    return route.map(point => [point.lat, point.lng] as [number, number]);
+  }, [route]);
+
+  // State for snapped coordinates (with safe fallback)
+  const [snappedPolylineCoords, setSnappedPolylineCoords] = useState<[number, number][]>(rawPolylineCoords);
+  const [lastProcessedRoute, setLastProcessedRoute] = useState<string>('');
+
+  // Apply road snapping when route changes (safe fallback to raw coordinates if fails)
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Create a stable key for this route
+    const routeKey = JSON.stringify(rawPolylineCoords);
+    
+    // Skip if we've already processed this exact route
+    if (routeKey === lastProcessedRoute) {
+      return;
+    }
+    
+    // Initialize with raw coordinates (immediate fallback)
+    if (isMounted) {
+      setSnappedPolylineCoords(rawPolylineCoords);
+    }
+    
+    const applyRoadSnapping = async () => {
+      if (rawPolylineCoords.length === 0) {
+        if (isMounted) {
+          setSnappedPolylineCoords([]);
+          setLastProcessedRoute(routeKey);
+        }
+        return;
+      }
+
+      try {
+        // Apply road snapping (with automatic fallback if API unavailable)
+        const snappedCoords = await snapPointsToRoads(rawPolylineCoords);
+        
+        if (isMounted) {
+          setSnappedPolylineCoords(snappedCoords);
+          setLastProcessedRoute(routeKey);
+        }
+      } catch (error) {
+        console.error('❌ [Road Snapping] Error:', error);
+        // Safe fallback: use raw coordinates if snapping fails
+        if (isMounted) {
+          setSnappedPolylineCoords(rawPolylineCoords);
+          setLastProcessedRoute(routeKey);
+        }
+      }
+    };
+
+    applyRoadSnapping();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [rawPolylineCoords, lastProcessedRoute]);
+
+  // Use snapped coordinates (or raw if snapping failed/not available)
+  const polylineCoords = snappedPolylineCoords.length > 0 ? snappedPolylineCoords : rawPolylineCoords;
+  
+  // Create speed segments using snapped coordinates (fallback to raw if needed)
+  const speedSegments = useMemo(() => {
+    // For speed segments, we need to map back to route points
+    // Use raw route coordinates but snap the connections
+    const segments: Array<{
+      positions: [number, number][];
+      color: string;
+      weight: number;
+      opacity: number;
+    }> = [];
+    
+    // If we have snapped coordinates, use them for better road following
+    const coordsToUse = polylineCoords.length > 1 ? polylineCoords : rawPolylineCoords;
+    
+    for (let i = 0; i < coordsToUse.length - 1; i++) {
+      // Find closest route point for speed data
+      const routeIndex = Math.min(Math.floor(i * route.length / coordsToUse.length), route.length - 1);
+      const current = route[routeIndex];
+      const next = route[Math.min(routeIndex + 1, route.length - 1)];
+      
+      segments.push({
+        positions: [coordsToUse[i], coordsToUse[i + 1]] as [number, number][],
+        color: getSpeedColor((current.speed + next.speed) / 2),
+        weight: 4,
+        opacity: 0.8
+      });
+    }
+    
+    return segments;
+  }, [polylineCoords, rawPolylineCoords, route]);
 
   // Calculate center for map
   const centerLat = route.reduce((sum, point) => sum + point.lat, 0) / route.length;
