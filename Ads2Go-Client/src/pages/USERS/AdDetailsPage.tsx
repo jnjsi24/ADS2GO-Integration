@@ -220,7 +220,6 @@ const AdDetailsPage: React.FC = () => {
   useEffect(() => {
     if (deleteError) {
       console.error('Error deleting ad:', deleteError);
-      alert('Failed to delete advertisement. Please try again.');
     }
     if (deleteData) {
       setDeleteSuccess(true);

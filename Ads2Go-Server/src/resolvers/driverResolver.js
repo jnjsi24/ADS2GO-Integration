@@ -347,11 +347,25 @@ createDriver: async (_, { input }) => {
     const qrCodeIdentifier = `QR-${driverId}-${Date.now()}`;
 
     // Handle file uploads to Firebase Storage with proper folder structure
-    const [licensePictureUrl, vehiclePhotoUrl, orCrPictureUrl, profilePictureUrl] = await Promise.all([
+    // Support new split uploads while remaining backward compatible with legacy fields
+    const [
+      legacyLicenseUrl,
+      vehiclePhotoUrl,
+      legacyOrCrUrl,
+      profilePictureUrl,
+      licenseFrontUrl,
+      licenseBackUrl,
+      orUrl,
+      crUrl,
+    ] = await Promise.all([
       input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : null,
       input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : null,
       input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : null,
-      input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null
+      input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null,
+      input.licenseFront ? uploadToFirebase(input.licenseFront, 'drivers', normalizedEmail, 'licenses/front') : null,
+      input.licenseBack ? uploadToFirebase(input.licenseBack, 'drivers', normalizedEmail, 'licenses/back') : null,
+      input.orPicture ? uploadToFirebase(input.orPicture, 'drivers', normalizedEmail, 'documents/or') : null,
+      input.crPicture ? uploadToFirebase(input.crPicture, 'drivers', normalizedEmail, 'documents/cr') : null,
     ]);
 
     // Create driver (PENDING until approved)
@@ -366,13 +380,18 @@ createDriver: async (_, { input }) => {
       password: input.password.trim(),
       address: input.address.trim(), // Now required
       licenseNumber: input.licenseNumber.trim(),
-      licensePictureURL: licensePictureUrl?.url || null,
+      // If new split fields provided, store them; otherwise keep legacy single URL
+      licensePictureURL: legacyLicenseUrl?.url || null,
+      licenseFrontURL: licenseFrontUrl?.url || null,
+      licenseBackURL: licenseBackUrl?.url || null,
       vehiclePlateNumber: input.vehiclePlateNumber.trim(),
       vehicleType: input.vehicleType,
       vehicleModel: input.vehicleModel.trim(),
       vehicleYear: input.vehicleYear,
       vehiclePhotoURL: vehiclePhotoUrl?.url || null,
-      orCrPictureURL: orCrPictureUrl?.url || null,
+      orCrPictureURL: legacyOrCrUrl?.url || null,
+      orPictureURL: orUrl?.url || null,
+      crPictureURL: crUrl?.url || null,
       preferredMaterialType: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [],
       profilePicture: profilePictureUrl?.url || null,
       accountStatus: 'PENDING',
@@ -914,6 +933,80 @@ createDriver: async (_, { input }) => {
       }
     },
 
+    resubmitDriver: async (_, { driverId, input }, { driver, user }) => {
+      try {
+        // Either the authenticated driver or an admin can trigger a resubmission
+        if (!(user?.role === 'ADMIN' || driver?.driverId === driverId)) {
+          throw new Error('Not authorized');
+        }
+
+        const existing = await Driver.findOne({ driverId });
+        if (!existing) {
+          return { success: false, message: 'Driver not found', driver: null };
+        }
+
+        const normalizedEmail = existing.email.toLowerCase().trim();
+
+        // Upload new files if provided
+        const [
+          profileUrl,
+          legacyLicenseUrl,
+          licenseFrontUrl,
+          licenseBackUrl,
+          vehiclePhotoUrl,
+          legacyOrCrUrl,
+          orUrl,
+          crUrl,
+        ] = await Promise.all([
+          input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null,
+          input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : null,
+          input.licenseFront ? uploadToFirebase(input.licenseFront, 'drivers', normalizedEmail, 'licenses/front') : null,
+          input.licenseBack ? uploadToFirebase(input.licenseBack, 'drivers', normalizedEmail, 'licenses/back') : null,
+          input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : null,
+          input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : null,
+          input.orPicture ? uploadToFirebase(input.orPicture, 'drivers', normalizedEmail, 'documents/or') : null,
+          input.crPicture ? uploadToFirebase(input.crPicture, 'drivers', normalizedEmail, 'documents/cr') : null,
+        ]);
+
+        // Update basic fields if provided
+        existing.firstName = input.firstName?.trim() || existing.firstName;
+        existing.middleName = input.middleName?.trim() || existing.middleName;
+        existing.lastName = input.lastName?.trim() || existing.lastName;
+        existing.contactNumber = input.contactNumber?.trim() || existing.contactNumber;
+        existing.email = input.email ? input.email.toLowerCase().trim() : existing.email;
+        existing.address = input.address?.trim() || existing.address;
+        existing.licenseNumber = input.licenseNumber?.trim() || existing.licenseNumber;
+        existing.vehiclePlateNumber = input.vehiclePlateNumber?.trim() || existing.vehiclePlateNumber;
+        existing.vehicleType = input.vehicleType || existing.vehicleType;
+        existing.vehicleModel = input.vehicleModel?.trim() || existing.vehicleModel;
+        existing.vehicleYear = input.vehicleYear || existing.vehicleYear;
+        existing.preferredMaterialType = Array.isArray(input.preferredMaterialType)
+          ? input.preferredMaterialType
+          : existing.preferredMaterialType;
+
+        // Apply uploaded file URLs if present
+        existing.profilePicture = profileUrl?.url ?? existing.profilePicture;
+        existing.licensePictureURL = legacyLicenseUrl?.url ?? existing.licensePictureURL;
+        existing.licenseFrontURL = licenseFrontUrl?.url ?? existing.licenseFrontURL;
+        existing.licenseBackURL = licenseBackUrl?.url ?? existing.licenseBackURL;
+        existing.vehiclePhotoURL = vehiclePhotoUrl?.url ?? existing.vehiclePhotoURL;
+        existing.orCrPictureURL = legacyOrCrUrl?.url ?? existing.orCrPictureURL;
+        existing.orPictureURL = orUrl?.url ?? existing.orPictureURL;
+        existing.crPictureURL = crUrl?.url ?? existing.crPictureURL;
+
+        // Mark as resubmitted for review
+        existing.accountStatus = 'RESUBMITTED';
+        existing.reviewStatus = 'RESUBMITTED';
+
+        await existing.save();
+
+        return { success: true, message: 'Driver resubmitted successfully', driver: existing };
+      } catch (error) {
+        console.error('resubmitDriver error:', error);
+        return { success: false, message: error.message || 'Failed to resubmit driver', driver: null };
+      }
+    },
+
     deleteDriver: async (_, { driverId }, { user }) => {
       try {
         checkAdmin(user);
@@ -1051,12 +1144,16 @@ createDriver: async (_, { input }) => {
         driver.profilePicture = editData.profilePicture ?? driver.profilePicture;
         driver.licenseNumber = editData.licenseNumber ?? driver.licenseNumber;
         driver.licensePictureURL = editData.licensePictureURL ?? driver.licensePictureURL;
+        driver.licenseFrontURL = editData.licenseFrontURL ?? driver.licenseFrontURL;
+        driver.licenseBackURL = editData.licenseBackURL ?? driver.licenseBackURL;
         driver.vehiclePlateNumber = editData.vehiclePlateNumber ?? driver.vehiclePlateNumber;
         driver.vehicleType = editData.vehicleType ?? driver.vehicleType;
         driver.vehicleModel = editData.vehicleModel ?? driver.vehicleModel;
         driver.vehicleYear = editData.vehicleYear ?? driver.vehicleYear;
         driver.vehiclePhotoURL = editData.vehiclePhotoURL ?? driver.vehiclePhotoURL;
         driver.orCrPictureURL = editData.orCrPictureURL ?? driver.orCrPictureURL;
+        driver.orPictureURL = editData.orPictureURL ?? driver.orPictureURL;
+        driver.crPictureURL = editData.crPictureURL ?? driver.crPictureURL;
         driver.preferredMaterialType = editData.preferredMaterialType ?? driver.preferredMaterialType;
 
         driver.editRequestData = null;
@@ -1113,9 +1210,42 @@ createDriver: async (_, { input }) => {
           return { success: false, message: "You already have a pending edit request", driver };
         }
 
-        // Store all edit data including reason
-        const { reason: _, ...editData } = input;
-        driver.editRequestData = { ...editData, reason }; // include reason in editRequestData
+        // Upload any provided files and store resulting URLs in editRequestData
+        const normalizedEmail = driver.email.toLowerCase().trim();
+        const [
+          profileUrl,
+          legacyLicenseUrl,
+          licenseFrontUrl,
+          licenseBackUrl,
+          vehiclePhotoUrl,
+          legacyOrCrUrl,
+          orUrl,
+          crUrl,
+        ] = await Promise.all([
+          input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null,
+          input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : null,
+          input.licenseFront ? uploadToFirebase(input.licenseFront, 'drivers', normalizedEmail, 'licenses/front') : null,
+          input.licenseBack ? uploadToFirebase(input.licenseBack, 'drivers', normalizedEmail, 'licenses/back') : null,
+          input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : null,
+          input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : null,
+          input.orPicture ? uploadToFirebase(input.orPicture, 'drivers', normalizedEmail, 'documents/or') : null,
+          input.crPicture ? uploadToFirebase(input.crPicture, 'drivers', normalizedEmail, 'documents/cr') : null,
+        ]);
+
+        const { reason: _ignored, profilePicture, licensePicture, licenseFront, licenseBack, vehiclePhoto, orCrPicture, orPicture, crPicture, ...fields } = input || {};
+
+        driver.editRequestData = {
+          ...fields,
+          reason,
+          profilePicture: profileUrl?.url || undefined,
+          licensePictureURL: legacyLicenseUrl?.url || undefined,
+          licenseFrontURL: licenseFrontUrl?.url || undefined,
+          licenseBackURL: licenseBackUrl?.url || undefined,
+          vehiclePhotoURL: vehiclePhotoUrl?.url || undefined,
+          orCrPictureURL: legacyOrCrUrl?.url || undefined,
+          orPictureURL: orUrl?.url || undefined,
+          crPictureURL: crUrl?.url || undefined,
+        };
         driver.editRequestStatus = "PENDING";
 
         await driver.save();

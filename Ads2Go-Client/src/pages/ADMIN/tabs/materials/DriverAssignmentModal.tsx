@@ -95,7 +95,6 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDriverId || !material) {
-      alert('Please select a driver');
       return;
     }
 

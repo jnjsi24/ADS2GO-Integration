@@ -253,7 +253,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       }
       
       console.error('Failed to delete notification:', errorMessage);
-      alert(errorMessage);
     } finally {
       // Close the modal and reset state
       setShowDeleteConfirmation(false);
@@ -306,7 +305,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       }
       
       console.error('Failed to delete all notifications:', errorMessage);
-      alert(errorMessage);
     }
   };
 

@@ -90,7 +90,20 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Auto-capitalize first letter of each word for name fields
+    let processedValue = value;
+    if (name === 'lastName' || name === 'middleName') {
+      if (value.length > 0) {
+        processedValue = value
+          .toLowerCase()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+    }
+    
+    setFormData(prev => ({ ...prev, [name]: processedValue }));
     
     // Clear error when user starts typing
     if (errors[name]) {

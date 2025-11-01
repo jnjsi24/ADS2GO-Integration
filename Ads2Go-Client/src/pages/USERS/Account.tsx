@@ -4,6 +4,8 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
 import { uploadUserProfilePicture } from "../../utils/fileUpload";
+import { useToast, ToastContainer } from "../../components/ToastNotification";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 // GraphQL Mutation (update user)
 const UPDATE_USER = gql`
@@ -55,8 +57,7 @@ const Account: React.FC = () => {
   const { user, setUser, logout } = useUserAuth();
   const [pos, setPos] = useState({ x: 50, y: 50 }); // for hover shine
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const { toasts, addToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -118,8 +119,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const extension = file.name.split(".").pop()?.toLowerCase();
 
     if (!extension || !allowedExtensions.includes(extension)) {
-      setErrorMessage("Unsupported file type. Allowed types: JPG, JPEG, PNG");
-      setSuccessMessage("");
+      addToast({
+        type: 'error',
+        title: 'Invalid File Type',
+        message: 'Unsupported file type. Allowed types: JPG, JPEG, PNG',
+        duration: 4000
+      });
       return;
     }
 
@@ -127,21 +132,26 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       // Upload the file to Firebase Storage
       const uploadedUrl = await uploadUserProfilePicture(file);
       setFormData(prev => ({ ...prev, profilePicture: uploadedUrl }));
-      setSuccessMessage("Profile picture uploaded successfully!");
-      setErrorMessage("");
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Profile picture uploaded successfully',
+        duration: 3000
+      });
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      setErrorMessage('Error uploading profile picture. Please try again.');
-      setSuccessMessage("");
+      addToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: 'Error uploading profile picture. Please try again.',
+        duration: 4000
+      });
     }
   }
 };
 
   const toggleEdit = async () => {
     if (isEditing) {
-      setErrorMessage("");
-      setSuccessMessage("");
-      
       try {
         const { data } = await updateUser({
           variables: {
@@ -160,8 +170,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         });
 
         if (data.updateUser.success) {
-          setSuccessMessage("Profile updated successfully!");
-          setErrorMessage("");
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Profile updated successfully!',
+            duration: 3000
+          });
 
           // ✅ Update context AFTER save
           if (user) {
@@ -176,8 +190,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             });
           }
         } else {
-          setErrorMessage(data.updateUser.message || "Update failed. Please try again.");
-          setSuccessMessage("");
+          addToast({
+            type: 'error',
+            title: 'Update Failed',
+            message: data.updateUser.message || 'Update failed. Please try again.',
+            duration: 4000
+          });
         }
       } catch (error: any) {
         // Extract specific error message
@@ -191,8 +209,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
           errorMsg = error.message;
         }
         
-        setErrorMessage(errorMsg);
-        setSuccessMessage("");
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: errorMsg,
+          duration: 5000
+        });
       }
     }
     setIsEditing((prev) => !prev);
@@ -207,8 +229,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       const { data } = await deleteOwnAccount();
 
       if (data.deleteOwnAccount.success) {
-        setSuccessMessage(data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.");
-        setErrorMessage("");
+        addToast({
+          type: 'success',
+          title: 'Account Deleted',
+          message: data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.",
+          duration: 5000
+        });
         
         // Close modal first
         setShowDeleteModal(false);
@@ -219,8 +245,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
           navigate("/login");
         }, 2000);
       } else {
-        setErrorMessage(data.deleteOwnAccount.message || "Failed to delete account. Please try again.");
-        setSuccessMessage("");
+        addToast({
+          type: 'error',
+          title: 'Delete Failed',
+          message: data.deleteOwnAccount.message || "Failed to delete account. Please try again.",
+          duration: 5000
+        });
         setShowDeleteModal(false);
       }
     } catch (error: any) {
@@ -235,8 +265,13 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         errorMsg = error.message;
       }
       
-      setErrorMessage(errorMsg);
-      setSuccessMessage("");
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: errorMsg,
+        duration: 5000
+      });
+    } finally {
       setShowDeleteModal(false);
     }
   };
@@ -375,32 +410,6 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
         {/* Right Section */}
         <div className="flex-grow p-6 sm:p-8 space-y-6 sm:space-y-8 relative">
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-              <span className="block sm:inline">{errorMessage}</span>
-              <button
-                className="absolute top-0 bottom-0 right-0 px-4 py-3"
-                onClick={() => setErrorMessage("")}
-              >
-                <span className="text-xl">&times;</span>
-              </button>
-            </div>
-          )}
-
-          {/* Success Message */}
-          {successMessage && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
-              <span className="block sm:inline">{successMessage}</span>
-              <button
-                className="absolute top-0 bottom-0 right-0 px-4 py-3"
-                onClick={() => setSuccessMessage("")}
-              >
-                <span className="text-xl">&times;</span>
-              </button>
-            </div>
-          )}
-
           <h3 className="text-base sm:text-lg font-bold text-black mb-4 sm:mb-6">Personal Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-6">
             {/* First Name & Middle Name */}
@@ -544,6 +553,9 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         </div>
       </div>
     )}
+
+    {/* Toast Notifications */}
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

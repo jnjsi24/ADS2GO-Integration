@@ -27,10 +27,10 @@ const Register: React.FC = () => {
   const [registrationError, setRegistrationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   
   const isSubmittingRef = useRef(false);
   const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [showTermsModal, setShowTermsModal] = useState(false);
   
   const navigate = useNavigate();
   const { register } = useUserAuth();
@@ -147,10 +147,23 @@ const Register: React.FC = () => {
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Auto-capitalize first letter of each word for name fields
+    let processedValue = value;
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      if (value.length > 0) {
+        processedValue = value
+          .toLowerCase()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+    }
+    
+    setFormData(prev => ({ ...prev, [name]: processedValue }));
     
     // Validate the field in real-time
-    const error = validateField(name, value);
+    const error = validateField(name, processedValue);
     setErrors(prev => {
       const newErrors = { ...prev };
       if (error) {
@@ -311,15 +324,15 @@ const Register: React.FC = () => {
         password: formData.password
       };
 
-      const success = await register(registrationData);
-      if (success) {
+      const result = await register(registrationData);
+      if (result.success) {
         // Clear the timeout since we're navigating away
         if (submissionTimeoutRef.current) {
           clearTimeout(submissionTimeoutRef.current);
         }
         navigate('/verify-email');
       } else {
-        setRegistrationError('Registration failed. Please try again.');
+        setRegistrationError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
       setRegistrationError(
@@ -634,7 +647,7 @@ const Register: React.FC = () => {
                     value={formData.companyAddress}
                     onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
                     placeholder="Select company location or enter address..."
-                    addressPlaceholder="Enter your Company/Business Address number and street..."
+                    addressLabel="Enter your Company/Business Address number and street..."
                     required
                     error={errors.companyAddress}
                   />
@@ -643,7 +656,7 @@ const Register: React.FC = () => {
                     value={formData.houseAddress}
                     onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
                     placeholder="Select house location or enter address..."
-                    addressPlaceholder="Enter your house number and street..."
+                    addressLabel="Enter your house number and street..."
                     required
                     error={errors.houseAddress}
                   />
@@ -899,7 +912,7 @@ const Register: React.FC = () => {
                   value={formData.companyAddress}
                   onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
                   placeholder="Select company location or enter address..."
-                  addressPlaceholder="Enter your Company/Business Address number and street..."
+                  addressLabel="Enter your Company/Business Address number and street..."
                   required
                   error={errors.companyAddress}
                 />
@@ -908,7 +921,7 @@ const Register: React.FC = () => {
                   value={formData.houseAddress}
                   onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
                   placeholder="Select house location or enter address..."
-                  addressPlaceholder="Enter your house number and street..."
+                  addressLabel="Enter your house number and street..."
                   required
                   error={errors.houseAddress}
                 />
@@ -1057,8 +1070,7 @@ const Register: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Terms Modal (root) */}
+      {/* Terms Modal */}
       <TermsAndConditionsModal
         isOpen={showTermsModal}
         onClose={() => setShowTermsModal(false)}

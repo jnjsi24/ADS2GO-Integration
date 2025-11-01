@@ -312,7 +312,8 @@ app.use('/api/analyzeGPS', require('./routes/analyzeGPS'));
 app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for offline devices showing hours
   
   // GraphQL file uploads middleware (must come after regular upload route)
-  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
+  // Allow up to 8 concurrent file uploads to support driver registration (profile, vehicle, license front/back, OR, CR)
+  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 8 }));
 
   // GraphQL endpoint with combined context
   app.use(

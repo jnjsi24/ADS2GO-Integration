@@ -91,6 +91,81 @@
             color: #7f8c8d;
             font-style: italic;
         }
+        
+        /* Custom Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+        }
+        .modal-message {
+            font-size: 16px;
+            color: #5a6c7d;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .modal-btn-cancel {
+            background: #e8e8e8;
+            color: #5a6c7d;
+        }
+        .modal-btn-cancel:hover {
+            background: #d0d0d0;
+        }
+        .modal-btn-confirm {
+            background: #3498db;
+            color: white;
+        }
+        .modal-btn-confirm:hover {
+            background: #2980b9;
+        }
     </style>
 </head>
 <body>
@@ -117,6 +192,29 @@
         </div>
 
         <div class="loading" id="loading">Tracking scan...</div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-content">
+            <div class="modal-title">Close Page?</div>
+            <div class="modal-message">Would you like to close this page?</div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <div class="modal-overlay" id="alertModal">
+        <div class="modal-content">
+            <div class="modal-title">Notice</div>
+            <div class="modal-message" id="alertMessage"></div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-confirm" id="alertOkBtn">OK</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -170,10 +268,32 @@
         trackScan();
 
         // Button handlers
+        // Custom alert function
+        function showAlert(message) {
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.add('show');
+        }
+        
+        function hideAlert() {
+            document.getElementById('alertModal').classList.remove('show');
+        }
+        
         document.getElementById('learnMoreBtn').addEventListener('click', function(e) {
             e.preventDefault();
             // You can customize this to redirect to a specific landing page
-            alert('This would redirect to the advertiser\'s website or more information about the ad.');
+            showAlert('This would redirect to the advertiser\'s website or more information about the ad.');
+        });
+        
+        // Alert modal close handler
+        document.getElementById('alertOkBtn').addEventListener('click', function() {
+            hideAlert();
+        });
+        
+        // Close alert modal when clicking outside
+        document.getElementById('alertModal').addEventListener('click', function(e) {
+            if (e.target === document.getElementById('alertModal')) {
+                hideAlert();
+            }
         });
 
         document.getElementById('closeBtn').addEventListener('click', function(e) {
@@ -181,11 +301,38 @@
             window.close();
         });
 
-        // Auto-close after 10 seconds if no interaction
-        setTimeout(() => {
-            if (confirm('Would you like to close this page?')) {
-                window.close();
+        // Modal functionality
+        const confirmModal = document.getElementById('confirmModal');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+        
+        function showModal() {
+            confirmModal.classList.add('show');
+        }
+        
+        function hideModal() {
+            confirmModal.classList.remove('show');
+        }
+        
+        modalConfirmBtn.addEventListener('click', function() {
+            hideModal();
+            window.close();
+        });
+        
+        modalCancelBtn.addEventListener('click', function() {
+            hideModal();
+        });
+        
+        // Close modal when clicking outside
+        confirmModal.addEventListener('click', function(e) {
+            if (e.target === confirmModal) {
+                hideModal();
             }
+        });
+        
+        // Auto-show modal after 10 seconds if no interaction
+        setTimeout(() => {
+            showModal();
         }, 10000);
     </script>
 </body>

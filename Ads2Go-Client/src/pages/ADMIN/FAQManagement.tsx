@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 type FAQCategory = 'ADVERTISERS' | 'DRIVERS' | 'EVERYONE';
 type FAQStatus = 'all' | 'active' | 'inactive';
@@ -57,6 +58,8 @@ const FAQManagement: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [faqToDelete, setFaqToDelete] = useState<string | null>(null);
 
   const categoryFilterOptions = ['all', 'ADVERTISERS', 'DRIVERS', 'EVERYONE'];
   const statusFilterOptions = ['all', 'active', 'inactive'];
@@ -214,20 +217,32 @@ const FAQManagement: React.FC = () => {
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete this FAQ?')) {
-      setIsDeleting(true);
-      
-      try {
-        await deleteFAQ({
-          variables: { id }
-        });
-        refetch();
-      } catch (error) {
-        console.error('Error deleting FAQ:', error);
-      } finally {
-        setIsDeleting(false);
-      }
+    setFaqToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!faqToDelete) return;
+
+    setIsDeleting(true);
+    
+    try {
+      await deleteFAQ({
+        variables: { id: faqToDelete }
+      });
+      refetch();
+    } catch (error) {
+      console.error('Error deleting FAQ:', error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setFaqToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setFaqToDelete(null);
   };
 
   const handleToggleStatus = async (faq: FAQ) => {
@@ -992,6 +1007,19 @@ const FAQManagement: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={cancelDelete}
+          onConfirm={confirmDelete}
+          title="Delete FAQ"
+          message="Are you sure you want to delete this FAQ?"
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmButtonClass="bg-red-600 hover:bg-red-700"
+          isProcessing={isDeleting}
+        />
       </div>
     </div>
   );

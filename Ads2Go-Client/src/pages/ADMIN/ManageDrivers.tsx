@@ -30,8 +30,12 @@ interface Driver {
   installedMaterialType?: string;
   address?: string;
   licenseNumber?: string;
-  licensePictureURL?: string;
-  orCrPictureURL?: string;
+  licensePictureURL?: string; // legacy single license
+  orCrPictureURL?: string; // legacy combined OR/CR
+  licenseFrontURL?: string;
+  licenseBackURL?: string;
+  orPictureURL?: string;
+  crPictureURL?: string;
   vehiclePhotoURL?: string;
   profilePicture?: string;
   dateJoined: string;
@@ -1594,8 +1598,11 @@ const ManageDrivers: React.FC = () => {
                 {(() => {
                   const documents = [
                     { src: selectedDriverDetails.profilePicture, title: 'Profile Picture' },
-                    { src: selectedDriverDetails.licensePictureURL, title: 'Driver License' },
-                    { src: selectedDriverDetails.orCrPictureURL, title: 'OR/CR Document' },
+                    // Prefer new separate fields; fall back to legacy
+                    { src: selectedDriverDetails.licenseFrontURL || selectedDriverDetails.licensePictureURL, title: 'Driver License (Front)' },
+                    { src: selectedDriverDetails.licenseBackURL, title: 'Driver License (Back)' },
+                    { src: selectedDriverDetails.orPictureURL || selectedDriverDetails.orCrPictureURL, title: 'OR (Official Receipt)' },
+                    { src: selectedDriverDetails.crPictureURL, title: 'CR (Certificate of Registration)' },
                     { src: selectedDriverDetails.vehiclePhotoURL, title: 'Vehicle Photo' }
                   ].filter(doc => doc.src);
                   if (documents.length === 0) {

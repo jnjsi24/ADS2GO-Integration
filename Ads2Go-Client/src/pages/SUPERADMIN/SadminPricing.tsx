@@ -17,6 +17,7 @@ import {
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +28,8 @@ const SadminPricing: React.FC = () => {
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
   const [showDurationDropdowns, setShowDurationDropdowns] = useState<boolean[]>([]); // One for each tier
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [configToDelete, setConfigToDelete] = useState<PricingConfig | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<PricingConfigInput>({
@@ -156,9 +159,21 @@ const SadminPricing: React.FC = () => {
   };
 
   const handleDeleteConfig = (config: PricingConfig) => {
-    if (window.confirm(`Are you sure you want to delete the pricing configuration for ${config.materialType} ${config.vehicleType} ${config.category}?`)) {
-      deletePricingConfig({ variables: { id: config.id } });
+    setConfigToDelete(config);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (configToDelete) {
+      deletePricingConfig({ variables: { id: configToDelete.id } });
+      setShowDeleteModal(false);
+      setConfigToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setConfigToDelete(null);
   };
 
   const handleToggleStatus = (config: PricingConfig) => {
@@ -575,14 +590,14 @@ const SadminPricing: React.FC = () => {
                   htmlFor="maxDevices"
                   className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                 >
-                  Max Devices
+                  Maximum Number of Vehicles This Pricing Covers
                 </label>
+                <span className="text-xs text-blue-500 mt-1 block">
+                  For example, if maximum is 3, this price applies if you advertise on up to 3 vehicles.
+                </span>
                 {validationErrors.maxDevices && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.maxDevices}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">
-                  Maximum: {formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10} devices
-                </p>
               </div>
             </div>
 
@@ -671,6 +686,9 @@ const SadminPricing: React.FC = () => {
                       >
                         Price per Play
                       </label>
+                      <span className="text-xs text-gray-500 mt-1 block">
+                        This is the fee charged each time an ad is played on a single device. For example, if Price per Play is ₱1 and your ad gets 1000 plays in a day, you pay ₱1,000 per day.
+                      </span>
                       {validationErrors[`pricePerPlay_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors[`pricePerPlay_${index}`]}</p>
                       )}
@@ -693,6 +711,9 @@ const SadminPricing: React.FC = () => {
                       >
                         Ad Length Multiplier
                       </label>
+                      <span className="text-xs text-gray-500 mt-1 block">
+                        This adjusts price based on ad length. Example: 1.0 = regular price, 1.5 = 50% more.
+                      </span>
                       {validationErrors[`adLengthMultiplier_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors[`adLengthMultiplier_${index}`]}</p>
                       )}
@@ -761,6 +782,18 @@ const SadminPricing: React.FC = () => {
         </div>
       </div>
     )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Pricing Configuration"
+        message={configToDelete ? `Are you sure you want to delete the pricing configuration for ${configToDelete.materialType} ${configToDelete.vehicleType} ${configToDelete.category}?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

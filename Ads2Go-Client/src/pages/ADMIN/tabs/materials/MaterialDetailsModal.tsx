@@ -101,13 +101,12 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
       });
       
       if (result.data?.approveMonthlyPhoto?.success) {
-        alert('Photo approved successfully!');
+        console.log('Photo approved successfully!');
       } else {
-        alert('Failed to approve photo.');
+        console.error('Failed to approve photo.');
       }
     } catch (e) {
       console.error('Approve failed:', e);
-      alert('Failed to approve photo.');
     } finally {
       setReviewLoading(null);
     }
@@ -124,13 +123,12 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
       });
       
       if (result.data?.rejectMonthlyPhoto?.success) {
-        alert('Photo rejected successfully!');
+        console.log('Photo rejected successfully!');
       } else {
-        alert('Failed to reject photo.');
+        console.error('Failed to reject photo.');
       }
     } catch (e) {
       console.error('Reject failed:', e);
-      alert('Failed to reject photo.');
     } finally {
       setReviewLoading(null);
     }
@@ -184,7 +182,6 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
       // The material will be refetched automatically due to Apollo cache
     } catch (error) {
       console.error('Error updating material condition:', error);
-      alert('Failed to update material condition. Please try again.');
     } finally {
       setIsUpdatingCondition(false);
     }

@@ -15,6 +15,7 @@ import {
 } from '../../graphql/superadmin/mutations/driverSalaryMutations';
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 const SadminDriverSalary: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +26,8 @@ const SadminDriverSalary: React.FC = () => {
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pricingToDelete, setPricingToDelete] = useState<DriverSalaryPricing | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<CreateDriverSalaryPricingInput>({
@@ -162,9 +165,21 @@ const SadminDriverSalary: React.FC = () => {
   };
 
   const handleDeletePricing = (pricing: DriverSalaryPricing) => {
-    if (window.confirm(`Are you sure you want to delete the salary pricing for ${pricing.displayName}?`)) {
-      deleteDriverSalaryPricing({ variables: { id: pricing.id } });
+    setPricingToDelete(pricing);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (pricingToDelete) {
+      deleteDriverSalaryPricing({ variables: { id: pricingToDelete.id } });
+      setShowDeleteModal(false);
+      setPricingToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setPricingToDelete(null);
   };
 
 
@@ -700,6 +715,18 @@ const SadminDriverSalary: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Salary Pricing"
+        message={pricingToDelete ? `Are you sure you want to delete the salary pricing for ${pricingToDelete.displayName}?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };
