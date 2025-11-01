@@ -227,12 +227,6 @@ const Advertisements: React.FC = () => {
     navigate(`/advertisements/${ad.id}`);
   };
 
-  const showConfirmModal = (message: string, callback: () => void) => {
-    if (window.confirm(message)) {
-      callback();
-    }
-  };
-
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 

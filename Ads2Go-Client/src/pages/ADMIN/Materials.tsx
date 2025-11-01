@@ -151,6 +151,8 @@ const Materials: React.FC = () => {
   const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
+  const [showCreateTabletModal, setShowCreateTabletModal] = useState(false);
+  const [showUnregisterTabletModal, setShowUnregisterTabletModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
   const [dismountReason, setDismountReason] = useState('');
@@ -393,9 +395,11 @@ const Materials: React.FC = () => {
       return;
     }
 
-    if (!window.confirm('Create tablet configuration for this HEADDRESS material? This will set up 2 tablet slots.')) {
-      return;
-    }
+    setShowCreateTabletModal(true);
+  };
+
+  const confirmCreateTablet = async () => {
+    if (!selectedTabletMaterialId) return;
 
     setCreatingTabletConfig(true);
     try {
@@ -412,7 +416,14 @@ const Materials: React.FC = () => {
       });
     } catch (error) {
       console.error('Error creating tablet configuration:', error);
+    } finally {
+      setCreatingTabletConfig(false);
+      setShowCreateTabletModal(false);
     }
+  };
+
+  const cancelCreateTablet = () => {
+    setShowCreateTabletModal(false);
   };
 
   // Function to unregister tablet
@@ -427,8 +438,11 @@ const Materials: React.FC = () => {
       return;
     }
 
-    // Use window.confirm instead of confirm to avoid ESLint error
-    if (!window.confirm('Are you sure you want to unregister this tablet? This will disconnect the device from the system.')) {
+    setShowUnregisterTabletModal(true);
+  };
+
+  const confirmUnregisterTablet = async () => {
+    if (!selectedTabletMaterialId || !selectedTabletSlotNumber || !tabletData?.getTabletsByMaterial?.[0]?.carGroupId) {
       return;
     }
 
@@ -445,7 +459,14 @@ const Materials: React.FC = () => {
       });
     } catch (error) {
       console.error('Error unregistering tablet:', error);
+    } finally {
+      setUnregistering(false);
+      setShowUnregisterTabletModal(false);
     }
+  };
+
+  const cancelUnregisterTablet = () => {
+    setShowUnregisterTabletModal(false);
   };
 
   const [updateMaterial] = useMutation(UPDATE_MATERIAL, {
@@ -1568,6 +1589,32 @@ const Materials: React.FC = () => {
 
     {/* Toast Notifications */}
     <ToastContainer toasts={toasts} onRemove={removeToast} />
+    
+    {/* Create Tablet Configuration Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showCreateTabletModal}
+      onClose={cancelCreateTablet}
+      onConfirm={confirmCreateTablet}
+      title="Create Tablet Configuration"
+      message="Create tablet configuration for this HEADDRESS material? This will set up 2 tablet slots."
+      confirmText="Create"
+      cancelText="Cancel"
+      confirmButtonClass="bg-blue-600 hover:bg-blue-700"
+      isProcessing={creatingTabletConfig}
+    />
+
+    {/* Unregister Tablet Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showUnregisterTabletModal}
+      onClose={cancelUnregisterTablet}
+      onConfirm={confirmUnregisterTablet}
+      title="Unregister Tablet"
+      message="Are you sure you want to unregister this tablet? This will disconnect the device from the system."
+      confirmText="Unregister"
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+      isProcessing={unregistering}
+    />
     </div>
   );
 };

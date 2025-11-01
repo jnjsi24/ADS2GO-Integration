@@ -663,7 +663,6 @@ const Reports: React.FC = () => {
       // Check for GraphQL errors
       if (result.errors) {
         console.error('GraphQL errors:', result.errors);
-        alert(`Failed to load driver details: ${result.errors[0]?.message || 'Unknown error'}`);
         setIsDriverEditModalOpen(false);
         setIsLoadingDriverDetails(false);
         return;
@@ -673,12 +672,10 @@ const Reports: React.FC = () => {
         setDriverDetails(result.data.getDriverById);
       } else {
         console.error('No driver data returned');
-        alert('Failed to load driver details: No data returned');
         setIsDriverEditModalOpen(false);
       }
     } catch (error) {
       console.error('Error fetching driver details:', error);
-      alert(`Failed to load driver details: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsDriverEditModalOpen(false);
     } finally {
       setIsLoadingDriverDetails(false);

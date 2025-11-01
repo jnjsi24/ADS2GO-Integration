@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X, Mail, Upload, Loader, Send, Image as ImageIcon } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { useToast, ToastContainer } from "../../components/ToastNotification";
 
 interface Subscriber {
   _id: string;
@@ -18,6 +19,7 @@ const NewsletterManagement: React.FC = () => {
   const [filteredSubscribers, setFilteredSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { toasts, addToast, removeToast } = useToast();
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -265,13 +267,23 @@ const NewsletterManagement: React.FC = () => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+        addToast({
+          type: 'error',
+          title: 'Invalid File Type',
+          message: 'Please select an image file',
+          duration: 4000
+        });
         return;
       }
       
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size must be less than 5MB');
+        addToast({
+          type: 'error',
+          title: 'File Too Large',
+          message: 'Image size must be less than 5MB',
+          duration: 4000
+        });
         return;
       }
 
@@ -321,17 +333,32 @@ const NewsletterManagement: React.FC = () => {
     try {
       // Validation
       if (!emailSubject.trim()) {
-        alert('Please enter a subject');
+        addToast({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please enter a subject',
+          duration: 4000
+        });
         return;
       }
 
       if (!emailMessage.trim()) {
-        alert('Please enter a message');
+        addToast({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please enter a message',
+          duration: 4000
+        });
         return;
       }
 
       if (!sendToAllActive && selectedSubscribers.length === 0) {
-        alert('Please select at least one subscriber or choose "All Active Subscribers"');
+        addToast({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please select at least one subscriber or choose "All Active Subscribers"',
+          duration: 4000
+        });
         return;
       }
 
@@ -367,7 +394,12 @@ const NewsletterManagement: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
-        alert(`✅ Newsletter sent successfully to ${data.recipientCount} subscriber(s)!`);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: `Newsletter sent successfully to ${data.recipientCount} subscriber(s)!`,
+          duration: 5000
+        });
         
         // Close modal and reset form
         setIsEmailModalOpen(false);
@@ -385,7 +417,12 @@ const NewsletterManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Newsletter send error:', error);
-      alert(`Failed to send newsletter: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addToast({
+        type: 'error',
+        title: 'Send Failed',
+        message: `Failed to send newsletter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 5000
+      });
     } finally {
       setIsSendingEmail(false);
     }
@@ -421,12 +458,28 @@ const NewsletterManagement: React.FC = () => {
         fetchSubscribers();
         setShowUnsubscribeModal(false);
         setEmailToUnsubscribe('');
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Subscriber unsubscribed successfully',
+          duration: 3000
+        });
       } else {
-        alert('Failed to unsubscribe: ' + data.message);
+        addToast({
+          type: 'error',
+          title: 'Unsubscribe Failed',
+          message: 'Failed to unsubscribe: ' + data.message,
+          duration: 5000
+        });
       }
     } catch (err) {
       console.error('❌ Unsubscribe error:', err);
-      alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
+      addToast({
+        type: 'error',
+        title: 'Unsubscribe Failed',
+        message: 'Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'),
+        duration: 5000
+      });
     }
   };
 
@@ -494,11 +547,21 @@ const NewsletterManagement: React.FC = () => {
       const failCount = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !(r.value as any).success)).length;
 
       if (successCount > 0) {
-        alert(`${successCount} subscriber(s) unsubscribed successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`);
+        addToast({
+          type: successCount === selectedSubscribers.length ? 'success' : 'warning',
+          title: successCount === selectedSubscribers.length ? 'Success!' : 'Partial Success',
+          message: `${successCount} subscriber(s) unsubscribed successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          duration: 5000
+        });
       }
 
       if (failCount > 0 && successCount === 0) {
-        alert(`Failed to unsubscribe ${failCount} subscriber(s)`);
+        addToast({
+          type: 'error',
+          title: 'Unsubscribe Failed',
+          message: `Failed to unsubscribe ${failCount} subscriber(s)`,
+          duration: 5000
+        });
       }
 
       fetchSubscribers();
@@ -506,7 +569,12 @@ const NewsletterManagement: React.FC = () => {
       setSelectedSubscribers([]);
     } catch (err) {
       console.error('❌ Bulk unsubscribe error:', err);
-      alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
+      addToast({
+        type: 'error',
+        title: 'Unsubscribe Failed',
+        message: 'Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'),
+        duration: 5000
+      });
     } finally {
       setIsBulkProcessing(false);
     }
@@ -540,7 +608,12 @@ const NewsletterManagement: React.FC = () => {
     link.click();
     document.body.removeChild(link);
 
-    alert(`${selectedSubscribers.length} subscriber(s) exported to CSV`);
+    addToast({
+      type: 'success',
+      title: 'Export Successful',
+      message: `${selectedSubscribers.length} subscriber(s) exported to CSV`,
+      duration: 3000
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -1090,255 +1163,258 @@ const NewsletterManagement: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {showUnsubscribeModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full max-w-[90vw]' : 'p-6 w-96'}`}>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
-                <p className="text-gray-600 mb-6">
-                  Are you sure you want to unsubscribe <strong>{emailToUnsubscribe}</strong> from the newsletter?
-                </p>
-                <div className="flex space-x-4">
-                  <button
-                    onClick={confirmUnsubscribe}
-                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
-                  >
-                    Yes, Unsubscribe
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowUnsubscribeModal(false);
-                      setEmailToUnsubscribe('');
-                    }}
-                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Bulk Unsubscribe Modal */}
-          {showBulkUnsubscribeModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-gray-800">Unsubscribe Multiple Subscribers</h2>
-                  <button
-                    onClick={() => setShowBulkUnsubscribeModal(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <p className="text-gray-600 mb-6">
-                  Are you sure you want to unsubscribe <strong>{selectedSubscribers.length}</strong> subscriber(s) from the newsletter? This action cannot be undone.
-                </p>
-
-                <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => setShowBulkUnsubscribeModal(false)}
-                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-                    disabled={isBulkProcessing}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmBulkUnsubscribe}
-                    disabled={isBulkProcessing}
-                    className={`px-4 py-2 text-white rounded ${
-                      isBulkProcessing
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-red-600 hover:bg-red-700'
-                    }`}
-                  >
-                    {isBulkProcessing ? 'Processing...' : `Unsubscribe ${selectedSubscribers.length} Subscriber${selectedSubscribers.length > 1 ? 's' : ''}`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Email Compose Modal */}
-          {isEmailModalOpen && (
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-              onClick={() => setIsEmailModalOpen(false)}
-            >
-              <div
-                className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Send Newsletter Email</h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {sendToAllActive
-                        ? `Send to all ${stats.active} active subscribers`
-                        : `Send to ${selectedSubscribers.length} selected subscriber(s)`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsEmailModalOpen(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <X size={24} />
-                  </button>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 space-y-4">
-                  {/* Send To Options */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Send To:
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="sendTo"
-                          checked={sendToAllActive}
-                          onChange={() => setSendToAllActive(true)}
-                          className="form-radio text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">
-                          All Active Subscribers ({stats.active} subscribers)
-                        </span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="sendTo"
-                          checked={!sendToAllActive}
-                          onChange={() => setSendToAllActive(false)}
-                          className="form-radio text-blue-600"
-                          disabled={selectedSubscribers.length === 0}
-                        />
-                        <span className={`text-sm ${selectedSubscribers.length === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
-                          Selected Subscribers Only ({selectedSubscribers.length} selected)
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Subject */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Subject <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={emailSubject}
-                      onChange={(e) => setEmailSubject(e.target.value)}
-                      placeholder="Enter email subject"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Message */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Message <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={emailMessage}
-                      onChange={(e) => setEmailMessage(e.target.value)}
-                      placeholder="Enter your message..."
-                      rows={8}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                    />
-                  </div>
-
-                  {/* Image Upload */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Image (Optional)
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors">
-                        <Upload size={16} />
-                        <span className="text-sm">Choose Image</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleImageSelect}
-                          className="hidden"
-                        />
-                      </label>
-                      {emailImage && (
-                        <button
-                          onClick={() => {
-                            setEmailImage(null);
-                            setEmailImagePreview(null);
-                          }}
-                          className="text-red-600 hover:text-red-700 text-sm"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    {emailImagePreview && (
-                      <div className="mt-3 border border-gray-200 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 mb-2">Preview:</p>
-                        <img
-                          src={emailImagePreview}
-                          alt="Preview"
-                          className="max-w-full h-auto max-h-64 rounded"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Note */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p className="text-xs text-blue-800">
-                      <strong>Note:</strong> Email will be sent via BCC to protect subscriber privacy. 
-                      The image will be displayed at the top of the email message.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
-                  <button
-                    onClick={() => setIsEmailModalOpen(false)}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                    disabled={isSendingEmail}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSendNewsletter}
-                    disabled={isSendingEmail || !emailSubject.trim() || !emailMessage.trim()}
-                    className={`px-6 py-2 rounded-lg transition-colors font-medium flex items-center gap-2 ${
-                      isSendingEmail || !emailSubject.trim() || !emailMessage.trim()
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {isSendingEmail ? (
-                      <>
-                        <Loader size={16} className="animate-spin" />
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <Send size={16} />
-                        Send Email
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-  );
+
+        {showUnsubscribeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full max-w-[90vw]' : 'p-6 w-96'}`}>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to unsubscribe <strong>{emailToUnsubscribe}</strong> from the newsletter?
+              </p>
+              <div className="flex space-x-4">
+                <button
+                  onClick={confirmUnsubscribe}
+                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
+                >
+                  Yes, Unsubscribe
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUnsubscribeModal(false);
+                    setEmailToUnsubscribe('');
+                  }}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Unsubscribe Modal */}
+        {showBulkUnsubscribeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-800">Unsubscribe Multiple Subscribers</h2>
+                <button
+                  onClick={() => setShowBulkUnsubscribeModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to unsubscribe <strong>{selectedSubscribers.length}</strong> subscriber(s) from the newsletter? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowBulkUnsubscribeModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                  disabled={isBulkProcessing}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkUnsubscribe}
+                  disabled={isBulkProcessing}
+                  className={`px-4 py-2 text-white rounded ${
+                    isBulkProcessing
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-red-600 hover:bg-red-700'
+                  }`}
+                >
+                  {isBulkProcessing ? 'Processing...' : `Unsubscribe ${selectedSubscribers.length} Subscriber${selectedSubscribers.length > 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Email Compose Modal */}
+        {isEmailModalOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setIsEmailModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Send Newsletter Email</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {sendToAllActive
+                      ? `Send to all ${stats.active} active subscribers`
+                      : `Send to ${selectedSubscribers.length} selected subscriber(s)`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                {/* Send To Options */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Send To:
+                  </label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="sendTo"
+                        checked={sendToAllActive}
+                        onChange={() => setSendToAllActive(true)}
+                        className="form-radio text-blue-600"
+                      />
+                      <span className="text-sm text-gray-700">
+                        All Active Subscribers ({stats.active} subscribers)
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="sendTo"
+                        checked={!sendToAllActive}
+                        onChange={() => setSendToAllActive(false)}
+                        className="form-radio text-blue-600"
+                        disabled={selectedSubscribers.length === 0}
+                      />
+                      <span className={`text-sm ${selectedSubscribers.length === 0 ? 'text-gray-400' : 'text-gray-700'}`}>
+                        Selected Subscribers Only ({selectedSubscribers.length} selected)
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Subject */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Enter email subject"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Message */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
+                    placeholder="Enter your message..."
+                    rows={8}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+
+                {/* Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Image (Optional)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg cursor-pointer transition-colors">
+                      <Upload size={16} />
+                      <span className="text-sm">Choose Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                    {emailImage && (
+                      <button
+                        onClick={() => {
+                          setEmailImage(null);
+                          setEmailImagePreview(null);
+                        }}
+                        className="text-red-600 hover:text-red-700 text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {emailImagePreview && (
+                    <div className="mt-3 border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                      <img
+                        src={emailImagePreview}
+                        alt="Preview"
+                        className="max-w-full h-auto max-h-64 rounded"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Note */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-800">
+                    <strong>Note:</strong> Email will be sent via BCC to protect subscriber privacy. 
+                    The image will be displayed at the top of the email message.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setIsEmailModalOpen(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  disabled={isSendingEmail}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendNewsletter}
+                  disabled={isSendingEmail || !emailSubject.trim() || !emailMessage.trim()}
+                  className={`px-6 py-2 rounded-lg transition-colors font-medium flex items-center gap-2 ${
+                    isSendingEmail || !emailSubject.trim() || !emailMessage.trim()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <Loader size={16} className="animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} />
+                      Send Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Toast Notifications */}
+<ToastContainer toasts={toasts} onRemove={removeToast} />
+</div>
+);
 };
 
 export default NewsletterManagement;

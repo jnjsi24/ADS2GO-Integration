@@ -17,6 +17,7 @@ import {
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +28,8 @@ const SadminPricing: React.FC = () => {
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
   const [showDurationDropdowns, setShowDurationDropdowns] = useState<boolean[]>([]); // One for each tier
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [configToDelete, setConfigToDelete] = useState<PricingConfig | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<PricingConfigInput>({
@@ -156,9 +159,21 @@ const SadminPricing: React.FC = () => {
   };
 
   const handleDeleteConfig = (config: PricingConfig) => {
-    if (window.confirm(`Are you sure you want to delete the pricing configuration for ${config.materialType} ${config.vehicleType} ${config.category}?`)) {
-      deletePricingConfig({ variables: { id: config.id } });
+    setConfigToDelete(config);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (configToDelete) {
+      deletePricingConfig({ variables: { id: configToDelete.id } });
+      setShowDeleteModal(false);
+      setConfigToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setConfigToDelete(null);
   };
 
   const handleToggleStatus = (config: PricingConfig) => {
@@ -780,6 +795,18 @@ const SadminPricing: React.FC = () => {
         </div>
       </div>
     )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Pricing Configuration"
+        message={configToDelete ? `Are you sure you want to delete the pricing configuration for ${configToDelete.materialType} ${configToDelete.vehicleType} ${configToDelete.category}?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

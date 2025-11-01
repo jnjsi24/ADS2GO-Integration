@@ -31,6 +31,7 @@ import {
 } from '../../../../graphql/admin';
 import { uploadFileToFirebase } from '../../../../utils/fileUpload';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../../../components/ConfirmationModal';
 
 interface CompanyAd {
   id: string;
@@ -126,6 +127,8 @@ const CompanyAdsManagement: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adToDelete, setAdToDelete] = useState<string | null>(null);
 
   const companyAds: CompanyAd[] = data?.getAllCompanyAds || [];
 
@@ -323,18 +326,30 @@ const CompanyAdsManagement: React.FC = () => {
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete this company ad?')) {
-      setIsDeleting(true);
-      
-      try {
-        await deleteCompanyAd({ variables: { id } });
-        refetch();
-      } catch (error) {
-        console.error('Error deleting company ad:', error);
-      } finally {
-        setIsDeleting(false);
-      }
+    setAdToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!adToDelete) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await deleteCompanyAd({ variables: { id: adToDelete } });
+      refetch();
+    } catch (error) {
+      console.error('Error deleting company ad:', error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setAdToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setAdToDelete(null);
   };
 
   // Handle status toggle
@@ -1335,6 +1350,19 @@ const CompanyAdsManagement: React.FC = () => {
           </motion.div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Company Ad"
+        message="Are you sure you want to delete this company ad?"
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isDeleting}
+      />
     </div>
   );
 };

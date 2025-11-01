@@ -129,6 +129,7 @@ const ManageAds: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
   // Close calendar when clicking outside
   React.useEffect(() => {
@@ -503,10 +504,10 @@ const ManageAds: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedAds.length === 0) return;
 
-    if (!window.confirm(`Are you sure you want to delete ${selectedAds.length} advertisement(s)? This action cannot be undone.`)) {
-      return;
-    }
+    setShowBulkDeleteModal(true);
+  };
 
+  const confirmBulkDelete = async () => {
     try {
       await Promise.all(
         selectedAds.map(id =>
@@ -530,7 +531,13 @@ const ManageAds: React.FC = () => {
         message: 'Failed to delete some advertisements',
         duration: 5000
       });
+    } finally {
+      setShowBulkDeleteModal(false);
     }
+  };
+
+  const cancelBulkDelete = () => {
+    setShowBulkDeleteModal(false);
   };
 
   const handleStatusFilterChange = (status: string) => {
@@ -1455,6 +1462,18 @@ const ManageAds: React.FC = () => {
         onClose={() => setShowDateFilterModal(false)}
         onApplyFilter={handleApplyDateFilter}
         onDeleteFilter={handleDeleteDateFilter}
+      />
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showBulkDeleteModal}
+        onClose={cancelBulkDelete}
+        onConfirm={confirmBulkDelete}
+        title="Delete Advertisements"
+        message={`Are you sure you want to delete ${selectedAds.length} advertisement(s)? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
 
       {/* Toast Notifications */}

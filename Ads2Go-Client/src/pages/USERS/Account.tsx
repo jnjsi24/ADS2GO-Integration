@@ -4,6 +4,8 @@ import { Pencil, FileUp, Trash2 } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
 import { uploadUserProfilePicture } from "../../utils/fileUpload";
+import { useToast, ToastContainer } from "../../components/ToastNotification";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 // GraphQL Mutation (update user)
 const UPDATE_USER = gql`
@@ -55,6 +57,7 @@ const Account: React.FC = () => {
   const { user, setUser, logout } = useUserAuth();
   const [pos, setPos] = useState({ x: 50, y: 50 }); // for hover shine
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { toasts, addToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -116,7 +119,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const extension = file.name.split(".").pop()?.toLowerCase();
 
     if (!extension || !allowedExtensions.includes(extension)) {
-      alert("Unsupported file type. Allowed types: JPG, JPEG, PNG");
+      addToast({
+        type: 'error',
+        title: 'Invalid File Type',
+        message: 'Unsupported file type. Allowed types: JPG, JPEG, PNG',
+        duration: 4000
+      });
       return;
     }
 
@@ -124,9 +132,20 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       // Upload the file to Firebase Storage
       const uploadedUrl = await uploadUserProfilePicture(file);
       setFormData(prev => ({ ...prev, profilePicture: uploadedUrl }));
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Profile picture uploaded successfully',
+        duration: 3000
+      });
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      alert('Error uploading profile picture. Please try again.');
+      addToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: 'Error uploading profile picture. Please try again.',
+        duration: 4000
+      });
     }
   }
 };
@@ -151,7 +170,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         });
 
         if (data.updateUser.success) {
-          alert("Profile updated successfully!");
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Profile updated successfully!',
+            duration: 3000
+          });
 
           // ✅ Update context AFTER save
           if (user) {
@@ -166,10 +190,20 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             });
           }
         } else {
-          alert("Update failed: " + data.updateUser.message);
+          addToast({
+            type: 'error',
+            title: 'Update Failed',
+            message: data.updateUser.message,
+            duration: 4000
+          });
         }
       } catch (error: any) {
-        alert("Something went wrong: " + error.message);
+        addToast({
+          type: 'error',
+          title: 'Error',
+          message: 'Something went wrong: ' + error.message,
+          duration: 5000
+        });
       }
     }
     setIsEditing((prev) => !prev);
@@ -184,7 +218,12 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       const { data } = await deleteOwnAccount();
 
       if (data.deleteOwnAccount.success) {
-        alert(data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.");
+        addToast({
+          type: 'success',
+          title: 'Account Deleted',
+          message: data.deleteOwnAccount.message || "Your account has been scheduled for deletion in 30 days.",
+          duration: 5000
+        });
         
         // Log out the user
         logout();
@@ -192,10 +231,20 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         // Redirect to login page
         navigate("/login");
       } else {
-        alert("Failed to delete account: " + data.deleteOwnAccount.message);
+        addToast({
+          type: 'error',
+          title: 'Delete Failed',
+          message: "Failed to delete account: " + data.deleteOwnAccount.message,
+          duration: 5000
+        });
       }
     } catch (error: any) {
-      alert("Error deleting account: " + (error.message || "Unknown error"));
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: "Error deleting account: " + (error.message || "Unknown error"),
+        duration: 5000
+      });
     } finally {
       setShowDeleteModal(false);
     }
@@ -478,6 +527,9 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         </div>
       </div>
     )}
+
+    {/* Toast Notifications */}
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

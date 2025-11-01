@@ -27,6 +27,7 @@ import {
   SuperAdminNotification 
 } from '../../graphql/superadmin/queries/sadminNotificationQueries';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 const SadminNotifications: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'high'>('all');
@@ -35,6 +36,7 @@ const SadminNotifications: React.FC = () => {
   const [notificationToDelete, setNotificationToDelete] = useState<SuperAdminNotification | null>(null);
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_SUPERADMIN_NOTIFICATIONS, {
@@ -80,7 +82,6 @@ const SadminNotifications: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error deleting notification:', error);
-      alert('Failed to delete notification: ' + error.message);
     }
   });
 
@@ -93,7 +94,6 @@ const SadminNotifications: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error deleting all notifications:', error);
-      alert('Failed to delete all notifications: ' + error.message);
     }
   });
 
@@ -187,11 +187,18 @@ const SadminNotifications: React.FC = () => {
   };
 
   const handleDeleteAll = async () => {
-    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
-      await deleteAllNotifications();
-      setSelectedNotifications(new Set());
-      setIsSelectMode(false);
-    }
+    setShowDeleteAllModal(true);
+  };
+
+  const confirmDeleteAll = async () => {
+    await deleteAllNotifications();
+    setSelectedNotifications(new Set());
+    setIsSelectMode(false);
+    setShowDeleteAllModal(false);
+  };
+
+  const cancelDeleteAll = () => {
+    setShowDeleteAllModal(false);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -635,6 +642,18 @@ const SadminNotifications: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete All Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteAllModal}
+        onClose={cancelDeleteAll}
+        onConfirm={confirmDeleteAll}
+        title="Delete All Notifications"
+        message="Are you sure you want to delete all notifications? This action cannot be undone."
+        confirmText="Delete All"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

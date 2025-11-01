@@ -316,7 +316,7 @@ const DeviceDataHistoryV2: React.FC = () => {
       }
     } catch (error) {
       console.error('Error deleting daily data:', error);
-      alert('Failed to delete data. Please try again.');
+      showToast('Failed to delete data. Please try again.');
     }
   };
 
