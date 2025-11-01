@@ -285,8 +285,6 @@ const Login: React.FC = () => {
       {/* Mobile View */}
       <div className="relative z-10 w-full px-4 py-6 md:hidden">
         <div className="max-w-md mx-auto">
-          
-          
           {/* Mobile Form Card */}
           <div className="bg-white/20 backdrop-blur-lg border border-white/30 rounded-md p-6 shadow-2xl">
             {/* Ads2Go Logo - Mobile */}

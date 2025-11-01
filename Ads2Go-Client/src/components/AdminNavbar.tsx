@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { useAdminNotifications } from '../contexts/AdminNotificationContext';
@@ -34,14 +34,15 @@ const AdminSidebar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const dropupRef = useRef<HTMLDivElement>(null);
+  const mobileDropupRef = useRef<HTMLDivElement>(null);
 
   // Responsive collapse based on window width
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
-      setIsMobile(width < 768); // mobile breakpoint
-      setIsCollapsed(width >= 768 && width < 1024); // tablet breakpoint
-      if (width >= 768) {
+      setIsMobile(width < 1024); // mobile breakpoint (using lg: breakpoint)
+      setIsCollapsed(width >= 1024 && width < 1280); // tablet breakpoint
+      if (width >= 1024) {
         setIsMobileMenuOpen(false); // close mobile menu on larger screens
       }
     };
@@ -50,26 +51,56 @@ const AdminSidebar: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     setIsDropupOpen(false);
-  };
+    setIsMobileMenuOpen(false);
+  }, [logout]);
 
-  const toggleDropup = () => setIsDropupOpen((prev) => !prev);
-  const closeDropup = () => setIsDropupOpen(false);
+  const toggleDropup = useCallback(() => setIsDropupOpen((prev) => !prev), []);
+  const closeDropup = useCallback(() => setIsDropupOpen(false), []);
 
+  // Close dropup when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropupRef.current && !dropupRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement;
+      const isClickInsideDropup = dropupRef.current?.contains(target);
+      const isClickInsideMobileDropup = mobileDropupRef.current?.contains(target);
+      const isClickOnProfileButton = target.closest('[data-profile-toggle]');
+      const isClickOnNotificationButton = target.closest('button[title="View notifications"]');
+      
+      if (!isClickInsideDropup && !isClickInsideMobileDropup && !isClickOnProfileButton && !isClickOnNotificationButton) {
         closeDropup();
       }
     };
-    if (isDropupOpen) document.addEventListener('mousedown', handleClickOutside);
+    if (isDropupOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isDropupOpen]);
+  }, [isDropupOpen, closeDropup]);
 
-  const getInitials = (firstName?: string, lastName?: string) =>
-    !firstName && !lastName ? '?' : `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (isMobileMenuOpen && !target.closest('.mobile-menu') && !target.closest('.hamburger-button')) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    if (isMobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMobileMenuOpen]);
+
+  const getInitials = useCallback((firstName?: string, lastName?: string) => {
+    if (!firstName && !lastName) return '?';
+    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  }, []);
 
   const menuItems = [
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
@@ -89,31 +120,138 @@ const AdminSidebar: React.FC = () => {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      {isMobile && (
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg text-black hover:bg-gray-100 transition-colors"
-          aria-label="Toggle menu"
-        >
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      )}
-
-      {/* Overlay for mobile */}
-      {isMobile && isMobileMenuOpen && (
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40"
+          className="fixed inset-0 bg-black/50 z-[999] lg:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
+      {/* Mobile Hamburger Button */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="hamburger-button absolute top-4 left-4 z-[1100] p-2 lg:hidden transition-colors"
+        aria-label="Toggle menu"
+      >
+        {!isMobileMenuOpen && <Menu size={24} className="text-gray-800" />}
+      </button>
+
+      {/* Mobile User Profile & Dropup Menu - Fixed Top Right */}
+      <div className="absolute top-4 right-4 z-[1100] lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              navigate('/admin/notifications');
+              setIsMobileMenuOpen(false);
+            }}
+            className="relative p-2 text-gray-800 hover:text-gray-900 transition-all duration-300 ease-out"
+            title="View notifications"
+          >
+            <Bell size={20} />
+            {totalDisplayCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {totalDisplayCount > 99 ? '99+' : totalDisplayCount}
+              </span>
+            )}
+          </button>
+          
+          <div className="relative">
+            <div
+              data-profile-toggle
+              className="cursor-pointer p-2 transition-all duration-300 ease-out"
+              onClick={toggleDropup}
+            >
+              <div className="w-8 h-8 rounded-full flex border border-black/30 items-center justify-center relative overflow-hidden">
+                {admin?.profilePicture ? (
+                  <img
+                    src={admin.profilePicture}
+                    alt={`${admin.firstName} ${admin.lastName}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const initialsSpan = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (initialsSpan) initialsSpan.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <span 
+                  className="text-white font-semibold flex items-center justify-center w-full h-full text-xs bg-[#FF9D3D]"
+                  style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+                >
+                  {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Dropup Menu for Mobile */}
+            <div 
+              ref={mobileDropupRef}
+              className={`absolute top-12 right-0 w-32
+                        bg-white backdrop-blur-md border border-gray-200 rounded-lg shadow-lg
+                        transition-all duration-300 ease-in-out transform ${
+                          isDropupOpen 
+                            ? 'opacity-100 translate-y-0 scale-100' 
+                            : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+                        }`}
+            >
+              <div className="py-2">
+                <button
+                  onClick={() => {
+                    navigate('/admin/account');
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <User size={18} />
+                  <span>Profile</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    navigate('/admin/SiteSettings');
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  <Settings size={18} />
+                  <span>Settings</span>
+                </button>
+                
+                <hr className="my-1" />
+                
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    closeDropup();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:text-red-400 transition-colors"
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Sidebar */}
       <motion.div
-        className={`h-screen fixed flex flex-col justify-between bg-white shadow-lg z-40 ${
-          isMobile ? (isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full') : ''
+        className={`mobile-menu h-screen fixed flex flex-col justify-between bg-white shadow-lg transition-all duration-500 ease-in-out ${
+          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
-        style={{ width: isMobile ? '240px' : `${sidebarWidth}px` }}
+        style={{ 
+          width: isMobile ? '240px' : `${sidebarWidth}px`,
+          willChange: 'auto',
+          backfaceVisibility: 'hidden',
+          top: 0,
+          left: 0,
+          zIndex: 1000,
+        }}
         onMouseEnter={() => !isMobile && isCollapsed && setIsHovered(true)}
         onMouseLeave={() => !isMobile && isCollapsed && setIsHovered(false)}
         animate={!isMobile ? { width: sidebarWidth } : {}}
@@ -144,7 +282,7 @@ const AdminSidebar: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
-              onClick={() => isMobile && setIsMobileMenuOpen(false)}
+              onClick={() => setIsMobileMenuOpen(false)}
               className={`flex items-center gap-3 rounded-md text-sm pt-2 hover:bg-[#3674B5] hover:text-white transition-colors ${
                 isCollapsed && !isHovered ? 'px-2 py-3 justify-center' : 'px-4 py-3'
               } ${
@@ -169,12 +307,13 @@ const AdminSidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Profile + Notifications */}
-      <div className={`border-t border-gray-200 text-sm text-gray-500 relative flex-shrink-0 transition-all duration-300 ${
+      {/* Profile + Notifications - Desktop Only */}
+      <div className={`border-t border-gray-200 text-sm text-gray-500 relative flex-shrink-0 transition-all duration-300 hidden lg:block ${
         isCollapsed && !isHovered ? 'p-2' : 'p-4'
       }`}>
         <div className={`flex items-center ${isCollapsed && !isHovered ? 'flex-col gap-2' : 'justify-between'}`}>
           <div
+            data-profile-toggle
             className={`flex items-center cursor-pointer hover:bg-black/10 rounded-lg p-2 transition-all ${
               isCollapsed && !isHovered ? 'justify-center' : 'space-x-3'
             }`}
@@ -182,12 +321,27 @@ const AdminSidebar: React.FC = () => {
             title={isCollapsed && !isHovered ? (admin ? `${admin.firstName} ${admin.lastName}` : 'Profile') : undefined}
           >
             <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative flex-shrink-0">
-              <span className="text-white font-semibold">
+              {admin?.profilePicture ? (
+                <img
+                  src={admin.profilePicture}
+                  alt={`${admin.firstName} ${admin.lastName}`}
+                  className="w-full h-full object-cover rounded-full"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const initialsSpan = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (initialsSpan) initialsSpan.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <span 
+                className="text-white font-semibold flex items-center justify-center w-full h-full"
+                style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+              >
                 {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
               </span>
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
             </div>
-            {(isMobile || !isCollapsed || isHovered) && (
+            {(!isCollapsed || isHovered) && (
               <div className="overflow-hidden">
                 <p className="font-semibold text-gray-800 truncate">
                   {admin ? `${admin.firstName} ${admin.lastName}` : 'Loading...'}
@@ -198,7 +352,6 @@ const AdminSidebar: React.FC = () => {
           <button
             onClick={() => {
               navigate('/admin/notifications');
-              isMobile && setIsMobileMenuOpen(false);
             }}
             className={`relative p-2 text-black/70 hover:text-gray-600 transition-colors ${
               isCollapsed && !isHovered ? 'hover:bg-black/10 rounded-lg' : ''
@@ -214,7 +367,7 @@ const AdminSidebar: React.FC = () => {
           </button>
         </div>
 
-        {/* Dropup Menu */}
+        {/* Dropup Menu - Desktop Only */}
         <div ref={dropupRef}>
           <AnimatePresence>
             {isDropupOpen && (
@@ -230,7 +383,6 @@ const AdminSidebar: React.FC = () => {
                     onClick={() => {
                       navigate('/admin/account');
                       closeDropup();
-                      isMobile && setIsMobileMenuOpen(false);
                     }}
                     className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
                   >
@@ -241,7 +393,6 @@ const AdminSidebar: React.FC = () => {
                     onClick={() => {
                       navigate('/admin/SiteSettings');
                       closeDropup();
-                      isMobile && setIsMobileMenuOpen(false);
                     }}
                     className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
                   >

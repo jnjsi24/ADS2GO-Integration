@@ -416,51 +416,61 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-md max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+        <div className="bg-white px-6 py-4 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Edit Advertisement</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={24} />
-          </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Title <span className="text-red-500">*</span>
-            </label>
+          <div className="relative">
             <input
               type="text"
+              id="edit-title"
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter ad title"
+              placeholder=""
+              required
+              className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${errors.title ? 'border-red-400' : 'border-gray-300'}`}
+              style={{ backgroundColor: 'transparent' }}
             />
+            <label
+              htmlFor="edit-title"
+              className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.title
+                ? '-top-2 text-sm text-gray-700 font-bold'  
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
+            >
+              Title
+            </label>
             {errors.title && (
-              <p className="mt-1 text-sm text-red-600">{errors.title}</p>
+              <p className="text-red-400 text-xs mt-1">{errors.title}</p>
             )}
           </div>
 
           {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description <span className="text-red-500">*</span>
-            </label>
+          <div className="relative mt-6">
             <textarea
+              id="edit-description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter ad description"
+              placeholder=""
+              required
+              className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition resize-none ${errors.description ? 'border-red-400' : 'border-gray-300'}`}
+              style={{ backgroundColor: 'transparent' }}
             />
+            <label
+              htmlFor="edit-description"
+              className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.description
+                ? '-top-2 text-sm text-gray-700 font-bold'  
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
+            >
+              Description
+            </label>
             {errors.description && (
-              <p className="mt-1 text-sm text-red-600">{errors.description}</p>
+              <p className="text-red-400 text-xs mt-1">{errors.description}</p>
             )}
           </div>
 
@@ -472,7 +482,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
             <div className="space-y-3">
               {/* Current/Preview */}
               {previewUrl && (
-                <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                <div className="relative aspect-video bg-gray-100 rounded-md overflow-hidden">
                   {formData.adFormat === 'VIDEO' ? (
                     <video src={previewUrl} controls className="w-full h-full object-contain" />
                   ) : (
@@ -482,7 +492,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
               )}
 
               {/* Upload Button */}
-              <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
+              <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-500 transition-colors">
                 <Upload className="w-5 h-5 text-gray-400 mr-2" />
                 <span className="text-sm text-gray-600">
                   {newMediaFile ? newMediaFile.name : 'Click to upload new media'}
@@ -499,135 +509,186 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
               <p className="mt-1 text-sm text-red-600">{errors.mediaFile}</p>
             )}
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Start Date Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Campaign Start Date
+              </label>
+              <div className="relative calendar-container">
+                <button
+                  type="button"
+                  onClick={toggleCalendar}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                  <span className={selectedDate ? 'text-gray-900' : 'text-gray-400'}>
+                    {selectedDate 
+                      ? selectedDate.toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                      : 'Select start date'}
+                  </span>
+                  <CalendarIcon className="w-4 h-4 text-gray-400" />
+                </button>
 
-          {/* Start Date Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign Start Date <span className="text-red-500">*</span>
-            </label>
-            <div className="relative calendar-container">
-              <button
-                type="button"
-                onClick={toggleCalendar}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between"
-              >
-                <span className={selectedDate ? 'text-gray-900' : 'text-gray-400'}>
-                  {selectedDate 
-                    ? selectedDate.toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })
-                    : 'Select start date'}
-                </span>
-                <CalendarIcon className="w-5 h-5 text-gray-400" />
-              </button>
-
-              {showCalendar && (
-                <div className="absolute z-50 mt-2 bg-white rounded-lg shadow-lg border border-gray-200">
-                  <CalendarWidget
-                    selectedDate={selectedDate}
-                    onDateSelect={handleCalendarDateSelect}
-                    minDate={new Date()}
-                  />
-                </div>
+                {showCalendar && (
+                  <div className="absolute z-50 mt-2 bg-white rounded-md shadow-lg border border-gray-200">
+                    <CalendarWidget
+                      selectedDate={selectedDate}
+                      onDateSelect={handleCalendarDateSelect}
+                      minDate={new Date()}
+                    />
+                  </div>
+                )}
+              </div>
+              {errors.startTime && (
+                <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>
+              )}
+              {formData.startTime && (
+                <p className="mt-2 text-sm text-red-500">
+                  Campaign will end on: <span className="font-medium">{calculateEndDate()}</span>
+                </p>
               )}
             </div>
-            {errors.startTime && (
-              <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>
-            )}
-            {formData.startTime && (
-              <p className="mt-2 text-sm text-gray-600">
-                Campaign will end on: <span className="font-medium">{calculateEndDate()}</span>
-              </p>
-            )}
+
+            {/* Campaign Duration Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Campaign Duration
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowDurationDropdown(!showDurationDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+
+                >
+                  <span className="truncate">{getDurationLabel(formData.durationDays)}</span>
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showDurationDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showDurationDropdown && (
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                    {[
+                      { value: 30, label: '1 month (30 days)' },
+                      { value: 60, label: '2 months (60 days)' },
+                      { value: 90, label: '3 months (90 days)' },
+                      { value: 120, label: '4 months (120 days)' },
+                      { value: 150, label: '5 months (150 days)' },
+                      { value: 180, label: '6 months (180 days)' }
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, durationDays: option.value }));
+                          setShowDurationDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 pl-6 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {errors.durationDays && (
+                <p className="mt-1 text-sm text-red-600">{errors.durationDays}</p>
+              )}
+            </div>
           </div>
 
-          {/* Vehicle Type Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Vehicle Type <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <span>{formData.vehicleType || 'Select Vehicle Type'}</span>
-                <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showVehicleTypeDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showVehicleTypeDropdown && (
-                <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
-                  {getAvailableVehicleTypes().map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, vehicleType: type }));
-                        setShowVehicleTypeDropdown(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {errors.vehicleType && (
-              <p className="mt-1 text-sm text-red-600">{errors.vehicleType}</p>
-            )}
-          </div>
+          {/* Vehicle Type and Material Type in one row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Vehicle Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Vehicle Type
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
 
-          {/* Material Type Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Material Type <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => formData.vehicleType && setShowMaterialTypeDropdown(!showMaterialTypeDropdown)}
-                disabled={!formData.vehicleType}
-                className={`flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  !formData.vehicleType ? 'bg-gray-100 cursor-not-allowed' : ''
-                }`}
-              >
-                <span className={!formData.vehicleType ? 'text-gray-400' : ''}>
-                  {formData.materialType || 'Select Material Type'}
-                </span>
-                <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showMaterialTypeDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showMaterialTypeDropdown && formData.vehicleType && (
-                <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
-                  {getAvailableMaterialTypes().map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, materialType: type }));
-                        setShowMaterialTypeDropdown(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
+                >
+                  <span>{formData.vehicleType || 'Select Vehicle Type'}</span>
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showVehicleTypeDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showVehicleTypeDropdown && (
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                    {getAvailableVehicleTypes().map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, vehicleType: type }));
+                          setShowVehicleTypeDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 pl-6 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {errors.vehicleType && (
+                <p className="mt-1 text-sm text-red-600">{errors.vehicleType}</p>
               )}
             </div>
-            {!formData.vehicleType && (
-              <p className="mt-1 text-sm text-gray-500">Please select vehicle type first</p>
-            )}
-            {errors.materialType && (
-              <p className="mt-1 text-sm text-red-600">{errors.materialType}</p>
-            )}
+
+            {/* Material Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Material Type
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => formData.vehicleType && setShowMaterialTypeDropdown(!showMaterialTypeDropdown)}
+                  disabled={!formData.vehicleType}
+                  className={`flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                    !formData.vehicleType ? 'bg-gray-100 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <span className={!formData.vehicleType ? 'text-gray-400' : ''}>
+                    {formData.materialType || 'Select Material Type'}
+                  </span>
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showMaterialTypeDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showMaterialTypeDropdown && formData.vehicleType && (
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                    {getAvailableMaterialTypes().map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, materialType: type }));
+                          setShowMaterialTypeDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 pl-6 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {!formData.vehicleType && (
+                <p className="mt-1 text-sm text-gray-500">Please select vehicle type first</p>
+              )}
+              {errors.materialType && (
+                <p className="mt-1 text-sm text-red-600">{errors.materialType}</p>
+              )}
+            </div>
           </div>
 
           {/* Type Change Warning */}
           {(formData.materialType !== ad.materialType || formData.vehicleType !== ad.vehicleType) && (
-            <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
+            <div className="p-4 bg-orange-50 border border-orange-200 rounded-md flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-orange-900">Ad Type Changed</p>
@@ -638,124 +699,80 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
             </div>
           )}
 
-          {/* Ad Length Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Advertisement Length <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <span>{formData.adLengthSeconds} seconds</span>
-                <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showAdLengthDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showAdLengthDropdown && (
-                <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-lg border border-gray-200">
-                  {[20, 40, 60].map((seconds) => (
-                    <button
-                      key={seconds}
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, adLengthSeconds: seconds }));
-                        setShowAdLengthDropdown(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-                    >
-                      {seconds} seconds
-                    </button>
-                  ))}
-                </div>
+          {/* Advertisement Length, Number of Devices, and Campaign Duration in one row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Ad Length Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Advertisement Length
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+
+                >
+                  <span>{formData.adLengthSeconds} seconds</span>
+                  <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showAdLengthDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showAdLengthDropdown && (
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                    {[20, 40, 60].map((seconds) => (
+                      <button
+                        key={seconds}
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, adLengthSeconds: seconds }));
+                          setShowAdLengthDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 pl-6 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {seconds} seconds
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {errors.adLengthSeconds && (
+                <p className="mt-1 text-sm text-red-600">{errors.adLengthSeconds}</p>
               )}
             </div>
-            {errors.adLengthSeconds && (
-              <p className="mt-1 text-sm text-red-600">{errors.adLengthSeconds}</p>
-            )}
-          </div>
 
-          {/* Campaign Duration Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign Duration <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowDurationDropdown(!showDurationDropdown)}
-                className="flex items-center justify-between w-full px-4 py-2 border border-gray-300 rounded-lg text-left focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <span>{getDurationLabel(formData.durationDays)}</span>
-                <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showDurationDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showDurationDropdown && (
-                <div className="absolute z-50 mt-2 w-full bg-white rounded-lg shadow-lg border border-gray-200">
-                  {[
-                    { value: 30, label: '1 month (30 days)' },
-                    { value: 60, label: '2 months (60 days)' },
-                    { value: 90, label: '3 months (90 days)' },
-                    { value: 120, label: '4 months (120 days)' },
-                    { value: 150, label: '5 months (150 days)' },
-                    { value: 180, label: '6 months (180 days)' }
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, durationDays: option.value }));
-                        setShowDurationDropdown(false);
-                      }}
-                      className="block w-full text-left px-4 py-2 hover:bg-gray-100 transition-colors"
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Number of Devices */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Number of Devices
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={pricingCalculation?.maxDevices || 10}
+                value={formData.numberOfDevices}
+                onChange={(e) => setFormData(prev => ({ ...prev, numberOfDevices: parseInt(e.target.value) || 1 }))}
+                className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-blue-500"
+              />
+              {pricingCalculation && (
+                <p className="mt-1 text-sm text-gray-600">
+                  Max: {pricingCalculation.maxDevices}
+                </p>
+              )}
+              {errors.numberOfDevices && (
+                <p className="mt-1 text-sm text-red-600">{errors.numberOfDevices}</p>
               )}
             </div>
-            {errors.durationDays && (
-              <p className="mt-1 text-sm text-red-600">{errors.durationDays}</p>
-            )}
-          </div>
-
-          {/* Number of Devices */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Number of Devices <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              min="1"
-              max={pricingCalculation?.maxDevices || 10}
-              value={formData.numberOfDevices}
-              onChange={(e) => setFormData(prev => ({ ...prev, numberOfDevices: parseInt(e.target.value) || 1 }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {pricingCalculation && (
-              <p className="mt-1 text-sm text-gray-600">
-                Maximum: {pricingCalculation.maxDevices} devices available
-              </p>
-            )}
-            {errors.numberOfDevices && (
-              <p className="mt-1 text-sm text-red-600">{errors.numberOfDevices}</p>
-            )}
           </div>
 
           {/* Price Calculation Display */}
           {isCalculating ? (
-            <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center">
+            <div className="p-6 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center">
               <Loader2 className="w-5 h-5 animate-spin text-blue-500 mr-2" />
               <span className="text-gray-600">Calculating price...</span>
             </div>
           ) : pricingCalculation ? (
-            <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg">
+            <div className="p-6 rounded-md">
               <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="w-5 h-5 text-blue-600" />
                 <h4 className="font-bold text-lg text-gray-900">New Campaign Price</h4>
-              </div>
-              <div className="text-3xl font-bold text-blue-600 mb-4">
-                {formatCurrency(pricingCalculation.totalPrice)}
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -774,13 +791,16 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <span className="text-gray-600">Devices:</span>
                   <span className="font-medium text-gray-900">{formData.numberOfDevices}</span>
                 </div>
+                <div className="flex justify-end text-2xl font-bold mb-4">
+                  {formatCurrency(pricingCalculation.totalPrice)}
+                </div>
               </div>
             </div>
           ) : null}
 
           {/* Price Change Warning */}
           {pricingCalculation && Math.abs(pricingCalculation.totalPrice - ad.price) > 0.01 && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-yellow-900">Price Update Notice</p>
@@ -793,17 +813,17 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Submit Error */}
           {errors.submit && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
               <p className="text-sm text-red-800">{errors.submit}</p>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t">
+          <div className="flex items-center justify-between gap-3 pt-4 ">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
               disabled={uploading || updating}
             >
               Cancel
@@ -811,7 +831,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
             <button
               type="submit"
               disabled={uploading || updating}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-[#3674B5] text-white rounded-md hover:shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {(uploading || updating) && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? 'Uploading...' : updating ? 'Updating...' : 'Update Advertisement'}

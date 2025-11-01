@@ -16,7 +16,7 @@ const AdminList: React.FC<AdminListProps> = ({
   formatDate,
 }) => {
   return (
-    <div className="mx-6 mt-4 rounded-xl overflow-hidden">
+    <div className="mx-6 mt-4 rounded-md overflow-hidden">
       {/* Header */}
       <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-3 text-sm font-semibold text-black/80">
         <span>Name</span>
@@ -32,7 +32,7 @@ const AdminList: React.FC<AdminListProps> = ({
           {admins.map((admin) => (
             <li
               key={admin.id}
-              className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-4 bg-white rounded-xl shadow-md items-center hover:bg-gray-100 transition-colors"
+              className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-4 bg-white rounded-xl shadow-md items-center hover:shadow-lg transition-colors"
             >
               {/* Name + Avatar */}
               <div className="flex items-center space-x-3">

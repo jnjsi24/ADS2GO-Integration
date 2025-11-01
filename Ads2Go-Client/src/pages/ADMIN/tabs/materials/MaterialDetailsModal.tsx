@@ -310,7 +310,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50"
+      className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50 z-[9999]" 
       onClick={handleClose}
     >
       <div

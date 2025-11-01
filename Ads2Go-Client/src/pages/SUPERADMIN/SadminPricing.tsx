@@ -262,7 +262,7 @@ const SadminPricing: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mt-4">Pricing Management</h1>
+              <h1 className="text-3xl font-semibold text-gray-900 mt-5">Pricing Management</h1>
             </div>
           </div>
         </div>
@@ -307,7 +307,7 @@ const SadminPricing: React.FC = () => {
           {/* Create button on the right */}
           <button
             onClick={handleCreateConfig}
-            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-md transition-all duration-200 flex items-center gap-2"
+            className="bg-[#3674B5] hover:bg-[#3674B5]/80 text-sm text-white px-6 py-3 rounded-md transition-all duration-200 flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
             Create Pricing Config
@@ -326,8 +326,8 @@ const SadminPricing: React.FC = () => {
         {/* Configurations List */}
         {filteredConfigs.length === 0 ? (
           <div className="text-center py-12">
-            <div className="bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <DollarSign className="w-8 h-8 text-gray-400" />
+            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+              <DollarSign className="w-8 h-8 text-black/80" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               No {activeTab} pricing configurations found
@@ -338,15 +338,6 @@ const SadminPricing: React.FC = () => {
                 : "No inactive configurations at the moment"
               }
             </p>
-            {activeTab === 'active' && (
-              <button
-                onClick={handleCreateConfig}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
-              >
-                <Plus className="w-5 h-5" />
-                Create Pricing Config
-              </button>
-            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">

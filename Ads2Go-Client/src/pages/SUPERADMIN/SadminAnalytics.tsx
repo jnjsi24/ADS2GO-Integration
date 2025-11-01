@@ -146,7 +146,7 @@ const SadminAnalytics: React.FC = () => {
   const renderOverviewTab = () => (
     <div className="space-y-6">
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
           {/* Left side: icon */}
           <div>
@@ -218,7 +218,7 @@ const SadminAnalytics: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Growth Chart (takes 8/12 on large screens) */}
         <div className="lg:col-span-8">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Growth Overview</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Growth Overview</h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={userGrowthData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -289,7 +289,7 @@ const SadminAnalytics: React.FC = () => {
         {/* LEFT SIDE */}
         <div className="lg:col-span-8 space-y-6">
           {/* Top Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Active Users */}
             <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
@@ -422,7 +422,7 @@ const SadminAnalytics: React.FC = () => {
         </div>
   
         {/* Right side stat cards (2 per row) */}
-        <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Avg Ads per Driver */}
           <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
@@ -581,7 +581,7 @@ const SadminAnalytics: React.FC = () => {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="py-3 bg-[#feb011] text-xs shadow-md font-semibold text-white rounded-md w-28 hover:bg-[#FF9B45] transition-colors flex items-center justify-center"
+              className="py-3 bg-[#3674B5] text-xs font-semibold text-white rounded-md w-28 hover:shadow-lg transition-colors flex items-center justify-center"
                 >
               <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
               Refresh

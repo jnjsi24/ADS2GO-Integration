@@ -622,17 +622,26 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.title}</p>
           )}
         </div>
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Description 
-          </label>
+        <div className="relative w-full mt-6">
           <textarea
+            id="adDescription"
             value={formData.description}
             onChange={(e) => handleInputChange('description', e.target.value)}
-            className="w-full p-3 bg-transparent border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition h-"
-            placeholder="Describe your advertisement"
+            placeholder=""
             required
+            className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition resize-none ${errors.description ? 'border-red-400' : 'border-black/40'}`}
+            style={{ backgroundColor: 'transparent' }}
+            rows={4}
           />
+          <label
+            htmlFor="adDescription"
+            className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.description
+              ? '-top-2 text-sm text-gray-700 font-bold'
+              : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-semibold peer-placeholder-shown:text-black/80'}
+              peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
+          >
+            Describe your advertisement
+          </label>
           {errors.description && (
             <p className="text-sm text-red-600 mt-1">{errors.description}</p>
           )}
@@ -766,9 +775,6 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 </p>
                 {detectedVideoDuration !== null && (
                   <>
-                    <p className="text-sm text-green-600">
-                      ✓ Video duration detected: ~{detectedVideoDuration}s
-                    </p>
                     <p className="text-xs text-gray-500 mt-1">
                       Note: This is an estimate. Final validation will occur when creating the ad.
                     </p>
@@ -1149,7 +1155,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           className="w-full p-3 border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition bg-transparent [&::-webkit-outer-spin-button]:bg-transparent [&::-webkit-outer-spin-button]:text-black [&::-webkit-inner-spin-button]:bg-transparent [&::-webkit-inner-spin-button]:text-black [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
           required
         />
-        <div className="flex items-center justify-between mt-1">
+        <div className="flex flex-col mt-1">
           {pricingCalculation?.availableDevices !== undefined ? (
             <p className="text-sm text-gray-500">
               Maximum: {getMaxDevices()} device{getMaxDevices() === 1 ? '' : 's'} available
@@ -1174,20 +1180,11 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           )}
           {pricingCalculation?.availableDevices !== undefined && 
            pricingCalculation.availableDevices < formData.numberOfDevices && (
-            <p className="text-sm font-medium text-red-600">
+            <p className="text-sm font-medium text-red-500">
               Only {pricingCalculation.availableDevices} available
             </p>
           )}
         </div>
-        {pricingCalculation?.availableDevices !== undefined && 
-         pricingCalculation.availableDevices < formData.numberOfDevices && (
-          <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Only <strong>{pricingCalculation.availableDevices}</strong> device{pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available with open slots. 
-              Please reduce the number of devices to {pricingCalculation.availableDevices} or try a different date.
-            </p>
-          </div>
-        )}
         {errors.numberOfDevices && (
           <p className="text-sm text-red-600 mt-1">{errors.numberOfDevices}</p>
         )}
@@ -1283,7 +1280,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           {/* LEFT COLUMN - Media preview + filename */}
           <div className="flex flex-col">
             {/* Media Preview */}
-            <div className="w-full overflow-hidden flex items-center justify-center min-h-40">
+            <div className="w-full bg-white/30 overflow-hidden flex items-center justify-center min-h-40">
               {formData.mediaFile ? (
                 formData.mediaFile.type.startsWith("image/") ? (
                   <img

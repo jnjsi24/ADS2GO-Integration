@@ -219,7 +219,7 @@ const SadminDriverSalary: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mt-4">Driver Salary Management</h1>
+              <h1 className="text-3xl font-semibold text-gray-900 mt-5">Driver Salary Management</h1>
             </div>
           </div>
         </div>
@@ -227,7 +227,7 @@ const SadminDriverSalary: React.FC = () => {
 
       {/* Stats */}
       <div className="px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
           <div className="bg-white rounded-md p-6 shadow-md">
             <div className="flex items-center">
               <div className="p-3 bg-green-100 rounded-full">

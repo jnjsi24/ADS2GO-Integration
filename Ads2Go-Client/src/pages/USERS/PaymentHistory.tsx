@@ -481,13 +481,26 @@ const PaymentHistory: React.FC = () => {
                 {/* Details Section */}
                 <div className="w-3/4 pl-4 flex flex-col justify-between p-3">
                   <div>
-                    <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
-                        item.status
-                      )}`}
-                    >
-                      {item.status}
-                    </span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                          item.status
+                        )}`}
+                      >
+                        {item.status}
+                      </span>
+                      <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPayment(item);
+                        setSelectedPaymentType(item.paymentType || "");
+                        setIsModalOpen(true);
+                      }}
+                      className="text-white px-3 py-2 bg-[#3674B5] rounded-full hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
+                      >
+                      {item.status === 'PAID' ? 'View Details' : 'Make Payment'}
+                    </button>
+                    </div>
                     <h3 className="text-2xl font-bold text-black/80 mt-2">
                       {item.amount}
                     </h3>
@@ -500,20 +513,6 @@ const PaymentHistory: React.FC = () => {
                         ? "Ad pending approval. Payment will be available once your ad is approved by admin."
                         : "Awaiting payment confirmation. Your ad will be activated once the transaction is complete."}
                     </p>
-                  </div>
-
-                  <div className="flex justify-end mt-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedPayment(item);
-                        setSelectedPaymentType(item.paymentType || "");
-                        setIsModalOpen(true);
-                      }}
-                      className="text-[#3674B5] hover:text-[#3674B5]/80 font-bold hover:underline text-xs px-4 py-2 transition-all duration-300 hover:underline-offset-4"
-                    >
-                      {item.status === 'PAID' ? 'View Details' : 'Make Payment'}
-                    </button>
                   </div>
                 </div>
               </div>

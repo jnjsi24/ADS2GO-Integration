@@ -1210,7 +1210,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Material Selection Modal */}
       {showMaterialModal && selectedDriverDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Select Material Type(s)</h2>
@@ -1235,7 +1235,7 @@ const ManageDrivers: React.FC = () => {
                   return <p className="text-sm text-red-600">No available materials for this driver’s vehicle type.</p>;
                 }
                 return types.map((mType) => (
-                  <label key={mType} className="flex items-center justify-between text-sm px-3 py-2 border rounded-md">
+                  <label key={mType} className="flex items-center justify-between text-sm px-3 py-2 shadow-md rounded-md">
                     <span className="flex items-center gap-3">
                       <input
                         type="checkbox"
@@ -1252,7 +1252,7 @@ const ManageDrivers: React.FC = () => {
                 ));
               })()}
             </div>
-            <div className="flex gap-3 justify-end">
+            <div className="flex gap-3 pt-8 justify-between">
               <button
                 className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
                 onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
@@ -1261,7 +1261,7 @@ const ManageDrivers: React.FC = () => {
                 Cancel
               </button>
               <button
-                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                className={`px-4 py-2 text-white rounded hover:shadow-md transition-colors flex items-center gap-2 ${
                   isProcessingApproval
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700'
@@ -1281,7 +1281,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Details Modal */}
       {showDetailsModal && selectedDriverDetails && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50" onClick={handleCloseModal}>
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50 z-[9999]" onClick={handleCloseModal}>
           <div
             className={`fixed ${
               isMobile ? 'inset-x-4 top-16 bottom-6 w-auto max-h-[80vh] rounded-md' : 'top-2 bottom-2 right-2 w-full max-w-xl rounded-lg'
@@ -1717,7 +1717,7 @@ const ManageDrivers: React.FC = () => {
         message="Are you sure you want to delete this driver? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
-        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        confirmButtonClass="bg-red-600 hover:shadow-md"
         isProcessing={isProcessingDeletion}
       />
 

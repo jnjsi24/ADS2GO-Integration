@@ -35,6 +35,7 @@ type Ad = {
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
   paymentStatus?: string | null;
+  reasonForReject?: string;
   createdAt: string;
   startTime: string;
   endTime: string;
@@ -409,23 +410,24 @@ const Advertisements: React.FC = () => {
     <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 flex flex-col">
       <div className="bg-transparent w-full flex-1 flex flex-col">
         
-        {/* Header Section - Common for both */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-5 lg:pt-10 gap-4">
-          {/* ================= MOBILE VIEW ================= */}
-          <div className="block lg:hidden w-full space-y-4">
-            {/* Row 1: Search and Status Filter */}
-            <div className="flex gap-2 w-full px-4">
+        {/* Header Section - Desktop */}
+        <div className="hidden lg:flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-5 lg:pt-10 gap-4">
+          <h1 className="text-2xl sm:text-3xl pl-6 font-bold text-gray-800">Advertisements</h1>
+
+          <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
               <input
                 type="text"
-                className="text-xs text-black rounded-md ml-8 pl-5 py-3 w-64 shadow-md focus:outline-none bg-white/70"
+                className="text-xs text-black rounded-md pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
                 placeholder="Search Advertisements"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <div className="relative w-32">
+
+              <div className="relative w-full sm:w-32">
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
                 >
                   {selectedStatusFilter}
                   <ChevronDown
@@ -435,6 +437,7 @@ const Advertisements: React.FC = () => {
                     }`}
                   />
                 </button>
+
                 <AnimatePresence>
                   {showStatusDropdown && (
                     <motion.div
@@ -442,13 +445,13 @@ const Advertisements: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {statusFilterOptions.map((status) => (
                         <button
                           key={status}
                           onClick={() => handleStatusFilterChange(status)}
-                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                         >
                           {status}
                         </button>
@@ -457,103 +460,124 @@ const Advertisements: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-            </div>
-
-            {/* Row 2: Advertisements Title */}
-            <h1 className="text-2xl font-bold text-gray-800">Advertisements</h1>
-          </div>
-
-          {/* ================= DESKTOP VIEW ================= */}
-          <div className="hidden lg:flex flex-col lg:flex-row justify-between items-start lg:items-center w-full gap-4">
-            <h1 className="text-2xl sm:text-3xl pl-6 font-bold text-gray-800">Advertisements</h1>
-
-            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
-                <input
-                  type="text"
-                  className="text-xs text-black rounded-md pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
-                  placeholder="Search Advertisements"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-
-                <div className="relative w-full sm:w-32">
-                  <button
-                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
-                  >
-                    {selectedStatusFilter}
-                    <ChevronDown
-                      size={16}
-                      className={`transform transition-transform duration-200 ${
-                        showStatusDropdown ? 'rotate-180' : 'rotate-0'
-                      }`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {showStatusDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-                      >
-                        {statusFilterOptions.map((status) => (
-                          <button
-                            key={status}
-                            onClick={() => handleStatusFilterChange(status)}
-                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                          >
-                            {status}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                <div className="relative w-full sm:w-48">
-                  <button
-                    onClick={() => setShowSortDropdown(!showSortDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
-                  >
-                    <span className="truncate">{selectedSortBy}</span>
-                    <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} />
-                  </button>
-                  <AnimatePresence>
-                    {showSortDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                      >
-                        {sortByOptions.map((sortOption) => (
-                          <button
-                            key={sortOption}
-                            onClick={() => {
-                              setSelectedSortBy(sortOption);
-                              setShowSortDropdown(false);
-                            }}
-                            className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                          >
-                            {sortOption}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+              <div className="relative w-full sm:w-48">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                >
+                  <span className="truncate">{selectedSortBy}</span>
+                  <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    >
+                      {sortByOptions.map((sortOption) => (
+                        <button
+                          key={sortOption}
+                          onClick={() => {
+                            setSelectedSortBy(sortOption);
+                            setShowSortDropdown(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {sortOption}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
         </div>
 
 
-        {/* Add New Ads Button - Common for both */}
-        <div className="flex justify-end lg:justify-end mb-6">
+        {/* Mobile Header Section - Below Navbar */}
+        <div className="block lg:hidden pt-16 pb-4">
+          <h1 className="text-2xl font-bold text-gray-800 mb-4">Advertisements</h1>
+          
+          {/* Search and Filter Row */}
+          <div className="flex gap-2 w-full mb-4">
+            <input
+              type="text"
+              className="text-xs text-black rounded-md pl-5 py-3 flex-1 shadow-md focus:outline-none bg-white/70"
+              placeholder="Search Advertisements"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+              >
+                {selectedStatusFilter}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Add New Ads Button */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => navigate('/create-advertisement')}
+              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
+              onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
+                const button = e.currentTarget;
+                const rect = button.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                button.style.setProperty('--x', `${x}px`);
+                button.style.setProperty('--y', `${y}px`);
+              }}
+            >
+              <span
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{
+                  background: 'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.2) 0%, transparent 50%)',
+                }}
+              />
+              <span className="relative z-10 flex items-center gap-2">
+                <Plus size={16} />
+                Add New Ads
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Add New Ads Button */}
+        <div className="hidden lg:flex justify-end lg:justify-end mb-6">
           <button
             onClick={() => navigate('/create-advertisement')}
             className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-40 sm:w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
@@ -580,8 +604,8 @@ const Advertisements: React.FC = () => {
         </div>
 
         {/* Mobile View */}
-        <div className="block lg:hidden">
-        <div className="flex-1 grid grid-cols-2 gap-2">
+        <div className="block lg:hidden flex-1 flex flex-col">
+        <div className="grid grid-cols-2 gap-2 mb-4">
   {currentAds.length > 0 ? (
     currentAds.map((ad) => (
       <div
@@ -693,10 +717,9 @@ const Advertisements: React.FC = () => {
   )}
 </div>
 
-
-          {/* Pagination - Mobile */}
+          {/* Pagination - Mobile - Sticky at bottom */}
           {filteredAds.length > 0 && (
-            <div className="mt-auto flex justify-center py-4">
+            <div className="sticky bottom-0 bg-gradient-to-t from-white/95 to-transparent pt-4 pb-2 flex justify-center mt-auto">
               <div className="flex items-center space-x-1">
                 <button
                   onClick={handlePreviousPage}
@@ -750,13 +773,13 @@ const Advertisements: React.FC = () => {
         </div>
 
         {/* Desktop View */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:block flex-1 flex flex-col">
           <div className="flex-1 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {currentAds.length > 0 ? (
               currentAds.map((ad) => (
                 <div
                   key={ad.id}
-                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:scale-105 transition-transform duration-300"
+                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:shadow-lg"
                 >
                   <div className="w-full h-44 flex-shrink-0 relative">
                     {ad.mediaFile ? (
@@ -888,9 +911,9 @@ const Advertisements: React.FC = () => {
             )}
           </div>
 
-          {/* Pagination - Desktop */}
+          {/* Pagination - Desktop - Sticky at bottom */}
           {filteredAds.length > 0 && (
-            <div className="mt-auto flex justify-center py-4">
+            <div className="sticky bottom-0 pt-4 pb-2 flex justify-center mt-auto">
               <div className="flex items-center space-x-2">
                 <button
                   onClick={handlePreviousPage}
@@ -918,7 +941,7 @@ const Advertisements: React.FC = () => {
                           onClick={() => handlePageChange(i)}
                           className={`px-3 py-1 text-sm rounded ${
                             currentPage === i
-                              ? "bg-[#3674B5] text-white"
+                              ? "bg-white/30 text-black"
                               : "text-gray-700 hover:border border-gray-300"
                           }`}
                         >

@@ -888,8 +888,8 @@ const ManageUsers: React.FC = () => {
                         <div className="flex items-center justify-center w-8 h-8 mr-3 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
                           {getInitials(user.firstName, user.lastName)}
                         </div>
-                        <span className="truncate font-semibold">
-                          {user.firstName} {user.middleName} {user.lastName}
+                        <span className="font-semibold max-w-[160px] truncate block">
+                        {user.firstName} {user.middleName} {user.lastName}
                         </span>
                       </div>
                     </div>
@@ -948,7 +948,7 @@ const ManageUsers: React.FC = () => {
       {/* Details Modal - Responsive */}
       {showDetailsModal && selectedUser && (
         <div
-          className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50"
+          className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50 z-[9999]"
           onClick={handleCloseModal}
         >
           <div

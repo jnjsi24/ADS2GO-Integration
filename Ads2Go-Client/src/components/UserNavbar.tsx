@@ -204,7 +204,7 @@ const SideNavbar: React.FC = () => {
               className="cursor-pointer p-2 transition-all duration-300 ease-out"
               onClick={toggleDropup}
             >
-              <div className="w-8 h-8 rounded-full flex border border-black/30 items-center justify-center relative overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-[#FF9800] flex border border-black/30 items-center justify-center relative overflow-hidden">
                 {user?.profilePicture ? (
                   <img
                     src={user.profilePicture}

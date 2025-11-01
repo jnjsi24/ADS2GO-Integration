@@ -524,7 +524,7 @@ const Dashboard = () => {
         }}
       ></div>
       {/* Overlay */}
-      <div className="absolute inset-0 bg-white/50 backdrop-blur-lg"></div>
+      <div className="absolute inset-0 bg-white/50 backdrop-blur-xl"></div>
       {/* Content */}
       <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
         {/* Header Section */}
@@ -537,7 +537,7 @@ const Dashboard = () => {
         
         {/* No Analytics Data Message */}
         {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
@@ -943,13 +943,10 @@ const Dashboard = () => {
         <div className="pt-6 lg:pt-10">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Advertisement Locations</h2>
-            <div className="text-xs sm:text-sm text-gray-500">
-              Live tracking • Updated every 2s
-            </div>
           </div>
 
           {/* Tab Navigation */}
-          <div className="bg-white/70 backdrop-blur-md rounded-t-lg border border-white/20 border-b-0">
+          <div className="bg-white/70 backdrop-blur-md border border-white/20 border-b-0">
             <div className="flex space-x-1 p-1">
               <button
                 onClick={() => setMapActiveTab('today')}
@@ -981,76 +978,69 @@ const Dashboard = () => {
           </div>
 
           {/* Map Container */}
-          <div className="relative bg-white rounded-b-lg shadow-sm overflow-hidden">
+          <div className="relative bg-white shadow-sm overflow-hidden">
             {/* History Tab Controls */}
             {mapActiveTab === 'history' && (
-              <div className="p-4 border-b bg-gray-50 flex flex-wrap gap-3 items-center">
+              <div className="p-4 bg-gray-50 flex flex justify-end gap-2 items-center">
                 {/* Ad Selector */}
-                <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Advertisement
-                  </label>
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowAdDropdown(!showAdDropdown)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1b5087]"
-                    >
-                      <span className="truncate">
-                        {selectedAdForRoute 
-                          ? userAdsForRoute.find((ad: any) => ad.id === selectedAdForRoute)?.title || 'Select Ad'
-                          : 'Select Ad'}
-                      </span>
-                      <ChevronDown className={`w-4 h-4 transition-transform ${showAdDropdown ? 'rotate-180' : ''}`} />
-                    </button>
-                    <AnimatePresence>
-                      {showAdDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto"
-                        >
-                          {userAdsForRoute.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                              No active ads with materials
-                            </div>
-                          ) : (
-                            userAdsForRoute.map((ad: any) => (
-                              <button
-                                key={ad.id}
-                                onClick={() => {
-                                  setSelectedAdForRoute(ad.id);
-                                  setShowAdDropdown(false);
-                                }}
-                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors ${
-                                  ad.id === selectedAdForRoute ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                                }`}
-                              >
-                                <div className="font-medium truncate">{ad.title}</div>
-                                <div className="text-xs text-gray-500">
-                                  {ad.materialId?.length || 0} material(s) assigned
-                                </div>
-                              </button>
-                            ))
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                <div className="relative w-40">
+                  <button
+                    onClick={() => setShowAdDropdown(!showAdDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    <span className="truncate">
+                      {selectedAdForRoute 
+                        ? userAdsForRoute.find((ad: any) => ad.id === selectedAdForRoute)?.title || 'Select Ad'
+                        : 'Select Ad'}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showAdDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  <AnimatePresence>
+                    {showAdDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-20 top-full mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-y-auto"
+                      >
+                        {userAdsForRoute.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                            No active ads with materials
+                          </div>
+                        ) : (
+                          userAdsForRoute.map((ad: any) => (
+                            <button
+                              key={ad.id}
+                              onClick={() => {
+                                setSelectedAdForRoute(ad.id);
+                                setShowAdDropdown(false);
+                              }}
+                              className={`block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                                ad.id === selectedAdForRoute ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                              }`}
+                            >
+
+                              <div className="font-medium truncate">{ad.title}</div>
+                              <div className="text-xs text-gray-500">
+                                {ad.materialId?.length || 0} material(s) assigned
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Date Picker */}
                 <div className="min-w-[150px]">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Select Date
-                  </label>
                   <input
                     type="date"
                     value={selectedRouteDate}
                     onChange={(e) => setSelectedRouteDate(e.target.value)}
                     max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1b5087]"
+                    className="w-full px-3 py-2 text-sm bg-white shadow-md rounded-md"
                   />
                 </div>
               </div>
@@ -1065,11 +1055,11 @@ const Dashboard = () => {
                   {!selectedAdForRoute ? (
                     <div className="flex items-center justify-center h-full bg-gray-50">
                       <div className="text-center p-8">
-                        <Monitor className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-700 mb-2">
+                        <Monitor className="w-14 h-14 mx-auto mb-4" />
+                        <h3 className="font-medium mb-2">
                           Select an Advertisement
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm">
                           Choose an ad from the dropdown above to view its historical routes
                         </p>
                       </div>

@@ -75,7 +75,9 @@ const ManageAds: React.FC = () => {
   const [bulkRejectReason, setBulkRejectReason] = useState('');
 
   // Loading states for approve/reject buttons
-  const [processingAds, setProcessingAds] = useState<Set<string>>(new Set());
+  const [processingApprove, setProcessingApprove] = useState<Set<string>>(new Set());
+  const [processingReject, setProcessingReject] = useState<Set<string>>(new Set());
+
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -256,43 +258,20 @@ const ManageAds: React.FC = () => {
 
   // Actions
   const handleApprove = async (adId: string) => {
-    // Prevent multiple clicks
-    if (processingAds.has(adId)) {
-      return;
-    }
-
-    // Add to processing set
-    setProcessingAds(prev => new Set(prev).add(adId));
-
+    if (processingApprove.has(adId)) return;
+    setProcessingApprove(prev => new Set(prev).add(adId));
+  
     try {
-      await updateAd({
-        variables: {
-          id: adId,
-          input: {
-            status: 'APPROVED'
-          }
-        }
-      });
-      addToast({
-        type: 'success',
-        title: 'Success!',
-        message: 'Advertisement has been accepted successfully',
-        duration: 5000
-      });
+      await updateAd({ variables: { id: adId, input: { status: 'APPROVED' } } });
+      addToast({ type: 'success', title: 'Success!', message: 'Advertisement approved successfully.' });
     } catch (error) {
       console.error('Error approving ad:', error);
-      addToast({
-        type: 'error',
-        title: 'Error!',
-        message: 'Something went wrong.',
-        duration: 5000
-      });
+      addToast({ type: 'error', title: 'Error!', message: 'Something went wrong.' });
     } finally {
-      // Remove from processing set
-      setProcessingAds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(adId);
-        return newSet;
+      setProcessingApprove(prev => {
+        const next = new Set(prev);
+        next.delete(adId);
+        return next;
       });
     }
   };
@@ -304,50 +283,26 @@ const ManageAds: React.FC = () => {
 
   const submitReject = async () => {
     if (!adToReject || !rejectReason.trim()) {
-      addToast({
-        type: 'warning',
-        title: 'Missing Information',
-        message: 'Please provide a reason for rejection',
-        duration: 4000
-      });
+      addToast({ type: 'warning', title: 'Missing Information', message: 'Please provide a reason for rejection' });
       return;
     }
-
-    // Prevent multiple clicks
-    if (processingAds.has(adToReject)) {
-      return;
-    }
-
-    // Add to processing set
-    setProcessingAds(prev => new Set(prev).add(adToReject));
-
+  
+    if (processingReject.has(adToReject)) return;
+    setProcessingReject(prev => new Set(prev).add(adToReject));
+  
     try {
-      await updateAd({
-        variables: {
-          id: adToReject,
-          input: {
-            status: 'REJECTED',
-            reasonForReject: rejectReason
-          }
-        }
-      });
+      await updateAd({ variables: { id: adToReject, input: { status: 'REJECTED', reasonForReject: rejectReason } } });
       setShowRejectModal(false);
       setRejectReason('');
       setAdToReject(null);
     } catch (error) {
       console.error('Error rejecting ad:', error);
-      addToast({
-        type: 'error',
-        title: 'Error!',
-        message: 'Something went wrong.',
-        duration: 5000
-      });
+      addToast({ type: 'error', title: 'Error!', message: 'Something went wrong.' });
     } finally {
-      // Remove from processing set
-      setProcessingAds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(adToReject);
-        return newSet;
+      setProcessingReject(prev => {
+        const next = new Set(prev);
+        next.delete(adToReject);
+        return next;
       });
     }
   };
@@ -675,7 +630,7 @@ const ManageAds: React.FC = () => {
             <input
               type="text"
               placeholder="Search by title, advertiser, or Ad ID..."
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-md pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
@@ -744,7 +699,7 @@ const ManageAds: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 {activeTab === 'ads'
                   ? adsStatusFilter
@@ -764,7 +719,7 @@ const ManageAds: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {(activeTab === 'deployment' ? deploymentStatusFilterOptions : statusFilterOptions).map((status) => (
                       <button
@@ -790,7 +745,7 @@ const ManageAds: React.FC = () => {
               <div className="relative w-48">
                 <button
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   <span className="truncate">{selectedSortBy}</span>
                   <ChevronDown
@@ -806,7 +761,7 @@ const ManageAds: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
                     >
                       {sortByOptions.map((sortOption) => (
                         <button
@@ -848,29 +803,29 @@ const ManageAds: React.FC = () => {
           <div className="">
             {/* Stats Summary */}
             <div className="grid grid-cols-5 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
                 <h3 className="text-s text-center font-medium text-gray-500">Total Advertisement</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-blue-500">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'RUNNING').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Running</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-green-600">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Approved</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-yellow-500">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Pending</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-purple-600">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'SCHEDULED').length || 0}
                 </p>
@@ -880,7 +835,7 @@ const ManageAds: React.FC = () => {
 
             {/* Bulk Actions Bar */}
             {selectedAds.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <span className="text-sm font-medium text-blue-800">
@@ -947,7 +902,7 @@ const ManageAds: React.FC = () => {
                 </div>
 
                 {paginatedAds.map((ad: Ad) => (
-                  <div key={ad.id} className="bg-white mb-3 rounded-lg shadow-md">
+                  <div key={ad.id} className="bg-white mb-3 rounded-md shadow-md">
                     <div
                       className="grid grid-cols-12 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointe"
                       onClick={() => handleRowClick(ad)}
@@ -988,47 +943,49 @@ const ManageAds: React.FC = () => {
                         </span>
                       </div>
                       <div className="col-span-2 flex items-center justify-center gap-1">
-                        {ad.status === 'PENDING' && (
-                          <>
-                            <button
-                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
-                                processingAds.has(ad.id) 
-                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                                  : 'bg-green-200 hover:bg-green-200 text-green-700'
-                              }`}
-                              onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                              disabled={processingAds.has(ad.id)}
-                              title={processingAds.has(ad.id) ? "Processing..." : "Approve"}
-                            >
-                              {processingAds.has(ad.id) ? (
-                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
-                              ) : (
-                                <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                              )}
-                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                                {processingAds.has(ad.id) ? 'Processing...' : 'Approve'}
-                              </span>
-                            </button>
-                            <button
-                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
-                                processingAds.has(ad.id) 
-                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                                  : 'bg-red-200 hover:bg-red-200 text-red-700'
-                              }`}
-                              onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                              disabled={processingAds.has(ad.id)}
-                              title={processingAds.has(ad.id) ? "Processing..." : "Reject"}
-                            >
-                              {processingAds.has(ad.id) ? (
-                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
-                              ) : (
-                                <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                              )}
-                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
-                                {processingAds.has(ad.id) ? 'Processing...' : 'Reject'}
-                              </span>
-                            </button>
-                          </>
+                      {ad.status === 'PENDING' && ( <>
+                        {/* APPROVE BUTTON */}
+                        <button
+                          className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                            processingApprove.has(ad.id)
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'bg-green-200 hover:bg-green-200 text-green-700'
+                          }`}
+                          onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
+                          disabled={processingApprove.has(ad.id)}
+                          title={processingApprove.has(ad.id) ? "Processing..." : "Approve"}
+                        >
+                          {processingApprove.has(ad.id) ? (
+                            <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                          ) : (
+                            <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                          )}
+                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                            {processingApprove.has(ad.id) ? 'Processing...' : 'Approve'}
+                          </span>
+                        </button>
+
+                        {/* REJECT BUTTON */}
+                        <button
+                          className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
+                            processingReject.has(ad.id)
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                              : 'bg-red-200 hover:bg-red-200 text-red-700'
+                          }`}
+                          onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
+                          disabled={processingReject.has(ad.id)}
+                          title={processingReject.has(ad.id) ? "Processing..." : "Reject"}
+                        >
+                          {processingReject.has(ad.id) ? (
+                            <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                          ) : (
+                            <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                          )}
+                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
+                            {processingReject.has(ad.id) ? 'Processing...' : 'Reject'}
+                          </span>
+                        </button>
+                        </> 
                         )}
                         <button
                           className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
@@ -1142,7 +1099,7 @@ const ManageAds: React.FC = () => {
           onClick={handleCloseAdModal} // closes the modal on outside click
         >
           <div
-            className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${
+            className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-md transform transition-transform duration-300 ease-in-out ${
               isAdModalOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
             onClick={(e) => e.stopPropagation()} // stops click from closing modal
@@ -1191,19 +1148,19 @@ const ManageAds: React.FC = () => {
                       <img
                         src={selectedAd.mediaFile}
                         alt="Ad media"
-                        className="w-full h-64 object-contain bg-gray-100 rounded-lg shadow-md"
+                        className="w-full h-64 object-contain bg-gray-100 rounded-md shadow-md"
                         onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,...'; }}
                       />
                     ) : selectedAd.adFormat === 'VIDEO' ? (
-                      <video controls className="w-full h-64 bg-gray-100 rounded-lg shadow-md">
+                      <video controls className="w-full h-64 bg-gray-100 rounded-md shadow-md">
                         <source src={selectedAd.mediaFile} />
                         Your browser does not support the video tag.
                       </video>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-lg">Media not available</div>
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-md">Media not available</div>
                     )
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-lg">Media not available</div>
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-md">Media not available</div>
                   )}
                 </div>
 
@@ -1264,25 +1221,30 @@ const ManageAds: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800 mb-5">Reject Advertisement</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full m-4 shadow-lg">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">
+                Reject Advertisement
+              </h2>
               <button
                 onClick={() => {
                   setShowRejectModal(false);
                   setRejectReason('');
                   setAdToReject(null);
                 }}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition"
               >
-                <X size={20} />
+                <X size={22} />
               </button>
             </div>
 
-            <div className="relative mb-6">
+            {/* Textarea */}
+            <div className="relative mb-7">
               <textarea
                 id="rejectReason"
                 name="rejectReason"
@@ -1290,63 +1252,66 @@ const ManageAds: React.FC = () => {
                 value={rejectReason}
                 onChange={(e) => {
                   setRejectReason(e.target.value);
-                  // 🔹 Auto-expand behavior
+                  // 🔹 Auto-expand
                   e.target.style.height = "auto";
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`; // max height ≈ 100px
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`; // smoother max
                 }}
-                placeholder=" "
-                className={`peer w-full px-0 pt-6 pb-2 text-gray-800 border-b bg-transparent focus:outline-none focus:border-blue-500 placeholder-transparent transition
-                  ${!rejectReason.trim() ? 'border-gray-300' : 'border-gray-400'}
-                `}
-                style={{
-                  minHeight: "40px",
-                  maxHeight: "100px",
-                  resize: "none",
-                  overflowY: "auto",
-                }}
-              />
+                placeholder="Reason for rejection"
+                className="peer w-full px-1 pb-3 pt-3 border-b border-gray-300
+                    focus:outline-none focus:border-blue-500 placeholder-transparent transition"
+                />
 
-              {/* 🔹 Floating label with better spacing */}
+              {/* Floating label */}
               <label
                 htmlFor="rejectReason"
-                className={`absolute left-0 bg-white text-gray-600 transition-all duration-200
+                className={`absolute left-0 pb-3 w-full text-gray-500 text-sm transition-all duration-200
+                  pointer-events-none bg-transparent px-1
                   ${
                     rejectReason
-                      ? '-top-2 text-sm text-blue-600 font-semibold'
-                      : 'peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                      ? "text-xs -top-3.5 font-medium"
+                      : "peer-placeholder-shown:top-10 peer-placeholder-shown:text-gray-500 peer-placeholder-shown:text-sm"
                   }
-                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold`}
+                  peer-focus:-top-3.5 peer-focus:text-xs peer-focus:font-medium
+                `}
               >
                 Reason for rejection
               </label>
 
-              <p className="mt-1 text-xs text-gray-500">This reason will be visible to the advertiser.</p>
+              <p className="mt-2 text-xs text-[#3674B5]">
+                This reason will be visible to the advertiser.
+              </p>
             </div>
 
-            <div className="flex gap-3 justify-between">
+            {/* Action buttons */}
+            <div className="flex justify-between">
               <button
                 onClick={() => {
                   setShowRejectModal(false);
                   setRejectReason('');
                   setAdToReject(null);
                 }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={submitReject}
-                disabled={!rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)}
-                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
-                  !rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-red-500 hover:bg-red-600'
-                }`}
+                disabled={
+                  !rejectReason.trim() ||
+                  (adToReject ? processingReject.has(adToReject) : false)
+                }
+                className={`px-4 py-2 rounded-md transition-all flex items-center gap-2
+                  ${
+                    !rejectReason.trim() ||
+                    (adToReject ? processingReject.has(adToReject) : false)
+                      ? 'bg-gray-200 text-black/70 cursor-not-allowed'
+                      : 'bg-red-200 text-red-700 hover:shadow-md'
+                  }`}
               >
-                {adToReject && processingAds.has(adToReject) && (
-                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                {adToReject && processingReject.has(adToReject) && (
+                  <div className="w-4 h-4 animate-spin text-black/60 border-2 border-black/60 border-t-transparent rounded-full" />
                 )}
-                {adToReject && processingAds.has(adToReject)
+                {adToReject && processingReject.has(adToReject)
                   ? 'Processing...'
                   : 'Reject Advertisement'}
               </button>
@@ -1358,7 +1323,7 @@ const ManageAds: React.FC = () => {
       {/* Bulk Reject Modal */}
       {showBulkRejectModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+          <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800 mb-5">Reject {selectedAds.length} Advertisement(s)</h2>
               <button

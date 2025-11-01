@@ -1470,7 +1470,7 @@ const Materials: React.FC = () => {
           <div className="flex justify-end space-x-3">
             <button
               onClick={cancelRemove}
-              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={unassigning}
             >
               Cancel

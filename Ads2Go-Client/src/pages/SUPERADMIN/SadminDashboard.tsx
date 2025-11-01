@@ -95,14 +95,14 @@ const Dashboard = () => {
           {/* Notifications Button */}
           <Link
             to="/sadmin-notifications"
-            className="relative flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-md text-gray-700 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center bg-white border border-gray-200 rounded-md px-4 py-2 shadow-md text-gray-700 text-sm hover:bg-gray-50 transition-colors"
           >
             <Bell className="h-5 w-5 mr-2 text-gray-500" />
             <span>Notifications</span>
           </Link>
           
           {/* Calendar icon and 'This month' button */}
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-md text-gray-700 text-sm cursor-pointer">
+          <div className="flex items-center bg-white border border-gray-200 rounded-md px-4 py-2 shadow-md text-gray-700 text-sm cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 mr-2 text-gray-500"
@@ -136,178 +136,169 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-        {/* LEFT SIDE: Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {[
-            { 
-              label: "Total Drivers", 
-              value: stats?.totalDrivers || 0, 
-              change: "Active drivers", 
-              color: "green", 
-              icon: "LifeBuoy" 
-            },
-            { 
-              label: "Total Ads", 
-              value: stats?.totalAds || 0, 
-              change: "All advertisements", 
-              color: "blue", 
-              icon: "Megaphone" 
-            },
-            { 
-              label: "Total Users", 
-              value: stats?.totalUsers || 0, 
-              change: "Registered users", 
-              color: "yellow", 
-              icon: "Users" 
-            },
-            { 
-              label: "Total Plans", 
-              value: stats?.totalPlans || 0, 
-              change: "Available plans", 
-              color: "purple", 
-              icon: "ClipboardList" 
-            },
-          ].map((stat, i) => {
-            const Icon =
-              {
-                LifeBuoy: require("lucide-react").LifeBuoy,
-                Megaphone: require("lucide-react").Megaphone,
-                Users: require("lucide-react").Users,
-                ClipboardList: require("lucide-react").ClipboardList,
-              }[stat.icon];
+      {/* ROW 1: Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {[
+          { 
+            label: "Total Drivers", 
+            value: stats?.totalDrivers || 0, 
+            change: "Active drivers", 
+            color: "green", 
+            icon: "LifeBuoy" 
+          },
+          { 
+            label: "Total Ads", 
+            value: stats?.totalAds || 0, 
+            change: "All advertisements", 
+            color: "blue", 
+            icon: "Megaphone" 
+          },
+          { 
+            label: "Total Users", 
+            value: stats?.totalUsers || 0, 
+            change: "Registered users", 
+            color: "yellow", 
+            icon: "Users" 
+          },
+          { 
+            label: "Total Plans", 
+            value: stats?.totalPlans || 0, 
+            change: "Available plans", 
+            color: "purple", 
+            icon: "ClipboardList" 
+          },
+        ].map((stat, i) => {
+          const Icon =
+            {
+              LifeBuoy: require("lucide-react").LifeBuoy,
+              Megaphone: require("lucide-react").Megaphone,
+              Users: require("lucide-react").Users,
+              ClipboardList: require("lucide-react").ClipboardList,
+            }[stat.icon];
 
-            return (
-              <div
-                key={i}
-                className={`p-6 rounded-xl shadow-md border flex items-center justify-between`}
-              >
-                {/* Left side: Icon */}
-                <div>
-                  <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+          return (
+            <div
+              key={i}
+              className={`p-6 rounded-md shadow-md border flex items-center justify-between bg-white`}
+            >
+              {/* Left side: Icon */}
+              <div>
+                <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+              </div>
+
+              {/* Right side: Label + Value */}
+              <div className="flex flex-col items-end text-right">
+                <p className={`text-3xl font-bold`}>
+                  {stat.value.toLocaleString()}
+                </p>
+                <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ROW 2: Analytics Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Users Analytics */}
+        <div className="bg-white p-6 rounded-md shadow-md">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-gray-800">Users Analytics</h3>
+            <Link
+              to="/sadmin-analytics?tab=users"
+              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
+            >
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+          </div>
+
+          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+            {usersData.map((item, index) => (
+              <div key={index} className="flex flex-col items-center flex-1">
+                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                  <div
+                    className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
+                    style={{ height: `${item.value}%` }}
+                  />
                 </div>
-
-                {/* Right side: Label + Value */}
-                <div className="flex flex-col items-end text-right">
-                  <p className={`text-3xl font-bold`}>
-                    {stat.value.toLocaleString()}
-                  </p>
-                  <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+                <div className="text-center">
+                  <span className="text-sm font-semibold text-gray-900 block">
+                    {item.value.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-gray-600 mt-1 block">
+                    {item.label}
+                  </span>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        {/* RIGHT SIDE: Analytics Panels */}
-        <div className="space-y-6">
-          {/* Users Analytics */}
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Users Analytics</h3>
-              <Link
-                to="/sadmin-analytics?tab=users"
-                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
-              >
-                View Details
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {usersData.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between w-full space-x-3"
-                >
-                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
-                    {item.label}
-                  </p>
-                  <div className="flex-1">
-                    <div
-                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
-                      style={{ width: `${(item.value / maxValue) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
-                    {item.value.toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* Drivers Analytics */}
+        <div className="bg-white p-6 rounded-md shadow-md">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-gray-800">Drivers Analytics</h3>
+            <Link
+              to="/sadmin-analytics?tab=drivers"
+              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
+            >
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
           </div>
 
-          {/* Drivers Analytics */}
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Drivers Analytics</h3>
-              <Link
-                to="/sadmin-analytics?tab=drivers"
-                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
-              >
-                View Details
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {driversData.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between w-full space-x-3"
-                >
-                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
-                    {item.label}
-                  </p>
-                  <div className="flex-1">
-                    <div
-                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
-                      style={{ width: `${(item.value / maxValue) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
+          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+            {driversData.map((item, index) => (
+              <div key={index} className="flex flex-col items-center flex-1">
+                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                  <div
+                    className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
+                    style={{ height: `${item.value}%` }}
+                  />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-semibold text-gray-900 block">
                     {item.value.toLocaleString()}
                   </span>
+                  <span className="text-xs text-gray-600 mt-1 block">
+                    {item.label}
+                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Ads Analytics */}
+        <div className="bg-white p-6 rounded-md shadow-md">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-gray-800">Ads Analytics</h3>
+            <Link
+              to="/sadmin-analytics?tab=ads"
+              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
+            >
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
           </div>
 
-          {/* Ads Analytics */}
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Ads Analytics</h3>
-              <Link
-                to="/sadmin-analytics?tab=ads"
-                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
-              >
-                View Details
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              {adsData.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between w-full space-x-3"
-                >
-                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
-                    {item.label}
-                  </p>
-                  <div className="flex-1">
-                    <div
-                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
-                      style={{ width: `${(item.value / maxValue) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
+          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+            {adsData.map((item, index) => (
+              <div key={index} className="flex flex-col items-center flex-1">
+                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                  <div
+                    className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
+                    style={{ height: `${item.value}%` }}
+                  />
+                </div>
+                <div className="text-center">
+                  <span className="text-sm font-semibold text-gray-900 block">
                     {item.value.toLocaleString()}
                   </span>
+                  <span className="text-xs text-gray-600 mt-1 block">
+                    {item.label}
+                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

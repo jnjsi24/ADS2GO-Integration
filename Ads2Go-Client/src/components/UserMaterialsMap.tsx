@@ -235,16 +235,16 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
   if (materialsWithLocation.length === 0) {
     return (
       <div 
-        className={`bg-blue-50 border border-blue-200 flex items-center justify-center ${className}`}
+        className={`flex items-center justify-center ${className}`}
         style={{ height }}
       >
         <div className="text-center p-4">
-          <svg className="w-16 h-16 text-blue-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg className="w-14 h-14 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <p className="text-blue-700 font-medium mb-1">No Active Materials</p>
-          <p className="text-blue-600 text-sm">
+          <p className="font-medium mb-1">No Active Materials</p>
+          <p className="text-sm">
             Your materials will appear here when they're online and sending location data.
           </p>
         </div>
