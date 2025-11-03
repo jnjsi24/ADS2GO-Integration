@@ -1621,7 +1621,7 @@ const Materials: React.FC = () => {
     
     {/* Remove from Driver Confirmation Modal */}
     {showRemoveModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
         <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             Remove Material from Driver
@@ -1631,30 +1631,26 @@ const Materials: React.FC = () => {
           </p>
           <div className="mb-4">
             <label htmlFor="dismountReason" className="block text-sm font-medium text-gray-700 mb-2">
-              Reason for Removal *
+              Reason for Removal
             </label>
             <textarea
               id="dismountReason"
               value={dismountReason}
               onChange={(e) => setDismountReason(e.target.value)}
-              placeholder="Please provide a reason for removing this material from the driver..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border-b border-gray-300 focus:outline-none"
               rows={3}
               required
             />
           </div>
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-between space-x-3">
             <button
               onClick={cancelRemove}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={unassigning}
-            >
-              Cancel
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">              Cancel
             </button>
             <button
               onClick={confirmRemove}
               disabled={!dismountReason.trim() || unassigning}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 bg-red-500 text-white rounded-md hover:shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
               {unassigning ? 'Removing...' : 'Remove'}
             </button>

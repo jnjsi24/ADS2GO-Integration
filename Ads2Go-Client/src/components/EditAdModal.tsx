@@ -824,7 +824,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={uploading || updating}
             >
               Cancel
@@ -832,7 +832,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
             <button
               type="submit"
               disabled={uploading || updating}
-              className="px-6 py-2 bg-[#3674B5] text-white rounded-md hover:shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-10 py-2 bg-[#3674B5] text-white rounded-md hover:shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {(uploading || updating) && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? 'Uploading...' : updating ? 'Updating...' : 'Update Advertisement'}

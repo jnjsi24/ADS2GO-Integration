@@ -204,7 +204,7 @@ const SideNavbar: React.FC = () => {
               className="cursor-pointer p-2 transition-all duration-300 ease-out"
               onClick={toggleDropup}
             >
-              <div className="w-8 h-8 rounded-full bg-[#FF9800] flex border border-black/30 items-center justify-center relative overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-[#FF9800] flex items-center justify-center relative overflow-hidden">
                 {user?.profilePicture ? (
                   <img
                     src={user.profilePicture}
@@ -319,14 +319,14 @@ const SideNavbar: React.FC = () => {
       </div>
 
       {/* User Profile & Dropup Menu - Desktop Only */}
-      <div className="p-6 relative hidden lg:block">
+      <div className="p-4 relative hidden lg:block">
         <div className="flex items-center justify-between mb-4">
           <div
             data-profile-toggle
             className="flex items-center space-x-3 cursor-pointer hover:bg-black/10 flex-1 rounded-lg p-2 transition-all duration-300 ease-out"
             onClick={toggleDropup}
           >
-            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative overflow-hidden">
+            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
               {user?.profilePicture ? (
                 <img
                   src={user.profilePicture}
@@ -341,16 +341,16 @@ const SideNavbar: React.FC = () => {
                 />
               ) : null}
               <span 
-                className="text-black/70 font-semibold flex items-center justify-center w-full h-full"
+                className="text-black/70 font-semibold flex items-center rounded-full justify-center w-full h-full"
                 style={{ display: user?.profilePicture ? 'none' : 'flex' }}
               >
                 {user ? getInitials(user.firstName, user.lastName) : '...'}
               </span>
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+              <span className="absolute bottom-0 -right-0.5 w-3 h-3 bg-green-500 rounded-full border border-white"></span>
             </div>
             <div>
               {user ? (
-                <p className="font-bold text-black/70">
+                <p className="font-semibold text-black/70">
                   {`${user.firstName} ${user.lastName}`}
                 </p>
               ) : (
