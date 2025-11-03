@@ -173,18 +173,30 @@ const adResolvers = {
       }
 
       // Note: maxDevices removed - constraint is now based on available materials, not pricing config
-      // Get price for duration
-      console.log(`💵 [calculateFlexiblePricing] Getting price per play...`);
-      const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
-      console.log(`💵 [calculateFlexiblePricing] Price per play: ${pricePerPlay}`);
+      // Convert duration days to months
+      const durationMonths = durationDays / 30;
       
-      // Calculate pricing
-      console.log(`💰 [calculateFlexiblePricing] Calculating pricing...`);
-      const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
+      // Calculate total price with duration discount using the proper method
+      console.log(`💵 [calculateFlexiblePricing] Calculating total price with discounts...`);
+      const totalPriceCalculation = await pricingConfig.calculateTotalPrice(adLengthSeconds, durationMonths, numberOfDevices);
+      console.log(`💵 [calculateFlexiblePricing] Total price calculation:`, totalPriceCalculation);
+      
+      // Now derive price per play from the total price (for display purposes)
+      const pricing = calculatePricing(0, adLengthSeconds, numberOfDevices, durationDays); // This just calculates plays, not price
+      const pricePerPlay = totalPriceCalculation.totalPrice / (pricing.totalPlaysPerDay * durationDays);
+      const dailyRevenue = totalPriceCalculation.totalPrice / durationDays;
+      
+      // Update pricing with the actual calculated values
+      pricing.dailyRevenue = dailyRevenue;
+      pricing.totalPrice = totalPriceCalculation.totalPrice;
+      
       console.log(`💰 [calculateFlexiblePricing] Pricing calculated:`, { 
         playsPerDayPerDevice: pricing.playsPerDayPerDevice, 
         totalPlaysPerDay: pricing.totalPlaysPerDay,
-        totalPrice: pricing.totalPrice 
+        pricePerPlay: pricePerPlay,
+        dailyRevenue: dailyRevenue,
+        totalPrice: pricing.totalPrice,
+        discount: totalPriceCalculation.discount
       });
 
       // Get available materials to calculate available slots
@@ -306,14 +318,31 @@ const adResolvers = {
       }
 
       // Note: maxDevices removed - constraint is now based on available materials, not pricing config
-      // Get price for duration (use selected length for pricing, since that's what user chose)
-      const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
+      // Convert duration days to months
+      const durationMonths = durationDays / 30;
       
-      // Calculate pricing (use actual duration for accurate play count calculations)
-      const pricing = calculatePricing(pricePerPlay, actualVideoDuration, numberOfDevices, durationDays);
+      // Calculate total price with duration discount using the proper method
+      console.log(`💵 [createFlexibleAd] Calculating total price with discounts...`);
+      const totalPriceCalculation = await pricingConfig.calculateTotalPrice(adLengthSeconds, durationMonths, numberOfDevices);
+      console.log(`💵 [createFlexibleAd] Total price calculation:`, totalPriceCalculation);
       
-      // Use provided price if available, otherwise use calculated price
+      // Now derive price per play from the total price (for display purposes)
+      const pricing = calculatePricing(0, actualVideoDuration, numberOfDevices, durationDays); // This just calculates plays, not price
+      const pricePerPlay = totalPriceCalculation.totalPrice / (pricing.totalPlaysPerDay * durationDays);
+      
+      // Update pricing with the actual calculated values
+      pricing.dailyRevenue = totalPriceCalculation.totalPrice / durationDays;
+      pricing.totalPrice = totalPriceCalculation.totalPrice;
+      
+      // Use provided price if available, otherwise use calculated price (with discount applied)
       const finalPrice = price || pricing.totalPrice;
+      
+      console.log(`💰 [createFlexibleAd] Final pricing:`, { 
+        pricePerPlay: pricePerPlay,
+        dailyRevenue: pricing.dailyRevenue,
+        totalPrice: pricing.totalPrice,
+        discount: totalPriceCalculation.discount
+      });
 
       // Use smart material selection for multiple devices
       let selectedMaterials = [];
