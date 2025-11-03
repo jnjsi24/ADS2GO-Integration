@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -40,51 +40,17 @@ import {
   Eye,
   Percent,
   XCircle,
-  PlayCircle
+  PlayCircle,
+  Megaphone,
+  Archive
 } from 'lucide-react';
-import { GET_SUPERADMIN_DASHBOARD_STATS, GET_USER_COUNTS_BY_PLAN } from '../../graphql/superadmin/queries/sadminNotificationQueries';
+import { GET_SUPERADMIN_DASHBOARD_STATS, GET_SUPERADMIN_MONTHLY_GROWTH } from '../../graphql/superadmin/queries/sadminNotificationQueries';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
-// Mock data for comprehensive analytics
-const userGrowthData = [
-  { month: "Jan", users: 120, drivers: 45, ads: 89 },
-  { month: "Feb", users: 180, drivers: 62, ads: 134 },
-  { month: "Mar", users: 250, drivers: 78, ads: 189 },
-  { month: "Apr", users: 320, drivers: 95, ads: 245 },
-  { month: "May", users: 380, drivers: 112, ads: 298 },
-  { month: "Jun", users: 450, drivers: 128, ads: 356 },
-  { month: "Jul", users: 520, drivers: 145, ads: 412 },
-];
-
-const revenueData = [
-  { month: "Jan", revenue: 12000, ads: 89 },
-  { month: "Feb", revenue: 18500, ads: 134 },
-  { month: "Mar", revenue: 25200, ads: 189 },
-  { month: "Apr", revenue: 31800, ads: 245 },
-  { month: "May", revenue: 38400, ads: 298 },
-  { month: "Jun", revenue: 45600, ads: 356 },
-  { month: "Jul", revenue: 52800, ads: 412 },
-];
-
-
-const adPerformanceData = [
-  { name: "Video Ads", value: 45, impressions: 12500, clicks: 890 },
-  { name: "Image Ads", value: 35, impressions: 9800, clicks: 650 },
-  { name: "Text Ads", value: 20, impressions: 5600, clicks: 320 },
-];
-
-const locationData = [
-  { location: "Metro Manila", users: 320, drivers: 95, revenue: 25000 },
-  { location: "Cebu", users: 180, drivers: 45, revenue: 15000 },
-  { location: "Davao", users: 120, drivers: 28, revenue: 9800 },
-  { location: "Iloilo", users: 85, drivers: 22, revenue: 7200 },
-  { location: "Others", users: 95, drivers: 18, revenue: 6800 },
-];
 
 const SadminAnalytics: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
-  const [dateRange, setDateRange] = useState('30d');
   const [refreshing, setRefreshing] = useState(false);
 
   // ✅ Add these missing states
@@ -113,20 +79,22 @@ const SadminAnalytics: React.FC = () => {
     }
   });
 
-  // Fetch plan data
-  const { data: planData, loading: planLoading, refetch: refetchPlans } = useQuery(GET_USER_COUNTS_BY_PLAN, {
+  // Fetch monthly growth data (last 12 months)
+  const { data: growthData, loading: growthLoading, refetch: refetchGrowth } = useQuery(GET_SUPERADMIN_MONTHLY_GROWTH, {
+    variables: { months: 12 },
+    pollInterval: 120000,
     onError: (error) => {
-      console.error("Error fetching plan data:", error);
+      console.error("Error fetching monthly growth data:", error);
     }
   });
 
   const stats = statsData?.getSuperAdminDashboardStats;
-  const plans = planData?.getUserCountsByPlan || [];
+  const monthlyGrowth = growthData?.getSuperAdminMonthlyGrowth || [];
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([refetchStats(), refetchPlans()]);
+      await Promise.all([refetchStats(), refetchGrowth()]);
     } finally {
       setRefreshing(false);
     }
@@ -141,6 +109,7 @@ const SadminAnalytics: React.FC = () => {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'drivers', label: 'Drivers', icon: UserCheck },
+    { id: 'advertisements', label: 'Advertisements', icon: Megaphone },
   ];
 
   const renderOverviewTab = () => (
@@ -196,31 +165,18 @@ const SadminAnalytics: React.FC = () => {
           </div>
         </div>
 
-        {/* Total Revenue */}
-        <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
-          {/* Left side: icon */}
-          <div>
-            <DollarSign className="h-12 w-12 text-white rounded-full bg-yellow-500 p-2" />
-          </div>
-
-          {/* Right side: label + value */}
-          <div className="flex flex-col items-end text-right">
-            <p className="text-2xl font-bold">
-              ₱{stats?.totalRevenue?.toLocaleString() || 0}
-            </p>
-            <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
-          </div>
-        </div>
-
       </div>
 
-      {/* Growth + Locations Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Growth Chart (takes 8/12 on large screens) */}
-        <div className="lg:col-span-8">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Growth Overview</h3>
+      {/* Growth Chart Section */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Growth Overview</h3>
+        {growthLoading ? (
+          <div className="bg-white p-8 rounded-md shadow-md border text-center">
+            <p className="text-gray-500">Loading growth data...</p>
+          </div>
+        ) : monthlyGrowth.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={userGrowthData}>
+            <AreaChart data={monthlyGrowth}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />
@@ -233,6 +189,7 @@ const SadminAnalytics: React.FC = () => {
                 stroke="#3B82F6"
                 fill="#3B82F6"
                 fillOpacity={0.6}
+                name="Users"
               />
               <Area
                 type="monotone"
@@ -241,6 +198,7 @@ const SadminAnalytics: React.FC = () => {
                 stroke="#10B981"
                 fill="#10B981"
                 fillOpacity={0.6}
+                name="Drivers"
               />
               <Area
                 type="monotone"
@@ -249,35 +207,16 @@ const SadminAnalytics: React.FC = () => {
                 stroke="#8B5CF6"
                 fill="#8B5CF6"
                 fillOpacity={0.6}
+                name="Ads"
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Top Locations (takes 4/12 on large screens) */}
-        <div className="lg:col-span-4">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Top Locations</h3>
-          <div className="space-y-3">
-            {locationData.map((location, index) => (
-              <div
-                key={index}
-                className="flex justify-between items-center bg-white shadow-md rounded-lg px-4 py-3 mb-3"
-              >
-                <span className="text-sm font-medium text-gray-700">
-                  {location.location}
-                </span>
-                <div className="flex items-center space-x-4 text-sm text-gray-600">
-                  <span>{location.users} users</span>
-                  <span>{location.drivers} drivers</span>
-                  <span className="font-medium text-green-600">
-                    ₱{location.revenue.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            ))}
+        ) : (
+          <div className="bg-white p-8 rounded-md shadow-md border text-center">
+            <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">No growth data available yet</p>
           </div>
-        </div>
-
+        )}
       </div>
 
     </div>
@@ -287,114 +226,105 @@ const SadminAnalytics: React.FC = () => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT SIDE */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* Top Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Active Users */}
-            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
-              {/* Left side: icon */}
-              <div>
-                <UserCheck className="h-12 w-12 text-white rounded-full bg-green-400 p-2" />
-              </div>
-
-              {/* Right side: label + value */}
-              <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold">
-                  {Math.floor((stats?.totalUsers || 0) * 0.85)}
-                </p>
-                <h4 className="text-sm font-medium">Active Users</h4>
-              </div>
-            </div>
-
-            {/* New Users */}
-            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
-              {/* Left side: icon */}
-              <div>
-                <UserPlus className="h-12 w-12 text-white rounded-full bg-yellow-400 p-2" />
-              </div>
-
-              {/* Right side: label + value */}
-              <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold">
-                  {Math.floor((stats?.totalUsers || 0) * 0.12)}
-                </p>
-                <h4 className="text-sm font-medium">New Users</h4>
-              </div>
-            </div>
-
-            {/* Inactive Users */}
-            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
-              {/* Left side: icon */}
-              <div>
-                <UserX className="h-12 w-12 text-white rounded-full bg-gray-400 p-2" />
-              </div>
-
-              {/* Right side: label + value */}
-              <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold">
-                  {Math.floor((stats?.totalUsers || 0) * 0.15)}
-                </p>
-                <h4 className="text-sm font-medium">Inactive Users</h4>
-              </div>
-            </div>
-          </div>
-  
+        <div className="lg:col-span-8">
           {/* User Growth Chart */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               User Growth
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={userGrowthData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="users"
-                  stroke="#3B82F6"
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {growthLoading ? (
+              <div className="bg-white p-8 rounded-md shadow-md border text-center">
+                <p className="text-gray-500">Loading growth data...</p>
+              </div>
+            ) : monthlyGrowth.length > 0 ? (
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={monthlyGrowth}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="users"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    name="Users"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="bg-white p-8 rounded-md shadow-md border text-center">
+                <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No user growth data available yet</p>
+              </div>
+            )}
           </div>
         </div>
-  
-        {/* RIGHT SIDE */}
+
+        {/* RIGHT SIDE - User Stats */}
         <div className="lg:col-span-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            User Distribution by Location
-          </h3>
-          <div className="space-y-3">
-            {locationData.map((location, index) => (
-              <div
-                key={index}
-                className="flex justify-between items-center bg-white shadow-md rounded-lg p-3 mb-3"
-              >
-                <span className="text-sm font-medium text-gray-700">
-                  {location.location}
-                </span>
-                <div className="flex items-center space-x-2">
-                  <div className="w-32 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full"
-                      style={{
-                        width: `${
-                          (location.users /
-                            Math.max(...locationData.map((l) => l.users))) *
-                          100
-                        }%`,
-                      }}
-                    ></div>
-                  </div>
-                  <span className="text-sm text-gray-600 w-12 text-right">
-                    {location.users}
-                  </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Active Users */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-green-400 text-white rounded-full">
+                  <UserCheck className="w-5 h-5" />
                 </div>
+                <p className="text-3xl font-bold">
+                  {Math.floor((stats?.totalUsers || 0) * 0.85)}
+                </p>
               </div>
-            ))}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Active Users</h4>
+            </div>
+
+            {/* Archived Users */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-orange-400 text-white rounded-full">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.userStatistics?.archived || 0}
+                </p>
+              </div>
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Archived Users</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalUsers ? Math.round(((stats.userStatistics?.archived || 0) / stats.totalUsers) * 100) : 0}% of total
+              </p>
+            </div>
+
+            {/* Google Auth */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-purple-400 text-white rounded-full">
+                  <Users className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.userStatistics?.googleAuth || 0}
+                </p>
+              </div>
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Google Auth</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalUsers ? Math.round(((stats.userStatistics?.googleAuth || 0) / stats.totalUsers) * 100) : 0}% of total
+              </p>
+            </div>
+
+            {/* Local Auth */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-indigo-400 text-white rounded-full">
+                  <Users className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.userStatistics?.localAuth || 0}
+                </p>
+              </div>
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Local Auth</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalUsers ? Math.round(((stats.userStatistics?.localAuth || 0) / stats.totalUsers) * 100) : 0}% of total
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -409,96 +339,204 @@ const SadminAnalytics: React.FC = () => {
         {/* Driver Growth (left, wider) */}
         <div className="lg:col-span-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Driver Growth</h3>
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={userGrowthData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="drivers" stroke="#10B981" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
+          {growthLoading ? (
+            <div className="bg-white p-8 rounded-md shadow-md border text-center">
+              <p className="text-gray-500">Loading growth data...</p>
+            </div>
+          ) : monthlyGrowth.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={monthlyGrowth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="drivers" stroke="#10B981" strokeWidth={2} name="Drivers" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="bg-white p-8 rounded-md shadow-md border text-center">
+              <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No driver growth data available yet</p>
+            </div>
+          )}
         </div>
   
         {/* Right side stat cards (2 per row) */}
-        <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Avg Ads per Driver */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-blue-400 text-white rounded-full">
-                <BarChart className="w-5 h-5" />
+        <div className="lg:col-span-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Total Drivers */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-blue-400 text-white rounded-full">
+                  <Users className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.totalDrivers || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalAds || 0) / (stats?.totalDrivers || 1))}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Total Drivers</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                100% of total
               </p>
-            </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Avg. Ads/Driver</h4>
-          </div> 
+            </div> 
 
-          {/* Pending Approval */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-yellow-400 text-white rounded-full">
-                <Clock className="w-5 h-5" />
+            {/* Pending Approval */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-yellow-400 text-white rounded-full">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.driverStatistics?.pendingApproval || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalDrivers || 0) * 0.15)}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Pending Approval</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalDrivers ? Math.round(((stats.driverStatistics?.pendingApproval || 0) / stats.totalDrivers) * 100) : 0}% of total
               </p>
             </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Pending Approval</h4>
+
+            {/* Suspended */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-red-400 text-white rounded-full">
+                  <UserX className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.driverStatistics?.suspended || 0}
+                </p>
+              </div>
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Suspended</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalDrivers ? Math.round(((stats.driverStatistics?.suspended || 0) / stats.totalDrivers) * 100) : 0}% of total
+              </p>
+            </div>
+
+            {/* Archived Drivers */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-gray-400 text-white rounded-full">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.driverStatistics?.archived || 0}
+                </p>
+              </div>
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Archived Drivers</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalDrivers ? Math.round(((stats.driverStatistics?.archived || 0) / stats.totalDrivers) * 100) : 0}% of total
+              </p>
+            </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
 
-          {/* Top Performers */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-purple-400 text-white rounded-full">
-                <Trophy className="w-5 h-5" />
+  const renderAdvertisementsTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* LEFT SIDE - Ad Growth Chart */}
+        <div className="lg:col-span-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Advertisement Growth
+          </h3>
+          {growthLoading ? (
+            <div className="bg-white p-8 rounded-md shadow-md border text-center">
+              <p className="text-gray-500">Loading growth data...</p>
+            </div>
+          ) : monthlyGrowth.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={monthlyGrowth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="ads"
+                  stroke="#8B5CF6"
+                  strokeWidth={2}
+                  name="Ads"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="bg-white p-8 rounded-md shadow-md border text-center">
+              <BarChart3 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No advertisement growth data available yet</p>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT SIDE - Ad Statistics Cards */}
+        <div className="lg:col-span-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Total Ads */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-blue-400 text-white rounded-full">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.totalAds || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalDrivers || 0) * 0.2)}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Total Ads</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                100% of total
               </p>
             </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Top Performers</h4>
-          </div>
 
-          {/* Active Drivers */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-green-400 text-white rounded-full">
-                <UserCheck className="w-5 h-5" />
+            {/* Pending Ads */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-yellow-400 text-white rounded-full">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.adStatistics?.pending || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalDrivers || 0) * 0.78)}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Pending Ads</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalAds ? Math.round(((stats.adStatistics?.pending || 0) / stats.totalAds) * 100) : 0}% of total
               </p>
             </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Active Drivers</h4>
-          </div>
 
-          {/* New This Month */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-orange-400 text-white rounded-full">
-                <UserPlus className="w-5 h-5" />
+            {/* Running Ads */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-purple-400 text-white rounded-full">
+                  <PlayCircle className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.adStatistics?.running || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalDrivers || 0) * 0.12)}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Running Ads</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalAds ? Math.round(((stats.adStatistics?.running || 0) / stats.totalAds) * 100) : 0}% of total
               </p>
             </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">New This Month</h4>
-          </div>
 
-          {/* Suspended */}
-          <div className="bg-white p-4 rounded-md shadow-md border relative">
-            <div className="flex justify-between items-start">
-              <div className="p-2 bg-red-400 text-white rounded-full">
-                <UserX className="w-5 h-5" />
+            {/* Scheduled Ads */}
+            <div className="bg-white p-4 rounded-md shadow-md border relative">
+              <div className="flex justify-between items-start">
+                <div className="p-2 bg-green-400 text-white rounded-full">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <p className="text-3xl font-bold">
+                  {stats?.adStatistics?.scheduled || 0}
+                </p>
               </div>
-              <p className="text-3xl font-bold">
-                {Math.floor((stats?.totalDrivers || 0) * 0.07)}
+              <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Scheduled Ads</h4>
+              <p className="text-xs text-gray-500 mt-1 text-right">
+                {stats?.totalAds ? Math.round(((stats.adStatistics?.scheduled || 0) / stats.totalAds) * 100) : 0}% of total
               </p>
             </div>
-            <h4 className="text-sm font-medium text-right text-gray-700 mt-4">Suspended</h4>
           </div>
         </div>
       </div>
@@ -513,12 +551,14 @@ const SadminAnalytics: React.FC = () => {
         return renderUsersTab();
       case 'drivers':
         return renderDriversTab();
+      case 'advertisements':
+        return renderAdvertisementsTab();
       default:
         return renderOverviewTab();
     }
   };
 
-  if (statsLoading || planLoading) {
+  if (statsLoading || growthLoading) {
     return <AdminLoader />;
   }
 

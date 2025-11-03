@@ -17,16 +17,6 @@ export const GET_MY_ADS = gql`
       startTime
       endTime
       adLengthSeconds
-      planId {
-        id
-        name
-        durationDays
-        playsPerDayPerDevice
-        numberOfDevices
-        adLengthSeconds
-        pricePerPlay
-        totalPrice
-      }
       materialId {
         id
         materialId

@@ -349,19 +349,7 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
-    // Daily ads plan deletion job - runs at 3:30 AM PH time to permanently delete archived ads plans
-    const adsPlanDeletionTask = cron.schedule('30 3 * * *', async () => {
-      console.log('🗑️ Ads plan deletion job triggered at 3:30 AM (Philippines time)');
-      try {
-        const result = await userDeletionJob.deleteExpiredAdsPlans();
-        console.log(`✅ Ads plan deletion job completed: ${result.deletedCount} ads plans permanently deleted`);
-      } catch (error) {
-        console.error('❌ Ads plan deletion job failed:', error);
-      }
-    }, {
-      scheduled: true,
-      timezone: 'Asia/Manila'
-    });
+    // Removed ads plan deletion job - no longer using AdsPlan
 
     // Daily company ad deletion job - runs at 3:45 AM PH time to permanently delete archived company ads
     const companyAdDeletionTask = cron.schedule('45 3 * * *', async () => {
@@ -436,7 +424,7 @@ class CronJobs {
     this.jobs.set('adminDeletion', adminDeletionTask);
     this.jobs.set('superAdminDeletion', superAdminDeletionTask);
     this.jobs.set('materialDeletion', materialDeletionTask);
-    this.jobs.set('adsPlanDeletion', adsPlanDeletionTask);
+    // Removed adsPlanDeletion job - no longer using AdsPlan
     this.jobs.set('companyAdDeletion', companyAdDeletionTask);
     this.jobs.set('faqDeletion', faqDeletionTask);
     this.jobs.set('deploymentDeletion', deploymentDeletionTask);

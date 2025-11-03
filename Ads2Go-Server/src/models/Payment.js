@@ -12,12 +12,7 @@ const PaymentSchema = new mongoose.Schema(
       required: true,
       ref: 'Ad',
     },
-    // ❌ ADDED: The planID field (optional for flexible ads)
-    planID: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: false, // Made optional to support flexible ads
-      ref: 'AdsPlan',
-    },
+    // Removed planID field - no longer using AdsPlan
     paymentType: {
       type: String,
       required: true,

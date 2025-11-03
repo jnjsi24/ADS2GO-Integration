@@ -183,13 +183,7 @@ AdsDeploymentSchema.statics.getLCDDeployments = async function(materialId) {
     materialId,
     lcdSlots: { $exists: true, $ne: [] }
   })
-  .populate({
-    path: 'lcdSlots.adId',
-    populate: {
-      path: 'planId',
-      model: 'AdsPlan'
-    }
-  })
+  .populate('lcdSlots.adId')
   .populate('driverId');
 
   return deployment ? deployment.lcdSlots : [];

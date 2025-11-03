@@ -31,21 +31,12 @@ const paymentTypeDefs = gql`
     paymentStatus: String
   }
 
-  type AdsPlan {
-    id: ID
-    title: String
-    description: String
-    durationDays: Int
-    playsPerDayPerDevice: Int
-    numberOfDevices: Int
-    pricePerPlay: Float
-  }
+  # Removed AdsPlan type - no longer using AdsPlan
 
   type Payment {
     id: ID!
     userId: ID!
     adsId: Ad
-    planID: AdsPlan
     paymentDate: String
     paymentType: PaymentType!
     amount: Float!

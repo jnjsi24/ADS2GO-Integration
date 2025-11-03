@@ -188,23 +188,16 @@ const CreateAdvertisement: React.FC = () => {
     return Array.from(new Set(combinations.map((combo: any) => combo.materialType))) as string[];
   };
 
-  // Get max devices for selected combination
+  // Get max devices - now only limited by available devices (not pricing config limit)
   const getMaxDevices = () => {
-    const combination = fieldCombinations.find((combo: any) => 
-      combo.materialType === formData.materialType && 
-      combo.vehicleType === formData.vehicleType && 
-      combo.category === formData.category &&
-      combo.isActive
-    );
-    const theoreticalMax = combination?.maxDevices || 1;
-    
-    // ✅ Use the minimum of (theoretical max, actual available devices)
-    // This prevents users from selecting more devices than are actually available
+    // ✅ Constraint is now based on available materials only, not a pricing config limit
+    // Number of vehicles is just a multiplier in the pricing calculation
     if (pricingCalculation?.availableDevices !== undefined) {
-      return Math.min(theoreticalMax, pricingCalculation.availableDevices);
+      return pricingCalculation.availableDevices;
     }
     
-    return theoreticalMax;
+    // Default to 1 if no calculation available yet
+    return 1;
   };
 
   // Get ad length limits
@@ -406,13 +399,7 @@ const CreateAdvertisement: React.FC = () => {
       if (!allowedDurations.includes(formData.durationDays)) {
         newErrors.durationDays = 'Duration must be 1-6 months (30-180 days)';
       }
-      // Validate number of devices
-      const maxDevices = getMaxDevices();
-      if (formData.numberOfDevices > maxDevices) {
-        newErrors.numberOfDevices = `Maximum ${maxDevices} devices allowed`;
-      }
-      
-      // ✅ NEW: Check if enough devices are available
+      // Validate number of devices - constraint based on available devices only
       if (pricingCalculation?.availableDevices !== undefined && 
           formData.numberOfDevices > pricingCalculation.availableDevices) {
         newErrors.numberOfDevices = `Only ${pricingCalculation.availableDevices} device${pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available. Please reduce to ${pricingCalculation.availableDevices} or try a different date.`;
@@ -1183,24 +1170,11 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         <div className="flex flex-col mt-1">
           {pricingCalculation?.availableDevices !== undefined ? (
             <p className="text-sm text-gray-500">
-              Maximum: {getMaxDevices()} device{getMaxDevices() === 1 ? '' : 's'} available
-              {(() => {
-                const combination = fieldCombinations.find((combo: any) => 
-                  combo.materialType === formData.materialType && 
-                  combo.vehicleType === formData.vehicleType && 
-                  combo.category === formData.category &&
-                  combo.isActive
-                );
-                const theoreticalMax = combination?.maxDevices || 1;
-                if (theoreticalMax > pricingCalculation.availableDevices) {
-                  return <span className="text-gray-400"> ({theoreticalMax} max per campaign)</span>;
-                }
-                return null;
-              })()}
+              {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'} available
             </p>
           ) : (
             <p className="text-sm text-gray-500">
-              Maximum: {getMaxDevices()} devices
+              Loading available devices...
             </p>
           )}
           {pricingCalculation?.availableDevices !== undefined && 

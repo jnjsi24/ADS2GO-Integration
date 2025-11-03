@@ -7,6 +7,7 @@ import { GET_ALL_MATERIALS } from '../../graphql/admin/queries/materials';
 import { GET_DRIVER_MATERIALS } from '../../graphql/admin/queries/driverMaterials';
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin/mutations/compliance';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER, RESTORE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
+import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
 import { GET_DRIVER_SALARY_SUMMARY } from '../../graphql/superadmin/queries/driverSalaryQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -187,6 +188,9 @@ const ManageDrivers: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [driverToReject, setDriverToReject] = useState<string | null>(null);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [driverToSuspend, setDriverToSuspend] = useState<string | null>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -202,6 +206,7 @@ const ManageDrivers: React.FC = () => {
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
   const [isProcessingRejection, setIsProcessingRejection] = useState(false);
   const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
+  const [isProcessingSuspension, setIsProcessingSuspension] = useState(false);
   
   // Bulk actions state
   const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
@@ -293,6 +298,10 @@ const ManageDrivers: React.FC = () => {
   });
 
   const [restoreDriver] = useMutation(RESTORE_DRIVER, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const [updateDriver] = useMutation(UPDATE_DRIVER, {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
@@ -574,6 +583,125 @@ const ManageDrivers: React.FC = () => {
   const cancelRestore = () => {
     setShowRestoreModal(false);
     setDriverToRestore(null);
+  };
+
+  const handleSuspend = (driverId: string) => {
+    setDriverToSuspend(driverId);
+    setShowSuspendModal(true);
+  };
+
+  const handleUnsuspend = async (driverId: string) => {
+    if (isProcessingSuspension) return;
+    
+    setIsProcessingSuspension(true);
+    
+    try {
+      const result = await updateDriver({
+        variables: {
+          driverId,
+          input: {
+            accountStatus: 'ACTIVE'
+          }
+        }
+      });
+      
+      if (result.data?.updateDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been unsuspended successfully.',
+          duration: 4000
+        });
+        refetch();
+        if (selectedDriverDetails?.driverId === driverId) {
+          setSelectedDriverDetails({ ...selectedDriverDetails, accountStatus: 'ACTIVE' });
+        }
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Unsuspension Failed',
+          message: result.data?.updateDriver?.message || 'Failed to unsuspend driver',
+          duration: 6000
+        });
+      }
+    } catch (error: any) {
+      console.error('Error unsuspending driver:', error);
+      addToast({
+        type: 'error',
+        title: 'Unsuspension Failed',
+        message: error.message || 'Failed to unsuspend driver',
+        duration: 6000
+      });
+    } finally {
+      setIsProcessingSuspension(false);
+    }
+  };
+
+  const submitSuspend = async () => {
+    if (!driverToSuspend) return;
+    
+    if (isProcessingSuspension) return;
+    
+    setIsProcessingSuspension(true);
+    
+    try {
+      const result = await updateDriver({
+        variables: {
+          driverId: driverToSuspend,
+          input: {
+            accountStatus: 'SUSPENDED',
+            rejectedReason: suspendReason.trim() || undefined
+          }
+        }
+      });
+      
+      if (result.data?.updateDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been suspended successfully.',
+          duration: 4000
+        });
+        refetch();
+        setShowSuspendModal(false);
+        setSuspendReason('');
+        setDriverToSuspend(null);
+        if (selectedDriverDetails?.driverId === driverToSuspend) {
+          setSelectedDriverDetails({ ...selectedDriverDetails, accountStatus: 'SUSPENDED' });
+        }
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Suspension Failed',
+          message: result.data?.updateDriver?.message || 'Failed to suspend driver',
+          duration: 6000
+        });
+      }
+    } catch (error: any) {
+      console.error('Error suspending driver:', error);
+      let errorMessage = 'Failed to suspend driver';
+      if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+        errorMessage = error.graphQLErrors[0].message;
+      } else if (error.networkError) {
+        errorMessage = `Network Error: ${error.networkError.message}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      addToast({
+        type: 'error',
+        title: 'Suspension Failed',
+        message: errorMessage,
+        duration: 6000
+      });
+    } finally {
+      setIsProcessingSuspension(false);
+    }
+  };
+
+  const cancelSuspend = () => {
+    setShowSuspendModal(false);
+    setSuspendReason('');
+    setDriverToSuspend(null);
   };
 
   const handleViewDetails = (driver: Driver) => {
@@ -1448,6 +1576,7 @@ const ManageDrivers: React.FC = () => {
                         selectedDriverDetails.accountStatus === 'ACTIVE' ? 'bg-green-200 text-green-800' :
                         selectedDriverDetails.accountStatus === 'PENDING' ? 'bg-yellow-200 text-yellow-800' :
                         selectedDriverDetails.accountStatus === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                        selectedDriverDetails.accountStatus === 'SUSPENDED' ? 'bg-orange-200 text-orange-800' :
                         'bg-gray-200 text-gray-800'
                       }`}
                     >
@@ -1777,6 +1906,107 @@ const ManageDrivers: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-wrap gap-3 justify-center border-t pt-4">
+                {selectedDriverDetails.accountStatus === 'PENDING' && (
+                  <>
+                    <button
+                      onClick={() => openApprovalWithMaterialSelection(selectedDriverDetails)}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+                    >
+                      <CheckCircle size={16} />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleReject(selectedDriverDetails.driverId)}
+                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                    >
+                      <XCircle size={16} />
+                      Reject
+                    </button>
+                  </>
+                )}
+                {selectedDriverDetails.accountStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => handleSuspend(selectedDriverDetails.driverId)}
+                    className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors flex items-center gap-2"
+                  >
+                    <AlertCircle size={16} />
+                    Suspend Driver
+                  </button>
+                )}
+                {selectedDriverDetails.accountStatus === 'SUSPENDED' && (
+                  <button
+                    onClick={() => handleUnsuspend(selectedDriverDetails.driverId)}
+                    disabled={isProcessingSuspension}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isProcessingSuspension ? (
+                      <>
+                        <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} />
+                        Unsuspend Driver
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(selectedDriverDetails.driverId)}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <Trash size={16} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend Modal */}
+      {showSuspendModal && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Suspend Driver</h3>
+              <button onClick={cancelSuspend} className="text-gray-500 hover:text-gray-700">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">Please provide a reason for suspending this driver (optional).</p>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="Enter suspension reason..."
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+              rows={4}
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={cancelSuspend}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitSuspend}
+                disabled={isProcessingSuspension}
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  isProcessingSuspension
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-orange-600 hover:bg-orange-700'
+                }`}
+              >
+                {isProcessingSuspension && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isProcessingSuspension ? 'Suspending...' : 'Suspend Driver'}
+              </button>
             </div>
           </div>
         </div>

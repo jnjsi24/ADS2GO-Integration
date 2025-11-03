@@ -26,7 +26,8 @@ const resolvers = {
   Query: {
     getAllAdmins: async (_, __, { admin }) => {
       checkSuperAdmin(admin);
-      const admins = await Admin.find({ isActive: true });
+      // Return ALL admins including archived (client handles filtering by archive status)
+      const admins = await Admin.find({});
       return {
         success: true,
         message: 'Admins retrieved successfully',
@@ -54,8 +55,9 @@ const resolvers = {
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view users');
       }
-      // Only return non-archived users
-      return await User.find({ isArchived: { $ne: true } });
+      // Return ALL users including archived (client handles filtering by archive status)
+      // Add safety filter to ensure only USER role records are returned (extra safety check)
+      return await User.find({ role: 'USER' });
     },
 
     getAdminNotificationPreferences: async (_, __, { admin }) => {

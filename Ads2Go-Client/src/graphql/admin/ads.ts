@@ -38,14 +38,6 @@ export const GET_ALL_ADS = gql`
         id
         materialId
       }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
-      }
       isArchived
       archivedAt
       scheduledDeletionDate
@@ -88,14 +80,6 @@ export const GET_AD_BY_ID = gql`
         id
         materialId
       }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
-      }
     }
   }
 `;
@@ -135,14 +119,6 @@ export const GET_ADS_BY_USER = gql`
         id
         materialId
       }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
-      }
     }
   }
 `;
@@ -180,14 +156,6 @@ export const CREATE_AD = gql`
       materialId {
         id
         materialId
-      }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
       }
     }
   }
@@ -480,14 +448,7 @@ export interface Material {
   vehicleType?: string;
 }
 
-export interface AdsPlan {
-  id: string;
-  durationDays: number;
-  numberOfDevices: number;
-  adLengthSeconds: number;
-  playsPerDayPerDevice: number;
-  pricePerPlay: number;
-}
+// Removed AdsPlan interface - no longer using AdsPlan
 
 export interface Ad {
   id: string;
@@ -515,7 +476,7 @@ export interface Ad {
   updatedAt: string;
   userId: User | null;
   materialId: Material | null;
-  planId: AdsPlan | null;
+  // Removed planId - no longer using AdsPlan
   isArchived?: boolean;
   archivedAt?: string | null;
   scheduledDeletionDate?: string | null;
@@ -566,7 +527,7 @@ export interface AdDeployment {
 export interface CreateAdInput {
   driverId?: string;
   materialId: string;
-  planId: string;
+  // Removed planId - no longer using AdsPlan
   title: string;
   description?: string;
   website?: string;
@@ -585,7 +546,7 @@ export interface UpdateAdInput {
   adFormat?: string;
   mediaFile?: string;
   materialId?: string;
-  planId?: string;
+  // Removed planId - no longer using AdsPlan
   status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'ENDED';
   startTime?: string;
   endTime?: string;

@@ -4,8 +4,7 @@ import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
-  PricingConfig, 
-  PricingTier 
+  PricingConfig
 } from '../../graphql/superadmin/queries/pricingConfigQueries';
 import { 
   CREATE_PRICING_CONFIG, 
@@ -15,6 +14,16 @@ import {
   PricingConfigInput,
   PricingConfigUpdateInput
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
+import { 
+  GET_GLOBAL_PRICING_MULTIPLIERS,
+  GlobalPricingMultipliers,
+  GlobalPricingMultipliersInput,
+  AdLengthMultipliers,
+  DurationDiscountMultipliers
+} from '../../graphql/superadmin/queries/globalPricingMultipliersQueries';
+import { 
+  UPDATE_GLOBAL_PRICING_MULTIPLIERS
+} from '../../graphql/superadmin/mutations/globalPricingMultipliersMutations';
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminLoader } from "../../components/ProtectedRoute";
 import ConfirmationModal from "../../components/ConfirmationModal";
@@ -27,17 +36,25 @@ const SadminPricing: React.FC = () => {
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
-  const [showDurationDropdowns, setShowDurationDropdowns] = useState<boolean[]>([]); // One for each tier
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<PricingConfig | null>(null);
+  const [multipliersFormData, setMultipliersFormData] = useState<GlobalPricingMultipliersInput>({
+    durationDiscountMultipliers: {
+      months1: 1.0,
+      months2: 0.95,
+      months3: 0.95,
+      months4: 0.90,
+      months5: 0.90,
+      months6: 0.85
+    }
+  });
 
   // Form states
   const [formData, setFormData] = useState<PricingConfigInput>({
     materialType: '',
     vehicleType: '',
     category: '',
-    pricingTiers: [{ durationDays: 30, pricePerPlay: 1.0 }],
-    maxDevices: 1,
+    basePrice: 0,
     minAdLengthSeconds: 20,
     maxAdLengthSeconds: 60,
     isActive: true
@@ -51,6 +68,18 @@ const SadminPricing: React.FC = () => {
     skip: !admin || admin.role !== 'SUPERADMIN',
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
+  });
+
+  const { data: multipliersData, loading: multipliersLoading, refetch: refetchMultipliers } = useQuery(GET_GLOBAL_PRICING_MULTIPLIERS, {
+    skip: !admin || admin.role !== 'SUPERADMIN',
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network'
+  });
+
+  const [updateGlobalMultipliers] = useMutation(UPDATE_GLOBAL_PRICING_MULTIPLIERS, {
+    onError: (error) => {
+      setErrorMsg(error.message || 'Failed to update global multipliers');
+    }
   });
 
   const [createPricingConfig, { loading: createLoading }] = useMutation(CREATE_PRICING_CONFIG, {
@@ -108,15 +137,13 @@ const SadminPricing: React.FC = () => {
       materialType: '',
       vehicleType: '',
       category: '',
-      pricingTiers: [{ durationDays: 30, pricePerPlay: 1.0 }],
-      maxDevices: 1,
+      basePrice: 0,
       minAdLengthSeconds: 20,
       maxAdLengthSeconds: 60,
       isActive: true
     });
     setShowVehicleDropdown(false);
     setShowMaterialDropdown(false);
-    setShowDurationDropdowns([false]);
     setValidationErrors({});
     setEditingConfig(null);
   };
@@ -128,15 +155,24 @@ const SadminPricing: React.FC = () => {
         materialType: editingConfig.materialType,
         vehicleType: editingConfig.vehicleType,
         category: editingConfig.category,
-        pricingTiers: editingConfig.pricingTiers,
-        maxDevices: editingConfig.maxDevices,
+        basePrice: editingConfig.basePrice,
         minAdLengthSeconds: editingConfig.minAdLengthSeconds,
         maxAdLengthSeconds: editingConfig.maxAdLengthSeconds,
         isActive: editingConfig.isActive
       });
-      setShowDurationDropdowns(editingConfig.pricingTiers.map(() => false));
     }
   }, [editingConfig]);
+
+  // Initialize multipliers form when pricing modal opens
+  useEffect(() => {
+    if (isModalOpen && multipliersData?.getGlobalPricingMultipliers) {
+      const multipliers = multipliersData.getGlobalPricingMultipliers;
+      setMultipliersFormData({
+        // Note: adLengthMultipliers are hardcoded, not included in form
+        durationDiscountMultipliers: multipliers.durationDiscountMultipliers
+      });
+    }
+  }, [isModalOpen, multipliersData]);
 
   // Auto-determine category based on material type
   useEffect(() => {
@@ -186,19 +222,14 @@ const SadminPricing: React.FC = () => {
     setErrorMsg('');
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const errors: { [key: string]: string } = {};
     if (!formData.vehicleType) errors.vehicleType = 'Vehicle Type is required';
     if (!formData.materialType) errors.materialType = 'Material Type is required';
     if (!formData.category) errors.category = 'Category is required';
-    if (formData.maxDevices < 1) errors.maxDevices = 'Max Devices must be at least 1';
-    formData.pricingTiers.forEach((tier, index) => {
-      if (tier.durationDays < 30) errors[`durationDays_${index}`] = 'Duration must be at least 30 days';
-      if (tier.pricePerPlay <= 0) errors[`pricePerPlay_${index}`] = 'Price per Play must be positive';
-      if (tier.adLengthMultiplier && (tier.adLengthMultiplier < 0.1 || tier.adLengthMultiplier > 2.0)) errors[`adLengthMultiplier_${index}`] = 'Multiplier must be between 0.1 and 2.0';
-    });
+    if (!formData.basePrice || formData.basePrice <= 0) errors.basePrice = 'Base Price must be greater than 0';
   
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -207,10 +238,25 @@ const SadminPricing: React.FC = () => {
   
     setValidationErrors({});
   
+    // Save duration discount multipliers first (always, since they're global)
+    try {
+      await updateGlobalMultipliers({ 
+        variables: { 
+          input: { 
+            durationDiscountMultipliers: multipliersFormData.durationDiscountMultipliers 
+          } 
+        } 
+      });
+    } catch (error) {
+      console.error('Failed to update multipliers:', error);
+      setErrorMsg('Failed to update duration discount multipliers');
+      return;
+    }
+
+    // Then save pricing config
     if (editingConfig) {
       const updateInput: PricingConfigUpdateInput = {
-        pricingTiers: formData.pricingTiers,
-        maxDevices: formData.maxDevices,
+        basePrice: formData.basePrice,
         minAdLengthSeconds: formData.minAdLengthSeconds,
         maxAdLengthSeconds: formData.maxAdLengthSeconds,
         isActive: formData.isActive
@@ -221,43 +267,8 @@ const SadminPricing: React.FC = () => {
     }
   };
 
-  const addPricingTier = () => {
-    setFormData(prev => ({
-      ...prev,
-      pricingTiers: [...prev.pricingTiers, { durationDays: 30, pricePerPlay: 1.0 }]
-    }));
-    setShowDurationDropdowns(prev => [...prev, false]);
-  };
-
-  const removePricingTier = (index: number) => {
-    if (formData.pricingTiers.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        pricingTiers: prev.pricingTiers.filter((_, i) => i !== index)
-      }));
-      setShowDurationDropdowns(prev => prev.filter((_, i) => i !== index));
-    }
-  };
-
-  const updatePricingTier = (index: number, field: keyof PricingTier, value: number) => {
-    setFormData(prev => ({
-      ...prev,
-      pricingTiers: prev.pricingTiers.map((tier, i) => 
-        i === index ? { ...tier, [field]: value } : tier
-      )
-    }));
-  };
-
-  const getMaxDevices = (vehicleType: string, materialType: string): number => {
-    if (vehicleType === 'CAR') {
-      if (materialType === 'LCD') return 3;
-      if (materialType === 'HEADDRESS') return 2;
-    }
-    if (vehicleType === 'MOTORCYCLE') {
-      if (materialType === 'LCD') return 1;
-    }
-    return 1;
-  };
+  // Removed pricing tier management functions - now using basePrice instead
+  // Removed getMaxDevices - maxDevices field removed from pricing config
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-PH', {
@@ -402,36 +413,17 @@ const SadminPricing: React.FC = () => {
 
                 {/* Configuration Details */}
                 <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Max Devices:</span>
-                    <span className="font-medium">{config.maxDevices}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Ad Length Range:</span>
-                    <span className="font-medium">{config.minAdLengthSeconds}s - {config.maxAdLengthSeconds}s</span>
-                  </div>
-                  
-                  {/* Pricing Tiers */}
+                  {/* Base Price */}
                   <div className="border-t pt-3">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Pricing Tiers:</p>
-                    <div className="space-y-2">
-                      {config.pricingTiers.map((tier, index) => (
-                        <div key={index} className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">
-                            {tier.durationDays === 30 ? '1 month' :
-                             tier.durationDays === 60 ? '2 months' :
-                             tier.durationDays === 90 ? '3 months' :
-                             tier.durationDays === 120 ? '4 months' :
-                             tier.durationDays === 150 ? '5 months' :
-                             tier.durationDays === 180 ? '6 months' :
-                             `${tier.durationDays} days`}:
-                          </span>
-                          <span className="font-medium text-green-600">
-                            {formatCurrency(tier.pricePerPlay)}/play
-                          </span>
-                        </div>
-                      ))}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Base Price:</span>
+                      <span className="font-medium text-green-600">
+                        {formatCurrency(config.basePrice)}
+                      </span>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      For 20-second ad / 1 month / 1 device
+                    </p>
                   </div>
                 </div>
               </div>
@@ -573,187 +565,116 @@ const SadminPricing: React.FC = () => {
                 )}
               </div>
 
-              {/* Max Devices Floating Input */}
+            </div>
+
+            {/* Base Price Input */}
+            <div className="mt-6">
               <div className="relative">
                 <input
                   type="number"
-                  id="maxDevices"
+                  id="basePrice"
                   placeholder=" "
-                  min="1"
-                  max={formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10}
-                  value={formData.maxDevices}
-                  onChange={(e) => setFormData(prev => ({ ...prev, maxDevices: parseInt(e.target.value) }))}
-                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.maxDevices ? 'border-red-400' : 'border-gray-300'}`}
+                  step="0.01"
+                  min="0.01"
+                  value={formData.basePrice}
+                  onChange={(e) => setFormData(prev => ({ ...prev, basePrice: parseFloat(e.target.value) || 0 }))}
+                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
                   required
                 />
                 <label
-                  htmlFor="maxDevices"
-                  className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                  htmlFor="basePrice"
+                  className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.basePrice ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                 >
-                  Maximum Number of Vehicles This Pricing Covers
+                  Base Price (for 20-second ad / 1 month / 1 device)
                 </label>
                 <span className="text-xs text-blue-500 mt-1 block">
-                  For example, if maximum is 3, this price applies if you advertise on up to 3 vehicles.
+                  This is the starting price for the smallest possible ad package. For example: $50.00 for Car/LCD, $30.00 for Car/Headdress.
                 </span>
-                {validationErrors.maxDevices && (
-                  <p className="text-red-500 text-xs mt-1">{validationErrors.maxDevices}</p>
+                {validationErrors.basePrice && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.basePrice}</p>
                 )}
               </div>
-            </div>
 
-            {/* Pricing Tiers */}
-            <div className="mt-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Pricing Tiers</h3>
-                <button
-                  type="button"
-                  onClick={addPricingTier}
-                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                >
-                  + Add Tier
-                </button>
+              {/* Ad Length Multipliers - Display Only (Hardcoded) */}
+              <div className="mt-6 border-t pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Ad Length Multipliers</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  These multipliers are automatically calculated based on ad length and cannot be changed.
+                </p>
+                <div className="bg-gray-50 rounded-md p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">20-second Ad:</span>
+                    <span className="text-sm font-semibold text-gray-900">1.0x (Base)</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">40-second Ad:</span>
+                    <span className="text-sm font-semibold text-gray-900">2.0x (Double)</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">60-second Ad:</span>
+                    <span className="text-sm font-semibold text-gray-900">3.0x (Triple)</span>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  These values are fixed because a 40-second ad uses 2x the screen time, and a 60-second ad uses 3x the screen time.
+                </p>
               </div>
 
-              <div className="space-y-4">
-                {formData.pricingTiers.map((tier, index) => (
-                  <div key={index} className="flex gap-4 items-end">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Duration (days)
-                      </label>
-                      <div className="relative w-full">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newDropdowns = [...showDurationDropdowns];
-                            newDropdowns[index] = !newDropdowns[index];
-                            setShowDurationDropdowns(newDropdowns);
-                          }}
-                          className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"                        >
-                          {tier.durationDays ? `${tier.durationDays / 30} month${tier.durationDays > 30 ? 's' : ''} (${tier.durationDays} days)` : 'Select duration'}
-                          <ChevronDown
-                            size={16}
-                            className={`transform transition-transform duration-200 ${showDurationDropdowns[index] ? "rotate-180" : "rotate-0"}`}
-                          />
-                        </button>
-                        <AnimatePresence>
-                          {showDurationDropdowns[index] && (
-                            <motion.div
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.2 }}
-                              className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
-                            >
-                              {[30, 60, 90, 120, 150, 180].map((days) => (
-                                <button
-                                  key={days}
-                                  type="button"
-                                  onClick={() => {
-                                    updatePricingTier(index, 'durationDays', days);
-                                    const newDropdowns = [...showDurationDropdowns];
-                                    newDropdowns[index] = false;
-                                    setShowDurationDropdowns(newDropdowns);
-                                  }}
-                                  className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                                >
-                                  {days / 30} month{days > 30 ? 's' : ''} ({days} days)
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                      {validationErrors[`durationDays_${index}`] && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors[`durationDays_${index}`]}</p>
-                      )}
-                    </div>
-                    <div className="flex-1 relative">
+              {/* Duration Discount Multipliers */}
+              <div className="mt-6 border-t pt-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Duration Discount Multipliers</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  These multipliers provide discounts for longer durations. 1 month is the base (1.0 = no discount).
+                </p>
+                <div className="space-y-4">
+                  {([
+                    { key: 'months1', months: '1' },
+                    { key: 'months2', months: '2' },
+                    { key: 'months3', months: '3' },
+                    { key: 'months4', months: '4' },
+                    { key: 'months5', months: '5' },
+                    { key: 'months6', months: '6' }
+                  ] as const).map(({ key, months }) => (
+                    <div key={key} className="relative">
                       <input
                         type="number"
-                        id={`pricePerPlay_${index}`}
+                        id={`duration_${months}`}
                         placeholder=" "
                         step="0.01"
-                        min="0.01"
-                        value={tier.pricePerPlay}
-                        onChange={(e) => updatePricingTier(index, 'pricePerPlay', parseFloat(e.target.value))}
-                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors[`pricePerPlay_${index}`] ? 'border-red-400' : 'border-gray-300'}`}
+                        min="0"
+                        max="1"
+                        value={multipliersFormData.durationDiscountMultipliers[key]}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 1.0;
+                          if (key === 'months1' && value !== 1.0) {
+                            setErrorMsg('1-month multiplier must be 1.0 (base)');
+                            return;
+                          }
+                          if (value < 0 || value > 1) {
+                            setErrorMsg('Duration multiplier must be between 0 and 1');
+                            return;
+                          }
+                          setErrorMsg('');
+                          setMultipliersFormData(prev => ({
+                            ...prev,
+                            durationDiscountMultipliers: {
+                              ...prev.durationDiscountMultipliers,
+                              [key]: value
+                            }
+                          }));
+                        }}
+                        disabled={key === 'months1'}
+                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 ${key === 'months1' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         required
                       />
                       <label
-                        htmlFor={`pricePerPlay_${index}`}
-                        className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${tier.pricePerPlay ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                        htmlFor={`duration_${months}`}
+                        className="absolute left-0 text-gray-700 bg-transparent transition-all duration-200 -top-2 text-sm text-gray-700 font-semibold"
                       >
-                        Price per Play
+                        {months} Month{months !== '1' ? 's' : ''} Discount Multiplier {key === 'months1' && '(Base - Fixed at 1.0)'}
                       </label>
-                      <span className="text-xs text-gray-500 mt-1 block">
-                        This is the fee charged each time an ad is played on a single device. For example, if Price per Play is ₱1 and your ad gets 1000 plays in a day, you pay ₱1,000 per day.
-                      </span>
-                      {validationErrors[`pricePerPlay_${index}`] && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors[`pricePerPlay_${index}`]}</p>
-                      )}
                     </div>
-                    <div className="flex-1 relative">
-                      <input
-                        type="number"
-                        id={`adLengthMultiplier_${index}`}
-                        placeholder=" "
-                        step="0.1"
-                        min="0.1"
-                        max="2.0"
-                        value={tier.adLengthMultiplier || 1.0}
-                        onChange={(e) => updatePricingTier(index, 'adLengthMultiplier', parseFloat(e.target.value))}
-                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors[`adLengthMultiplier_${index}`] ? 'border-red-400' : 'border-gray-300'}`}
-                      />
-                      <label
-                        htmlFor={`adLengthMultiplier_${index}`}
-                        className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${tier.adLengthMultiplier ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
-                      >
-                        Ad Length Multiplier
-                      </label>
-                      <span className="text-xs text-gray-500 mt-1 block">
-                        This adjusts price based on ad length. Example: 1.0 = regular price, 1.5 = 50% more.
-                      </span>
-                      {validationErrors[`adLengthMultiplier_${index}`] && (
-                        <p className="text-red-500 text-xs mt-1">{validationErrors[`adLengthMultiplier_${index}`]}</p>
-                      )}
-                    </div>
-                    {formData.pricingTiers.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removePricingTier(index)}
-                        className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Ad Length Range */}
-              <div className="md:col-span-2">
-                <label className="block text-sm mt-6 font-medium text-gray-700 mb-2">
-                  Ad Length Range
-                </label>
-                <div className="bg-gray-50 rounded-md p-4">
-                  <div className="flex gap-4">
-                    <div className="flex items-center">
-                      <input
-                        type="radio"
-                        id="adLength20"
-                        name="adLength"
-                        value="20"
-                        checked={formData.minAdLengthSeconds === 20 && formData.maxAdLengthSeconds === 60}
-                        onChange={() => setFormData(prev => ({ ...prev, minAdLengthSeconds: 20, maxAdLengthSeconds: 60 }))}
-                        className="mr-2"
-                      />
-                      <label htmlFor="adLength20" className="text-sm">20, 40, or 60 seconds</label>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Only these three ad lengths are allowed in the system
-                  </p>
+                  ))}
                 </div>
               </div>
             </div>
@@ -775,7 +696,7 @@ const SadminPricing: React.FC = () => {
               disabled={createLoading || updateLoading}
               className="px-4 py-2 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
             >
-              {createLoading || updateLoading ? 'Saving...' : editingConfig ? 'Update Configuration' : 'Create Configuration'}
+              {createLoading || updateLoading ? 'Saving...' : editingConfig ? 'Update Configuration & Multipliers' : 'Create Configuration & Save Multipliers'}
             </button>
           </div>
           </form>
@@ -794,6 +715,7 @@ const SadminPricing: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
+
     </div>
   );
 };

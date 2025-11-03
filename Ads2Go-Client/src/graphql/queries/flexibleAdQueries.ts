@@ -7,7 +7,6 @@ export const GET_FLEXIBLE_FIELD_COMBINATIONS = gql`
       materialType
       vehicleType
       category
-      maxDevices
       minAdLengthSeconds
       maxAdLengthSeconds
       isActive
@@ -43,7 +42,6 @@ export const CALCULATE_FLEXIBLE_PRICING = gql`
       totalPlaysPerDay
       dailyRevenue
       totalPrice
-      maxDevices
       availableDevices
       devicesWithDriver
       devicesMounted
@@ -58,7 +56,6 @@ export interface FieldCombination {
   materialType: string;
   vehicleType: string;
   category: string;
-  maxDevices: number;
   minAdLengthSeconds: number;
   maxAdLengthSeconds: number;
   isActive: boolean;
@@ -76,7 +73,6 @@ export interface FlexiblePricingCalculation {
   totalPlaysPerDay: number;
   dailyRevenue: number;
   totalPrice: number;
-  maxDevices: number;
   availableDevices: number;
   devicesWithDriver: number;
   devicesMounted: number;

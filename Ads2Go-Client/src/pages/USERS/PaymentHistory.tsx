@@ -46,10 +46,6 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
         status
         paymentStatus
         createdAt
-        planId {
-          title
-          durationDays
-        }
       }
       payment {
         id
@@ -115,7 +111,7 @@ const PaymentHistory: React.FC = () => {
     if (data) {
       
       const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
-        const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
+        const durationDays = ad.durationDays || 0;
         let plan: string;
         switch (durationDays) {
           case 30:

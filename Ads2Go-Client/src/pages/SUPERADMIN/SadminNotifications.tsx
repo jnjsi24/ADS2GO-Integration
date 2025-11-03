@@ -21,7 +21,6 @@ import {
   MARK_ALL_SUPERADMIN_NOTIFICATIONS_READ,
   DELETE_SUPERADMIN_NOTIFICATION,
   DELETE_ALL_SUPERADMIN_NOTIFICATIONS,
-  GET_USER_COUNTS_BY_PLAN,
   SuperAdminNotification 
 } from '../../graphql/superadmin/queries/sadminNotificationQueries';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -44,12 +43,8 @@ const SadminNotifications: React.FC = () => {
     }
   });
 
-  // Fetch user counts by plan
-  const { data: planData } = useQuery(GET_USER_COUNTS_BY_PLAN, {
-    onError: (error) => {
-      console.error('Error fetching user counts by plan:', error);
-    }
-  });
+  // Removed plan data fetch - no longer using AdsPlan
+  const planData = null;
 
   // Mark notification as read
   const [markAsRead] = useMutation(MARK_SUPERADMIN_NOTIFICATION_READ, {
@@ -240,7 +235,7 @@ const SadminNotifications: React.FC = () => {
 
   const notifications = notificationsData?.getSuperAdminNotifications?.notifications || [];
   const unreadCount = notificationsData?.getSuperAdminNotifications?.unreadCount || 0;
-  const planCounts = planData?.getUserCountsByPlan || [];
+  const planCounts = []; // Removed - no longer using AdsPlan
 
   // Filter notifications based on selected filter
   const filteredNotifications = notifications.filter((notification: SuperAdminNotification) => {
@@ -382,17 +377,6 @@ const SadminNotifications: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Plans</p>
-                <p className="text-2xl font-bold text-gray-900">{planCounts.length}</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Filter Tabs */}
@@ -558,41 +542,6 @@ const SadminNotifications: React.FC = () => {
           </div>
         </div>
 
-        {/* Plan Usage Statistics */}
-        {planCounts.length > 0 && (
-          <div className="mb-8">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Plan Usage Statistics</h2>
-              <p className="text-gray-600 mt-1 mb-5">User counts and revenue by plan</p>
-            </div>
-            <div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {planCounts.map((plan: any) => (
-                  <div key={plan.planId} className="bg-white shadow-md border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-gray-900">{plan.planName}</h3>
-                      <span className="text-sm bg-gray-100 px-2 py-1 rounded-xl text-gray-500">{plan.planDetails.materialType}</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Users:</span>
-                        <span className="font-medium">{plan.userCount}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Active Ads:</span>
-                        <span className="font-medium">{plan.activeAdsCount}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Revenue:</span>
-                        <span className="font-medium text-green-600">₱{plan.totalRevenue.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Delete Confirmation Modal */}

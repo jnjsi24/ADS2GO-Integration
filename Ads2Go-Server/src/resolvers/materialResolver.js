@@ -5,7 +5,6 @@ const Tablet = require('../models/Tablet');
 const DeviceCompliance = require('../models/deviceCompliance');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const MaterialAvailability = require('../models/MaterialAvailability');
-const AdsPlan = require('../models/AdsPlan');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const NotificationService = require('../services/notifications/NotificationService');
@@ -67,22 +66,7 @@ const cleanupMaterialRelatedRecords = async (materialId, materialStringId) => {
     console.error(`❌ Error cleaning up Tablet:`, tabletError);
   }
 
-  // Remove material from all plans
-  try {
-    const plans = await AdsPlan.find({ materials: materialId });
-    for (const plan of plans) {
-      plan.materials = plan.materials.filter(
-        planMaterialId => planMaterialId.toString() !== materialId.toString()
-      );
-      await plan.save();
-      console.log(`✅ Removed material from plan: ${plan.name}`);
-    }
-    if (plans.length > 0) {
-      cleanupResults.plans = true;
-    }
-  } catch (planCleanupError) {
-    console.error(`❌ Error removing material from plans:`, planCleanupError);
-  }
+  // Removed AdsPlan functionality - no longer using AdsPlan
 
   return cleanupResults;
 };
@@ -446,47 +430,7 @@ const materialResolvers = {
         console.log(`⚠️ Material created but availability record creation failed. Run sync script to fix.`);
       }
 
-      // Automatically assign material to compatible plans
-      try {
-        console.log(`🔗 Auto-assigning material ${material.materialId} to compatible plans...`);
-        
-        // Find plans that match this material's criteria
-        const compatiblePlans = await AdsPlan.find({
-          materialType: material.materialType,
-          vehicleType: material.vehicleType,
-          category: material.category,
-          status: 'RUNNING'
-        });
-        
-        console.log(`📋 Found ${compatiblePlans.length} compatible plans for ${material.materialId}`);
-        
-        for (const plan of compatiblePlans) {
-          // Check if material is already assigned to this plan
-          const isAlreadyAssigned = plan.materials && plan.materials.some(
-            planMaterialId => planMaterialId.toString() === material._id.toString()
-          );
-          
-          if (!isAlreadyAssigned) {
-            // Add material to plan (limit to 3 materials per plan)
-            if (!plan.materials) plan.materials = [];
-            if (plan.materials.length < 3) {
-              plan.materials.push(material._id);
-              await plan.save();
-              console.log(`✅ Assigned ${material.materialId} to plan: ${plan.name}`);
-            } else {
-              console.log(`ℹ️ Plan ${plan.name} already has maximum materials (3), skipping assignment`);
-            }
-          } else {
-            console.log(`ℹ️ Material ${material.materialId} already assigned to plan: ${plan.name}`);
-          }
-        }
-        
-        console.log(`🎯 Auto-assignment completed for material: ${material.materialId}`);
-      } catch (planAssignmentError) {
-        console.error(`❌ Error auto-assigning material to plans:`, planAssignmentError);
-        // Don't throw error - plan assignment is helpful but shouldn't break material creation
-        console.log(`⚠️ Material created but plan assignment failed. Run sync script to fix.`);
-      }
+      // Removed AdsPlan auto-assignment - no longer using AdsPlan
 
       // Create tablet pair if the material type is HEADDRESS
       if (materialType === 'HEADDRESS') {

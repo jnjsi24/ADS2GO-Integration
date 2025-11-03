@@ -1,5 +1,4 @@
 // Export all admin queries
-export * from './adsPlans';
 export * from './getAd';
 export * from './getCompanyAds';
 export * from './getOwnAdminDetails';

@@ -47,7 +47,8 @@ const resolvers = {
       if (superAdmin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view admins');
       }
-      const admins = await Admin.find({ isActive: true });
+      // Return ALL admins including archived (client handles filtering by archive status)
+      const admins = await Admin.find({});
       return {
         success: true,
         message: 'Admins retrieved successfully',
@@ -292,27 +293,10 @@ const resolvers = {
       const superAdminToDelete = await SuperAdmin.findById(id);
       if (!superAdminToDelete) throw new Error('SuperAdmin not found');
       
-      // Check if already archived
-      if (superAdminToDelete.isArchived) {
-        return {
-          success: false,
-          message: 'SuperAdmin is already archived'
-        };
-      }
+      // Hard delete: Permanently delete the super admin (no archiving)
+      await SuperAdmin.findByIdAndDelete(id);
       
-      // Soft delete: Mark as archived with 30-day deletion schedule
-      const now = new Date();
-      const deletionDate = new Date(now);
-      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
-      
-      superAdminToDelete.isArchived = true;
-      superAdminToDelete.archivedAt = now;
-      superAdminToDelete.scheduledDeletionDate = deletionDate;
-      superAdminToDelete.tokenVersion += 1; // Invalidate all sessions
-      
-      await superAdminToDelete.save();
-      
-      console.log(`✅ SuperAdmin ${superAdminToDelete.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      console.log(`✅ SuperAdmin ${superAdminToDelete.email} permanently deleted`);
       
       return { 
         success: true, 

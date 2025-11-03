@@ -242,56 +242,8 @@ const SadminDriverSalary: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Tabs */}
       <div className="px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-full">
-                <DollarSign className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{pricingList.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Calculator className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{pricingList.filter(p => p.isActive).length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-purple-100 rounded-full">
-                <Users className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Vehicle Types</p>
-                <p className="text-2xl font-bold text-gray-900">{new Set(pricingList.map(p => p.vehicleType)).size}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-orange-100 rounded-full">
-                <Clock className="w-6 h-6 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Material Types</p>
-                <p className="text-2xl font-bold text-gray-900">{new Set(pricingList.map(p => p.materialType)).size}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
         <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
           {/* Tabs on the left */}
           <div className="flex space-x-1 p-1">

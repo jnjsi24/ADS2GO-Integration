@@ -29,7 +29,6 @@ interface PendingAd {
     lastName: string;
   } | null;
   materialId?: string[];
-  planId?: string;
 }
 
 interface PendingMaterial {

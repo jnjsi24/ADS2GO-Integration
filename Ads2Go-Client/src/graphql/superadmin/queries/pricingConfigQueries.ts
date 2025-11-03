@@ -7,12 +7,7 @@ export const GET_ALL_PRICING_CONFIGS = gql`
       materialType
       vehicleType
       category
-      pricingTiers {
-        durationDays
-        pricePerPlay
-        adLengthMultiplier
-      }
-      maxDevices
+      basePrice
       minAdLengthSeconds
       maxAdLengthSeconds
       isActive
@@ -30,12 +25,7 @@ export const GET_PRICING_CONFIG = gql`
       materialType
       vehicleType
       category
-      pricingTiers {
-        durationDays
-        pricePerPlay
-        adLengthMultiplier
-      }
-      maxDevices
+      basePrice
       minAdLengthSeconds
       maxAdLengthSeconds
       isActive
@@ -50,49 +40,44 @@ export const CALCULATE_PRICING_CONFIG = gql`
     $materialType: String!
     $vehicleType: String!
     $category: String!
-    $durationDays: Int!
+    $durationMonths: Int!
     $adLengthSeconds: Int!
-    $numberOfDevices: Int!
+    $numberOfVehicles: Int!
   ) {
     calculatePricingConfig(
       materialType: $materialType
       vehicleType: $vehicleType
       category: $category
-      durationDays: $durationDays
+      durationMonths: $durationMonths
       adLengthSeconds: $adLengthSeconds
-      numberOfDevices: $numberOfDevices
+      numberOfVehicles: $numberOfVehicles
     ) {
       materialType
       vehicleType
       category
-      durationDays
+      basePrice
+      durationMonths
       adLengthSeconds
-      numberOfDevices
-      pricePerPlay
-      playsPerDayPerDevice
-      totalPlaysPerDay
-      dailyRevenue
+      numberOfVehicles
+      adLengthMultiplier
+      durationDiscountMultiplier
+      subtotal
+      discount
       totalPrice
-      maxDevices
       minAdLengthSeconds
       maxAdLengthSeconds
     }
   }
 `;
 
-export interface PricingTier {
-  durationDays: number;
-  pricePerPlay: number;
-  adLengthMultiplier?: number;
-}
+// Removed PricingTier - no longer using pricing tiers
 
 export interface PricingConfig {
   id: string;
   materialType: string;
   vehicleType: string;
   category: string;
-  pricingTiers: PricingTier[];
-  maxDevices: number;
+  basePrice: number;
   minAdLengthSeconds: number;
   maxAdLengthSeconds: number;
   isActive: boolean;
@@ -105,15 +90,15 @@ export interface PricingCalculation {
   materialType: string;
   vehicleType: string;
   category: string;
-  durationDays: number;
+  basePrice: number;
+  durationMonths: number;
   adLengthSeconds: number;
-  numberOfDevices: number;
-  pricePerPlay: number;
-  playsPerDayPerDevice: number;
-  totalPlaysPerDay: number;
-  dailyRevenue: number;
+  numberOfVehicles: number;
+  adLengthMultiplier: number;
+  durationDiscountMultiplier: number;
+  subtotal: number;
+  discount: number;
   totalPrice: number;
-  maxDevices: number;
   minAdLengthSeconds: number;
   maxAdLengthSeconds: number;
 }

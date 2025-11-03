@@ -16,12 +16,6 @@ const AdSchema = new mongoose.Schema({
     ref: 'Material',
     required: true
   }],
-  planId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'AdsPlan',
-    required: false,
-    default: null
-  },
 
   // Ad details
   title: {
@@ -200,17 +194,14 @@ AdSchema.pre('validate', function (next) {
 AdSchema.pre('save', async function (next) {
   try {
     const Material = mongoose.model('Material');
-    const Plan = mongoose.model('AdsPlan');
     const User = mongoose.model('User');
 
-    const [materialExists, planExists, userExists] = await Promise.all([
+    const [materialExists, userExists] = await Promise.all([
       Material.exists({ _id: this.materialId }),
-      this.planId ? Plan.exists({ _id: this.planId }) : true, // Allow null planId for flexible ads
       User.exists({ _id: this.userId })
     ]);
 
     if (!materialExists) throw new Error('Material not found');
-    if (!planExists) throw new Error('Plan not found');
     if (!userExists) throw new Error('User not found');
 
     next();

@@ -31,8 +31,8 @@ interface User {
   profilePicture: string | null;
   houseAddress: string | null;
   isArchived?: boolean;
-  archivedAt?: string | null;
-  scheduledDeletionDate?: string | null;
+  archivedAt: Date | null;
+  scheduledDeletionDate: Date | null;
 }
 
 const cities = ['Manila', 'Quezon City', 'Cebu', 'Davao', 'Iloilo', 'Baguio', 'Makati', 'Mandaluyong', 'Taguig', 'Pasig', 'Parañaque'];
@@ -231,7 +231,11 @@ const ManageUsers: React.FC = () => {
     if (usersData?.getAllUsers) {
       const userData = usersData.getAllUsers;
       
-      const transformedUsers: User[] = userData.map((user: any) => {
+      // Safety filter to ensure only USER role records are displayed
+      // Explicitly exclude ADMIN and SUPERADMIN roles - only show USER/advertiser
+      const usersOnly = userData.filter((u: any) => u.role === 'USER');
+      
+      const transformedUsers: User[] = usersOnly.map((user: any) => {
         // Try to extract city from houseAddress first (more reliable), then companyAddress
         let city = 'Unknown';
         
@@ -261,6 +265,8 @@ const ManageUsers: React.FC = () => {
         const lastLogin = parseDate(user.lastLogin);
         const createdAt = parseDate(user.createdAt) || new Date();
         const updatedAt = parseDate(user.updatedAt) || new Date();
+        const scheduledDeletionDate = parseDate(user.scheduledDeletionDate);
+        const archivedAt = parseDate(user.archivedAt);
         
         return {
           id: user.id,
@@ -282,8 +288,8 @@ const ManageUsers: React.FC = () => {
           profilePicture: user.profilePicture || null,
           houseAddress: user.houseAddress || null,
           isArchived: user.isArchived || false,
-          archivedAt: user.archivedAt || null,
-          scheduledDeletionDate: user.scheduledDeletionDate || null
+          archivedAt: archivedAt,
+          scheduledDeletionDate: scheduledDeletionDate
         };
       });
       
@@ -531,6 +537,9 @@ const ManageUsers: React.FC = () => {
 
   // Filter and sort users based on search term, status, and sort option
   const filteredUsers = users.filter((user) => {
+    // Explicitly exclude ADMIN and SUPERADMIN roles (only show USER/advertiser)
+    if (user.role === 'ADMIN' || user.role === 'SUPERADMIN') return false;
+    
     // Filter by archive status based on active tab
     const isArchivedMatch = activeTab === 'archived' ? user.isArchived === true : user.isArchived !== true;
     
@@ -1038,7 +1047,7 @@ const ManageUsers: React.FC = () => {
 
                     {activeTab === 'archived' && (
                       <div className="col-span-1 text-sm text-red-600 font-medium">
-                        {user.scheduledDeletionDate ? formatDate(new Date(user.scheduledDeletionDate)) : 'N/A'}
+                        {user.scheduledDeletionDate ? formatDate(user.scheduledDeletionDate) : 'N/A'}
                       </div>
                     )}
 

@@ -169,8 +169,8 @@ Upload: GraphQLUpload,
     },
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
-      // Filter out archived drivers (30-day deferred deletion)
-      return Driver.find({ isArchived: { $ne: true } })
+      // Return ALL drivers including archived (client handles filtering by archive status)
+      return Driver.find({})
         .select('+createdAt +updatedAt +lastLogin +dateJoined +approvalDate')
         .populate({
           path: 'material',

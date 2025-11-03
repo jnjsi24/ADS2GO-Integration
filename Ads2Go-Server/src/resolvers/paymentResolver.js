@@ -1,6 +1,5 @@
 const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
-const AdsPlan = require('../models/AdsPlan');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const mongoose = require('mongoose');
 
@@ -204,15 +203,13 @@ const paymentResolvers = {
       // Fetch payments
       const payments = await Payment.find(filter).sort({ createdAt: -1 });
 
-      // Populate durationDays from adsId and planID
+      // Populate durationDays from adsId
       const results = await Promise.all(
         payments.map(async (p) => {
           const ad = await Ad.findById(p.adsId).select('id title durationDays');
-          const plan = await AdsPlan.findById(p.planID).select('id title durationDays');
           return {
             ...p.toObject(),
             adsId: ad,
-            planID: plan,
           };
         })
       );
@@ -310,7 +307,7 @@ const paymentResolvers = {
       const newPayment = new Payment({
         ...input,
         userId: user.id,
-        planID: ad.planId || null, // Add planID from the ad (null for flexible ads)
+        // Removed planID - no longer using AdsPlan
         receiptId,
         paymentStatus: 'PAID', // Use 'PAID' instead of 'COMPLETED'
         paymentDate: paymentDate || new Date(),
@@ -373,7 +370,7 @@ const paymentResolvers = {
         console.log('💳 Creating payment with data:', {
           userId: user.id,
           adsId: adsId,
-          planID: ad.planId,
+          // Removed planID - no longer using AdsPlan
           paymentType: paymentType,
           amount: ad.totalPrice,
           receiptId: receiptId,
@@ -683,11 +680,7 @@ const paymentResolvers = {
       const ad = await Ad.findById(parent.adsId);
       return ad || null;
     },
-    planID: async (parent) => {
-      if (!parent.planID) return null; // Handle flexible ads without plans
-      const plan = await AdsPlan.findById(parent.planID);
-      return plan || null;
-    },
+    // Removed planID resolver - no longer using AdsPlan
   },
 };
 

@@ -1,26 +1,5 @@
 const PricingConfig = require('../models/PricingConfig');
 
-// Helper function to calculate plays per day
-const calculatePlaysPerDay = (adLengthSeconds, screenHoursPerDay = 8) => {
-  const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
-  return Math.floor(screenSecondsPerDay / adLengthSeconds);
-};
-
-// Helper function to calculate pricing
-const calculatePricing = (pricePerPlay, adLengthSeconds, numberOfDevices, durationDays) => {
-  const playsPerDayPerDevice = calculatePlaysPerDay(adLengthSeconds);
-  const totalPlaysPerDay = playsPerDayPerDevice * numberOfDevices;
-  const dailyRevenue = totalPlaysPerDay * pricePerPlay;
-  const totalPrice = dailyRevenue * durationDays;
-
-  return {
-    playsPerDayPerDevice,
-    totalPlaysPerDay,
-    dailyRevenue,
-    totalPrice
-  };
-};
-
 module.exports = {
   Query: {
     getAllPricingConfigs: async (_, __, { user }) => {
@@ -42,7 +21,7 @@ module.exports = {
       return await PricingConfig.findPricingConfig(materialType, vehicleType, category);
     },
 
-    calculatePricingConfig: async (_, { materialType, vehicleType, category, durationDays, adLengthSeconds, numberOfDevices }, { user }) => {
+    calculatePricingConfig: async (_, { materialType, vehicleType, category, durationMonths, adLengthSeconds, numberOfVehicles }, { user }) => {
       // This can be called by both superadmin and regular users
       const pricingConfig = await PricingConfig.findPricingConfig(materialType, vehicleType, category);
       
@@ -56,36 +35,34 @@ module.exports = {
         throw new Error('Ad length must be 20, 40, or 60 seconds');
       }
 
-      // Validate duration - only allow 1-6 months (30-180 days)
-      const allowedDurations = [30, 60, 90, 120, 150, 180];
-      if (!allowedDurations.includes(durationDays)) {
-        throw new Error('Duration must be 1-6 months (30-180 days)');
+      // Validate duration - only allow 1-6 months
+      const allowedDurations = [1, 2, 3, 4, 5, 6];
+      if (!allowedDurations.includes(durationMonths)) {
+        throw new Error('Duration must be 1-6 months');
       }
 
-      // Validate number of devices
-      if (numberOfDevices > pricingConfig.maxDevices) {
-        throw new Error(`Maximum ${pricingConfig.maxDevices} devices allowed for this combination`);
+      // Validate number of vehicles (must be at least 1)
+      if (numberOfVehicles < 1) {
+        throw new Error('Number of vehicles must be at least 1');
       }
 
-      // Get price for duration
-      const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
-      
-      // Calculate pricing
-      const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
+      // Calculate total price using new formula
+      // Total Price = Base Price × Ad Length Multiplier × Duration (months) × Number of Vehicles × Duration Discount Multiplier
+      const calculation = await pricingConfig.calculateTotalPrice(adLengthSeconds, durationMonths, numberOfVehicles);
 
       return {
         materialType: pricingConfig.materialType,
         vehicleType: pricingConfig.vehicleType,
         category: pricingConfig.category,
-        durationDays,
+        basePrice: calculation.basePrice,
         adLengthSeconds,
-        numberOfDevices,
-        pricePerPlay,
-        playsPerDayPerDevice: pricing.playsPerDayPerDevice,
-        totalPlaysPerDay: pricing.totalPlaysPerDay,
-        dailyRevenue: pricing.dailyRevenue,
-        totalPrice: pricing.totalPrice,
-        maxDevices: pricingConfig.maxDevices,
+        durationMonths,
+        numberOfVehicles,
+        adLengthMultiplier: calculation.adLengthMultiplier,
+        durationDiscountMultiplier: calculation.durationDiscountMultiplier,
+        subtotal: calculation.subtotal,
+        discount: calculation.discount,
+        totalPrice: calculation.totalPrice,
         minAdLengthSeconds: pricingConfig.minAdLengthSeconds,
         maxAdLengthSeconds: pricingConfig.maxAdLengthSeconds
       };
@@ -104,13 +81,10 @@ module.exports = {
         throw new Error('Pricing configuration already exists for this combination');
       }
 
-      // Validate pricing tiers
-      if (!input.pricingTiers || input.pricingTiers.length === 0) {
-        throw new Error('At least one pricing tier is required');
+      // Validate base price
+      if (!input.basePrice || input.basePrice <= 0) {
+        throw new Error('Base price must be greater than 0');
       }
-
-      // Sort tiers by duration
-      input.pricingTiers.sort((a, b) => a.durationDays - b.durationDays);
 
       const newConfig = new PricingConfig({
         ...input,
@@ -133,9 +107,9 @@ module.exports = {
         throw new Error('Pricing configuration not found');
       }
 
-      // If updating pricing tiers, sort them
-      if (input.pricingTiers) {
-        input.pricingTiers.sort((a, b) => a.durationDays - b.durationDays);
+      // Validate base price if updating
+      if (input.basePrice !== undefined && input.basePrice <= 0) {
+        throw new Error('Base price must be greater than 0');
       }
 
       return await PricingConfig.findByIdAndUpdate(id, input, { new: true });

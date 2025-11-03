@@ -876,7 +876,6 @@ router.get('/', async (req, res) => {
     const ads = await Ad.find({ status: 'RUNNING' })
       .populate('userId', 'firstName lastName companyName')
       .populate('materialId', 'materialId materialType vehicleType')
-      .populate('planId', 'planName durationDays')
       .limit(10);
 
     res.json({

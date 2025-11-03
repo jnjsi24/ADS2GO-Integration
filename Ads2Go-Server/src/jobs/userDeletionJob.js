@@ -4,7 +4,6 @@ const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const Admin = require('../models/Admin');
 const SuperAdmin = require('../models/SuperAdmin');
-const AdsPlan = require('../models/AdsPlan');
 const CompanyAd = require('../models/CompanyAd');
 const FAQ = require('../models/FAQ');
 const AdsDeployment = require('../models/adsDeployment');
@@ -538,14 +537,7 @@ class UserDeletionJob {
           await DeviceCompliance.findOneAndDelete({ materialId });
           await Tablet.findOneAndDelete({ materialId: materialStringId });
           
-          // Remove material from all plans
-          const plans = await AdsPlan.find({ materials: materialId });
-          for (const plan of plans) {
-            plan.materials = plan.materials.filter(
-              planMaterialId => planMaterialId.toString() !== materialId.toString()
-            );
-            await plan.save();
-          }
+          // Removed AdsPlan functionality - no longer using AdsPlan
 
           await Material.findByIdAndDelete(materialId);
           
@@ -578,63 +570,11 @@ class UserDeletionJob {
   }
 
   /**
-   * Main job function - Permanently delete ads plans scheduled for deletion
+   * Removed deleteExpiredAdsPlans - no longer using AdsPlan
    */
   async deleteExpiredAdsPlans() {
-    console.log('🗑️ Starting ads plan deletion job (30-day deferred deletion)...');
-
-    try {
-      const now = new Date();
-      
-      const plansToDelete = await AdsPlan.find({
-        isArchived: true,
-        scheduledDeletionDate: { $lte: now }
-      });
-
-      console.log(`📊 Found ${plansToDelete.length} ads plans scheduled for permanent deletion`);
-
-      let deletedCount = 0;
-      let errorCount = 0;
-
-      for (const plan of plansToDelete) {
-        try {
-          const planId = plan._id;
-          const planName = plan.name;
-          const archivedAt = plan.archivedAt;
-          const scheduledDeletionDate = plan.scheduledDeletionDate;
-
-          const daysArchived = Math.floor((now - archivedAt) / (1000 * 60 * 60 * 24));
-
-          console.log(`🔍 Processing ads plan: ${planName} (Archived for ${daysArchived} days)`);
-
-          await AdsPlan.findByIdAndDelete(planId);
-          
-          deletedCount++;
-          console.log(`✅ Permanently deleted ads plan: ${planName} (ID: ${planId})`);
-          console.log(`   - Archived on: ${archivedAt.toISOString()}`);
-          console.log(`   - Scheduled deletion: ${scheduledDeletionDate.toISOString()}`);
-          console.log(`   - Days archived: ${daysArchived}`);
-
-        } catch (error) {
-          errorCount++;
-          console.error(`❌ Error deleting ads plan ${plan.name}:`, error.message);
-        }
-      }
-
-      console.log('✅ Ads plan deletion job completed successfully');
-      console.log(`📊 Summary: ${deletedCount} deleted, ${errorCount} errors`);
-
-      return {
-        success: true,
-        deletedCount,
-        errorCount,
-        totalProcessed: plansToDelete.length
-      };
-
-    } catch (error) {
-      console.error('❌ Ads plan deletion job failed:', error);
-      throw error;
-    }
+    console.log('⚠️ Ads plan deletion job disabled - no longer using AdsPlan');
+    return { deletedCount: 0, errorCount: 0, totalProcessed: 0 };
   }
 
   /**

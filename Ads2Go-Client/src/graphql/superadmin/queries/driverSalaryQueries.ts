@@ -29,6 +29,9 @@ export const GET_ALL_DRIVER_SALARY_PRICING = gql`
         displayName
         createdAt
         updatedAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
       }
       totalCount
     }

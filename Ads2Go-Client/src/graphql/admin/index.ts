@@ -1,6 +1,5 @@
 // Admin Queries
 export * from './queries/materials';
-export * from './queries/adsPlans';
 export * from './queries/getAd';
 export * from './queries/getCompanyAds';
 export * from './queries/getPendingForms';
