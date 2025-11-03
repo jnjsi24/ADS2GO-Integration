@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronDown, Clock, MonitorSmartphone, Calendar } from "lucide-react";
+import { Search, ChevronDown, Clock, MonitorSmartphone, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import Payment from "./Payment";
@@ -519,35 +519,38 @@ const PaymentHistory: React.FC = () => {
       )}
 
       {/* Pagination */}
-      <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
-        <span className="text-gray-500">
-          Showing {startItem}-{endItem} of {filteredPayments.length}
-        </span>
-        <div className="flex space-x-2">
+      <div className="sticky bottom-0 pt-4 pb-2 flex justify-center mt-auto">
+        <div className="flex items-center space-x-1">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            «
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            <span>Previous</span>
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-            <button
-              key={page}
-              onClick={() => handlePageChange(page)}
-              className={`px-2 py-1 border border-gray-300 rounded ${
-                currentPage === page ? "bg-[#3674B5] text-white" : ""
-              }`}
-            >
-              {page}
-            </button>
-          ))}
+          <div className="flex space-x-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => handlePageChange(page)}
+                className={`px-2 py-1 text-sm rounded ${
+                  currentPage === page 
+                    ? "text-black border border-black/40"
+                    : "text-gray-700 hover:border border-gray-300"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            »
+            <span>Next</span>
+            <ChevronRight className="w-4 h-4 ml-1" />
           </button>
         </div>
       </div>
@@ -555,59 +558,56 @@ const PaymentHistory: React.FC = () => {
     {/* End Desktop View */}
 
     {/* ======= MOBILE VIEW ======= */}
-    <div className="block lg:hidden relative z-10 min-h-screen bg-transparent px-4 py-6">
-      {/* Search + Filter in one row */}
-      <div className="block lg:hidden w-full space-y-4">
-          {/* Row 1: Search and Status Filter */}
-          <div className="flex gap-2 w-full">
-            <input
-              type="text"
-              className="text-xs text-black rounded-lg pl-4 py-3 flex-1 min-w-0 shadow-md focus:outline-none bg-white/70"
-              placeholder="Search Payments"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <div className="relative min-w-[120px]">
-              <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2 hover:bg-white/80 transition-colors duration-200"
-              >
-                {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All'}
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform duration-200 ${
-                    showStatusDropdown ? 'rotate-180' : 'rotate-0'
-                  }`}
-                />
-              </button>
-              <AnimatePresence>
-                {showStatusDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden border border-gray-200"
-                  >
-                    {statusFilterOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => handleStatusFilterChange(option.value)}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+    <div className="block lg:hidden relative z-10 bg-transparent py-10">
+    {/* ======= MOBILE VIEW ======= */}
+    <div className="mb-16">
+      <div className="block lg:hidden pb-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Payment History</h1>
+        {/* Search and Filter Row */}
+        <div className="flex gap-2 w-full mb-4">
+          <input
+            type="text"
+            className="text-xs text-black rounded-md pl-5 py-3 flex-1 shadow-md focus:outline-none bg-white/70"
+            placeholder="Search Payments"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+            >
+              {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All'}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${
+                  showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                }`}
+              />
+            </button>
+            <AnimatePresence>
+              {showStatusDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden border border-gray-200"
+                >
+                  {statusFilterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleStatusFilterChange(option.value)}
+                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-
-        {/* Title */}
-        <h1 className="text-xl font-bold text-gray-800 mt-2">
-          Payment History
-        </h1>
+        </div>
       </div>
 
       {/* Payment Cards (1 per row) */}
@@ -647,18 +647,33 @@ const PaymentHistory: React.FC = () => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                {/* Status badge */}
-                <span
-                  className={`inline-block text-[10px] px-2 py-1 rounded border ${
-                    item.status === 'PAID'
-                      ? 'border-green-500 text-green-700'
-                      : item.status === 'FAILED'
-                      ? 'border-red-500 text-red-700'
-                      : 'border-yellow-400 text-yellow-700'
-                  }`}
-                >
-                  {item.status === 'PENDING' ? 'Pending' : item.status === 'PAID' ? 'Paid' : 'Failed'}
-                </span>
+                {/* Status and Pay Now button row */}
+                <div className="flex justify-between items-start">
+                  <span
+                    className={`inline-block text-[10px] px-2 py-1 font-medium rounded ${
+                      item.status === 'PAID'
+                        ? 'bg-green-200 text-green-600'
+                        : item.status === 'FAILED'
+                        ? 'bg-red-200 text-red-600'
+                        : 'bg-yellow-200 text-yellow-600'
+                    }`}
+                  >
+                    {item.status === 'PENDING' ? 'Pending' : item.status === 'PAID' ? 'Paid' : 'Failed'}
+                  </span>
+                  {item.status === 'PENDING' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPayment(item);
+                        setSelectedPaymentType(item.paymentType || "");
+                        setIsModalOpen(true);
+                      }}
+                      className="bg-[#3674B5] text-white text-[10px] px-3 py-1 rounded-full hover:bg-[#2c5d94] transition-colors"
+                    >
+                      Pay Now
+                    </button>
+                  )}
+                </div>
                 <h3 className="text-lg font-semibold text-black mt-1 truncate">{item.productName}</h3>
                 <p className="text-[15px] font-bold text-black mt-1">{item.amount}</p>
                 <p className="text-xs text-black/70 mt-1 truncate">
@@ -687,23 +702,25 @@ const PaymentHistory: React.FC = () => {
           </div>
         ))}
       </div>
-
+      
       {/* Pagination */}
-      <div className="mt-6 flex justify-center items-center text-sm">
+      <div className="fixed bottom-0 left-0 right-0 pt-4 pb-2 flex justify-center z-50">
         <div className="flex space-x-1">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            «
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            <span>Previous</span>
           </button>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
             <button
               key={page}
               onClick={() => handlePageChange(page)}
-              className={`px-2 py-1 ${
-                currentPage === page ? "text-black" : ""
+              className={`px-2 py-1 text-sm rounded ${
+                currentPage === page ? "text-black border border-black/40"
+                              : "text-gray-700 hover:border border-gray-300"
               }`}
             >
               {page}
@@ -712,13 +729,18 @@ const PaymentHistory: React.FC = () => {
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
-          >
-            »
+            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4 ml-1" />
           </button>
         </div>
       </div>
     </div>
+  </div>
+
+
+    
     {/* End Mobile View */}
 
     {/* Payment modal - Shared between Desktop and Mobile */}

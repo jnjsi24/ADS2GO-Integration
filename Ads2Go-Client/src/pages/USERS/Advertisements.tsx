@@ -639,7 +639,12 @@ const Advertisements: React.FC = () => {
                   }}> 
                     {ad.description}
                   </div>
-                  <button className='w-full bg-[#3674B5] text-sm p-1 mt-2 rounded-full text-white'>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/ad-details/${ad.id}`);
+                    }}
+                    className='w-full bg-[#3674B5] text-sm p-1 mt-2 rounded-full text-white'>
                     View Details
                   </button>
                 </div>
@@ -707,7 +712,7 @@ const Advertisements: React.FC = () => {
                           onClick={() => handlePageChange(i)}
                           className={`px-2 py-1 text-sm rounded ${
                             currentPage === i
-                              ? "bg-[#3674B5] text-white"
+                              ? "text-black border border-black/40"
                               : "text-gray-700 hover:border border-gray-300"
                           }`}
                         >

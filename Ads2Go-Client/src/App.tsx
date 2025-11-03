@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
@@ -285,12 +285,24 @@ const AdminAppContent: React.FC = () => {
 
 const UserAppContent: React.FC = () => {
   const { user, isLoading, isInitialized } = useUserAuth();
+  const location = useLocation();
+  // Track viewport to differentiate mobile vs desktop
+  const [isMobile, setIsMobile] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth < 1024 : false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  // Hide user navbar on ad details pages only when on mobile view
+  const isAdDetailsRoute = location.pathname.startsWith('/ad-details/') ||
+                           /^\/advertisements\/[^/]+$/.test(location.pathname);
+  const hideUserNavbar = isMobile && isAdDetailsRoute;
   
   return (
     <NotificationProvider>
       <div className="min-h-screen bg-white text-black">
-        {/* Always show navbar for users, with loading state handled inside */}
-        <UserNavbar />
+        {/* Conditionally show navbar on mobile ad details only; always show on desktop */}
+        {!hideUserNavbar && <UserNavbar />}
         
         {/* Main content with smooth transition */}
         <div className="transition-all duration-300 ease-in-out">
