@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Calculator, Users, Clock, MapPin } from 'lucide-react';
+import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Calculator, Users, Clock, MapPin, RotateCcw } from 'lucide-react';
 import { 
   GET_ALL_DRIVER_SALARY_PRICING,
   DriverSalaryPricing
@@ -10,6 +10,7 @@ import {
   CREATE_DRIVER_SALARY_PRICING, 
   UPDATE_DRIVER_SALARY_PRICING, 
   DELETE_DRIVER_SALARY_PRICING,
+  RESTORE_DRIVER_SALARY_PRICING,
   CreateDriverSalaryPricingInput,
   UpdateDriverSalaryPricingInput
 } from '../../graphql/superadmin/mutations/driverSalaryMutations';
@@ -21,7 +22,7 @@ const SadminDriverSalary: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPricing, setEditingPricing] = useState<DriverSalaryPricing | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive' | 'archived'>('active');
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -82,13 +83,58 @@ const SadminDriverSalary: React.FC = () => {
     }
   });
 
+  const [restoreDriverSalaryPricing] = useMutation(RESTORE_DRIVER_SALARY_PRICING, {
+    onCompleted: () => {
+      refetch();
+      setErrorMsg('');
+    },
+    onError: (error) => {
+      setErrorMsg(error.message || 'Failed to restore driver salary pricing');
+    }
+  });
+
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [pricingToRestore, setPricingToRestore] = useState<DriverSalaryPricing | null>(null);
 
   const pricingList: DriverSalaryPricing[] = data?.getAllDriverSalaryPricing?.pricingList || [];
 
-  // Filter pricing by active status
-  const filteredPricing = pricingList.filter(pricing => 
-    activeTab === 'active' ? pricing.isActive : !pricing.isActive
-  );
+  // Debug logging
+  console.log('📊 Driver Salary Pricing Debug:', {
+    totalPricingList: pricingList.length,
+    activeTab,
+    pricingList: pricingList.map(p => ({
+      id: p.id,
+      vehicleType: p.vehicleType,
+      materialType: p.materialType,
+      isActive: p.isActive,
+      isArchived: p.isArchived
+    }))
+  });
+
+  // Filter pricing - separate archived from inactive
+  const filteredPricing = pricingList.filter(pricing => {
+    // Ensure boolean values are properly handled (defensive programming)
+    // Default isArchived to false if undefined/null (for backward compatibility)
+    const isArchived = Boolean(pricing.isArchived === true || pricing.isArchived === 'true');
+    // Default isActive to true if undefined/null (for backward compatibility) 
+    const isActive = pricing.isActive !== false && pricing.isActive !== 'false' && (pricing.isActive === true || pricing.isActive === 'true' || pricing.isActive === undefined || pricing.isActive === null);
+    const isInactive = !isActive && !isArchived;
+    
+    if (activeTab === 'active') {
+      return isActive && !isArchived;
+    } else if (activeTab === 'inactive') {
+      return isInactive; // Only inactive, NOT archived
+    } else if (activeTab === 'archived') {
+      return isArchived; // Only archived
+    }
+    return true;
+  });
+
+  console.log('📊 Filtered Pricing:', {
+    filteredCount: filteredPricing.length,
+    activeTab
+  });
 
   // Reset form function
   const resetForm = () => {
@@ -177,11 +223,35 @@ const SadminDriverSalary: React.FC = () => {
     }
   };
 
+  const handleRestorePricing = (pricing: DriverSalaryPricing) => {
+    setPricingToRestore(pricing);
+    setShowRestoreModal(true);
+  };
+
+  const confirmRestore = async () => {
+    if (pricingToRestore) {
+      setIsRestoring(true);
+      try {
+        await restoreDriverSalaryPricing({ variables: { id: pricingToRestore.id } });
+        setShowRestoreModal(false);
+        setPricingToRestore(null);
+      } catch (error) {
+        console.error('Error restoring pricing:', error);
+      } finally {
+        setIsRestoring(false);
+      }
+    }
+  };
+
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setPricingToDelete(null);
   };
 
+  const cancelRestore = () => {
+    setShowRestoreModal(false);
+    setPricingToRestore(null);
+  };
 
   const handleModalClose = () => {
     setIsModalOpen(false);
@@ -247,23 +317,36 @@ const SadminDriverSalary: React.FC = () => {
         <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
           {/* Tabs on the left */}
           <div className="flex space-x-1 p-1">
-            {["active", "inactive"].map((tab) => {
+            {["active", "inactive", "archived"].map((tab) => {
               const isActive = activeTab === tab;
               const count =
                 tab === "active"
-                  ? pricingList.filter((p) => p.isActive).length
-                  : pricingList.filter((p) => !p.isActive).length;
+                  ? pricingList.filter((p) => {
+                      const pIsActive = p.isActive !== false && p.isActive !== 'false' && (p.isActive === true || p.isActive === 'true' || p.isActive === undefined || p.isActive === null);
+                      const pIsArchived = Boolean(p.isArchived === true || p.isArchived === 'true');
+                      return pIsActive && !pIsArchived;
+                    }).length
+                  : tab === "inactive"
+                  ? pricingList.filter((p) => {
+                      const pIsActive = p.isActive !== false && p.isActive !== 'false' && (p.isActive === true || p.isActive === 'true' || p.isActive === undefined || p.isActive === null);
+                      const pIsArchived = Boolean(p.isArchived === true || p.isArchived === 'true');
+                      return !pIsActive && !pIsArchived;
+                    }).length
+                  : pricingList.filter((p) => {
+                      const pIsArchived = Boolean(p.isArchived === true || p.isArchived === 'true');
+                      return pIsArchived;
+                    }).length;
 
               return (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab as "active" | "inactive")}
+                  onClick={() => setActiveTab(tab as "active" | "inactive" | "archived")}
                   className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
                     isActive
                       ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {tab === "active" ? "Active" : "Inactive"}
+                  {tab === "active" ? "Active" : tab === "inactive" ? "Inactive" : "Archived"}
 
                   {/* Underline animation */}
                   <span
@@ -350,20 +433,33 @@ const SadminDriverSalary: React.FC = () => {
                       <p className="text-gray-600 text-sm">{pricing.category === 'NON_DIGITAL' ? 'NON DIGITAL' : pricing.category}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEditPricing(pricing)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit Pricing"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeletePricing(pricing)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete Pricing"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* Show Restore button only for archived pricing */}
+                      {pricing.isArchived ? (
+                        <button
+                          onClick={() => handleRestorePricing(pricing)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Restore Pricing"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEditPricing(pricing)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit Pricing"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePricing(pricing)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Pricing"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -406,6 +502,11 @@ const SadminDriverSalary: React.FC = () => {
                   {pricing.updatedBy && (
                     <p className="text-xs text-black">
                       Updated: <span className="font-medium">{new Date(pricing.updatedAt).toLocaleDateString()}</span>
+                    </p>
+                  )}
+                  {pricing.isArchived && pricing.scheduledDeletionDate && (
+                    <p className="text-xs text-red-600 font-medium">
+                      Deletion: <span className="font-medium">{new Date(pricing.scheduledDeletionDate).toLocaleDateString()}</span>
                     </p>
                   )}
                 </div>
@@ -678,6 +779,18 @@ const SadminDriverSalary: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Restore Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRestoreModal}
+        onClose={cancelRestore}
+        onConfirm={confirmRestore}
+        title="Restore Salary Pricing"
+        message={pricingToRestore ? `Are you sure you want to restore the salary pricing for ${pricingToRestore.displayName}?` : ''}
+        confirmText="Restore"
+        cancelText="Cancel"
+        confirmButtonClass="bg-green-600 hover:bg-green-700"
       />
     </div>
   );

@@ -55,6 +55,20 @@ const pricingConfigSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  
+  // Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -62,6 +76,40 @@ const pricingConfigSchema = new mongoose.Schema({
 
 // Index for efficient lookups
 pricingConfigSchema.index({ materialType: 1, vehicleType: 1, category: 1, isActive: 1 });
+pricingConfigSchema.index({ isArchived: 1 }); // Archive filter for queries
+pricingConfigSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
+
+// Method to get price per play for flexible ads
+// This calculates the price per play based on duration days and ad length
+pricingConfigSchema.methods.getPriceWithAdLength = function(durationDays, adLengthSeconds) {
+  // Hardcoded ad length multipliers (based on screen time)
+  // 20s = 1.0x (base), 40s = 2.0x (double), 60s = 3.0x (triple)
+  const adLengthMultiplierMap = {
+    20: 1.0,
+    40: 2.0,
+    60: 3.0
+  };
+  const adLengthMultiplier = adLengthMultiplierMap[adLengthSeconds] || 1.0;
+  
+  // Convert duration days to months (approximate)
+  const durationMonths = durationDays / 30;
+  
+  // Calculate total price: Base Price × Ad Length Multiplier × Duration (months)
+  const totalPrice = this.basePrice * adLengthMultiplier * durationMonths;
+  
+  // Calculate total plays per day for given ad length
+  // Assumes 8 hours (28,800 seconds) of screen time per day
+  const screenSecondsPerDay = 8 * 60 * 60; // 28,800 seconds
+  const playsPerDayPerDevice = Math.floor(screenSecondsPerDay / adLengthSeconds);
+  
+  // Total plays for the duration
+  const totalPlays = playsPerDayPerDevice * durationDays;
+  
+  // Price per play = total price / total plays
+  const pricePerPlay = totalPrice / totalPlays;
+  
+  return pricePerPlay;
+};
 
 // Method to calculate total price using new formula
 // Total Price = Base Price × Ad Length Multiplier × Duration (months) × Number of Vehicles × Duration Discount Multiplier
@@ -106,7 +154,8 @@ pricingConfigSchema.statics.findPricingConfig = function(materialType, vehicleTy
     materialType: materialType.toUpperCase(),
     vehicleType: vehicleType.toUpperCase(),
     category: category.toUpperCase(),
-    isActive: true
+    isActive: true,
+    isArchived: { $ne: true } // Exclude archived configs
   });
 };
 

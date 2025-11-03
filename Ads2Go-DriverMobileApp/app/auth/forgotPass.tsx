@@ -10,7 +10,8 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -355,8 +356,11 @@ const ForgotPasswordScreen = () => {
                 <Ionicons name="chevron-back-outline" size={24} color="#000" />
               </TouchableOpacity>
             )}
-            <Text style={styles.headerTitle}>Ads2go</Text>
-            <Ionicons name="star" size={24} color="#4BA3C3" style={styles.starIcon} />
+            <Image 
+              source={require('../../assets/images/Ads2GoLogoDriver.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
         )}
         <View style={[styles.content, currentStep === 2 && styles.centeredContent]}>
@@ -394,17 +398,14 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     marginTop: 20,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  starIcon: {
-    marginLeft: 10,
+  logo: {
+    width: 120,
+    height: 120,
   },
   backButton: {
     position: 'absolute',
     left: 0,
+    zIndex: 1,
   },
   content: {
     flex: 1,

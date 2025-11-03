@@ -22,6 +22,9 @@ export const GET_ALL_USER_REPORTS = gql`
         createdAt
         updatedAt
         resolvedAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
         user {
           id
           firstName
@@ -53,6 +56,9 @@ export const GET_USER_REPORT_BY_ID_ADMIN = gql`
       createdAt
       updatedAt
       resolvedAt
+      isArchived
+      archivedAt
+      scheduledDeletionDate
       user {
         id
         firstName

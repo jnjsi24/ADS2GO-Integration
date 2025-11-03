@@ -58,6 +58,20 @@ const userReportSchema = new mongoose.Schema({
   },
   resolvedAt: {
     type: Date
+  },
+  
+  // Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -69,6 +83,8 @@ const userReportSchema = new mongoose.Schema({
 userReportSchema.index({ userId: 1, createdAt: -1 });
 userReportSchema.index({ status: 1, priority: 1 });
 userReportSchema.index({ reportType: 1, status: 1 });
+userReportSchema.index({ isArchived: 1 }); // Archive filter for queries
+userReportSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Virtual for user relationship
 userReportSchema.virtual('user', {
@@ -99,6 +115,11 @@ userReportSchema.methods.canBeDeletedByUser = function() {
 userReportSchema.statics.getUserReports = function(userId, filters = {}, options = {}) {
   const query = { userId };
   
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
+  
   if (filters.reportType) {
     query.reportType = filters.reportType;
   }
@@ -127,6 +148,11 @@ userReportSchema.statics.getUserReports = function(userId, filters = {}, options
 
 userReportSchema.statics.getUserReportCount = function(userId, filters = {}) {
   const query = { userId };
+  
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
   
   if (filters.reportType) {
     query.reportType = filters.reportType;

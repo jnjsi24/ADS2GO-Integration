@@ -64,6 +64,7 @@ class PlaybackWebSocketService {
   private onFullscreen: ((message: any) => void) | null = null;
   private onExitFullscreen: ((message: any) => void) | null = null;
   private onStop8Hours: ((message: any) => void) | null = null;
+  private onCompanyAdsOnly: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
 
@@ -167,6 +168,9 @@ class PlaybackWebSocketService {
           } else if (message.type === 'stop8Hours') {
             console.log('🛑 [WebSocket] Received 8-hour completion STOP command:', message);
             this.handleStop8Hours(message);
+          } else if (message.type === 'companyAdsOnly') {
+            console.log('🏢 [WebSocket] Received company ads only mode command:', message);
+            this.handleCompanyAdsOnly(message);
           } else if (message.type === 'slotSync') {
             console.log('🔄 [WebSocket] Received slot sync command:', message);
             this.handleSlotSync(message);
@@ -624,6 +628,36 @@ class PlaybackWebSocketService {
     }
   }
 
+  // Handle company ads only mode command from server (when 8 hours reached)
+  private handleCompanyAdsOnly(message: any) {
+    try {
+      console.log('🏢 [WebSocket] Handling company ads only mode command:', message);
+      console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
+      console.log(`🏢 Switching to company ads only mode - will lock at ${message.lockTime}`);
+      
+      // Emit companyAdsOnly event to trigger mode switch
+      if (this.onCompanyAdsOnly) {
+        this.onCompanyAdsOnly(message);
+      }
+      
+      // Save the completion data to AsyncStorage
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      AsyncStorage.setItem('8hourCompletion', JSON.stringify({
+        completedAt: message.completedAt,
+        totalHours: message.totalHours,
+        lockTime: message.lockTime,
+        deviceId: message.deviceId,
+        companyAdsOnlyMode: true
+      })).catch((error: any) => {
+        console.error('❌ Error saving 8-hour completion data:', error);
+      });
+      
+      // NOTE: Keep WebSocket connection open - device will continue playing
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling company ads only command:', error);
+    }
+  }
+
   // Request synchronization with other slots
   requestSync() {
     if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
@@ -740,6 +774,10 @@ class PlaybackWebSocketService {
 
   setStop8HoursCallback(callback: (message: any) => void) {
     this.onStop8Hours = callback;
+  }
+
+  setCompanyAdsOnlyCallback(callback: (message: any) => void) {
+    this.onCompanyAdsOnly = callback;
   }
 
   isWebSocketConnected(): boolean {

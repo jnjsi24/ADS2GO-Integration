@@ -13,6 +13,38 @@ const NotificationService = require('../services/notifications/NotificationServi
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
+/**
+ * Helper function to safely convert any date value to ISO string
+ * Handles: Date objects, timestamps (number/string), and ISO strings
+ */
+function toISOString(value) {
+  if (!value) return null;
+  
+  // If already a Date object, convert to ISO
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // If it's a number or numeric string (timestamp), convert to Date first
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+    const timestamp = typeof value === 'string' ? parseInt(value, 10) : value;
+    return new Date(timestamp).toISOString();
+  }
+  
+  // If it's already an ISO string, return as-is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return value;
+  }
+  
+  // Fallback: try to create a Date and convert
+  try {
+    return new Date(value).toISOString();
+  } catch (error) {
+    console.error('❌ Failed to convert date:', value, error);
+    return null;
+  }
+}
+
 // Helper function to calculate plays per day
 const calculatePlaysPerDay = (adLengthSeconds, screenHoursPerDay = 8) => {
   const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
@@ -39,10 +71,33 @@ const adResolvers = {
     getAllAds: async (_, __, { user }) => {
       checkAdmin(user);
       // Return ALL ads including archived (client handles filtering by archive status)
-      return await Ad.find({})
+      const ads = await Ad.find({})
         .populate('userId')
         .populate('driverId')
-        .populate('materialId')
+        .populate('materialId');
+      
+      // Convert to plain objects and format dates
+      const plainAds = ads.map(ad => {
+        const obj = ad.toObject();
+        obj.id = ad._id.toString();
+        
+        // Format date fields
+        obj.createdAt = toISOString(obj.createdAt);
+        obj.updatedAt = toISOString(obj.updatedAt);
+        obj.startTime = toISOString(obj.startTime);
+        obj.endTime = toISOString(obj.endTime);
+        obj.userDesiredStartTime = toISOString(obj.userDesiredStartTime);
+        obj.approveTime = toISOString(obj.approveTime);
+        obj.rejectTime = toISOString(obj.rejectTime);
+        obj.reservationExpires = toISOString(obj.reservationExpires);
+        obj.lastDeploymentAttempt = toISOString(obj.lastDeploymentAttempt);
+        obj.archivedAt = toISOString(obj.archivedAt);
+        obj.scheduledDeletionDate = toISOString(obj.scheduledDeletionDate);
+        
+        return obj;
+      });
+      
+      return plainAds;
     },
 
     getAdsByUser: async (_, { userId }, { user }) => {
@@ -90,11 +145,15 @@ const adResolvers = {
       const endTime = new Date();
       endTime.setDate(endTime.getDate() + durationDays);
 
+      console.log(`💰 [calculateFlexiblePricing] Calculating pricing for: ${materialType} ${vehicleType} ${category}, Duration: ${durationDays} days, Ad Length: ${adLengthSeconds}s, Devices: ${numberOfDevices}`);
+
       // Get pricing configuration
       const pricingConfig = await PricingConfig.findPricingConfig(materialType, vehicleType, category);
       if (!pricingConfig) {
+        console.log(`❌ [calculateFlexiblePricing] No pricing config found for ${materialType} ${vehicleType} ${category}`);
         throw new Error(`No pricing configuration found for ${materialType} ${vehicleType} ${category}`);
       }
+      console.log(`✅ [calculateFlexiblePricing] Pricing config found`);
 
       // Validate ad length - only allow 20, 40, or 60 seconds
       const allowedAdLengths = [20, 40, 60];
@@ -115,13 +174,24 @@ const adResolvers = {
 
       // Note: maxDevices removed - constraint is now based on available materials, not pricing config
       // Get price for duration
+      console.log(`💵 [calculateFlexiblePricing] Getting price per play...`);
       const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
+      console.log(`💵 [calculateFlexiblePricing] Price per play: ${pricePerPlay}`);
       
       // Calculate pricing
+      console.log(`💰 [calculateFlexiblePricing] Calculating pricing...`);
       const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
+      console.log(`💰 [calculateFlexiblePricing] Pricing calculated:`, { 
+        playsPerDayPerDevice: pricing.playsPerDayPerDevice, 
+        totalPlaysPerDay: pricing.totalPlaysPerDay,
+        totalPrice: pricing.totalPrice 
+      });
 
       // Get available materials to calculate available slots
+      // This function already filters for: available slots, driver assigned, mounted, device connected, not dismounted, time conflicts
+      console.log(`🔍 [calculateFlexiblePricing] Getting available materials...`);
       const materials = await getMaterialsSortedByAvailability(materialType, vehicleType, category, startTime, endTime);
+      console.log(`📊 [calculateFlexiblePricing] Found ${materials.length} available materials`);
       
       // Calculate actual available devices (not slots)
       let availableDevices = 0;
@@ -129,7 +199,13 @@ const adResolvers = {
       let devicesMounted = 0;
       
       for (const material of materials) {
-        const availability = await MaterialAvailability.findOne({ materialId: material._id });
+        // All materials returned from getMaterialsSortedByAvailability have already passed ALL checks:
+        // 1. Have available slots
+        // 2. Have driver assigned
+        // 3. Are physically mounted
+        // 4. Have connected device (validateMaterialHasDevice passed)
+        // 5. Are not dismounted
+        // 6. Have no time conflicts
         
         // Count devices with driver assigned
         if (material.driverId) {
@@ -141,29 +217,11 @@ const adResolvers = {
           devicesMounted += 1;
         }
         
-        // Check if device has been connected (has DeviceTracking record)
-        const DeviceTracking = require('../models/deviceTracking');
-        const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
-        
-        if (availability) {
-          // Count devices that have at least one available slot AND meet all requirements
-          if (availability.availableSlots > 0 && 
-              material.driverId && 
-              material.mountedAt && 
-              !material.dismountedAt &&
-              deviceTracking) { // Device has been connected before
-            availableDevices += 1;
-          }
-        } else {
-          // If no availability record, check if material meets requirements
-          if (material.driverId && 
-              material.mountedAt && 
-              !material.dismountedAt &&
-              deviceTracking) { // Device has been connected before
-            availableDevices += 1;
-          }
-        }
+        // Count as available (already validated by getMaterialsSortedByAvailability)
+        availableDevices += 1;
       }
+
+      console.log(`✅ [calculateFlexiblePricing] Returning: ${availableDevices} available devices, ${devicesWithDriver} with driver, ${devicesMounted} mounted`);
 
       return {
         materialType: pricingConfig.materialType,

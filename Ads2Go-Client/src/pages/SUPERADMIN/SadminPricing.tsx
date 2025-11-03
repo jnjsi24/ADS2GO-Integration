@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign } from 'lucide-react';
+import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign, RotateCcw } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
   PricingConfig
@@ -9,7 +9,8 @@ import {
 import { 
   CREATE_PRICING_CONFIG, 
   UPDATE_PRICING_CONFIG, 
-  DELETE_PRICING_CONFIG, 
+  DELETE_PRICING_CONFIG,
+  RESTORE_PRICING_CONFIG,
   TOGGLE_PRICING_CONFIG_STATUS,
   PricingConfigInput,
   PricingConfigUpdateInput
@@ -32,13 +33,21 @@ const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<PricingConfig | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive' | 'archived'>('active');
   const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<PricingConfig | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [configToRestore, setConfigToRestore] = useState<PricingConfig | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [multipliersFormData, setMultipliersFormData] = useState<GlobalPricingMultipliersInput>({
+    adLengthMultipliers: {
+      seconds20: 1.0,
+      seconds40: 2.0,
+      seconds60: 3.0
+    },
     durationDiscountMultipliers: {
       months1: 1.0,
       months2: 0.95,
@@ -109,9 +118,24 @@ const SadminPricing: React.FC = () => {
   const [deletePricingConfig] = useMutation(DELETE_PRICING_CONFIG, {
     onCompleted: () => {
       refetch();
+      setShowDeleteModal(false);
+      setConfigToDelete(null);
+      setErrorMsg('');
     },
     onError: (error) => {
       setErrorMsg(error.message || 'Failed to delete pricing configuration');
+    }
+  });
+
+  const [restorePricingConfig] = useMutation(RESTORE_PRICING_CONFIG, {
+    onCompleted: () => {
+      refetch();
+      setShowRestoreModal(false);
+      setConfigToRestore(null);
+      setErrorMsg('');
+    },
+    onError: (error) => {
+      setErrorMsg(error.message || 'Failed to restore pricing configuration');
     }
   });
 
@@ -126,10 +150,22 @@ const SadminPricing: React.FC = () => {
 
   const configs: PricingConfig[] = data?.getAllPricingConfigs || [];
 
-  // Filter configs by active status
-  const filteredConfigs = configs.filter(config => 
-    activeTab === 'active' ? config.isActive : !config.isActive
-  );
+  // Filter configs - separate archived from inactive
+  const filteredConfigs = configs.filter(config => {
+    // Ensure boolean values are properly handled (defensive programming)
+    const isArchived = Boolean(config.isArchived === true || String(config.isArchived) === 'true');
+    const isActive = config.isActive !== false && String(config.isActive) !== 'false' && (config.isActive === true || String(config.isActive) === 'true' || config.isActive === undefined || config.isActive === null);
+    const isInactive = !isActive && !isArchived;
+    
+    if (activeTab === 'active') {
+      return isActive && !isArchived;
+    } else if (activeTab === 'inactive') {
+      return isInactive; // Only inactive, NOT archived
+    } else if (activeTab === 'archived') {
+      return isArchived; // Only archived
+    }
+    return true;
+  });
 
   // Reset form function
   const resetForm = () => {
@@ -168,7 +204,7 @@ const SadminPricing: React.FC = () => {
     if (isModalOpen && multipliersData?.getGlobalPricingMultipliers) {
       const multipliers = multipliersData.getGlobalPricingMultipliers;
       setMultipliersFormData({
-        // Note: adLengthMultipliers are hardcoded, not included in form
+        adLengthMultipliers: multipliers.adLengthMultipliers,
         durationDiscountMultipliers: multipliers.durationDiscountMultipliers
       });
     }
@@ -210,6 +246,31 @@ const SadminPricing: React.FC = () => {
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setConfigToDelete(null);
+  };
+
+  const handleRestoreConfig = (config: PricingConfig) => {
+    setConfigToRestore(config);
+    setShowRestoreModal(true);
+  };
+
+  const confirmRestore = async () => {
+    if (configToRestore) {
+      setIsRestoring(true);
+      try {
+        await restorePricingConfig({ variables: { id: configToRestore.id } });
+        setShowRestoreModal(false);
+        setConfigToRestore(null);
+      } catch (error) {
+        console.error('Error restoring config:', error);
+      } finally {
+        setIsRestoring(false);
+      }
+    }
+  };
+
+  const cancelRestore = () => {
+    setShowRestoreModal(false);
+    setConfigToRestore(null);
   };
 
   const handleToggleStatus = (config: PricingConfig) => {
@@ -299,19 +360,36 @@ const SadminPricing: React.FC = () => {
         <div className="flex items-center justify-between p-1 w-full mb-6">
           {/* Tabs on the left */}
           <div className="flex space-x-1 rounded-lg p-1">
-            {["active", "inactive"].map((tab) => {
+            {["active", "inactive", "archived"].map((tab) => {
               const isActive = activeTab === tab;
+              const count =
+                tab === "active"
+                  ? configs.filter((c) => {
+                      const cIsActive = c.isActive !== false && String(c.isActive) !== 'false' && (c.isActive === true || String(c.isActive) === 'true' || c.isActive === undefined || c.isActive === null);
+                      const cIsArchived = Boolean(c.isArchived === true || String(c.isArchived) === 'true');
+                      return cIsActive && !cIsArchived;
+                    }).length
+                  : tab === "inactive"
+                  ? configs.filter((c) => {
+                      const cIsActive = c.isActive !== false && String(c.isActive) !== 'false' && (c.isActive === true || String(c.isActive) === 'true' || c.isActive === undefined || c.isActive === null);
+                      const cIsArchived = Boolean(c.isArchived === true || String(c.isArchived) === 'true');
+                      return !cIsActive && !cIsArchived;
+                    }).length
+                  : configs.filter((c) => {
+                      const cIsArchived = Boolean(c.isArchived === true || String(c.isArchived) === 'true');
+                      return cIsArchived;
+                    }).length;
 
               return (
                 <button
-                  key={tab} // ✅ fixed here
-                  onClick={() => setActiveTab(tab as "active" | "inactive")}
+                  key={tab}
+                  onClick={() => setActiveTab(tab as "active" | "inactive" | "archived")}
                   className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
                     isActive
                       ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {tab === "active" ? "Active" : "Inactive"}
+                  {tab === "active" ? "Active" : tab === "inactive" ? "Inactive" : "Archived"}
 
                   {/* Underline animation */}
                   <span
@@ -357,9 +435,20 @@ const SadminPricing: React.FC = () => {
             <p className="text-gray-600 mb-6">
               {activeTab === 'active' 
                 ? "Create a new pricing configuration to get started"
-                : "No inactive configurations at the moment"
+                : activeTab === 'inactive'
+                ? "No inactive configurations at the moment"
+                : "No archived configurations at the moment"
               }
             </p>
+            {activeTab === 'active' && (
+              <button
+                onClick={handleCreateConfig}
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
+              >
+                <Plus className="w-5 h-5" />
+                Create Pricing Config
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -382,32 +471,45 @@ const SadminPricing: React.FC = () => {
                     </div>
                     <p className="text-gray-600 text-sm">{config.category}</p>
                   </div>
-                  <div className="flex items-center">
-                    <button
-                      onClick={() => handleToggleStatus(config)}
-                      className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-                      title={config.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      {config.isActive ? (
-                        <Power className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <PowerOff className="w-4 h-4 text-gray-400" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleEditConfig(config)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit Configuration"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteConfig(config)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete Configuration"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center gap-2">
+                    {/* Show Restore button only for archived config */}
+                    {config.isArchived ? (
+                      <button
+                        onClick={() => handleRestoreConfig(config)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Restore Configuration"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleToggleStatus(config)}
+                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                          title={config.isActive ? 'Deactivate' : 'Activate'}
+                        >
+                          {config.isActive ? (
+                            <Power className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <PowerOff className="w-4 h-4 text-gray-400" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleEditConfig(config)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit Configuration"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConfig(config)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete Configuration"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -426,6 +528,25 @@ const SadminPricing: React.FC = () => {
                     </p>
                   </div>
                 </div>
+
+                {/* Footer — shows deletion date for archived items */}
+                {config.isArchived && config.scheduledDeletionDate && (
+                  <div className="border-t pt-3 mt-4">
+                    <p className="text-xs text-red-600 font-medium">
+                      Scheduled for deletion: <span className="font-medium">
+                        {(() => {
+                          try {
+                            const date = new Date(config.scheduledDeletionDate);
+                            if (isNaN(date.getTime())) return 'N/A';
+                            return date.toLocaleDateString();
+                          } catch {
+                            return 'N/A';
+                          }
+                        })()}
+                      </span>
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -710,10 +831,22 @@ const SadminPricing: React.FC = () => {
         onClose={cancelDelete}
         onConfirm={confirmDelete}
         title="Delete Pricing Configuration"
-        message={configToDelete ? `Are you sure you want to delete the pricing configuration for ${configToDelete.materialType} ${configToDelete.vehicleType} ${configToDelete.category}?` : ''}
+        message={configToDelete ? `Are you sure you want to delete the pricing configuration for ${configToDelete.materialType} ${configToDelete.vehicleType} ${configToDelete.category}? This will archive it for 30 days before permanent deletion.` : ''}
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Restore Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRestoreModal}
+        onClose={cancelRestore}
+        onConfirm={confirmRestore}
+        title="Restore Pricing Configuration"
+        message={configToRestore ? `Are you sure you want to restore the pricing configuration for ${configToRestore.materialType} ${configToRestore.vehicleType} ${configToRestore.category}?` : ''}
+        confirmText="Restore"
+        cancelText="Cancel"
+        confirmButtonClass="bg-green-600 hover:bg-green-700"
       />
 
     </div>

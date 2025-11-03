@@ -4,6 +4,38 @@ const { checkAuth, checkAdmin } = require('../middleware/auth');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 const NotificationService = require('../services/notifications/NotificationService');
 
+/**
+ * Helper function to safely convert any date value to ISO string
+ * Handles: Date objects, timestamps (number/string), and ISO strings
+ */
+function toISOString(value) {
+  if (!value) return null;
+  
+  // If already a Date object, convert to ISO
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // If it's a number or numeric string (timestamp), convert to Date first
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+    const timestamp = typeof value === 'string' ? parseInt(value, 10) : value;
+    return new Date(timestamp).toISOString();
+  }
+  
+  // If it's already an ISO string, return as-is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return value;
+  }
+  
+  // Fallback: try to create a Date and convert
+  try {
+    return new Date(value).toISOString();
+  } catch (error) {
+    console.error('❌ Failed to convert date:', value, error);
+    return null;
+  }
+}
+
 const companyAdResolvers = {
   Query: {
     getAllCompanyAds: async (_, __, { user }) => {
@@ -13,8 +45,16 @@ const companyAdResolvers = {
         .populate('updatedBy', 'firstName lastName email')
         .sort({ priority: -1, createdAt: -1 });
       
+      // Convert to plain objects to ensure date transformations stick
+      const plainAds = ads.map(ad => {
+        const obj = ad.toObject();
+        // Add id field (virtual field from Mongoose)
+        obj.id = ad._id.toString();
+        return obj;
+      });
+      
       // Handle ads with null createdBy by providing a default user object
-      return ads.map(ad => {
+      return plainAds.map(ad => {
         if (!ad.createdBy) {
           ad.createdBy = {
             id: 'unknown',
@@ -23,6 +63,21 @@ const companyAdResolvers = {
             email: 'unknown@example.com'
           };
         }
+        // Ensure dates are properly formatted as ISO strings
+        const originalCreatedAt = ad.createdAt;
+        ad.createdAt = toISOString(ad.createdAt);
+        ad.updatedAt = toISOString(ad.updatedAt);
+        ad.lastPlayed = toISOString(ad.lastPlayed);
+        ad.startDate = toISOString(ad.startDate);
+        ad.endDate = toISOString(ad.endDate);
+        ad.archivedAt = toISOString(ad.archivedAt);
+        ad.scheduledDeletionDate = toISOString(ad.scheduledDeletionDate);
+        
+        // Debug logging
+        if (!ad.createdAt) {
+          console.log('⚠️ Warning: Failed to format createdAt for ad:', ad.id, 'Original value:', originalCreatedAt);
+        }
+        
         return ad;
       });
     },
@@ -37,9 +92,13 @@ const companyAdResolvers = {
         throw new Error('Company ad not found');
       }
       
+      // Convert to plain object to ensure date transformations stick
+      const plainAd = companyAd.toObject();
+      plainAd.id = companyAd._id.toString();
+      
       // Handle null createdBy
-      if (!companyAd.createdBy) {
-        companyAd.createdBy = {
+      if (!plainAd.createdBy) {
+        plainAd.createdBy = {
           id: 'unknown',
           firstName: 'Unknown',
           lastName: 'User',
@@ -47,7 +106,16 @@ const companyAdResolvers = {
         };
       }
       
-      return companyAd;
+      // Ensure dates are properly formatted as ISO strings
+      plainAd.createdAt = toISOString(plainAd.createdAt);
+      plainAd.updatedAt = toISOString(plainAd.updatedAt);
+      plainAd.lastPlayed = toISOString(plainAd.lastPlayed);
+      plainAd.startDate = toISOString(plainAd.startDate);
+      plainAd.endDate = toISOString(plainAd.endDate);
+      plainAd.archivedAt = toISOString(plainAd.archivedAt);
+      plainAd.scheduledDeletionDate = toISOString(plainAd.scheduledDeletionDate);
+      
+      return plainAd;
     },
 
     getActiveCompanyAds: async (_, __, { user }) => {
@@ -183,6 +251,7 @@ const companyAdResolvers = {
         companyAd.isArchived = false;
         companyAd.archivedAt = null;
         companyAd.scheduledDeletionDate = null;
+        companyAd.isActive = true; // Re-activate when restored
         
         await companyAd.save();
         

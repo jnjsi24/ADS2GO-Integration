@@ -42,6 +42,12 @@ export const DELETE_PRICING_CONFIG = gql`
   }
 `;
 
+export const RESTORE_PRICING_CONFIG = gql`
+  mutation RestorePricingConfig($id: ID!) {
+    restorePricingConfig(id: $id)
+  }
+`;
+
 export const TOGGLE_PRICING_CONFIG_STATUS = gql`
   mutation TogglePricingConfigStatus($id: ID!) {
     togglePricingConfigStatus(id: $id) {

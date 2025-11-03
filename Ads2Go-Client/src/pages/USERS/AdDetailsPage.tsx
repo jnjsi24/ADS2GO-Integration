@@ -31,6 +31,7 @@ import L from 'leaflet';
 import { useMyAdsStatic } from '../../hooks/useMyAds';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { screenComplianceService } from '../../services/screenComplianceService';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 // ✅ REMOVED: Inline query definition - now using centralized import
 // const GET_MY_ADS = gql`
@@ -136,6 +137,7 @@ type MaterialSlotInfo = {
 const AdDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toasts, addToast, removeToast } = useToast();
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRejectionToast, setShowRejectionToast] = useState(true);
@@ -1134,11 +1136,22 @@ const AdDetailsPage: React.FC = () => {
               )}
             </div>
 
-            {/* Delete Button - Only show if not fully paid and approved */}
+            {/* Delete Button - Show for all non-paid ads */}
             {!isFullyPaidAndApproved && (
               <button
-                onClick={() => setShowDeleteModal(true)}
-                disabled={deleteLoading || ad?.status !== 'PENDING'}
+                onClick={() => {
+                  // Show message if ad is approved but not paid yet
+                  if (ad?.status === 'APPROVED' && ad?.paymentStatus !== 'PAID') {
+                    addToast({
+                      title: 'Cannot Delete Approved Ad',
+                      message: 'This ad has been approved and cannot be deleted. Please contact support if you need assistance.',
+                      type: 'error'
+                    });
+                  } else {
+                    setShowDeleteModal(true);
+                  }
+                }}
+                disabled={deleteLoading}
                 className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Ad'}
@@ -1568,6 +1581,8 @@ const AdDetailsPage: React.FC = () => {
         />
       )}
 
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   </div>
 );

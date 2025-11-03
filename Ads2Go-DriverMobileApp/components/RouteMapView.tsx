@@ -565,6 +565,10 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({
         scalesPageToFit={true}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        nestedScrollEnabled={true}
         onError={(syntheticEvent) => {
           const { nativeEvent } = syntheticEvent;
           console.error('🗺️ WebView error:', nativeEvent);
@@ -588,9 +592,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+    width: '100%',
+    height: '100%',
   },
   webview: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   placeholder: {
     flex: 1,

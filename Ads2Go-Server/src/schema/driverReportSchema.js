@@ -37,6 +37,10 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     resolvedAt: String
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type DriverReportResponse {
@@ -72,6 +76,7 @@ const typeDefs = gql`
     status: DriverReportStatus
     startDate: String
     endDate: String
+    includeArchived: Boolean
   }
 
   # Admin input for updating driver reports
@@ -102,8 +107,12 @@ const typeDefs = gql`
     # Cancel/delete driver's own report (only if status is PENDING)
     deleteDriverReport(id: ID!): DriverReportResponse!
     
+    # Restore archived report
+    restoreDriverReport(id: ID!): DriverReportResponse!
+    
     # Admin mutations
     updateDriverReportAdmin(id: ID!, input: AdminUpdateDriverReportInput!): DriverReportResponse!
+    deleteDriverReportAdmin(id: ID!): DriverReportResponse!
   }
 `;
 

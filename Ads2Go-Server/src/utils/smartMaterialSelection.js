@@ -6,11 +6,14 @@ const { validateMaterialHasDevice } = require('./materialDeviceValidator');
 // Helper function for smart material selection
 const getMaterialsSortedByAvailability = async (materialType, vehicleType, category, startTime = null, endTime = null) => {
   try {
+    console.log(`🔍 [getMaterialsSortedByAvailability] Searching for: ${materialType} ${vehicleType} ${category}`);
     const materials = await Material.find({ materialType, vehicleType, category });
+    console.log(`📦 [getMaterialsSortedByAvailability] Found ${materials.length} materials matching criteria`);
     if (materials.length === 0) return [];
 
     const materialIds = materials.map(m => m._id);
     const availabilities = await MaterialAvailability.find({ materialId: { $in: materialIds } });
+    console.log(`📊 [getMaterialsSortedByAvailability] Found ${availabilities.length} availability records`);
 
     const availabilityMap = new Map();
     availabilities.forEach(avail => {
@@ -26,6 +29,7 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       
       // 1. Check if material has available slots
       if (availableSlots <= 0) {
+        console.log(`❌ Material ${material.materialId} excluded: No available slots (${availableSlots})`);
         continue;
       }
       
@@ -81,15 +85,9 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       availableMaterials.push(material);
     }
 
-    // Sort available materials by fill-in-order strategy (001, 002, 003...), then by occupied slots
+    // Sort available materials by fill-in-order strategy (001, 002, 003...)
     const sortedMaterials = availableMaterials.sort((a, b) => {
-      const availA = availabilityMap.get(a._id.toString());
-      const availB = availabilityMap.get(b._id.toString());
-      
-      const occupiedA = availA ? availA.occupiedSlots : 0; // Default to 0 if no availability record
-      const occupiedB = availB ? availB.occupiedSlots : 0;
-      
-      // Primary sort: by material ID number (ascending) - fill materials in order 001, 002, 003, 004, 005, 006...
+      // Sort by material ID number (ascending) - fill materials in order 001, 002, 003, 004, 005, 006...
       const getMaterialNumber = (materialId) => {
         const match = materialId.match(/-(\d+)$/);
         return match ? parseInt(match[1], 10) : 999;
@@ -98,13 +96,7 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       const numberA = getMaterialNumber(a.materialId);
       const numberB = getMaterialNumber(b.materialId);
       
-      // Primary sort: by material number (ascending - 001, 002, 003...)
-      if (numberA !== numberB) {
-        return numberA - numberB;
-      }
-      
-      // Secondary sort: among materials with same number, prefer those with more occupied slots
-      return occupiedB - occupiedA;
+      return numberA - numberB;
     });
 
     console.log(`📊 Materials sorted by fill-in-order strategy (001, 002, 003...):`);
@@ -115,6 +107,7 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       console.log(`   ${index + 1}. ${material.materialId}: ${occupied}/5 slots used (${slots} available)`);
     });
 
+    console.log(`✅ [getMaterialsSortedByAvailability] Returning ${sortedMaterials.length} available materials`);
     return sortedMaterials;
   } catch (error) {
     console.error('Error getting materials sorted by availability:', error);
@@ -130,44 +123,42 @@ const syncMaterialSlots = async () => {
     const materials = await Material.find({});
     console.log(`Found ${materials.length} materials to sync`);
 
+    // Get AdsDeployment model
+    const AdsDeployment = require('../models/adsDeployment');
+
     for (const material of materials) {
       let availability = await MaterialAvailability.findOne({ materialId: material._id });
       if (!availability) {
         availability = new MaterialAvailability({ materialId: material._id, totalSlots: 5 });
       }
 
-      // ✅ Only count PAID ads with status RUNNING or SCHEDULED
-      // REJECTED, CANCELLED, ENDED, or UNPAID ads should NOT occupy slots
-      const runningAds = await Ad.find({
-        materialId: material._id,
-        status: { $in: ['RUNNING', 'SCHEDULED'] },
-        paymentStatus: 'PAID', // ✅ Must be PAID to occupy a slot
-        adStatus: 'ACTIVE',
-        endTime: { $gt: new Date() } // Ensure ad is still active
-      }).sort({ createdAt: 1 }); // Sort to assign slots consistently
-
-      // Separate RUNNING and SCHEDULED ads
+      // ✅ NEW: Use AdsDeployment instead of Ad.materialId (flexible ads don't use materialId)
+      const deployment = await AdsDeployment.findOne({ materialId: material.materialId });
+      
+      // Separate RUNNING and SCHEDULED slots from deployment
       availability.currentAds = [];
       availability.scheduledAds = [];
-      let slotNumber = 1;
       
-      for (const ad of runningAds) {
-        if (ad.status === 'RUNNING') {
-          availability.currentAds.push({
-            adId: ad._id,
-            startTime: ad.startTime,
-            endTime: ad.endTime,
-            slotNumber: slotNumber++
-          });
-        } else if (ad.status === 'SCHEDULED') {
-          availability.scheduledAds.push({
-            adId: ad._id,
-            startTime: ad.startTime,
-            endTime: ad.endTime,
-            slotNumber: slotNumber++,
-            reservedAt: ad.createdAt,
-            reservationExpires: null // Paid ads never expire
-          });
+      if (deployment && deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+        for (const slot of deployment.lcdSlots) {
+          // Only count active slots (RUNNING or SCHEDULED)
+          if (slot.status === 'RUNNING') {
+            availability.currentAds.push({
+              adId: slot.adId,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              slotNumber: slot.slotNumber
+            });
+          } else if (slot.status === 'SCHEDULED') {
+            availability.scheduledAds.push({
+              adId: slot.adId,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              slotNumber: slot.slotNumber,
+              reservedAt: slot.deployedAt || new Date(),
+              reservationExpires: null
+            });
+          }
         }
       }
 

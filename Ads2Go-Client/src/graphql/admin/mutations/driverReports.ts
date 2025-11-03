@@ -17,6 +17,49 @@ export const UPDATE_DRIVER_REPORT_ADMIN = gql`
         createdAt
         updatedAt
         resolvedAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
+      }
+    }
+  }
+`;
+
+export const DELETE_DRIVER_REPORT_ADMIN = gql`
+  mutation DeleteDriverReportAdmin($id: ID!) {
+    deleteDriverReportAdmin(id: $id) {
+      success
+      message
+      report {
+        id
+        driverId
+        title
+        description
+        reportType
+        status
+        isArchived
+        archivedAt
+        scheduledDeletionDate
+      }
+    }
+  }
+`;
+
+export const RESTORE_DRIVER_REPORT = gql`
+  mutation RestoreDriverReport($id: ID!) {
+    restoreDriverReport(id: $id) {
+      success
+      message
+      report {
+        id
+        driverId
+        title
+        description
+        reportType
+        status
+        isArchived
+        archivedAt
+        scheduledDeletionDate
       }
     }
   }

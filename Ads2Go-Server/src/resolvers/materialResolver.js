@@ -183,7 +183,7 @@ const materialResolvers = {
               materialName: `${materialObj.materialType} - ${materialObj.materialId}`,
               description: materialObj.description || '',
               status: materialObj.dismountedAt ? 'DISMOUNTED' : 'MOUNTED',
-              assignedDate: formatDateField(materialObj.assignedDate) || formatDateField(materialObj.mountedAt) || formatDateField(materialObj.createdAt) || new Date().toISOString(),
+              assignedDate: formatDateField(materialObj.assignedDate), // Only return assignedDate if explicitly set
               mountedAt: formatDateField(materialObj.mountedAt),
               location: materialObj.driver ? {
                 address: '',
@@ -709,6 +709,10 @@ const materialResolvers = {
       const driver = await Driver.findOne({ driverId });
       if (!driver) throw new Error('Driver not found');
 
+      // ✅ NEW: Only allow material assignment if driver is approved
+      if (driver.reviewStatus !== 'APPROVED' || driver.accountStatus !== 'ACTIVE') {
+        throw new Error('Cannot assign material to driver. Driver must be approved and active first.');
+      }
 
       const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType] || [];
       if (allowedTypes.length === 0) {
@@ -817,12 +821,11 @@ const materialResolvers = {
         }
       }
 
-      // Only assign the driver to the material, but don't mark as mounted yet
-      // mountedAt should be set separately when the material is physically mounted
+      // Assign the driver to the material
+      // Keep mountedAt and dismountedAt as these track physical device presence
       availableMaterial.driverId = driver.driverId;
       availableMaterial.assignedDate = new Date(); // ✅ Set assignedDate when admin assigns driver
-      availableMaterial.mountedAt = null; // Will be set when material is actually mounted
-      availableMaterial.dismountedAt = null; // Reset dismountedAt
+      // mountedAt and dismountedAt remain unchanged when changing drivers
       
       // Only set the material reference on the driver, not the installedMaterialType
       // installedMaterialType will be set when mountedAt is set
@@ -902,21 +905,21 @@ const materialResolvers = {
       const driver = await Driver.findOne({ driverId: material.driverId });
       if (!driver) throw new Error('Driver not found');
 
-      // Unassign the material and reset dates
-      const dismountDate = new Date();
+      // Unassign the material - only reset driver-related fields
+      // Keep mountedAt and dismountedAt as these track physical device presence
       material.driverId = null;
       material.assignedDate = null; // ✅ Reset assigned date so it gets a fresh date on re-assignment
-      material.mountedAt = null; // Reset mounted date
-      material.dismountedAt = dismountDate; // Set dismounted date to now
+      // mountedAt and dismountedAt remain unchanged when changing drivers
       await material.save();
 
-      // Create usage history entry for the unassignment with dismounted date and custom reason
+      // Create usage history entry for the unassignment
+      const unassignDate = new Date();
       await MaterialUsageHistory.endUsageEntry(
         material._id,
         driver.driverId,
         'CUSTOM',
         `Material manually unassigned by ${user.name || user.email}: ${dismountReason.trim()}`,
-        dismountDate,
+        material.dismountedAt || unassignDate, // Use existing dismountedAt if set, otherwise current date
         dismountReason.trim(),
         {
           adminId: user.id,
@@ -1229,6 +1232,28 @@ const materialResolvers = {
         return {
           success: false,
           message: `Failed to sync usage history: ${error.message}`,
+          updatedCount: 0
+        };
+      }
+    },
+
+    syncMaterialSlots: async (_, __, { user }) => {
+      checkAdmin(user);
+      
+      try {
+        const { syncMaterialSlots } = require('../utils/smartMaterialSelection');
+        await syncMaterialSlots();
+        
+        return {
+          success: true,
+          message: 'Successfully synced material slot availability',
+          updatedCount: 0 // The sync function doesn't return a count
+        };
+      } catch (error) {
+        console.error('Error in syncMaterialSlots resolver:', error);
+        return {
+          success: false,
+          message: `Failed to sync material slots: ${error.message}`,
           updatedCount: 0
         };
       }

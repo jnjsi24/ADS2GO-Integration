@@ -31,6 +31,9 @@ export const GET_ALL_DRIVER_REPORTS = gql`
         createdAt
         updatedAt
         resolvedAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
       }
       totalCount
     }
@@ -65,6 +68,9 @@ export const GET_DRIVER_REPORT_BY_ID = gql`
       createdAt
       updatedAt
       resolvedAt
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;

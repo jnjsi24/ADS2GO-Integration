@@ -370,7 +370,7 @@ class UserNotificationService extends BaseNotificationService {
             </div>
             
             <p style="color: #666; text-align: center; margin: 20px 0;">
-              Your advertisement is now being displayed on our network and will reach thousands of potential customers!
+              Please complete your payment to start running your advertisement. Once payment is confirmed, your ad will be displayed on our network!
             </p>
             
             <div style="text-align: center; margin: 30px 0;">

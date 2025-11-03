@@ -2768,8 +2768,8 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
       vehicleModel: driver?.vehicleModel || 'Unknown',
       materialId: material.materialId,
       materialType: material.materialType,
-      // ✅ Use same logic as GraphQL resolver to match Profile tab display
-      materialAssignedDate: formatDateField(material.assignedDate) || formatDateField(material.mountedAt) || formatDateField(material.createdAt),
+      // ✅ Only return assignedDate if explicitly set (no fallback to createdAt)
+      materialAssignedDate: formatDateField(material.assignedDate),
       materialMountedAt: formatDateField(material.mountedAt), // ✅ Add mountedAt for profile tab calculations
       isOnline: deviceTracking.isOnline,
       lastSeen: deviceTracking.lastSeen,

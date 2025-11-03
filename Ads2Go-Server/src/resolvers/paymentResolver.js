@@ -146,6 +146,25 @@ async function triggerAdDeployment(ad) {
     
     // Mark deployment status based on results
     if (deploymentSuccess) {
+      // Clean up reservation from MaterialAvailability since ad is now deployed
+      const MaterialAvailability = require('../models/MaterialAvailability');
+      for (const material of targetMaterials) {
+        try {
+          const availability = await MaterialAvailability.findOne({ materialId: material._id });
+          if (availability) {
+            // Remove reservation from scheduledAds (it's now in AdsDeployment)
+            availability.scheduledAds = availability.scheduledAds.filter(
+              slot => slot.adId.toString() !== ad._id.toString()
+            );
+            await availability.save();
+            console.log(`🧹 Cleaned up reservation for ad ${ad._id} from material ${material.materialId}`);
+          }
+        } catch (cleanupError) {
+          console.error(`❌ Error cleaning up reservation for ad ${ad._id}:`, cleanupError);
+          // Don't fail deployment if cleanup fails
+        }
+      }
+      
       await Ad.findByIdAndUpdate(ad._id, { 
         deploymentStatus: 'DEPLOYED',
         lastDeploymentAttempt: new Date()
@@ -317,7 +336,11 @@ const paymentResolvers = {
       // Validate slot availability before payment (for flexible ads)
       if (ad.targetDevices && ad.targetDevices.length > 0) {
         const MaterialAvailability = require('../models/MaterialAvailability');
+        const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
         console.log('🔍 Validating slot availability for flexible ad...');
+        
+        const unavailableDevices = [];
+        const Material = require('../models/Material');
         
         for (const deviceId of ad.targetDevices) {
           const availability = await MaterialAvailability.findOne({ materialId: deviceId });
@@ -350,14 +373,68 @@ const paymentResolvers = {
               await availability.save();
               console.log(`✅ Re-reserved slot ${slotNumber} for device ${deviceId}`);
             } else {
-              // Slot is truly unavailable
-              throw new Error(
-                `Slots for device ${deviceId} are no longer available. They have been taken by another user. ` +
-                `Please create a new ad with different dates or materials.`
-              );
+              // Slot is truly unavailable - we'll need to find alternatives
+              unavailableDevices.push(deviceId);
+              console.log(`⚠️ Device ${deviceId} is no longer available`);
             }
           } else {
             console.log(`✅ Slot validation passed for device ${deviceId}`);
+          }
+        }
+        
+        // If some devices are unavailable, try to find alternatives
+        if (unavailableDevices.length > 0 && unavailableDevices.length < ad.targetDevices.length) {
+          console.log(`⚠️ ${unavailableDevices.length}/${ad.targetDevices.length} devices are unavailable, will try to assign to the remaining devices only`);
+          // Remove unavailable devices from targetDevices
+          ad.targetDevices = ad.targetDevices.filter(deviceId => !unavailableDevices.includes(deviceId.toString()));
+          console.log(`📋 Updated targetDevices to: ${ad.targetDevices.length} device(s)`);
+        } else if (unavailableDevices.length === ad.targetDevices.length) {
+          // All original devices are unavailable - try to find completely new materials
+          console.log(`⚠️ All original devices are unavailable, searching for alternative materials...`);
+          try {
+            const alternativeMaterials = await getMaterialsSortedByAvailability(
+              ad.materialType,
+              ad.vehicleType,
+              ad.category,
+              new Date(ad.startTime),
+              new Date(ad.endTime)
+            );
+            
+            if (alternativeMaterials.length >= ad.numberOfDevices) {
+              // Found alternatives - update targetDevices
+              const newTargetDevices = alternativeMaterials.slice(0, ad.numberOfDevices).map(m => m._id);
+              console.log(`✅ Found ${newTargetDevices.length} alternative device(s), updating targetDevices`);
+              ad.targetDevices = newTargetDevices;
+              ad.materialId = newTargetDevices; // Also update materialId
+              
+              // Reserve the new slots
+              for (const material of alternativeMaterials.slice(0, ad.numberOfDevices)) {
+                const availability = await MaterialAvailability.findOne({ materialId: material._id });
+                if (availability) {
+                  const slotNumber = availability.reserveSlot(
+                    ad._id,
+                    ad.startTime,
+                    ad.endTime,
+                    null
+                  );
+                  await availability.save();
+                  console.log(`✅ Reserved new slot ${slotNumber} for alternative device ${material.materialId}`);
+                }
+              }
+            } else {
+              throw new Error(
+                `Only ${alternativeMaterials.length} device(s) available, but you need ${ad.numberOfDevices}. ` +
+                `Please create a new ad with different dates or reduce the number of devices.`
+              );
+            }
+          } catch (error) {
+            if (error.message.includes('Only') || error.message.includes('No compatible materials')) {
+              throw error; // Re-throw our custom errors
+            }
+            throw new Error(
+              `Slots for your requested devices are no longer available. They have been taken by another user. ` +
+              `Please create a new ad with different dates or materials.`
+            );
           }
         }
       }

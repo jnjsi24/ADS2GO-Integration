@@ -35,6 +35,10 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     resolvedAt: String
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type UserReportResponse {
@@ -70,6 +74,7 @@ const typeDefs = gql`
     status: ReportStatus
     startDate: String
     endDate: String
+    includeArchived: Boolean
   }
 
   # Admin input for updating reports
@@ -100,8 +105,12 @@ const typeDefs = gql`
     # Cancel/delete user's own report (only if status is PENDING)
     deleteUserReport(id: ID!): UserReportResponse!
     
+    # Restore archived report
+    restoreUserReport(id: ID!): UserReportResponse!
+    
     # Admin mutations
     updateUserReportAdmin(id: ID!, input: AdminUpdateUserReportInput!): UserReportResponse!
+    deleteUserReportAdmin(id: ID!): UserReportResponse!
   }
 `;
 

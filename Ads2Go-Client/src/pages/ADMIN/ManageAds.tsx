@@ -261,7 +261,7 @@ const ManageAds: React.FC = () => {
   }
 
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | null | undefined) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -840,10 +840,11 @@ const ManageAds: React.FC = () => {
       {/* Tab Content */}
       <div className="">
         {/* All Ads Tab */}
-        {activeTab === 'ads' && (
+        {(activeTab === 'ads' || activeTab === 'archived') && (
           <div className="">
-            {/* Stats Summary */}
-            <div className="grid grid-cols-5 gap-4 mb-6">
+            {/* Stats Summary - Only show for All Ads tab */}
+            {activeTab === 'ads' && (
+              <div className="grid grid-cols-5 gap-4 mb-6">
               <div className="bg-white p-4 rounded-md">
                 <p className="text-3xl text-center font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
                 <h3 className="text-s text-center font-medium text-gray-500">Total Advertisement</h3>
@@ -872,7 +873,8 @@ const ManageAds: React.FC = () => {
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Scheduled</h3>
               </div>
-            </div>
+              </div>
+            )}
 
             {/* Bulk Actions Bar */}
             {selectedAds.length > 0 && (
@@ -938,8 +940,18 @@ const ManageAds: React.FC = () => {
                   </div>
                   <div className="col-span-3">Advertiser</div>
                   <div className="col-span-2">Ad Type</div>
-                  <div className="col-span-2">Status</div>
-                  <div className="col-span-2 text-center">Actions</div>
+                  {activeTab === 'archived' ? (
+                    <>
+                      <div className="col-span-1">Status</div>
+                      <div className="col-span-2">Deletion Date</div>
+                      <div className="col-span-1 text-center">Actions</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2 text-center">Actions</div>
+                    </>
+                  )}
                 </div>
 
                 {paginatedAds.map((ad: Ad) => (
@@ -966,99 +978,122 @@ const ManageAds: React.FC = () => {
                           {ad.adType}
                         </span>
                       </div>
-                      <div className="col-span-2">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            ad.status === 'APPROVED'
-                              ? 'bg-green-200 text-green-800'
-                              : ad.status === 'PENDING'
-                              ? 'bg-yellow-200 text-yellow-800'
-                              : ad.status === 'REJECTED'
-                              ? 'bg-red-200 text-red-800'
-                              : ad.status === 'RUNNING'
-                              ? 'bg-blue-200 text-blue-800'
-                              : 'bg-gray-200 text-gray-800'
-                          }`}
-                        >
-                          {ad.status}
-                        </span>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-center gap-1">
                       {activeTab === 'archived' ? (
-                        /* Restore button for archived tab */
-                        <button
-                          className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                          onClick={(e) => { e.stopPropagation(); setAdToRestore(ad.id); setShowRestoreModal(true); }}
-                          title="Restore"
-                        >
-                          <RotateCcw 
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                            size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Restore
-                          </span>
-                        </button>
+                        <>
+                          <div className="col-span-1">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                ad.status === 'APPROVED'
+                                  ? 'bg-green-200 text-green-800'
+                                  : ad.status === 'PENDING'
+                                  ? 'bg-yellow-200 text-yellow-800'
+                                  : ad.status === 'REJECTED'
+                                  ? 'bg-red-200 text-red-800'
+                                  : ad.status === 'RUNNING'
+                                  ? 'bg-blue-200 text-blue-800'
+                                  : 'bg-gray-200 text-gray-800'
+                              }`}
+                            >
+                              {ad.status}
+                            </span>
+                          </div>
+                          <div className="col-span-2 text-sm text-red-600 font-medium">
+                            {ad.scheduledDeletionDate ? formatDate(ad.scheduledDeletionDate) : 'N/A'}
+                          </div>
+                          <div className="col-span-1 flex items-center justify-center gap-1">
+                            <button
+                              className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                              onClick={(e) => { e.stopPropagation(); setAdToRestore(ad.id); setShowRestoreModal(true); }}
+                              title="Restore"
+                            >
+                              <RotateCcw 
+                                className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                                size={16} />
+                              <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                                Restore
+                              </span>
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         <>
-                      {ad.status === 'PENDING' && ( <>
-                        {/* APPROVE BUTTON */}
-                        <button
-                          className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
-                            processingApprove.has(ad.id)
-                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                              : 'bg-green-200 hover:bg-green-200 text-green-700'
-                          }`}
-                          onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                          disabled={processingApprove.has(ad.id)}
-                          title={processingApprove.has(ad.id) ? "Processing..." : "Approve"}
-                        >
-                          {processingApprove.has(ad.id) ? (
-                            <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
-                          ) : (
-                            <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                          )}
-                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                            {processingApprove.has(ad.id) ? 'Processing...' : 'Approve'}
-                          </span>
-                        </button>
+                          <div className="col-span-2">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                ad.status === 'APPROVED'
+                                  ? 'bg-green-200 text-green-800'
+                                  : ad.status === 'PENDING'
+                                  ? 'bg-yellow-200 text-yellow-800'
+                                  : ad.status === 'REJECTED'
+                                  ? 'bg-red-200 text-red-800'
+                                  : ad.status === 'RUNNING'
+                                  ? 'bg-blue-200 text-blue-800'
+                                  : 'bg-gray-200 text-gray-800'
+                              }`}
+                            >
+                              {ad.status}
+                            </span>
+                          </div>
+                          <div className="col-span-2 flex items-center justify-center gap-1">
+                            {ad.status === 'PENDING' && ( <>
+                              {/* APPROVE BUTTON */}
+                              <button
+                                className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                                  processingApprove.has(ad.id)
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'bg-green-200 hover:bg-green-200 text-green-700'
+                                }`}
+                                onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
+                                disabled={processingApprove.has(ad.id)}
+                                title={processingApprove.has(ad.id) ? "Processing..." : "Approve"}
+                              >
+                                {processingApprove.has(ad.id) ? (
+                                  <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                                ) : (
+                                  <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                                )}
+                                <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                                  {processingApprove.has(ad.id) ? 'Processing...' : 'Approve'}
+                                </span>
+                              </button>
 
-                        {/* REJECT BUTTON */}
-                        <button
-                          className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
-                            processingReject.has(ad.id)
-                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                              : 'bg-red-200 hover:bg-red-200 text-red-700'
-                          }`}
-                          onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                          disabled={processingReject.has(ad.id)}
-                          title={processingReject.has(ad.id) ? "Processing..." : "Reject"}
-                        >
-                          {processingReject.has(ad.id) ? (
-                            <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
-                          ) : (
-                            <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                          )}
-                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
-                            {processingReject.has(ad.id) ? 'Processing...' : 'Reject'}
-                          </span>
-                        </button>
-                        </> 
-                        )}
-                        <button
-                          className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
-                          title="Delete"
-                        >
-                          <Trash 
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                            size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Delete
-                          </span>
-                        </button>
+                              {/* REJECT BUTTON */}
+                              <button
+                                className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
+                                  processingReject.has(ad.id)
+                                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                    : 'bg-red-200 hover:bg-red-200 text-red-700'
+                                }`}
+                                onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
+                                disabled={processingReject.has(ad.id)}
+                                title={processingReject.has(ad.id) ? "Processing..." : "Reject"}
+                              >
+                                {processingReject.has(ad.id) ? (
+                                  <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                                ) : (
+                                  <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                                )}
+                                <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
+                                  {processingReject.has(ad.id) ? 'Processing...' : 'Reject'}
+                                </span>
+                              </button>
+                              </> 
+                            )}
+                            <button
+                              className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
+                              title="Delete"
+                            >
+                              <Trash 
+                                className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                                size={16} />
+                              <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                                Delete
+                              </span>
+                            </button>
+                          </div>
                         </>
                       )}
-                      </div>
                     </div>
                   </div>
                 ))}

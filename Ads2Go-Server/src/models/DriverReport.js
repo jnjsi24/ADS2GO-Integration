@@ -57,6 +57,20 @@ const driverReportSchema = new mongoose.Schema({
   },
   resolvedAt: {
     type: Date
+  },
+  
+  // Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -68,10 +82,17 @@ const driverReportSchema = new mongoose.Schema({
 driverReportSchema.index({ driverId: 1, createdAt: -1 });
 driverReportSchema.index({ status: 1, createdAt: -1 });
 driverReportSchema.index({ reportType: 1, status: 1 });
+driverReportSchema.index({ isArchived: 1 }); // Archive filter for queries
+driverReportSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Static methods for queries
 driverReportSchema.statics.getDriverReports = function(driverId, filters = {}, options = {}) {
   const query = { driverId };
+  
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
   
   // Apply filters
   if (filters.reportType) query.reportType = filters.reportType;
@@ -93,6 +114,11 @@ driverReportSchema.statics.getDriverReports = function(driverId, filters = {}, o
 driverReportSchema.statics.getDriverReportCount = function(driverId, filters = {}) {
   const query = { driverId };
   
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
+  
   if (filters.reportType) query.reportType = filters.reportType;
   if (filters.status) query.status = filters.status;
   if (filters.startDate || filters.endDate) {
@@ -106,6 +132,11 @@ driverReportSchema.statics.getDriverReportCount = function(driverId, filters = {
 
 driverReportSchema.statics.getAllReports = function(filters = {}, options = {}) {
   const query = {};
+  
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
   
   if (filters.reportType) query.reportType = filters.reportType;
   if (filters.status) query.status = filters.status;
@@ -125,6 +156,11 @@ driverReportSchema.statics.getAllReports = function(filters = {}, options = {}) 
 
 driverReportSchema.statics.getAllReportsCount = function(filters = {}) {
   const query = {};
+  
+  // Exclude archived by default unless explicitly requested
+  if (filters.includeArchived !== true) {
+    query.isArchived = { $ne: true };
+  }
   
   if (filters.reportType) query.reportType = filters.reportType;
   if (filters.status) query.status = filters.status;

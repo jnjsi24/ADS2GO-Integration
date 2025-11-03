@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare } from 'lucide-react';
+import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
-import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
+import { UPDATE_USER_REPORT_ADMIN, DELETE_USER_REPORT_ADMIN, RESTORE_USER_REPORT } from '../../graphql/admin/mutations/userReports';
 import { GET_ALL_DRIVER_REPORTS } from '../../graphql/admin/queries/driverReports';
-import { UPDATE_DRIVER_REPORT_ADMIN } from '../../graphql/admin/mutations/driverReports';
+import { UPDATE_DRIVER_REPORT_ADMIN, DELETE_DRIVER_REPORT_ADMIN, RESTORE_DRIVER_REPORT } from '../../graphql/admin/mutations/driverReports';
 import { GET_DRIVER_BY_ID } from '../../graphql/admin/queries/driverDetails';
 import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
 import { GET_ALL_CONTACT_MESSAGES } from '../../graphql/admin/queries/contactMessages';
 import { UPDATE_CONTACT_MESSAGE, SEND_CONTACT_REPLY } from '../../graphql/admin/mutations/contactMessages';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 interface User {
   id: string;
@@ -52,6 +53,10 @@ interface Report {
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
+  // Archive fields
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 interface ContactMessage {
@@ -125,7 +130,7 @@ const Reports: React.FC = () => {
   // Status filter options - different for Contact Messages vs Reports
   const statusFilterOptions = reportSource === 'messages'
     ? ['All Status', 'Pending', 'In Progress', 'Resolved']  // Contact Messages: No 'Closed'
-    : ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];  // User/Driver Reports: Include 'Closed'
+    : ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed', 'Archived'];  // User/Driver Reports: Include 'Archived'
   
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
   const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'REQUEST_ACCOUNT_CLOSURE', 'UPDATE_PROFILE_DETAILS', 'OTHER'];
@@ -163,23 +168,33 @@ const Reports: React.FC = () => {
     }
   }, [searchParams]);
 
-  // Reset status filter to "All Status" if "Closed" is selected when switching to General Inquiries
+  // Reset status filter when switching report sources
   useEffect(() => {
-    if (reportSource === 'messages' && selectedStatusFilter === 'Closed') {
+    if (reportSource === 'messages') {
       setSelectedStatusFilter('All Status');
     }
-  }, [reportSource, selectedStatusFilter]);
+  }, [reportSource]);
 
-  // Fetch user reports
+  // Fetch user reports - include archived when "Archived" filter is selected
   const { data: userData, loading: userLoading, error: userError } = useQuery(GET_ALL_USER_REPORTS, {
     fetchPolicy: 'network-only',
     skip: reportSource !== 'users',
+    variables: {
+      filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false },
+      limit: 1000,
+      offset: 0
+    }
   });
 
-  // Fetch driver reports
+  // Fetch driver reports - include archived when "Archived" filter is selected
   const { data: driverData, loading: driverLoading, error: driverError } = useQuery(GET_ALL_DRIVER_REPORTS, {
     fetchPolicy: 'network-only',
     skip: reportSource !== 'drivers',
+    variables: {
+      filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false },
+      limit: 1000,
+      offset: 0
+    }
   });
 
   // Fetch contact messages
@@ -191,6 +206,30 @@ const Reports: React.FC = () => {
   // Update mutations
   const [updateUserReport] = useMutation(UPDATE_USER_REPORT_ADMIN);
   const [updateDriverReport] = useMutation(UPDATE_DRIVER_REPORT_ADMIN);
+  const [deleteUserReport] = useMutation(DELETE_USER_REPORT_ADMIN, {
+    refetchQueries: [
+      { query: GET_ALL_USER_REPORTS, variables: { filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false }, limit: 1000, offset: 0 } },
+      { query: GET_ALL_DRIVER_REPORTS, variables: { filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false }, limit: 1000, offset: 0 } }
+    ]
+  });
+  const [deleteDriverReport] = useMutation(DELETE_DRIVER_REPORT_ADMIN, {
+    refetchQueries: [
+      { query: GET_ALL_USER_REPORTS, variables: { filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false }, limit: 1000, offset: 0 } },
+      { query: GET_ALL_DRIVER_REPORTS, variables: { filters: selectedStatusFilter === 'Archived' ? { includeArchived: true } : { includeArchived: false }, limit: 1000, offset: 0 } }
+    ]
+  });
+  const [restoreUserReport] = useMutation(RESTORE_USER_REPORT, {
+    refetchQueries: [
+      { query: GET_ALL_USER_REPORTS },
+      { query: GET_ALL_DRIVER_REPORTS }
+    ]
+  });
+  const [restoreDriverReport] = useMutation(RESTORE_DRIVER_REPORT, {
+    refetchQueries: [
+      { query: GET_ALL_USER_REPORTS },
+      { query: GET_ALL_DRIVER_REPORTS }
+    ]
+  });
   const [updateContactMessage] = useMutation(UPDATE_CONTACT_MESSAGE);
   const [sendContactReply] = useMutation(SEND_CONTACT_REPLY);
   const [updateDriver] = useMutation(UPDATE_DRIVER);
@@ -229,7 +268,7 @@ const Reports: React.FC = () => {
     const searchLower = searchTerm.toLowerCase();
     
     // Handle different report types
-    let matchesSearch = false;
+    let matchesSearch: boolean = false;
     
     if (reportSource === 'messages') {
       const message = report as ContactMessage;
@@ -250,16 +289,26 @@ const Reports: React.FC = () => {
         userReport.user!.email.toLowerCase().includes(searchLower);
     } else if (reportSource === 'drivers' && (report as Report).driver) {
       const driverReport = report as Report;
+      const vehiclePlateMatch = driverReport.driver!.vehiclePlateNumber 
+        ? driverReport.driver!.vehiclePlateNumber.toLowerCase().includes(searchLower)
+        : false;
       matchesSearch = matchesSearch ||
         driverReport.driver!.firstName.toLowerCase().includes(searchLower) ||
         driverReport.driver!.lastName.toLowerCase().includes(searchLower) ||
         driverReport.driver!.email.toLowerCase().includes(searchLower) ||
         driverReport.driver!.driverId.toLowerCase().includes(searchLower) ||
-        (driverReport.driver!.vehiclePlateNumber && driverReport.driver!.vehiclePlateNumber.toLowerCase().includes(searchLower));
+        vehiclePlateMatch;
     }
     
-    const matchesStatus = selectedStatusFilter === 'All Status' || 
-      report.status === selectedStatusFilter.toUpperCase().replace(' ', '_');
+    // Handle status matching - including archived status (only for Reports, not ContactMessages)
+    const isArchived = reportSource === 'messages' ? false : ((report as Report).isArchived === true || String((report as Report).isArchived) === 'true');
+    
+    // Filter by status - handle archived as a status filter option
+    const matchesStatus = selectedStatusFilter === 'All Status' 
+      ? !isArchived  // Exclude archived by default when "All Status" is selected
+      : selectedStatusFilter === 'Archived'
+      ? isArchived  // Show only archived when "Archived" is selected
+      : !isArchived && report.status === selectedStatusFilter.toUpperCase().replace(' ', '_');  // Normal status filtering excludes archived
     
     // Contact messages don't have reportType, skip type filter for them
     const matchesType = reportSource === 'messages' || 
@@ -267,7 +316,7 @@ const Reports: React.FC = () => {
       (report as Report).reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
     
     return matchesSearch && matchesStatus && matchesType;
-  }).sort((a, b) => {
+  }).sort((a: Report | ContactMessage, b: Report | ContactMessage) => {
     // Handle sorting for different types
     if (sortBy === 'Alphabetical (A-Z)' || sortBy === 'Alphabetical (Z-A)') {
       const aValue = reportSource === 'messages' ? (a as ContactMessage).name : (a as Report).title;
@@ -396,6 +445,78 @@ const Reports: React.FC = () => {
       setSelectedReport(null);
     } catch (error) {
       console.error('Error updating report:', error);
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteReport = (report: Report) => {
+    setReportToDelete(report);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!reportToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      if (reportSource === 'users') {
+        await deleteUserReport({
+          variables: { id: reportToDelete.id }
+        });
+        setSuccessMessage('User report deleted (archived) successfully!');
+      } else if (reportSource === 'drivers') {
+        await deleteDriverReport({
+          variables: { id: reportToDelete.id }
+        });
+        setSuccessMessage('Driver report deleted (archived) successfully!');
+      }
+      setShowDeleteModal(false);
+      setReportToDelete(null);
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Error deleting report:', error);
+      setErrorMessage(`Failed to delete report: ${error.message || 'Unknown error'}`);
+      setShowErrorModal(true);
+      setShowDeleteModal(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDeleteReport = () => {
+    setShowDeleteModal(false);
+    setReportToDelete(null);
+  };
+
+  const handleRestoreReport = async (report: Report) => {
+    if (!report) return;
+    
+    try {
+      if (reportSource === 'users') {
+        await restoreUserReport({
+          variables: { id: report.id },
+          refetchQueries: [
+            { query: GET_ALL_USER_REPORTS, variables: { filters: { includeArchived: true }, limit: 1000, offset: 0 } }
+          ]
+        });
+        setSuccessMessage('User report restored successfully!');
+      } else if (reportSource === 'drivers') {
+        await restoreDriverReport({
+          variables: { id: report.id },
+          refetchQueries: [
+            { query: GET_ALL_DRIVER_REPORTS, variables: { filters: { includeArchived: true }, limit: 1000, offset: 0 } }
+          ]
+        });
+        setSuccessMessage('Driver report restored successfully!');
+      }
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      console.error('Error restoring report:', error);
+      setErrorMessage(`Failed to restore report: ${error.message || 'Unknown error'}`);
+      setShowErrorModal(true);
     }
   };
 
@@ -574,7 +695,7 @@ const Reports: React.FC = () => {
     if (csvData.length === 0) return;
 
     const headers = Object.keys(csvData[0]).join(',');
-    const rows = csvData.map(row => Object.values(row).map(val => `"${val}"`).join(',')).join('\n');
+    const rows = csvData.map((row: any) => Object.values(row).map((val: any) => `"${val}"`).join(',')).join('\n');
     const csv = `${headers}\n${rows}`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -983,7 +1104,7 @@ const Reports: React.FC = () => {
       </div>
       
       <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-2 mt-5">
-        {/* Tabs */}
+        {/* Report Source Tabs */}
         <div className="mb-6">
           <div className="flex space-x-1 w-fit">
             {/* USER REPORTS BUTTON */}
@@ -992,6 +1113,7 @@ const Reports: React.FC = () => {
                 setReportSource('users');
                 setCurrentPage(1);
                 setSelectedTypeFilter('All Types');
+                setSelectedStatusFilter('All Status');
               }}
               className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
                 reportSource === 'users'
@@ -1016,6 +1138,7 @@ const Reports: React.FC = () => {
                 setReportSource('drivers');
                 setCurrentPage(1);
                 setSelectedTypeFilter('All Types');
+                setSelectedStatusFilter('All Status');
               }}
               className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
                 reportSource === 'drivers'
@@ -1040,6 +1163,7 @@ const Reports: React.FC = () => {
                 setReportSource('messages');
                 setCurrentPage(1);
                 setSelectedTypeFilter('All Types');
+                setSelectedStatusFilter('All Status');
               }}
               className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
                 reportSource === 'messages'
@@ -1212,7 +1336,7 @@ const Reports: React.FC = () => {
 
           {/* Rows */}
           <div className="flex-1">
-            {paginatedReports.map((report: Report) => (
+            {paginatedReports.map((report: Report | ContactMessage) => (
             <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
               {/* Mobile Card View */}
               <div className="md:hidden p-4">
@@ -1227,9 +1351,9 @@ const Reports: React.FC = () => {
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className="font-semibold text-gray-800 truncate overflow-hidden whitespace-nowrap"
-                        title={reportSource === 'messages' ? (report as ContactMessage).name : report.title}
+                        title={reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}
                       >
-                        {reportSource === 'messages' ? (report as ContactMessage).name : report.title}
+                        {reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
@@ -1246,16 +1370,16 @@ const Reports: React.FC = () => {
                       <div className="font-medium">{reportSource === 'messages' ? 'Email:' : reportSource === 'users' ? 'User:' : 'Driver:'}</div>
                       <div>
                         {reportSource === 'messages'
-                          ? (report as ContactMessage).email
-                          : reportSource === 'users' && report.user
-                          ? `${report.user.firstName} ${report.user.lastName}`
-                          : reportSource === 'drivers' && report.driver
-                          ? `${report.driver.firstName} ${report.driver.lastName}`
+                          ? (report as unknown as ContactMessage).email
+                          : reportSource === 'users' && (report as Report).user
+                          ? `${(report as Report).user!.firstName} ${(report as Report).user!.lastName}`
+                          : reportSource === 'drivers' && (report as Report).driver
+                          ? `${(report as Report).driver!.firstName} ${(report as Report).driver!.lastName}`
                           : 'N/A'}
                       </div>
-                      {reportSource === 'drivers' && report.driver && report.driver.vehiclePlateNumber && (
+                      {reportSource === 'drivers' && (report as Report).driver && (report as Report).driver!.vehiclePlateNumber && (
                         <div className="text-xs text-gray-500">
-                          Vehicle: {report.driver.vehiclePlateNumber}
+                          Vehicle: {(report as Report).driver!.vehiclePlateNumber}
                         </div>
                       )}
                     </div>
@@ -1306,25 +1430,25 @@ const Reports: React.FC = () => {
                     onChange={() => handleSelectReport(report.id)}
                     onClick={(e) => e.stopPropagation()}
                   />
-                  <span className="truncate font-semibold" title={reportSource === 'messages' ? (report as ContactMessage).name : report.title}>
-                    {reportSource === 'messages' ? (report as ContactMessage).name : report.title}
+                  <span className="truncate font-semibold" title={reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}>
+                    {reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}
                   </span>
                 </div>
-                <div className={reportSource === 'messages' ? 'col-span-4' : 'col-span-2'} title={
+                <div className={reportSource === 'messages' ? 'col-span-4' : 'col-span-2'                } title={
                   reportSource === 'messages'
-                    ? (report as ContactMessage).email
-                    : reportSource === 'users' && report.user
-                    ? `${report.user.firstName} ${report.user.lastName}`
-                    : reportSource === 'drivers' && report.driver
-                    ? `${report.driver.firstName} ${report.driver.lastName}`
+                    ? (report as unknown as ContactMessage).email
+                    : reportSource === 'users' && (report as Report).user
+                    ? `${(report as Report).user!.firstName} ${(report as Report).user!.lastName}`
+                    : reportSource === 'drivers' && (report as Report).driver
+                    ? `${(report as Report).driver!.firstName} ${(report as Report).driver!.lastName}`
                     : 'N/A'
                 }>
                   {reportSource === 'messages'
-                    ? (report as ContactMessage).email
-                    : reportSource === 'users' && report.user
-                    ? `${report.user.firstName} ${report.user.lastName}`
-                    : reportSource === 'drivers' && report.driver
-                    ? `${report.driver.firstName} ${report.driver.lastName}`
+                    ? (report as unknown as ContactMessage).email
+                    : reportSource === 'users' && (report as Report).user
+                    ? `${(report as Report).user!.firstName} ${(report as Report).user!.lastName}`
+                    : reportSource === 'drivers' && (report as Report).driver
+                    ? `${(report as Report).driver!.firstName} ${(report as Report).driver!.lastName}`
                     : 'N/A'}
                 </div>
                 {reportSource !== 'messages' && (
@@ -1338,19 +1462,52 @@ const Reports: React.FC = () => {
                 </div>
                 <div className="col-span-2 truncate">{formatDate(report.createdAt)}</div>
                 <div className="col-span-1 flex items-center justify-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUpdateReport(report);
-                    }}
-                    className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
-                    title="Update Report"
-                  >
-                    <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                      Update
-                    </span>
-                  </button>
+                  {(report as Report).isArchived ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestoreReport(report as Report);
+                      }}
+                      className="group flex items-center text-green-600 overflow-hidden h-6 w-7 hover:w-24 transition-[width] duration-300"
+                      title="Restore Report"
+                    >
+                      <RotateCcw className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                      <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                        Restore
+                      </span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateReport(report);
+                        }}
+                        className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
+                        title="Update Report"
+                      >
+                        <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                        <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                          Update
+                        </span>
+                      </button>
+                      {reportSource !== 'messages' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteReport(report as Report);
+                          }}
+                          className="group flex items-center text-red-600 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
+                          title="Delete Report"
+                        >
+                          <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                            Delete
+                          </span>
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1457,6 +1614,31 @@ const Reports: React.FC = () => {
                   </div>
                   <p className="mt-1 font-semibold text-black">{formatDate(selectedReport.resolvedAt)}</p>
                 </div>
+              )}
+              {selectedReport.isArchived && (
+                <>
+                  {selectedReport.archivedAt && (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-gray-500" />
+                        <strong className="text-sm font-medium text-gray-700">Archived At</strong>
+                      </div>
+                      <p className="mt-1 font-semibold text-black">{formatDate(selectedReport.archivedAt)}</p>
+                    </div>
+                  )}
+                  {selectedReport.scheduledDeletionDate && (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-500" />
+                        <strong className="text-sm font-medium text-red-700">Scheduled for Deletion</strong>
+                      </div>
+                      <p className="mt-1 font-semibold text-red-600">
+                        {formatDate(selectedReport.scheduledDeletionDate)}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">This report will be permanently deleted on this date.</p>
+                    </div>
+                  )}
+                </>
               )}
               {selectedReport.attachments.length > 0 && (
                 <div>
@@ -2466,9 +2648,22 @@ const Reports: React.FC = () => {
                 Close
               </button>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDeleteReport}
+        onConfirm={confirmDeleteReport}
+        title="Delete Report"
+        message={reportToDelete ? `Are you sure you want to delete the report "${reportToDelete.title}"? This will archive it for 30 days before permanent deletion.` : ''}
+        confirmText={isDeleting ? "Deleting..." : "Delete"}
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isDeleting}
+      />
     </div>
   );
 };

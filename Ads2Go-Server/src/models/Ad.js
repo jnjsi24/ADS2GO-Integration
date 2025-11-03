@@ -380,6 +380,25 @@ AdSchema.post('save', async function (doc) {
       
       // Mark deployment status based on results
       if (deploymentSuccess) {
+        // Clean up reservation from MaterialAvailability since ad is now deployed
+        const MaterialAvailability = require('./MaterialAvailability');
+        for (const material of targetMaterials) {
+          try {
+            const availability = await MaterialAvailability.findOne({ materialId: material._id });
+            if (availability) {
+              // Remove reservation from scheduledAds (it's now in AdsDeployment)
+              availability.scheduledAds = availability.scheduledAds.filter(
+                slot => slot.adId.toString() !== doc._id.toString()
+              );
+              await availability.save();
+              console.log(`🧹 Cleaned up reservation for ad ${doc._id} from material ${material.materialId}`);
+            }
+          } catch (cleanupError) {
+            console.error(`❌ Error cleaning up reservation for ad ${doc._id}:`, cleanupError);
+            // Don't fail deployment if cleanup fails
+          }
+        }
+        
         await Ad.findByIdAndUpdate(doc._id, { 
           deploymentStatus: 'DEPLOYED',
           lastDeploymentAttempt: new Date()

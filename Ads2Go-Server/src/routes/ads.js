@@ -388,27 +388,19 @@ router.get('/qr-scans/stats', async (req, res) => {
         currentTime: currentTime.toISOString()
       });
       
-      // Find all deployments for this material with running ads
+      // ✅ UPDATED: Find all deployments for this material (both RUNNING and SCHEDULED ads)
+      // SCHEDULED ads reserve slots even before they start - company ads fill those slots until start date
       const deployments = await AdsDeployment.find({
         materialId: materialId,
-        'lcdSlots.status': 'RUNNING',
-        'lcdSlots.startTime': { $lte: currentTime },
-        'lcdSlots.endTime': { $gte: currentTime }
+        'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] },
+        'lcdSlots.endTime': { $gte: currentTime } // Only include ads that haven't ended yet
       }).populate('lcdSlots.adId');
       
       console.log('Found deployments for material:', deployments.length);
       
-      if (deployments.length === 0) {
-        console.log(`No active deployments found for material ${materialId}`);
-        return res.json({
-          success: true,
-          ads: [],
-          message: 'No ads deployed for this material'
-        });
-      }
-
-      // Collect all active ads from all deployments
-      const allActiveAds = [];
+      // Collect RUNNING ads (currently playing) and SCHEDULED ads (reserved slots)
+      const runningAds = [];
+      const scheduledSlots = []; // Track slots reserved by scheduled ads
       
       deployments.forEach(deployment => {
         console.log('Processing deployment:', {
@@ -418,75 +410,109 @@ router.get('/qr-scans/stats', async (req, res) => {
         });
         
         deployment.lcdSlots.forEach(slot => {
-          if (slot.status === 'RUNNING' && 
+          // Skip archived ads
+          if (slot.adId && (slot.adId.status === 'ARCHIVED' || slot.adId.isArchived === true)) {
+            console.log('Skipping archived ad in slot:', {
+              slotNumber: slot.slotNumber,
+              adId: slot.adId._id,
+              adTitle: slot.adId.title,
+              status: slot.adId.status,
+              isArchived: slot.adId.isArchived
+            });
+            return;
+          }
+          
+          // RUNNING ads OR SCHEDULED ads whose startTime has arrived: show the actual ad immediately
+          // This allows ads to start playing at exactly their start time even before the cron job runs
+          if ((slot.status === 'RUNNING' || slot.status === 'SCHEDULED') && 
               slot.startTime <= currentTime && 
               slot.endTime >= currentTime && 
               slot.adId) {
             
-            // ✅ SKIP ARCHIVED ADS (30-day deferred deletion)
-            // When an ad is archived, devices skip it and show company ads instead
-            if (slot.adId.status === 'ARCHIVED' || slot.adId.isArchived === true) {
-              console.log('Skipping archived ad in slot:', {
-                slotNumber: slot.slotNumber,
-                adId: slot.adId._id,
-                adTitle: slot.adId.title,
-                status: slot.adId.status,
-                isArchived: slot.adId.isArchived
-              });
-              return; // Skip this ad, will be filled with company ad
-            }
-            
-            console.log('Found active ad in slot:', {
+            console.log(`Found ${slot.status === 'SCHEDULED' ? 'SCHEDULED (auto-promoted)' : 'RUNNING'} ad in slot:`, {
               slotNumber: slot.slotNumber,
               adId: slot.adId._id,
-              adTitle: slot.adId.title
+              adTitle: slot.adId.title,
+              status: slot.status,
+              startTime: slot.startTime
             });
             
-            allActiveAds.push({
-              adId: slot.adId._id.toString(),
-              adDeploymentId: deployment._id.toString(),
-              slotNumber: requestedSlotNumber, // Always return the requested slot number
-              startTime: slot.startTime.toISOString(),
-              endTime: slot.endTime.toISOString(),
-              status: slot.status,
-              mediaFile: slot.mediaFile,
+            runningAds.push({
+              slotNumber: slot.slotNumber,
+              adData: {
+                adId: slot.adId._id.toString(),
+                adDeploymentId: deployment._id.toString(),
+                slotNumber: requestedSlotNumber,
+                startTime: slot.startTime.toISOString(),
+                endTime: slot.endTime.toISOString(),
+                status: slot.status, // Keep original status for tracking
+                mediaFile: slot.mediaFile,
+                adTitle: slot.adId.title,
+                adDescription: slot.adId.description || '',
+                website: slot.adId.website || null,
+                duration: slot.adId.adLengthSeconds || 30,
+                createdAt: slot.createdAt,
+                updatedAt: slot.updatedAt
+              }
+            });
+          }
+          // SCHEDULED ads: startTime hasn't arrived yet, reserve slot with company ad
+          else if (slot.status === 'SCHEDULED' && 
+                   slot.startTime > currentTime && 
+                   slot.endTime >= currentTime && 
+                   slot.adId) {
+            
+            console.log('Found SCHEDULED ad reserving slot:', {
+              slotNumber: slot.slotNumber,
+              adId: slot.adId._id,
               adTitle: slot.adId.title,
-              adDescription: slot.adId.description || '',
-              website: slot.adId.website || null, // Include website field
-              duration: slot.adId.adLengthSeconds || 30,
-              createdAt: slot.createdAt,
-              updatedAt: slot.updatedAt
+              startTime: slot.startTime,
+              reservedUntil: slot.startTime
+            });
+            
+            scheduledSlots.push({
+              slotNumber: slot.slotNumber,
+              reservedUntil: slot.startTime,
+              scheduledAdId: slot.adId._id.toString()
             });
           }
         });
       });
 
-      console.log(`Found ${allActiveAds.length} active ads for material ${materialId}, slot ${requestedSlotNumber}`);
+      // Sort running ads by slot number to maintain order
+      runningAds.sort((a, b) => a.slotNumber - b.slotNumber);
+      const allActiveAds = runningAds.map(item => item.adData);
+
+      console.log(`Found ${allActiveAds.length} RUNNING ads and ${scheduledSlots.length} SCHEDULED slots for material ${materialId}`);
       
-      // ✅ COMPANY AD FILLER SYSTEM: Fill remaining slots with company ads (up to 5 total)
+      // ✅ COMPANY AD FILLER SYSTEM: 
+      // 1. Fill slots reserved by SCHEDULED ads (company ads play until scheduled ad starts)
+      // 2. Fill remaining empty slots up to MAX_SLOTS (5)
       const MAX_SLOTS = 5;
-      const slotsToFill = MAX_SLOTS - allActiveAds.length;
+      const reservedSlotNumbers = new Set([
+        ...runningAds.map(ad => ad.slotNumber),
+        ...scheduledSlots.map(slot => slot.slotNumber)
+      ]);
+      const slotsToFill = MAX_SLOTS - reservedSlotNumbers.size;
       
-      if (slotsToFill > 0) {
-        console.log(`📦 [CompanyAdFiller] Need to fill ${slotsToFill} empty slots with company ads`);
+      try {
+        // Fetch active company ads using the model's static method
+        const companyAds = await CompanyAd.getCurrentlyActiveAds();
         
-        try {
-          // Fetch active company ads using the model's static method
-          const companyAds = await CompanyAd.getCurrentlyActiveAds();
+        if (companyAds && companyAds.length > 0) {
+          console.log(`📦 [CompanyAdFiller] Found ${companyAds.length} active company ads available`);
           
-          if (companyAds && companyAds.length > 0) {
-            console.log(`📦 [CompanyAdFiller] Found ${companyAds.length} active company ads available`);
-            
-            // Select company ads with weighted priority
-            const selectedCompanyAds = [];
-            for (let i = 0; i < slotsToFill; i++) {
-              // Use the weighted selection method from CompanyAd model
+          const selectedCompanyAds = [];
+          
+          // First: Add company ads for SCHEDULED slots (reserved slots waiting for start date)
+          if (scheduledSlots.length > 0) {
+            console.log(`📦 [CompanyAdFiller] Adding company ads for ${scheduledSlots.length} SCHEDULED slot(s) as fillers until start date`);
+            for (const scheduledSlot of scheduledSlots) {
               const companyAd = await CompanyAd.getRandomScheduledAd();
-              
               if (companyAd) {
                 selectedCompanyAds.push({
                   adId: companyAd._id.toString(),
-                  adDeploymentId: null, // Company ads don't have deployments
+                  adDeploymentId: null,
                   slotNumber: requestedSlotNumber,
                   startTime: null,
                   endTime: null,
@@ -494,27 +520,67 @@ router.get('/qr-scans/stats', async (req, res) => {
                   mediaFile: companyAd.mediaFile,
                   adTitle: companyAd.title,
                   adDescription: companyAd.description || '',
-                  website: null, // Company ads don't have advertiser websites
+                  website: null,
                   duration: companyAd.duration,
                   createdAt: companyAd.createdAt,
                   updatedAt: companyAd.updatedAt,
-                  isCompanyAd: true // ✅ Flag to identify company ads
+                  isCompanyAd: true,
+                  isReservedForScheduled: true, // ✅ Flag to indicate this slot is reserved for a scheduled ad
+                  reservedUntil: scheduledSlot.reservedUntil.toISOString(),
+                  scheduledAdId: scheduledSlot.scheduledAdId
                 });
               }
             }
-            
-            // Add company ads to the rotation
-            allActiveAds.push(...selectedCompanyAds);
-            console.log(`✅ [CompanyAdFiller] Added ${selectedCompanyAds.length} company ads. Total ads in rotation: ${allActiveAds.length}`);
-          } else {
-            console.log(`⚠️ [CompanyAdFiller] No active company ads available to fill ${slotsToFill} empty slots`);
           }
-        } catch (error) {
-          console.error('❌ [CompanyAdFiller] Error fetching company ads:', error);
-          // Continue without company ads if there's an error
+          
+          // Second: Fill remaining empty slots with company ads
+          if (slotsToFill > 0) {
+            console.log(`📦 [CompanyAdFiller] Adding company ads for ${slotsToFill} empty slot(s)`);
+            for (let i = 0; i < slotsToFill; i++) {
+              const companyAd = await CompanyAd.getRandomScheduledAd();
+              if (companyAd) {
+                selectedCompanyAds.push({
+                  adId: companyAd._id.toString(),
+                  adDeploymentId: null,
+                  slotNumber: requestedSlotNumber,
+                  startTime: null,
+                  endTime: null,
+                  status: 'RUNNING',
+                  mediaFile: companyAd.mediaFile,
+                  adTitle: companyAd.title,
+                  adDescription: companyAd.description || '',
+                  website: null,
+                  duration: companyAd.duration,
+                  createdAt: companyAd.createdAt,
+                  updatedAt: companyAd.updatedAt,
+                  isCompanyAd: true
+                });
+              }
+            }
+          }
+          
+          // Add all company ads to the rotation
+          if (selectedCompanyAds.length > 0) {
+            allActiveAds.push(...selectedCompanyAds);
+            const scheduledCount = scheduledSlots.length;
+            const emptyCount = slotsToFill;
+            console.log(`✅ [CompanyAdFiller] Added ${selectedCompanyAds.length} company ads (${scheduledCount} for scheduled slots, ${emptyCount} for empty slots). Total ads in rotation: ${allActiveAds.length}`);
+          }
+        } else {
+          console.log(`⚠️ [CompanyAdFiller] No active company ads available to fill ${scheduledSlots.length} scheduled slots and ${slotsToFill} empty slots`);
         }
+      } catch (error) {
+        console.error('❌ [CompanyAdFiller] Error fetching company ads:', error);
+        // Continue without company ads if there's an error
+      }
+      
+      // Final check: ensure we have ads in rotation
+      if (allActiveAds.length === 0) {
+        console.log(`⚠️ [Rotation] No ads available (no RUNNING ads, no SCHEDULED slots, no company ads)`);
+      } else if (reservedSlotNumbers.size >= MAX_SLOTS && scheduledSlots.length === 0) {
+        console.log(`✅ [Rotation] All ${MAX_SLOTS} slots filled with RUNNING user ads`);
       } else {
-        console.log(`✅ [Rotation] All ${MAX_SLOTS} slots filled with user ads`);
+        console.log(`✅ [Rotation] ${allActiveAds.length} ads in rotation: ${runningAds.length} RUNNING, ${scheduledSlots.length} SCHEDULED (company ads filling), ${allActiveAds.length - runningAds.length - scheduledSlots.length} company fillers`);
       }
       
       // Debug: Log the first ad to see if website field is included

@@ -1381,7 +1381,12 @@ const RouteTab: React.FC = () => {
             <Ionicons name="time" size={24} color="#3b82f6" />
             <Text style={styles.metricLabel}>Duration</Text>
             <Text style={styles.metricValue}>
-              {routeData?.metrics?.totalDuration ? formatDuration(routeData.metrics.totalDuration) : '0s'}
+              {/* ✅ FIXED: Use sessionStatus.currentHours for today's date to match dashboard */}
+              {isSelectedDateToday() && sessionStatus?.currentHours !== undefined
+                ? `${sessionStatus.currentHours.toFixed(2)}h`
+                : routeData?.metrics?.totalDuration
+                ? formatDuration(routeData.metrics.totalDuration)
+                : '0s'}
             </Text>
           </View>
           

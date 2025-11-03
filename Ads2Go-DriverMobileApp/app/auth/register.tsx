@@ -157,8 +157,8 @@ const RegisterForm = () => {
   const validateStep = (step: number): boolean => {
     // Regex to check for names without numbers or symbols
     const nameRegex = /^[A-Za-z\s.'-]+$/;
-    // Regex to check for exactly 10 digits
-    const contactNumberRegex = /^\d{10}$/;
+    // Regex to check for Philippine mobile number format: 09XXXXXXXXX (10 digits starting with 09)
+    const contactNumberRegex = /^09\d{9}$/;
 
     switch (step) {
       case 0:
@@ -198,7 +198,7 @@ const RegisterForm = () => {
           return false;
         }
         if (!contactNumberRegex.test(contactNumber.trim())) {
-          Alert.alert('Validation Error', 'Contact Number must be exactly 10 digits.');
+          Alert.alert('Validation Error', 'Contact Number must be a valid Philippine mobile number (09XXXXXXXXX - 10 digits starting with 09).');
           return false;
         }
         if (!password.trim()) {
@@ -515,7 +515,17 @@ const RegisterForm = () => {
               if (isContactNumberInput) {
                 // Regex to allow only digits and limit to 10 characters
                 const cleanedText = text.replace(/[^0-9]/g, '');
-                onChangeText(cleanedText.slice(0, 10));
+                // Ensure it starts with 09 if user is typing
+                let formatted = cleanedText.slice(0, 10);
+                // If first digit is not 0, add 0 prefix (for cases like typing 9...)
+                if (formatted.length > 0 && formatted[0] !== '0' && formatted.length < 10) {
+                  formatted = '0' + formatted.slice(0, 9);
+                }
+                // If starts with 0 but second digit is not 9, enforce 09
+                if (formatted.length >= 2 && formatted[0] === '0' && formatted[1] !== '9') {
+                  formatted = '09' + formatted.slice(2);
+                }
+                onChangeText(formatted);
               } else {
                 onChangeText(text);
               }

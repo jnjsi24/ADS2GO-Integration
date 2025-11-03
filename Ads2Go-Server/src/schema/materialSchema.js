@@ -190,6 +190,9 @@ extend type Query {
 
     # Admin utility: Sync mountedAt dates from Material to MaterialUsageHistory
     syncUsageHistoryMountedDates: SyncResult
+
+    # Admin utility: Sync material slot availability with AdsDeployment
+    syncMaterialSlots: SyncResult
   }
 
   type MaterialPhotoTracking {

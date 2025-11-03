@@ -5,6 +5,7 @@ import MapView from './MapView';
 import { useQuery } from '@apollo/client';
 import { GET_USER_MATERIALS_WITH_LOCATION } from '../graphql/user/queries/getUserMaterialsWithLocation';
 import playbackWebSocketService from '../services/playbackWebSocketService';
+import { screenComplianceService } from '../services/screenComplianceService';
 
 interface MaterialLocation {
   lat?: number;
@@ -45,6 +46,7 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila default
   const [zoom, setZoom] = useState(12);
   const mapRef = useRef<L.Map | null>(null);
+  const [deviceHoursMap, setDeviceHoursMap] = useState<Map<string, number>>(new Map()); // Map of materialId -> currentHours
 
   // Fetch materials with location
   // 🔄 Changed from 30s to 2s for smooth real-time updates (matches Admin Client)
@@ -54,15 +56,54 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
     notifyOnNetworkStatusChange: false, // Silent refresh - no loading state during background updates
   });
 
+  // Fetch device hours from compliance service to check if devices completed 8 hours
+  useEffect(() => {
+    const fetchDeviceHours = async () => {
+      try {
+        const complianceData = await screenComplianceService.getCompliance(null, false);
+        if (complianceData.success && complianceData.data?.materialScreens) {
+          const hoursMap = new Map<string, number>();
+          complianceData.data.materialScreens.forEach((screen: any) => {
+            if (screen.materialId && screen.totalHours) {
+              hoursMap.set(screen.materialId, screen.totalHours);
+            }
+          });
+          setDeviceHoursMap(hoursMap);
+        }
+      } catch (error) {
+        console.error('Error fetching device hours for filtering:', error);
+      }
+    };
+    
+    fetchDeviceHours();
+    // Refresh device hours every 30 seconds
+    const interval = setInterval(fetchDeviceHours, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Update materials when data changes
   useEffect(() => {
     if (data?.getUserMaterialsWithLocation?.materials) {
       const materialsData = data.getUserMaterialsWithLocation.materials;
       console.log('📍 [UserMaterialsMap] Received materials:', materialsData.length);
-      setMaterials(materialsData);
+      
+      // ✅ FILTER: Remove GPS data for devices that completed 8 hours (in company-ads-only mode)
+      const filteredMaterials = materialsData.map((m: MaterialWithLocation) => {
+        const deviceHours = deviceHoursMap.get(m.materialId || '');
+        if (deviceHours !== undefined && deviceHours >= 8) {
+          // Device completed 8 hours - remove GPS location for user client
+          return {
+            ...m,
+            currentLocation: undefined // Remove location but keep other data
+          };
+        }
+        return m;
+      });
+      
+      setMaterials(filteredMaterials);
 
-      // Calculate map center from materials with valid locations
-      const validLocations = materialsData.filter((m: MaterialWithLocation) => 
+      // Calculate map center from materials with valid locations (only non-filtered ones)
+      const validLocations = filteredMaterials.filter((m: MaterialWithLocation) => 
         m.currentLocation && 
         typeof m.currentLocation.lat === 'number' &&
         typeof m.currentLocation.lng === 'number' &&
@@ -95,7 +136,7 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
         }
       }
     }
-  }, [data]);
+  }, [data, deviceHoursMap]);
 
   // WebSocket subscription for real-time location updates
   useEffect(() => {
@@ -105,12 +146,35 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
       if (update.type === 'locationUpdate' && update.deviceId && update.location) {
         console.log('📍 [UserMaterialsMap] Received location update:', update);
         
+        // ✅ FILTER: Check if device has completed 8 hours - don't update GPS for user client
+        const materialId = update.deviceId || update.materialId;
+        const deviceHours = deviceHoursMap.get(materialId || '');
+        
+        if (deviceHours !== undefined && deviceHours >= 8) {
+          // Device is in company-ads-only mode - don't track GPS for user client
+          console.log(`🚫 [UserMaterialsMap] Device ${materialId} completed 8 hours - filtering GPS update`);
+          return;
+        }
+        
         // Update material location in state
         setMaterials((prevMaterials) => {
           return prevMaterials.map((material) => {
             // Check if this update is for one of the user's materials
             if (material.materialId === update.deviceId || 
                 material.carGroupId === update.deviceId) {
+              
+              // Double-check device hours before updating GPS
+              const matHours = deviceHoursMap.get(material.materialId || '');
+              if (matHours !== undefined && matHours >= 8) {
+                // Device completed 8 hours - don't update GPS
+                return {
+                  ...material,
+                  isOnline: true,
+                  lastSeen: new Date().toISOString()
+                  // Keep existing location (or undefined if already filtered)
+                };
+              }
+              
               console.log(`📍 [UserMaterialsMap] Updating location for ${material.materialId}`);
               return {
                 ...material,

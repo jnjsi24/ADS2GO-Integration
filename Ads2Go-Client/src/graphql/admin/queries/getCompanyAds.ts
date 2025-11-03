@@ -11,6 +11,9 @@ export const GET_COMPANY_ADS = gql`
       duration
       isActive
       priority
+      isArchived
+      archivedAt
+      scheduledDeletionDate
       createdBy {
         id
         firstName

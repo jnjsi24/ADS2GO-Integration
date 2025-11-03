@@ -13,6 +13,10 @@ module.exports = gql`
     createdBy: String!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input PricingConfigInput {
@@ -71,6 +75,7 @@ module.exports = gql`
     createPricingConfig(input: PricingConfigInput!): PricingConfig!
     updatePricingConfig(id: ID!, input: PricingConfigUpdateInput!): PricingConfig!
     deletePricingConfig(id: ID!): String!
+    restorePricingConfig(id: ID!): String!
     togglePricingConfigStatus(id: ID!): PricingConfig!
   }
 `;

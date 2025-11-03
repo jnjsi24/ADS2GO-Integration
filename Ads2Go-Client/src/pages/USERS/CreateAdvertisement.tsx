@@ -12,6 +12,7 @@ import {
 import { uploadFileToFirebase } from '../../utils/fileUpload';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
 import CalendarWidget from '../../components/CalendarWidget';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 
 type VehicleType = 'CAR' | 'MOTORCYCLE' | '';
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
@@ -73,6 +74,7 @@ const CreateAdvertisement: React.FC = () => {
   const { data: fieldCombinationsData, loading: fieldCombinationsLoading } = useQuery(GET_FLEXIBLE_FIELD_COMBINATIONS);
   const [calculatePricing] = useLazyQuery(CALCULATE_FLEXIBLE_PRICING);
   const [createAd] = useMutation(CREATE_FLEXIBLE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
     onCompleted: () => {
       addToast({ 
         title: 'Success!', 
@@ -81,7 +83,7 @@ const CreateAdvertisement: React.FC = () => {
       });
       setTimeout(() => {
         navigate('/advertisements');
-      }, 3000);
+      }, 2000);
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
@@ -465,15 +467,17 @@ const CreateAdvertisement: React.FC = () => {
       const mediaFileURL = await uploadMediaFile(formData.mediaFile!);
       setIsUploading(false);
       
-      // Parse start date
+      // Parse start date - ads always start at 8:00 AM Manila time (operating hours start)
+      // Manila is UTC+8, so 8:00 AM Manila = 00:00 UTC
       const [year, month, day] = formData.startDate.split('-').map(Number);
-      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)); // 00:00 UTC = 8:00 AM Manila
       const startTime = startDate.toISOString();
       
-      // Calculate end date
+      // Calculate end date - ads end at 11:59 PM Manila time (operating hours end)
+      // Manila is UTC+8, so 11:59 PM Manila = 15:59 UTC (next day at 23:59 - 8 hours)
       const endDate = new Date(startDate);
       endDate.setUTCDate(endDate.getUTCDate() + formData.durationDays);
-      endDate.setUTCHours(23, 59, 59, 999);
+      endDate.setUTCHours(15, 59, 59, 999); // 15:59 UTC = 11:59 PM Manila
       const endTime = endDate.toISOString();
       
       // Create ad with ensured category
@@ -781,13 +785,29 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             />
 
             {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
-              <div className="mt-2">
-                <p className="text-sm text-green-600">
+              <div className="mt-4">
+                {/* Media Preview */}
+                <div className="w-full bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center h-40 mb-2">
+                  {formData.mediaFile.type.startsWith('image/') ? (
+                    <img
+                      src={URL.createObjectURL(formData.mediaFile)}
+                      alt="Preview"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <video
+                      src={URL.createObjectURL(formData.mediaFile)}
+                      className="max-h-full max-w-full"
+                      controls
+                    />
+                  )}
+                </div>
+                <p className="text-sm text-green-600 text-center font-medium">
                   ✓ Selected: {formData.mediaFile.name}
                 </p>
                 {detectedVideoDuration !== null && (
                   <>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1 text-center">
                       Note: This is an estimate. Final validation will occur when creating the ad.
                     </p>
                   </>

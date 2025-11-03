@@ -6,7 +6,49 @@ module.exports = {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can view pricing configurations');
       }
-      return await PricingConfig.find({}).sort({ materialType: 1, vehicleType: 1, category: 1 });
+      // Return all including archived (client handles filtering)
+      const configs = await PricingConfig.find({}).sort({ materialType: 1, vehicleType: 1, category: 1 });
+      // Ensure dates are properly serialized and id is set
+      return configs.map(config => {
+        const obj = config.toObject();
+        
+        // Ensure id field is set (GraphQL expects id, not _id)
+        if (!obj.id && obj._id) {
+          obj.id = obj._id.toString();
+        }
+        
+        // Ensure archive fields have defaults for older records
+        if (obj.isArchived === undefined || obj.isArchived === null) {
+          obj.isArchived = false;
+        }
+        
+        // Serialize dates to ISO strings
+        if (obj.scheduledDeletionDate) {
+          obj.scheduledDeletionDate = obj.scheduledDeletionDate instanceof Date 
+            ? obj.scheduledDeletionDate.toISOString() 
+            : obj.scheduledDeletionDate;
+        } else {
+          obj.scheduledDeletionDate = null;
+        }
+        
+        if (obj.archivedAt) {
+          obj.archivedAt = obj.archivedAt instanceof Date 
+            ? obj.archivedAt.toISOString() 
+            : obj.archivedAt;
+        } else {
+          obj.archivedAt = null;
+        }
+        
+        // Serialize other dates
+        if (obj.createdAt instanceof Date) {
+          obj.createdAt = obj.createdAt.toISOString();
+        }
+        if (obj.updatedAt instanceof Date) {
+          obj.updatedAt = obj.updatedAt.toISOString();
+        }
+        
+        return obj;
+      });
     },
 
     getPricingConfigById: async (_, { id }, { user }) => {
@@ -125,8 +167,56 @@ module.exports = {
         throw new Error('Pricing configuration not found');
       }
 
-      await PricingConfig.findByIdAndDelete(id);
-      return 'Pricing configuration deleted successfully';
+      // Check if already archived
+      if (existing.isArchived) {
+        throw new Error('Pricing configuration is already archived');
+      }
+
+      console.log(`🗑️ Archiving pricing config: ${id} - 30-day deferred deletion`);
+
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+      existing.isArchived = true;
+      existing.archivedAt = now;
+      existing.scheduledDeletionDate = deletionDate;
+      existing.isActive = false; // Deactivate immediately
+
+      await existing.save();
+
+      console.log(`✅ Pricing config ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+
+      return 'Pricing configuration archived successfully. Scheduled for deletion in 30 days.';
+    },
+
+    restorePricingConfig: async (_, { id }, { user }) => {
+      if (!user || user.role !== 'SUPERADMIN') {
+        throw new Error('Unauthorized: Only SUPERADMIN can restore pricing configurations');
+      }
+
+      const existing = await PricingConfig.findById(id);
+      if (!existing) {
+        throw new Error('Pricing configuration not found');
+      }
+
+      if (!existing.isArchived) {
+        throw new Error('Pricing configuration is not archived');
+      }
+
+      console.log(`✅ Restoring pricing config: ${id}`);
+
+      existing.isArchived = false;
+      existing.archivedAt = null;
+      existing.scheduledDeletionDate = null;
+      existing.isActive = true; // Re-activate when restored
+
+      await existing.save();
+
+      console.log(`✅ Pricing config ${id} restored successfully`);
+
+      return 'Pricing configuration restored successfully.';
     },
 
     togglePricingConfigStatus: async (_, { id }, { user }) => {

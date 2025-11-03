@@ -429,6 +429,10 @@ export interface DriverSalaryPricing {
   displayName: string;
   createdAt: string;
   updatedAt: string;
+  // Archive fields
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 export interface SalaryCalculationPeriod {

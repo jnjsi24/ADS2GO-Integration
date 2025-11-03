@@ -5,6 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const Driver = require('../models/Driver');
 const Material = require('../models/Material');
+const AdsDeployment = require('../models/adsDeployment');
 const { JWT_SECRET, checkAdmin } = require('../middleware/auth');
 const { checkDriverAuth } = require('../middleware/driverAuth');
 const { verifyDriverForMaterialAssignment } = require('../middleware/driverMaterialAuth');
@@ -1028,6 +1029,20 @@ createDriver: async (_, { input }) => {
 
         console.log(`🗑️ Archiving driver: ${driverId} (${driver.fullName}) - 30-day deferred deletion`);
 
+        // ✅ Issue 4: Check for deployed ads and log warning
+        const deployedAds = await AdsDeployment.find({ 
+          driverId: driver.driverId,
+          currentStatus: 'RUNNING'
+        });
+        
+        if (deployedAds.length > 0) {
+          console.warn(`⚠️ WARNING: Driver ${driverId} (${driver.fullName}) has ${deployedAds.length} currently deployed ad(s). Proceeding with deletion anyway.`);
+          console.warn(`   Deployed ads will remain associated with archived driver until removed manually.`);
+          deployedAds.forEach((deployment, index) => {
+            console.warn(`   Deployment ${index + 1}: Material ${deployment.materialId}, Status: ${deployment.currentStatus}`);
+          });
+        }
+
         // ✅ ARCHIVE INSTEAD OF DELETE (30-day deferred deletion like Facebook)
         const now = new Date();
         const deletionDate = new Date(now);
@@ -1040,11 +1055,23 @@ createDriver: async (_, { input }) => {
         
         await driver.save();
 
-        console.log(`✅ Driver ${driverId} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
-        console.log(`📌 Material assignments preserved - will be cleaned up after 30 days`);
+        // ✅ Issue 3: Unassign materials immediately when driver is deleted
+        const materialsUnassigned = await Material.updateMany(
+          { driverId: driver.driverId },
+          { 
+            $set: { 
+              driverId: null,
+              dismountedAt: now
+            } 
+          }
+        );
 
-        // ✅ DON'T unassign materials yet - keep them during grace period
-        // Materials will be unassigned by cron job after 30 days
+        console.log(`✅ Driver ${driverId} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        console.log(`📦 Unassigned ${materialsUnassigned.modifiedCount} material(s) immediately (Issue 3 fixed)`);
+        
+        if (deployedAds.length > 0) {
+          console.log(`⚠️ Note: ${deployedAds.length} deployed ad(s) still active - may need manual cleanup`);
+        }
 
         return { 
           success: true, 

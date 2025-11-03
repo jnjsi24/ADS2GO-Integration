@@ -302,10 +302,18 @@ router.post('/registerTablet', async (req, res) => {
         try {
           const Material = require('../models/Material');
           const material = await Material.findOne({ materialId: materialId });
-          if (material && !material.mountedAt) {
-            material.mountedAt = new Date();
+          if (material) {
+            // Set mountedAt if not already set
+            if (!material.mountedAt) {
+              material.mountedAt = new Date();
+              console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
+            }
+            // Clear dismountedAt when device reconnects
+            if (material.dismountedAt) {
+              material.dismountedAt = null;
+              console.log(`🔧 Auto-cleared dismountedAt date for material ${materialId} when device reconnected`);
+            }
             await material.save();
-            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
           }
         } catch (mountError) {
           console.error('Error auto-setting mountedAt date:', mountError);
@@ -372,10 +380,18 @@ router.post('/registerTablet', async (req, res) => {
         try {
           const Material = require('../models/Material');
           const material = await Material.findOne({ materialId: materialId });
-          if (material && !material.mountedAt) {
-            material.mountedAt = new Date();
+          if (material) {
+            // Set mountedAt if not already set
+            if (!material.mountedAt) {
+              material.mountedAt = new Date();
+              console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
+            }
+            // Clear dismountedAt when device reconnects
+            if (material.dismountedAt) {
+              material.dismountedAt = null;
+              console.log(`🔧 Auto-cleared dismountedAt date for material ${materialId} when device reconnected`);
+            }
             await material.save();
-            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
           }
         } catch (mountError) {
           console.error('Error auto-setting mountedAt date:', mountError);
@@ -707,6 +723,29 @@ router.post('/unregisterTablet', async (req, res) => {
     );
 
     await tablet.save();
+
+    // ✅ NEW: Check if ALL slots are empty - if so, set dismountedAt
+    try {
+      const Material = require('../models/Material');
+      const material = await Material.findOne({ materialId });
+      
+      if (material) {
+        // Check if any slot still has a device registered
+        const hasAnyDevice = tablet.tablets.some(t => t.deviceId && t.deviceId !== '');
+        
+        if (!hasAnyDevice) {
+          // ALL slots are empty - mark as dismounted
+          if (material.mountedAt && !material.dismountedAt) {
+            material.dismountedAt = new Date();
+            await material.save();
+            console.log(`🔧 [Unregistration] Material ${materialId} marked as DISMOUNTED - all slots empty`);
+          }
+        }
+      }
+    } catch (mountCheckError) {
+      console.error('Error checking mounted status on unregister:', mountCheckError);
+      // Don't fail the unregister if mount check fails
+    }
 
     res.json({
       success: true,

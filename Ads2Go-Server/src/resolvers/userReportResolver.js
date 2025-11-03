@@ -49,6 +49,11 @@ const resolvers = {
       try {
         const query = {};
         
+        // Exclude archived by default unless explicitly requested
+        if (filters.includeArchived !== true) {
+          query.isArchived = { $ne: true };
+        }
+        
         if (filters.reportType) {
           query.reportType = filters.reportType;
         }
@@ -258,26 +263,120 @@ const resolvers = {
         if (!report) {
           throw new Error('Report not found or access denied');
         }
+
+        // Check if already archived
+        if (report.isArchived) {
+          throw new Error('Report is already archived');
+        }
         
         // Check if report can be deleted by user
         if (!report.canBeDeletedByUser()) {
           throw new Error('This report cannot be deleted as it is no longer pending');
         }
-        
-        await UserReport.findByIdAndDelete(id);
+
+        console.log(`🗑️ Archiving user report: ${id} - 30-day deferred deletion`);
+
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+        report.isArchived = true;
+        report.archivedAt = now;
+        report.scheduledDeletionDate = deletionDate;
+
+        await report.save();
+
+        console.log(`✅ User report ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
         
         return {
           success: true,
-          message: 'Report deleted successfully',
+          message: 'Report archived successfully. Scheduled for deletion in 30 days.',
           report: null
         };
       } catch (error) {
-        console.error('Error deleting user report:', error);
-        throw new Error(error.message || 'Failed to delete report');
+        console.error('Error archiving user report:', error);
+        throw new Error(error.message || 'Failed to archive report');
+      }
+    },
+
+    restoreUserReport: async (_, { id }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const report = await UserReport.findOne({ _id: id, userId: user.id });
+        
+        if (!report) {
+          throw new Error('Report not found or access denied');
+        }
+
+        if (!report.isArchived) {
+          throw new Error('Report is not archived');
+        }
+
+        console.log(`✅ Restoring user report: ${id}`);
+
+        report.isArchived = false;
+        report.archivedAt = null;
+        report.scheduledDeletionDate = null;
+
+        await report.save();
+
+        console.log(`✅ User report ${id} restored successfully`);
+        
+        return {
+          success: true,
+          message: 'Report restored successfully.',
+          report
+        };
+      } catch (error) {
+        console.error('Error restoring user report:', error);
+        throw new Error(error.message || 'Failed to restore report');
       }
     },
 
     // Admin mutations
+    deleteUserReportAdmin: async (_, { id }, { admin, superAdmin }) => {
+      checkAdmin(admin || superAdmin);
+      
+      try {
+        const report = await UserReport.findById(id);
+        
+        if (!report) {
+          throw new Error('Report not found');
+        }
+
+        // Check if already archived
+        if (report.isArchived) {
+          throw new Error('Report is already archived');
+        }
+
+        console.log(`🗑️ Admin archiving user report: ${id} - 30-day deferred deletion`);
+
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+        report.isArchived = true;
+        report.archivedAt = now;
+        report.scheduledDeletionDate = deletionDate;
+
+        await report.save();
+
+        console.log(`✅ User report ${id} archived successfully by admin. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        
+        return {
+          success: true,
+          message: 'Report archived successfully. Scheduled for deletion in 30 days.',
+          report: null
+        };
+      } catch (error) {
+        console.error('Error archiving user report:', error);
+        throw new Error(error.message || 'Failed to archive report');
+      }
+    },
+
     updateUserReportAdmin: async (_, { id, input }, { admin, superAdmin }) => {
       checkAdmin(admin || superAdmin);
       

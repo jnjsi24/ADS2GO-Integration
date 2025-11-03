@@ -14,6 +14,9 @@ export const GET_ALL_PRICING_CONFIGS = gql`
       createdBy
       createdAt
       updatedAt
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;
@@ -84,6 +87,10 @@ export interface PricingConfig {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  // Archive fields
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 export interface PricingCalculation {

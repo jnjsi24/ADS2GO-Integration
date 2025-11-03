@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../contexts/AuthContext';
 import { NotificationToastProvider, useNotificationToast } from '../contexts/NotificationToastContext';
 import NotificationToast from '../components/NotificationToast';
@@ -74,10 +75,12 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <NotificationToastProvider>
-        <RootLayoutNav />
-      </NotificationToastProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <NotificationToastProvider>
+          <RootLayoutNav />
+        </NotificationToastProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

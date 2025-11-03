@@ -19,6 +19,38 @@ const checkAuth = (user) => {
   }
 };
 
+/**
+ * Helper function to safely convert any date value to ISO string
+ * Handles: Date objects, timestamps (number/string), and ISO strings
+ */
+function toISOString(value) {
+  if (!value) return null;
+  
+  // If already a Date object, convert to ISO
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // If it's a number or numeric string (timestamp), convert to Date first
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+    const timestamp = typeof value === 'string' ? parseInt(value, 10) : value;
+    return new Date(timestamp).toISOString();
+  }
+  
+  // If it's already an ISO string, return as-is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return value;
+  }
+  
+  // Fallback: try to create a Date and convert
+  try {
+    return new Date(value).toISOString();
+  } catch (error) {
+    console.error('❌ Failed to convert date:', value, error);
+    return null;
+  }
+}
+
 // Helper function to check if user is driver
 const checkDriver = (driver) => {
   if (!driver) {
@@ -122,18 +154,118 @@ const resolvers = {
       
       try {
         const pricingList = await DriverSalaryPricing.find({})
-          .populate('createdBy', 'firstName lastName email')
-          .populate('updatedBy', 'firstName lastName email')
+          .populate({
+            path: 'createdBy',
+            select: 'firstName lastName email',
+            model: 'SuperAdmin'
+          })
+          .populate({
+            path: 'updatedBy',
+            select: 'firstName lastName email',
+            model: 'SuperAdmin'
+          })
           .sort({ vehicleType: 1, category: 1, materialType: 1 });
+        
+        console.log(`✅ Found ${pricingList.length} driver salary pricing records`);
+        
+        // Convert to plain objects to ensure date transformations stick
+        const plainPricingList = pricingList.map(pricing => {
+          // Get the raw ObjectId from the document's _doc (before populate nullifies it)
+          // When populate fails, the ObjectId is still stored in _doc
+          const rawCreatedById = pricing._doc && pricing._doc.createdBy 
+            ? pricing._doc.createdBy.toString() 
+            : null;
+          const rawUpdatedById = pricing._doc && pricing._doc.updatedBy 
+            ? pricing._doc.updatedBy.toString() 
+            : null;
+          
+          const obj = pricing.toObject();
+          obj.id = pricing._id.toString();
+          
+          // Ensure isArchived defaults to false if not set (for backward compatibility)
+          if (obj.isArchived === undefined || obj.isArchived === null) {
+            obj.isArchived = false;
+          }
+          
+          // Ensure isActive defaults to true if not set (for backward compatibility)
+          if (obj.isActive === undefined || obj.isActive === null) {
+            obj.isActive = true;
+          }
+          
+          // Handle missing createdBy (if SuperAdmin was deleted/archived)
+          // When populate can't find the document, it returns null
+          if (!obj.createdBy || !obj.createdBy._id || !obj.createdBy.id) {
+            // Use the raw ObjectId we extracted from _doc
+            const createdById = rawCreatedById;
+            
+            obj.createdBy = {
+              id: createdById || 'deleted-admin',
+              _id: createdById || 'deleted-admin',
+              firstName: 'Deleted',
+              lastName: 'Admin',
+              email: createdById ? `deleted-${createdById}@system.local` : 'deleted@system.local'
+            };
+            console.log(`⚠️ Missing createdBy for pricing ${obj.id}, using fallback (original ID: ${createdById || 'N/A'})`);
+          } else {
+            // Ensure createdBy has an id field (not just _id) for GraphQL
+            if (obj.createdBy._id && !obj.createdBy.id) {
+              obj.createdBy.id = obj.createdBy._id.toString();
+            }
+            if (!obj.createdBy.id || obj.createdBy.id === undefined) {
+              obj.createdBy.id = obj.createdBy._id ? obj.createdBy._id.toString() : 'unknown';
+            }
+          }
+          
+          // Handle missing updatedBy (optional field, can be null)
+          if (obj.updatedBy) {
+            if (!obj.updatedBy._id && !obj.updatedBy.id) {
+              // Use the raw ObjectId we extracted from _doc
+              const updatedById = rawUpdatedById;
+              
+              if (updatedById) {
+                obj.updatedBy = {
+                  id: updatedById,
+                  _id: updatedById,
+                  firstName: 'Deleted',
+                  lastName: 'Admin',
+                  email: `deleted-${updatedById}@system.local`
+                };
+              } else {
+                obj.updatedBy = null;
+              }
+            } else {
+              // Ensure updatedBy has an id field
+              if (obj.updatedBy._id && !obj.updatedBy.id) {
+                obj.updatedBy.id = obj.updatedBy._id.toString();
+              }
+            }
+          }
+          
+          // Debug: Log each pricing config to verify fields
+          console.log(`📋 Pricing: ${obj.vehicleType} + ${obj.materialType} (${obj.category}) - isActive: ${obj.isActive}, isArchived: ${obj.isArchived}, createdBy: ${obj.createdBy?.email || obj.createdBy?.id || 'N/A'}`);
+          
+          return obj;
+        });
+        
+        // Format dates as ISO strings
+        const formattedPricingList = plainPricingList.map(pricing => {
+          pricing.createdAt = toISOString(pricing.createdAt);
+          pricing.updatedAt = toISOString(pricing.updatedAt);
+          pricing.archivedAt = toISOString(pricing.archivedAt);
+          pricing.scheduledDeletionDate = toISOString(pricing.scheduledDeletionDate);
+          return pricing;
+        });
+        
+        console.log(`✅ Returning ${formattedPricingList.length} formatted pricing records`);
         
         return {
           success: true,
           message: 'Driver salary pricing retrieved successfully',
-          pricingList,
-          totalCount: pricingList.length
+          pricingList: formattedPricingList,
+          totalCount: formattedPricingList.length
         };
       } catch (error) {
-        console.error('Error getting driver salary pricing:', error);
+        console.error('❌ Error getting driver salary pricing:', error);
         return {
           success: false,
           message: 'Failed to retrieve driver salary pricing',
@@ -539,6 +671,7 @@ const resolvers = {
         pricing.isArchived = false;
         pricing.archivedAt = null;
         pricing.scheduledDeletionDate = null;
+        pricing.isActive = true; // Re-activate when restored
         
         await pricing.save();
         await pricing.populate('createdBy', 'firstName lastName email');

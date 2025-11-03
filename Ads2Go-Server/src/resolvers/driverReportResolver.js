@@ -249,26 +249,124 @@ const resolvers = {
         if (!report) {
           throw new Error('Report not found or access denied');
         }
+
+        // Check if already archived
+        if (report.isArchived) {
+          throw new Error('Report is already archived');
+        }
         
         // Only allow deletion if report is still PENDING
         if (report.status !== 'PENDING') {
           throw new Error('Can only delete pending reports');
         }
-        
-        await report.deleteOne();
+
+        console.log(`🗑️ Archiving driver report: ${id} - 30-day deferred deletion`);
+
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+        report.isArchived = true;
+        report.archivedAt = now;
+        report.scheduledDeletionDate = deletionDate;
+
+        await report.save();
+
+        console.log(`✅ Driver report ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
         
         return {
           success: true,
-          message: 'Report deleted successfully',
+          message: 'Report archived successfully. Scheduled for deletion in 30 days.',
           report: null
         };
       } catch (error) {
-        console.error('Error deleting driver report:', error);
+        console.error('Error archiving driver report:', error);
         return {
           success: false,
-          message: error.message || 'Failed to delete report',
+          message: error.message || 'Failed to archive report',
           report: null
         };
+      }
+    },
+
+    restoreDriverReport: async (_, { id }, { driver }) => {
+      checkDriverAuth(driver);
+      
+      try {
+        const report = await DriverReport.findOne({ _id: id, driverId: driver.driverId });
+        
+        if (!report) {
+          throw new Error('Report not found or access denied');
+        }
+
+        if (!report.isArchived) {
+          throw new Error('Report is not archived');
+        }
+
+        console.log(`✅ Restoring driver report: ${id}`);
+
+        report.isArchived = false;
+        report.archivedAt = null;
+        report.scheduledDeletionDate = null;
+
+        await report.save();
+
+        console.log(`✅ Driver report ${id} restored successfully`);
+        
+        return {
+          success: true,
+          message: 'Report restored successfully.',
+          report
+        };
+      } catch (error) {
+        console.error('Error restoring driver report:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to restore report',
+          report: null
+        };
+      }
+    },
+
+    deleteDriverReportAdmin: async (_, { id }, { admin, superAdmin }) => {
+      checkAdmin(admin || superAdmin);
+      
+      try {
+        const report = await DriverReport.findById(id);
+        
+        if (!report) {
+          throw new Error('Report not found');
+        }
+
+        // Check if already archived
+        if (report.isArchived) {
+          throw new Error('Report is already archived');
+        }
+
+        console.log(`🗑️ Admin archiving driver report: ${id} - 30-day deferred deletion`);
+
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+        report.isArchived = true;
+        report.archivedAt = now;
+        report.scheduledDeletionDate = deletionDate;
+
+        await report.save();
+
+        console.log(`✅ Driver report ${id} archived successfully by admin. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+        
+        return {
+          success: true,
+          message: 'Report archived successfully. Scheduled for deletion in 30 days.',
+          report: null
+        };
+      } catch (error) {
+        console.error('Error archiving driver report:', error);
+        throw new Error(error.message || 'Failed to archive report');
       }
     },
 

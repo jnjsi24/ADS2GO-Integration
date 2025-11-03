@@ -79,6 +79,12 @@ const Payment: React.FC<PaymentProps> = ({
     { value: "CASH", label: "Cash" },
   ];
 
+  // Helper function to convert payment code to readable label
+  const getPaymentLabel = (paymentCode: string) => {
+    const method = methods.find(m => m.value === paymentCode);
+    return method ? method.label : paymentCode || "N/A";
+  };
+
   const showError = (msg: string) => {
     addToast({
       type: 'error',
@@ -463,7 +469,7 @@ const Payment: React.FC<PaymentProps> = ({
                 <tr>
                   <td className="py-2 px-4 text-gray-600">Mode of Payment</td>
                   <td className="py-2 px-4 text-gray-800 font-medium">
-                    {paymentType || "N/A"}
+                    {getPaymentLabel(paymentType)}
                   </td>
                 </tr>
                 <tr>
@@ -610,7 +616,7 @@ const Payment: React.FC<PaymentProps> = ({
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Mode of Payment</span>
-                  <span className="text-gray-800 font-medium">{paymentType || "N/A"}</span>
+                  <span className="text-gray-800 font-medium">{getPaymentLabel(paymentType)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Ad Type</span>

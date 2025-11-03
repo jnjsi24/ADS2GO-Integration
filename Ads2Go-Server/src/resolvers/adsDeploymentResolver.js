@@ -163,6 +163,9 @@ const adsDeploymentResolvers = {
                 adFormat: '',
                 mediaFile: ''
               };
+            } else {
+              // slot.adId is null or undefined - set to empty string to match schema requirement
+              slot.adId = '';
             }
           }));
         }

@@ -104,7 +104,10 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           const isSelected = selectedDate && isSameDay(day, selectedDate);
           const isCurrentMonthDay = isCurrentMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
-          const isDisabled = minDate && day < minDate;
+          // Compare dates at midnight to properly handle minDate
+          const dayAtMidnight = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+          const minDateAtMidnight = minDate ? new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()) : null;
+          const isDisabled = minDate && dayAtMidnight < minDateAtMidnight;
           
           return (
             <button

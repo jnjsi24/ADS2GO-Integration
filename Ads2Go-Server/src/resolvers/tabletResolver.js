@@ -197,29 +197,45 @@ module.exports = {
           const Material = require('../models/Material');
           const MaterialUsageHistory = require('../models/MaterialUsageHistory');
           const material = await Material.findOne({ materialId: materialId });
-          if (material && !material.mountedAt) {
+          if (material) {
             const mountedDate = new Date();
-            material.mountedAt = mountedDate;
-            await material.save();
-            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected via GraphQL`);
+            let needsSave = false;
+            
+            // Set mountedAt if not already set
+            if (!material.mountedAt) {
+              material.mountedAt = mountedDate;
+              needsSave = true;
+              console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected via GraphQL`);
+            }
+            
+            // Clear dismountedAt when device reconnects
+            if (material.dismountedAt) {
+              material.dismountedAt = null;
+              needsSave = true;
+              console.log(`🔧 Auto-cleared dismountedAt date for material ${materialId} when device reconnected`);
+            }
+            
+            if (needsSave) {
+              await material.save();
 
-            // Also update usage history if there's an active driver
-            if (material.driverId) {
-              try {
-                const usageHistory = await MaterialUsageHistory.findOne({
-                  materialId: material._id,
-                  driverId: material.driverId,
-                  isActive: true
-                });
-                
-                if (usageHistory) {
-                  usageHistory.mountedAt = mountedDate;
-                  await usageHistory.save();
-                  console.log(`✅ Auto-synced mountedAt date to usage history for material ${materialId}, driver ${material.driverId}`);
+              // Also update usage history if there's an active driver
+              if (material.driverId) {
+                try {
+                  const usageHistory = await MaterialUsageHistory.findOne({
+                    materialId: material._id,
+                    driverId: material.driverId,
+                    isActive: true
+                  });
+                  
+                  if (usageHistory) {
+                    usageHistory.mountedAt = mountedDate;
+                    await usageHistory.save();
+                    console.log(`✅ Auto-synced mountedAt date to usage history for material ${materialId}, driver ${material.driverId}`);
+                  }
+                } catch (usageError) {
+                  console.error('Error syncing mountedAt to usage history:', usageError);
+                  // Don't fail the main operation
                 }
-              } catch (usageError) {
-                console.error('Error syncing mountedAt to usage history:', usageError);
-                // Don't fail the main operation
               }
             }
           }
@@ -548,6 +564,29 @@ module.exports = {
         );
 
         await tablet.save();
+
+        // ✅ NEW: Check if ALL slots are empty - if so, set dismountedAt
+        try {
+          const Material = require('../models/Material');
+          const material = await Material.findOne({ materialId: normalizedMaterialId });
+          
+          if (material) {
+            // Check if any slot still has a device registered
+            const hasAnyDevice = tablet.tablets.some(t => t.deviceId && t.deviceId !== '');
+            
+            if (!hasAnyDevice) {
+              // ALL slots are empty - mark as dismounted
+              if (material.mountedAt && !material.dismountedAt) {
+                material.dismountedAt = new Date();
+                await material.save();
+                console.log(`🔧 [Unregistration] Material ${normalizedMaterialId} marked as DISMOUNTED - all slots empty`);
+              }
+            }
+          }
+        } catch (mountCheckError) {
+          console.error('Error checking mounted status on unregister:', mountCheckError);
+          // Don't fail the unregister if mount check fails
+        }
 
         // ✅ FIX: Archive data before unregistering
         console.log(`📦 [Unregistration] Archiving data for ${oldDeviceId} before unregistration...`);

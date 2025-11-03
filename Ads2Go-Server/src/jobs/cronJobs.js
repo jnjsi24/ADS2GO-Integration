@@ -23,6 +23,10 @@ class CronJobs {
 
     console.log('🚀 Starting cron jobs...');
 
+    // Sync material slots on startup to fix availability data
+    const { syncMaterialSlots } = require('../utils/smartMaterialSelection');
+    syncMaterialSlots().catch(err => console.error('❌ Error syncing material slots on startup:', err));
+
     // Start the high-precision hours update service (30-second intervals)
     hoursUpdateService.start();
 

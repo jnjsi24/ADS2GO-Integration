@@ -80,6 +80,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [currentVideoPosition, setCurrentVideoPosition] = useState<number>(0); // Track current video position for drift detection
   const positionDriftCheckInterval = useRef<NodeJS.Timeout | null>(null); // Interval for periodic drift checks
   const videoRef = useRef<Video>(null);
+  const [isCompanyAdsOnlyMode, setIsCompanyAdsOnlyMode] = useState(false); // Track if in company-ads-only mode (after 8 hours)
 
   // Cache key for storing ads locally
   const getCacheKey = () => `ads_${materialId}_${slotNumber}`;
@@ -188,6 +189,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setUnlockCallback(handleUnlock);
       // Set up 8-hour stop callback
       playbackWebSocketService.setStop8HoursCallback(handleStop8Hours);
+      // Set up company ads only callback
+      playbackWebSocketService.setCompanyAdsOnlyCallback(handleCompanyAdsOnly);
       
       // Connect to WebSocket
       playbackWebSocketService.connect().then((connected) => {
@@ -236,6 +239,65 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       }
     };
   }, [isRegistered, slotNumber, lastSyncPosition, currentVideoPosition, lastSyncTime]);
+
+  // ✅ NEW: Periodic time check to lock at 12:00 AM (midnight)
+  useEffect(() => {
+    if (!isRegistered || isLocked) {
+      return; // Don't check if not registered or already locked
+    }
+
+    const checkMidnightLock = () => {
+      const now = new Date();
+      const currentHour = now.getHours(); // 0-23
+      
+      // Lock if current hour is 0 (12:00 AM - 12:59 AM)
+      if (currentHour === 0) {
+        console.log(`🔒 [Midnight Lock] Current time is ${currentHour}:00 - locking device`);
+        console.log(`⏰ [Midnight Lock] Locking ad player at midnight (12:00 AM)`);
+        
+        // Lock the screen
+        onLockStateChange?.(true);
+        
+        // Stop GPS tracking
+        adaptiveGPSService.stopTracking();
+        
+        // Stop ad playback
+        if (videoRef.current) {
+          videoRef.current.pauseAsync().catch(err => {
+            console.log('⏸️ [Midnight Lock] Video pause error (expected):', err.message);
+          });
+        }
+        
+        setIsPlaying(false);
+        setIsPaused(true);
+        
+        // Set device status to offline
+        tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 }).catch(err => {
+          console.error('❌ [Midnight Lock] Error updating device status:', err);
+        });
+        
+        // Show lock alert
+        Alert.alert(
+          '🔒 Ad Player Locked',
+          'The ad player is now locked until 8:00 AM.\n\nDrivers are not allowed to work between 12:00 AM - 7:59 AM.\n\nThank you for your service!',
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+        
+        console.log(`✅ [Midnight Lock] Device locked - will unlock at 8:00 AM`);
+      }
+    };
+
+    // Check immediately on mount
+    checkMidnightLock();
+
+    // Check every minute for midnight lock
+    const timeCheckInterval = setInterval(checkMidnightLock, 60000); // Check every 60 seconds
+
+    return () => {
+      clearInterval(timeCheckInterval);
+    };
+  }, [isRegistered, isLocked]);
 
   // Execute perfect synchronization
   const executePerfectSync = (message: any) => {
@@ -845,6 +907,46 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   };
 
+  // Handle company ads only mode command from server (when 8 hours reached)
+  const handleCompanyAdsOnly = async (message: any) => {
+    try {
+      console.log('🏢 [AdPlayer] Received company ads only mode command:', message);
+      console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
+      console.log(`🏢 Switching to company ads only mode - will lock at ${message.lockTime}`);
+      
+      // Enable company ads only mode
+      setIsCompanyAdsOnlyMode(true);
+      
+      // ✅ NEW: Stop ad playback tracking (hours and ad analytics)
+      console.log('⏸️ [AdPlayer] Stopping ad playback tracking - only location/GPS will be tracked');
+      
+      // Stop WebSocket playback updates (no more ad tracking)
+      playbackWebSocketService.stopPlaybackUpdates();
+      console.log('⏸️ [AdPlayer] WebSocket playback updates stopped');
+      
+      // Switch to company ad immediately (if currently showing user ad)
+      if (currentAdIndex >= 0 && companyAds.length > 0) {
+        console.log('🔄 [AdPlayer] Switching to company ad immediately');
+        setCurrentAdIndex(-1); // -1 indicates company ad
+        setCompanyAdRepeatIndex(0);
+      }
+      
+      // Show notification (non-blocking alert)
+      Alert.alert(
+        '🎉 8 Hours Completed!',
+        `Congratulations! You have completed your 8-hour daily requirement.\n\nTotal Hours: ${message.totalHours?.toFixed(2)} hours\n\nThe ad player will now show only company ads until ${message.lockTime}.\n\nNote: Hours and ad playback tracking have stopped. Only location tracking continues.\n\nThank you for your service!`,
+        [{ text: 'OK' }],
+        { cancelable: false }
+      );
+      
+      console.log('✅ [AdPlayer] Company ads only mode enabled - will continue playing company ads');
+      console.log('⏸️ [AdPlayer] Ad playback tracking stopped - location/GPS tracking continues');
+      console.log(`⏰ [AdPlayer] Device will lock at ${message.lockTime} due to time-based lock`);
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling company ads only mode:', error);
+    }
+  };
+
   // Sync to a specific ad from another slot
   const syncToAd = async (syncMessage: any) => {
     try {
@@ -921,6 +1023,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // ❌ REMOVED: Per-second playback updates (not needed for progress bar)
   // Helper function to send playback updates - DEPRECATED
   const sendPlaybackUpdate = (playbackData: any) => {
+    // ✅ NEW: Skip playback updates if in company-ads-only mode (after 8 hours)
+    if (isCompanyAdsOnlyMode) {
+      // Silent skip - no playback tracking in company-ads-only mode
+      return;
+    }
+    
     // No-op: Playback updates have been disabled
     return;
   };
@@ -928,6 +1036,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track ad playback
   const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
     try {
+      // ✅ NEW: Skip ad tracking if in company-ads-only mode (after 8 hours)
+      if (isCompanyAdsOnlyMode) {
+        console.log(`⏸️ [AdPlayer] Skipping ad tracking - company-ads-only mode (8 hours completed)`);
+        return;
+      }
+      
       // Slot 2 in mirror mode: NEVER send analytics
       if (slotNumber === 2 && masterConnected) {
         // Silent skip - Slot 2 is just mirroring
@@ -1819,50 +1933,34 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     return () => subscription?.remove();
   }, []);
 
-  // ✅ Automatic polling for new ads when no ads are available
+  // ✅ Initial ad fetch on mount (ads start/end at 8 AM via cron, no need for 5-min polling)
   useEffect(() => {
-    // Only poll if:
+    // Only fetch if:
     // 1. Device is registered
-    // 2. No ads available (ads.length === 0 and error is set, or just no ads)
-    // 3. Not currently loading
-    // 4. Device is online (not in offline mode)
+    // 2. Not currently loading
+    // 3. Device is online (not in offline mode)
     if (isRegistered === false || isRegistered === null) {
-      return; // Don't poll if not registered
-    }
-
-    if (ads.length > 0 && !error) {
-      return; // Don't poll if we already have ads
+      return; // Don't fetch if not registered
     }
 
     if (loading) {
-      return; // Don't poll while already fetching
+      return; // Don't fetch while already loading
     }
 
     if (isDeviceOffline) {
-      return; // Don't poll if device is offline
+      return; // Don't fetch if device is offline
     }
 
-    console.log('🔄 [AdPlayer] No ads available - starting automatic polling every 30 seconds...');
+    console.log('🔄 [AdPlayer] Fetching ads on mount...');
     
-    // Poll every 30 seconds for new ads
-    const pollingInterval = setInterval(() => {
-      // Double-check conditions before fetching
-      if (ads.length === 0 && !loading && !isDeviceOffline && isRegistered === true) {
-        console.log('🔄 [AdPlayer] Polling for new ads...');
-        fetchAds();
-        fetchCompanyAds(); // Also check for company ads
-      } else if (ads.length > 0) {
-        // Ads found, stop polling
-        console.log('✅ [AdPlayer] Ads found - stopping polling');
-        clearInterval(pollingInterval);
-      }
-    }, 30000); // Check every 30 seconds
-
-    return () => {
-      console.log('🧹 [AdPlayer] Cleaning up ad polling interval');
-      clearInterval(pollingInterval);
-    };
-  }, [isRegistered, ads.length, loading, error, isDeviceOffline, materialId, slotNumber]);
+    // Fetch ads once on mount
+    // Ads are scheduled via cron job which runs hourly, so no need for periodic polling
+    // Ads can only start at 8:00 AM Manila time when ad player opens
+    if (!loading && !isDeviceOffline && isRegistered === true) {
+      fetchAds();
+      fetchCompanyAds();
+    }
+  }, [isRegistered, loading, isDeviceOffline, materialId, slotNumber]);
 
   // Failover Detection for Slot 2: Monitor master connection
   useEffect(() => {
@@ -2006,6 +2104,37 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // Reset video started flag for next ad
       setVideoActuallyStarted(false);
+    
+    // ✅ NEW: If in company ads only mode (after 8 hours), only show company ads
+    if (isCompanyAdsOnlyMode) {
+      console.log('🏢 [Company Ads Only Mode] Only showing company ads');
+      if (companyAds.length > 0) {
+        // Cycle through company ads
+        const selectedCompanyAd = selectWeightedCompanyAd(companyAds);
+        if (selectedCompanyAd) {
+          setCurrentAdIndex(-1); // -1 indicates company ad
+          setCompanyAdRepeatIndex(0);
+          setTimeout(() => {
+            setIsTransitioning(false);
+            isHandlingVideoEnd.current = false;
+            console.log(`🏢 [Company Ads Only Mode] Next company ad: ${selectedCompanyAd.title}`);
+          }, 100);
+        } else {
+          console.log('⚠️ [Company Ads Only Mode] No company ads available');
+          setTimeout(() => {
+            setIsTransitioning(false);
+            isHandlingVideoEnd.current = false;
+          }, 100);
+        }
+      } else {
+        console.log('⚠️ [Company Ads Only Mode] No company ads available');
+        setTimeout(() => {
+          setIsTransitioning(false);
+          isHandlingVideoEnd.current = false;
+        }, 100);
+      }
+      return;
+    }
     
     // If no user ads available, loop the company ad
     if (ads.length === 0) {

@@ -101,6 +101,15 @@ class HoursUpdateService {
       const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
       
       if (hoursSinceLastUpdate > 0) {
+        // ✅ NEW: Stop tracking hours if 8 hours already completed (in company-ads-only mode)
+        if (device.currentSession.completedAt) {
+          console.log(`⏸️ [HoursUpdate] ${device.materialId} already completed 8 hours - skipping hours tracking (company-ads-only mode)`);
+          // Don't update hours - device is in company-ads-only mode
+          // GPS/location tracking still continues
+          await device.save();
+          return;
+        }
+        
         // Store previous hours to check if we crossed 8-hour threshold
         const previousHours = device.currentSession.totalHoursOnline || 0;
         
@@ -130,15 +139,15 @@ class HoursUpdateService {
         // ✅ FIX: Use centralized sync method
         syncHoursFromSession(device);
         
-        // ✅ AUTO-END SESSION AT 8 HOURS + STOP AD PLAYER
+        // ✅ NEW: SWITCH TO COMPANY ADS ONLY MODE AT 8 HOURS (instead of stopping)
         if (justReached8Hours && hasReached8Hours) {
-          console.log(`🎯 [HoursUpdate] ${device.materialId} reached ${targetHours} hours! Auto-ending session and stopping ad player...`);
+          console.log(`🎯 [HoursUpdate] ${device.materialId} reached ${targetHours} hours! Switching to company ads only mode...`);
           
           // ✅ Mark when 8 hours was completed (for 8 AM lock rule)
           device.currentSession.completedAt = new Date();
           console.log(`⏰ [HoursUpdate] Marked completion time for ${device.materialId}: ${device.currentSession.completedAt.toISOString()}`);
           
-          // Send notification BEFORE ending session
+          // Send notification
           const masterSlot = device.slots.find(slot => slot.slotNumber === 1 && slot.deviceId);
           const notificationDeviceId = masterSlot?.deviceId || device.slots.find(slot => slot.deviceId)?.deviceId;
           
@@ -149,17 +158,17 @@ class HoursUpdateService {
             );
           }
           
-          // ✅ NEW: Send STOP message to ad player and close connection
-          await this.stopAdPlayer(notificationDeviceId, device.materialId, device.currentSession.totalHoursOnline);
+          // ✅ NEW: Send companyAdsOnly message to ad player (keep connection open, continue playing)
+          await this.enableCompanyAdsOnlyMode(notificationDeviceId, device.materialId, device.currentSession.totalHoursOnline);
           
-          // Auto-end the session
-          await device.endDailySession();
-          console.log(`✅ [HoursUpdate] Session auto-ended for ${device.materialId} at ${device.currentSession.totalHoursOnline.toFixed(2)} hours`);
+          // NOTE: Session continues - device will lock at midnight (12:00 AM) instead
+          console.log(`✅ [HoursUpdate] Switched ${device.materialId} to company ads only mode at ${device.currentSession.totalHoursOnline.toFixed(2)} hours`);
+          console.log(`⏰ [HoursUpdate] Device will lock at 12:00 AM due to time-based lock`);
           
-          // Save to history (archiving is handled by endDailySession method)
+          // Save device state (session continues)
           await device.save();
           
-          return; // Exit early, session is now ended
+          // Don't exit early - continue tracking hours until midnight lock
         }
         
         // Save the device (if session hasn't ended)
@@ -174,11 +183,11 @@ class HoursUpdateService {
   }
 
   /**
-   * Stop ad player and close WebSocket connection when 8 hours is reached
+   * Enable company ads only mode when 8 hours is reached (keeps playing, only company ads)
    */
-  async stopAdPlayer(deviceId, materialId, totalHours) {
+  async enableCompanyAdsOnlyMode(deviceId, materialId, totalHours) {
     try {
-      console.log(`🛑 [HoursUpdate] Stopping ad player for device ${deviceId} (${totalHours.toFixed(2)} hours)`);
+      console.log(`🏢 [HoursUpdate] Enabling company ads only mode for device ${deviceId} (${totalHours.toFixed(2)} hours)`);
       
       // Get the device status service
       const deviceStatusService = require('./deviceStatusService');
@@ -187,34 +196,42 @@ class HoursUpdateService {
       const connection = deviceStatusService.activeConnections.get(deviceId);
       
       if (connection && connection.readyState === 1) { // 1 = OPEN
-        // Send STOP message to ad player
-        const stopMessage = {
-          type: 'stop8Hours',
+        // Send companyAdsOnly message to ad player (keep connection open)
+        const companyAdsOnlyMessage = {
+          type: 'companyAdsOnly',
           deviceId: deviceId,
           materialId: materialId,
-          message: 'You have completed your 8-hour daily requirement!',
+          message: 'You have completed your 8-hour daily requirement! Switching to company ads only.',
           totalHours: totalHours,
           completedAt: new Date().toISOString(),
-          unlockTime: '8:00 AM tomorrow'
+          lockTime: '12:00 AM (midnight)'
         };
         
-        connection.send(JSON.stringify(stopMessage));
-        console.log(`✅ [HoursUpdate] Sent STOP message to ad player ${deviceId}`);
+        connection.send(JSON.stringify(companyAdsOnlyMessage));
+        console.log(`✅ [HoursUpdate] Sent companyAdsOnly message to ad player ${deviceId}`);
+        console.log(`📺 [HoursUpdate] Device will continue playing company ads until midnight lock`);
         
-        // Wait a moment for the message to be sent, then close connection
-        setTimeout(() => {
-          try {
-            deviceStatusService.removeConnection(deviceId);
-            console.log(`✅ [HoursUpdate] Closed WebSocket connection for ${deviceId}`);
-          } catch (error) {
-            console.error(`❌ Error closing connection for ${deviceId}:`, error);
-          }
-        }, 1000); // 1 second delay to ensure message is sent
+        // NOTE: Keep WebSocket connection open - device will lock at midnight
       } else {
         console.log(`⚠️ [HoursUpdate] No active WebSocket connection found for device ${deviceId}`);
       }
     } catch (error) {
-      console.error(`❌ Error stopping ad player for device ${deviceId}:`, error);
+      console.error(`❌ Error enabling company ads only mode for device ${deviceId}:`, error);
+    }
+  }
+
+  /**
+   * Stop ad player and close WebSocket connection when 8 hours is reached
+   * NOTE: This method is kept for backward compatibility but is no longer used
+   * @deprecated Use enableCompanyAdsOnlyMode instead
+   */
+  async stopAdPlayer(deviceId, materialId, totalHours) {
+    try {
+      console.log(`🛑 [HoursUpdate] stopAdPlayer called (deprecated) for device ${deviceId}`);
+      // This method is deprecated - using enableCompanyAdsOnlyMode instead
+      await this.enableCompanyAdsOnlyMode(deviceId, materialId, totalHours);
+    } catch (error) {
+      console.error(`❌ Error in stopAdPlayer for device ${deviceId}:`, error);
     }
   }
 

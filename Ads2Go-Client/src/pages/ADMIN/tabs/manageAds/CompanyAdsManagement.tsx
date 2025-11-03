@@ -20,14 +20,17 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
-  Clock
+  Clock,
+  XCircle,
+  RotateCcw
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { 
   GET_COMPANY_ADS,
   CREATE_COMPANY_AD, 
   DELETE_COMPANY_AD, 
-  TOGGLE_COMPANY_AD_STATUS 
+  TOGGLE_COMPANY_AD_STATUS,
+  RESTORE_COMPANY_AD
 } from '../../../../graphql/admin';
 import { uploadFileToFirebase } from '../../../../utils/fileUpload';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -86,7 +89,7 @@ interface CreateCompanyAdInput {
 
 const CompanyAdsManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'scheduled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'scheduled' | 'archived'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -125,19 +128,25 @@ const CompanyAdsManagement: React.FC = () => {
   // GraphQL queries and mutations
   const { data, loading, error, refetch } = useQuery(GET_COMPANY_ADS);
   const [createCompanyAd] = useMutation(CREATE_COMPANY_AD);
-  const [deleteCompanyAd] = useMutation(DELETE_COMPANY_AD);
+  const [deleteCompanyAd] = useMutation(DELETE_COMPANY_AD, {
+    refetchQueries: [{ query: GET_COMPANY_ADS }]
+  });
   const [toggleStatus] = useMutation(TOGGLE_COMPANY_AD_STATUS);
+  const [restoreCompanyAd] = useMutation(RESTORE_COMPANY_AD, {
+    refetchQueries: [{ query: GET_COMPANY_ADS }]
+  });
 
   // Processing states for double-click prevention
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
 
   const companyAds: CompanyAd[] = data?.getAllCompanyAds || [];
 
-  const statusFilterOptions = ['All Status', 'Active', 'Inactive', 'Scheduled'];
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive', 'Scheduled', 'Archived'];
 
   const handleStatusFilterChange = (status: string) => {
     const normalizedStatus = status.toLowerCase();
@@ -149,21 +158,35 @@ const CompanyAdsManagement: React.FC = () => {
       setStatusFilter('inactive');
     } else if (normalizedStatus === 'scheduled') {
       setStatusFilter('scheduled');
+    } else if (normalizedStatus === 'archived') {
+      setStatusFilter('archived');
     }
     setShowStatusDropdown(false);
   };
 
   // Filter ads based on search and status
+  // Note: Archived ads are separate from inactive ads
   const filteredAds = companyAds.filter(ad => {
     const matchesSearch = ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          ad.description?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'active' && ad.isActive) ||
-                         (statusFilter === 'inactive' && !ad.isActive) ||
-                         (statusFilter === 'scheduled' && ad.isScheduled);
+    // Separate archived from inactive
+    const isArchived = ad.isArchived === true;
+    const isInactive = !ad.isActive && !isArchived; // Inactive but NOT archived
     
-    console.log(`Filtering ads: statusFilter=${statusFilter}, ad.isActive=${ad.isActive}, ad.isScheduled=${ad.isScheduled}, matchesStatus=${matchesStatus}, matchesSearch=${matchesSearch}`);
+    let matchesStatus = false;
+    if (statusFilter === 'all') {
+      matchesStatus = !isArchived; // Exclude archived from "All Status"
+    } else if (statusFilter === 'active') {
+      matchesStatus = ad.isActive && !isArchived;
+    } else if (statusFilter === 'inactive') {
+      matchesStatus = isInactive; // Only inactive, NOT archived
+    } else if (statusFilter === 'scheduled') {
+      matchesStatus = ad.isScheduled && !isArchived;
+    } else if (statusFilter === 'archived') {
+      matchesStatus = isArchived; // Only archived ads
+    }
+    
     return matchesSearch && matchesStatus;
   });
 
@@ -342,7 +365,7 @@ const CompanyAdsManagement: React.FC = () => {
     
     try {
       await deleteCompanyAd({ variables: { id: adToDelete } });
-      refetch();
+      // refetchQueries in mutation options will automatically refetch GET_COMPANY_ADS
     } catch (error) {
       console.error('Error deleting company ad:', error);
     } finally {
@@ -373,6 +396,25 @@ const CompanyAdsManagement: React.FC = () => {
       console.error('Error toggling status:', error);
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  // Handle restore archived ad
+  const handleRestore = async (id: string) => {
+    // Prevent multiple clicks
+    if (isRestoring) {
+      return;
+    }
+    
+    setIsRestoring(true);
+    
+    try {
+      await restoreCompanyAd({ variables: { id } });
+      // refetchQueries in mutation options will automatically refetch GET_COMPANY_ADS
+    } catch (error) {
+      console.error('Error restoring company ad:', error);
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -517,7 +559,7 @@ const CompanyAdsManagement: React.FC = () => {
             <div className="p-2 bg-blue-100 rounded-full">
               <FileVideo className="h-5 w-5 text-blue-600" />
             </div>
-            <p className="text-sm font-medium text-gray-600">Total Ads</p>
+            <p className="text-sm font-medium text-gray-600">Total Company Advertisements</p>
           </div>
           <div className="pl-10 mt-1">
             <p className="text-2xl font-semibold text-gray-900">{companyAds.length}</p>
@@ -540,33 +582,16 @@ const CompanyAdsManagement: React.FC = () => {
         </div>
 
         <div className="bg-white p-4 rounded-md shadow-md">
-          {/* Total Plays */}
+          {/* Inactive */}
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-purple-100 rounded-full">
-              <BarChart3 className="h-5 w-5 text-purple-600" />
+            <div className="p-2 bg-gray-100 rounded-full">
+              <XCircle className="h-5 w-5 text-gray-600" />
             </div>
-            <p className="text-sm font-medium text-gray-600">Total Plays</p>
+            <p className="text-sm font-medium text-gray-600">Inactive</p>
           </div>
           <div className="pl-10 mt-1">
             <p className="text-2xl font-semibold text-gray-900">
-              {companyAds.reduce((sum, ad) => sum + (ad.playCount || 0), 0)}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-md shadow-md">
-          {/* Avg Duration */}
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-orange-100 rounded-full">
-              <Clock className="h-5 w-5 text-orange-600" />
-            </div>
-            <p className="text-sm font-medium text-gray-600">Avg Duration</p>
-          </div>
-          <div className="pl-10 mt-1">
-            <p className="text-2xl font-semibold text-gray-900">
-              {companyAds.length > 0 
-                ? formatDuration(Math.round(companyAds.reduce((sum, ad) => sum + ad.duration, 0) / companyAds.length))
-                : '0:00'}
+              {companyAds.filter(ad => !ad.isActive).length}
             </p>
           </div>
         </div>
@@ -662,40 +687,62 @@ const CompanyAdsManagement: React.FC = () => {
               <div className="flex justify-between items-start mb-2">
                 <h4 className="font-semibold text-gray-900 truncate">{ad.title}</h4>
                 <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => handleToggleStatus(ad.id)}
-                    disabled={togglingId === ad.id}
-                    className={`p-1 rounded transition-colors ${
-                      togglingId === ad.id
-                        ? 'cursor-not-allowed opacity-50'
-                        : 'hover:bg-gray-100'
-                    }`}
-                    title={togglingId === ad.id ? 'Processing...' : (ad.isActive ? 'Deactivate' : 'Activate')}
-                  >
-                    {togglingId === ad.id ? (
-                      <div className="w-4 h-4 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
-                    ) : ad.isActive ? (
-                      <Pause className="h-4 w-4 text-orange-600" />
-                    ) : (
-                      <Play className="h-4 w-4 text-green-600" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(ad.id)}
-                    disabled={isDeleting}
-                    className={`p-1 rounded transition-colors ${
-                      isDeleting
-                        ? 'cursor-not-allowed opacity-50'
-                        : 'hover:bg-gray-100'
-                    }`}
-                    title={isDeleting ? 'Processing...' : 'Delete'}
-                  >
-                    {isDeleting ? (
-                      <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full" />
-                    ) : (
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    )}
-                  </button>
+                  {/* Show Restore button only for archived ads */}
+                  {ad.isArchived ? (
+                    <button
+                      onClick={() => handleRestore(ad.id)}
+                      disabled={isRestoring}
+                      className={`p-1 rounded transition-colors ${
+                        isRestoring
+                          ? 'cursor-not-allowed opacity-50'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      title={isRestoring ? 'Processing...' : 'Restore'}
+                    >
+                      {isRestoring ? (
+                        <div className="w-4 h-4 animate-spin border-2 border-blue-600 border-t-transparent rounded-full" />
+                      ) : (
+                        <RotateCcw className="h-4 w-4 text-blue-600" />
+                      )}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleToggleStatus(ad.id)}
+                        disabled={togglingId === ad.id}
+                        className={`p-1 rounded transition-colors ${
+                          togglingId === ad.id
+                            ? 'cursor-not-allowed opacity-50'
+                            : 'hover:bg-gray-100'
+                        }`}
+                        title={togglingId === ad.id ? 'Processing...' : (ad.isActive ? 'Deactivate' : 'Activate')}
+                      >
+                        {togglingId === ad.id ? (
+                          <div className="w-4 h-4 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                        ) : ad.isActive ? (
+                          <Pause className="h-4 w-4 text-orange-600" />
+                        ) : (
+                          <Play className="h-4 w-4 text-green-600" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(ad.id)}
+                        disabled={isDeleting}
+                        className={`p-1 rounded transition-colors ${
+                          isDeleting
+                            ? 'cursor-not-allowed opacity-50'
+                            : 'hover:bg-gray-100'
+                        }`}
+                        title={isDeleting ? 'Processing...' : 'Delete'}
+                      >
+                        {isDeleting ? (
+                          <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -735,6 +782,15 @@ const CompanyAdsManagement: React.FC = () => {
                   <span className="font-medium">Created:</span>
                   <span>{formatDate(ad.createdAt)}</span>
                 </div>
+                {ad.isArchived && ad.scheduledDeletionDate && (
+                  <div className="flex items-center space-x-2 text-xs text-red-600 font-medium mt-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span className="font-medium">Deletion:</span>
+                    <span>{formatDate(ad.scheduledDeletionDate)}</span>
+                  </div>
+                )}
               </div>
 
               {/* Scheduling Info */}
