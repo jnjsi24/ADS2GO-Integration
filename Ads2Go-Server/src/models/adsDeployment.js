@@ -141,6 +141,20 @@ const AdsDeploymentSchema = new mongoose.Schema({
   removalReason: {
     type: String,
     default: null
+  },
+  
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 
@@ -152,6 +166,8 @@ AdsDeploymentSchema.index({ materialId: 1 });
 AdsDeploymentSchema.index({ 'lcdSlots.slotNumber': 1, materialId: 1 });
 AdsDeploymentSchema.index({ 'lcdSlots.userId': 1 });
 AdsDeploymentSchema.index({ materialId: 1, userId: 1 });
+AdsDeploymentSchema.index({ isArchived: 1 }); // Archive filter for queries
+AdsDeploymentSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Generate unique deployment ID before saving
 AdsDeploymentSchema.pre('save', function(next) {
@@ -167,13 +183,7 @@ AdsDeploymentSchema.statics.getLCDDeployments = async function(materialId) {
     materialId,
     lcdSlots: { $exists: true, $ne: [] }
   })
-  .populate({
-    path: 'lcdSlots.adId',
-    populate: {
-      path: 'planId',
-      model: 'AdsPlan'
-    }
-  })
+  .populate('lcdSlots.adId')
   .populate('driverId');
 
   return deployment ? deployment.lcdSlots : [];

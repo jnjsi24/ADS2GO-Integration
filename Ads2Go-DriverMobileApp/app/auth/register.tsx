@@ -62,8 +62,10 @@ const RegisterForm = () => {
   const [preferredMaterialType, setPreferredMaterialType] = useState<string[]>([]);
   const [profilePicture, setProfilePicture] = useState<any>(null);
   const [vehiclePhoto, setVehiclePhoto] = useState<any>(null);
-  const [licensePhoto, setLicensePhoto] = useState<any>(null);
-  const [orCrPhoto, setOrCrPhoto] = useState<any>(null);
+  const [licensePhotoFront, setLicensePhotoFront] = useState<any>(null);
+  const [licensePhotoBack, setLicensePhotoBack] = useState<any>(null);
+  const [orPhoto, setOrPhoto] = useState<any>(null);
+  const [crPhoto, setCrPhoto] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -249,6 +251,22 @@ const RegisterForm = () => {
 
       // Document validation is optional, so we don't block submission
       case 3:
+        if (!licensePhotoFront) {
+          Alert.alert('Validation Error', 'License Front image is required.');
+          return false;
+        }
+        if (!licensePhotoBack) {
+          Alert.alert('Validation Error', 'License Back image is required.');
+          return false;
+        }
+        if (!orPhoto) {
+          Alert.alert('Validation Error', 'OR (Official Receipt) image is required.');
+          return false;
+        }
+        if (!crPhoto) {
+          Alert.alert('Validation Error', 'CR (Certificate of Registration) image is required.');
+          return false;
+        }
         return true;
 
       default:
@@ -295,8 +313,10 @@ const RegisterForm = () => {
         preferredMaterialType: preferredMaterialType,
         profilePicture: null,
         vehiclePhoto: null,
-        licensePicture: null,
-        orCrPicture: null,
+        licenseFront: null,
+        licenseBack: null,
+        orPicture: null,
+        crPicture: null,
       };
 
       const operations = {
@@ -317,8 +337,10 @@ const RegisterForm = () => {
             $preferredMaterialType: [MaterialTypeEnum!]!,
             $profilePicture: Upload,
             $vehiclePhoto: Upload,
-            $licensePicture: Upload,
-            $orCrPicture: Upload
+            $licenseFront: Upload,
+            $licenseBack: Upload,
+            $orPicture: Upload,
+            $crPicture: Upload
           ) {
             createDriver(input: {
               firstName: $firstName,
@@ -336,8 +358,10 @@ const RegisterForm = () => {
               preferredMaterialType: $preferredMaterialType,
               profilePicture: $profilePicture,
               vehiclePhoto: $vehiclePhoto,
-              licensePicture: $licensePicture,
-              orCrPicture: $orCrPicture
+              licenseFront: $licenseFront,
+              licenseBack: $licenseBack,
+              orPicture: $orPicture,
+              crPicture: $crPicture
             }) {
               success
               message
@@ -362,8 +386,10 @@ const RegisterForm = () => {
       [
         { file: profilePicture, varName: 'profilePicture' },
         { file: vehiclePhoto, varName: 'vehiclePhoto' },
-        { file: licensePhoto, varName: 'licensePicture' },
-        { file: orCrPhoto, varName: 'orCrPicture' },
+        { file: licensePhotoFront, varName: 'licenseFront' },
+        { file: licensePhotoBack, varName: 'licenseBack' },
+        { file: orPhoto, varName: 'orPicture' },
+        { file: crPhoto, varName: 'crPicture' },
       ].forEach(({ file, varName }) => {
         if (file) {
           fileIndex++;
@@ -726,8 +752,10 @@ const RegisterForm = () => {
             
             {renderImagePicker('Profile Picture', profilePicture, () => pickImage(setProfilePicture))}
             {renderImagePicker('Vehicle Photo', vehiclePhoto, () => pickImage(setVehiclePhoto), true)}
-            {renderImagePicker('License Photo', licensePhoto, () => pickImage(setLicensePhoto), true)}
-            {renderImagePicker('OR/CR Photo', orCrPhoto, () => pickImage(setOrCrPhoto), true)}
+            {renderImagePicker('License Front', licensePhotoFront, () => pickImage(setLicensePhotoFront), true)}
+            {renderImagePicker('License Back', licensePhotoBack, () => pickImage(setLicensePhotoBack), true)}
+            {renderImagePicker('OR (Official Receipt)', orPhoto, () => pickImage(setOrPhoto), true)}
+            {renderImagePicker('CR (Certificate of Registration)', crPhoto, () => pickImage(setCrPhoto), true)}
 
             <View style={styles.formButtonContainer}>
                 {currentStep > 0 && (
@@ -781,8 +809,10 @@ const RegisterForm = () => {
               <Text style={styles.reviewSectionTitle}>Uploaded Documents</Text>
               <Text style={styles.reviewItem}>Profile Picture: {profilePicture ? '✓' : '✗'}</Text>
               <Text style={styles.reviewItem}>Vehicle Photo: {vehiclePhoto ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>License Photo: {licensePhoto ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>OR/CR Photo: {orCrPhoto ? '✓' : '✗'}</Text>
+              <Text style={styles.reviewItem}>License Front: {licensePhotoFront ? '✓' : '✗'}</Text>
+              <Text style={styles.reviewItem}>License Back: {licensePhotoBack ? '✓' : '✗'}</Text>
+              <Text style={styles.reviewItem}>OR: {orPhoto ? '✓' : '✗'}</Text>
+              <Text style={styles.reviewItem}>CR: {crPhoto ? '✓' : '✗'}</Text>
             </View>
 
             <View style={styles.formButtonContainer}>

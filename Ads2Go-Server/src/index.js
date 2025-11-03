@@ -28,9 +28,8 @@ const adTypeDefs = require('./schema/adSchema');
 const driverTypeDefs = require('./schema/driverSchema');
 const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
-const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const pricingConfigTypeDefs = require('./schema/pricingConfigSchema');
-const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
+const globalPricingMultipliersTypeDefs = require('./schema/globalPricingMultipliersSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
@@ -51,9 +50,8 @@ const adResolvers = require('./resolvers/adResolver');
 const driverResolvers = require('./resolvers/driverResolver');
 const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
-const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const pricingConfigResolvers = require('./resolvers/pricingConfigResolver');
-const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
+const globalPricingMultipliersResolvers = require('./resolvers/globalPricingMultipliersResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
@@ -144,9 +142,8 @@ const server = new ApolloServer({
       driverTypeDefs,
       paymentTypeDefs,
       materialTypeDefs,
-      adsPlanTypeDefs,
       pricingConfigTypeDefs,
-      flexibleAdTypeDefs,
+      globalPricingMultipliersTypeDefs,
       materialTrackingTypeDefs,
       tabletTypeDefs,
       adsDeploymentTypeDefs,
@@ -178,9 +175,8 @@ const server = new ApolloServer({
     driverResolvers,
     paymentResolvers,
     materialResolver,
-    adsPlanResolvers,
     pricingConfigResolvers,
-    flexibleAdResolvers,
+    globalPricingMultipliersResolvers,
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
@@ -312,7 +308,8 @@ app.use('/api/analyzeGPS', require('./routes/analyzeGPS'));
 app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for offline devices showing hours
   
   // GraphQL file uploads middleware (must come after regular upload route)
-  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
+  // Allow up to 8 concurrent file uploads to support driver registration (profile, vehicle, license front/back, OR, CR)
+  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 8 }));
 
   // GraphQL endpoint with combined context
   app.use(

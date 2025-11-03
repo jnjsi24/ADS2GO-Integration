@@ -22,16 +22,6 @@ export const UPDATE_AD = gql`
       durationDays
       materialType
       category
-      planId {
-        id
-        name
-        durationDays
-        playsPerDayPerDevice
-        numberOfDevices
-        adLengthSeconds
-        pricePerPlay
-        totalPrice
-      }
       materialId {
         id
         materialId

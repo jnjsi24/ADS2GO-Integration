@@ -25,6 +25,9 @@ export const GET_ALL_ADMINS = gql`
         contactNumber
         profilePicture
         createdAt
+        isArchived
+        archivedAt
+        scheduledDeletionDate
       }
     }
   }
@@ -44,6 +47,9 @@ export interface Admin {
   contactNumber?: string;
   profilePicture?: string;
   createdAt: string | number;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 export interface GetAllAdminsResponse {

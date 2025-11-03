@@ -12,12 +12,7 @@ const PaymentSchema = new mongoose.Schema(
       required: true,
       ref: 'Ad',
     },
-    // ❌ ADDED: The planID field (optional for flexible ads)
-    planID: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: false, // Made optional to support flexible ads
-      ref: 'AdsPlan',
-    },
+    // Removed planID field - no longer using AdsPlan
     paymentType: {
       type: String,
       required: true,
@@ -40,9 +35,27 @@ const PaymentSchema = new mongoose.Schema(
       enum: ['PENDING', 'PAID', 'FAILED'],
       default: 'PENDING',
     },
+    
+    // Soft delete / Archive fields (30-day deferred deletion)
+    isArchived: {
+      type: Boolean,
+      default: false
+    },
+    archivedAt: {
+      type: Date,
+      default: null
+    },
+    scheduledDeletionDate: {
+      type: Date,
+      default: null
+    }
   },
   { timestamps: true }
 );
+
+// Indexes for archive functionality
+PaymentSchema.index({ isArchived: 1 }); // Archive filter for queries
+PaymentSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // 🔹 Auto-activate Ad after payment is PAID
 // Note: This hook is disabled during transactions to prevent conflicts

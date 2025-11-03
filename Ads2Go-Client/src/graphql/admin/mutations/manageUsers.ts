@@ -8,3 +8,12 @@ export const DELETE_USER = gql`
     }
   }
 `;
+
+export const RESTORE_USER = gql`
+  mutation RestoreUser($id: ID!) {
+    restoreUser(id: $id) {
+      success
+      message
+    }
+  }
+`;

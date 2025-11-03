@@ -17,13 +17,60 @@ const adTypeDefs = gql`
     NON_DIGITAL
   }
 
+  type FlexiblePricingCalculation {
+    materialType: String!
+    vehicleType: String!
+    category: String!
+    durationDays: Int!
+    adLengthSeconds: Int!
+    numberOfDevices: Int!
+    pricePerPlay: Float!
+    playsPerDayPerDevice: Int!
+    totalPlaysPerDay: Int!
+    dailyRevenue: Float!
+    totalPrice: Float!
+    availableDevices: Int!
+    devicesWithDriver: Int!
+    devicesMounted: Int!
+    minAdLengthSeconds: Int!
+    maxAdLengthSeconds: Int!
+  }
+
+  type FieldCombination {
+    id: ID!
+    materialType: String!
+    vehicleType: String!
+    category: String!
+    minAdLengthSeconds: Int!
+    maxAdLengthSeconds: Int!
+    isActive: Boolean!
+  }
+
+  input FlexibleAdInput {
+    title: String!
+    description: String!
+    website: String
+    materialType: String!
+    vehicleType: String!
+    category: String!
+    durationDays: Int!
+    adLengthSeconds: Int!
+    numberOfDevices: Int!
+    adType: String!
+    adFormat: String!
+    status: String!
+    startTime: String!
+    endTime: String!
+    mediaFile: String!
+    price: Float
+  }
+
   type Ad {
     id: ID!                
     userId: User!          
     driverId: ID
     materialId: [Material!]   # Array of materials where this ad is deployed
     targetDevices: [Material!]  # Array of devices where this ad should be deployed
-    planId: AdsPlan        
     title: String!
     description: String
     website: String        # Optional advertiser website
@@ -63,7 +110,6 @@ const adTypeDefs = gql`
   input CreateAdInput {
     driverId: ID
     materialId: [ID!]!
-    planId: ID!
     title: String!
     description: String
     website: String         # Optional advertiser website
@@ -82,7 +128,6 @@ const adTypeDefs = gql`
     adFormat: String
     mediaFile: String
     materialId: [ID]
-    planId: ID
     status: AdStatus
     startTime: String      # update start time, auto-adjusts endTime
     adType: AdType
@@ -101,12 +146,23 @@ const adTypeDefs = gql`
     getAdById(id: ID!): Ad
     getAdsByUser(userId: ID!): [Ad!]!
     getMyAds: [Ad!]!
+    getFlexibleFieldCombinations: [FieldCombination!]!
+    calculateFlexiblePricing(
+      materialType: String!
+      vehicleType: String!
+      category: String!
+      durationDays: Int!
+      adLengthSeconds: Int!
+      numberOfDevices: Int!
+    ): FlexiblePricingCalculation!
   }
 
   type Mutation {
-    createAd(input: CreateAdInput!): Ad!
+    createAd(input: CreateAdInput!): Ad! # Deprecated - not used, kept for schema compatibility
+    createFlexibleAd(input: FlexibleAdInput!): Ad!
     updateAd(id: ID!, input: UpdateAdInput!): Ad!
     deleteAd(id: ID!): Boolean!
+    restoreAd(id: ID!): Boolean!
   }
 `;
 

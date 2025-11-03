@@ -140,11 +140,11 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {[
           { 
-            label: "Total Drivers", 
-            value: stats?.totalDrivers || 0, 
-            change: "Active drivers", 
-            color: "green", 
-            icon: "LifeBuoy" 
+            label: "Total Admins", 
+            value: stats?.totalAdmins || 0, 
+            change: "All admins", 
+            color: "purple", 
+            icon: "Shield" 
           },
           { 
             label: "Total Ads", 
@@ -154,18 +154,18 @@ const Dashboard = () => {
             icon: "Megaphone" 
           },
           { 
+            label: "Total Drivers", 
+            value: stats?.totalDrivers || 0, 
+            change: "Active drivers", 
+            color: "green", 
+            icon: "LifeBuoy" 
+          },
+          { 
             label: "Total Users", 
             value: stats?.totalUsers || 0, 
             change: "Registered users", 
             color: "yellow", 
             icon: "Users" 
-          },
-          { 
-            label: "Total Plans", 
-            value: stats?.totalPlans || 0, 
-            change: "Available plans", 
-            color: "purple", 
-            icon: "ClipboardList" 
           },
         ].map((stat, i) => {
           const Icon =
@@ -173,7 +173,7 @@ const Dashboard = () => {
               LifeBuoy: require("lucide-react").LifeBuoy,
               Megaphone: require("lucide-react").Megaphone,
               Users: require("lucide-react").Users,
-              ClipboardList: require("lucide-react").ClipboardList,
+              Shield: require("lucide-react").Shield,
             }[stat.icon];
 
           return (
@@ -269,15 +269,15 @@ const Dashboard = () => {
         </div>
 
         {/* Ads Analytics */}
-        <div className="bg-white p-6 rounded-md shadow-md">
+        <Link
+          to="/sadmin-analytics?tab=advertisements"
+          className="bg-white p-6 rounded-md shadow-md block cursor-pointer hover:shadow-lg transition-shadow"
+        >
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-800">Ads Analytics</h3>
-            <Link
-              to="/sadmin-analytics?tab=ads"
-              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
-            >
+            <h3 className="text-lg font-bold text-gray-800">Advertisements Analytics</h3>
+            <div className="text-sm flex font-semibold items-center hover:text-black transition-colors">
               <ArrowRight className="h-4 w-4 ml-1" />
-            </Link>
+            </div>
           </div>
 
           <div className="flex items-end justify-between space-x-3 h-48 mt-4">
@@ -300,7 +300,7 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );

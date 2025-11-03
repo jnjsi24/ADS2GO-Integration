@@ -33,6 +33,10 @@ const companyAdTypeDefs = gql`
     scheduleType: ScheduleType!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input CreateCompanyAdInput {
@@ -80,6 +84,7 @@ const companyAdTypeDefs = gql`
     createCompanyAd(input: CreateCompanyAdInput!): CompanyAd!
     updateCompanyAd(id: ID!, input: UpdateCompanyAdInput!): CompanyAd!
     deleteCompanyAd(id: ID!): Boolean!
+    restoreCompanyAd(id: ID!): Boolean!
     toggleCompanyAdStatus(id: ID!): CompanyAd!
     incrementCompanyAdPlayCount(id: ID!): CompanyAd!
   }

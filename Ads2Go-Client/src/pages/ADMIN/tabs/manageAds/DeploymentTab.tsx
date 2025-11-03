@@ -55,7 +55,6 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     },
     onError: (error) => {
       console.error('Error updating LCD slot:', error);
-      alert(`Error updating LCD slot: ${error.message}`);
     }
   });
 
@@ -65,7 +64,6 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     },
     onError: (error) => {
       console.error('Error removing ads from LCD:', error);
-      alert(`Error removing ads: ${error.message}`);
     }
   });
 

@@ -1,6 +1,5 @@
 const MaterialAvailability = require('../models/MaterialAvailability');
 const Material = require('../models/Material');
-const AdsPlan = require('../models/AdsPlan');
 const Ad = require('../models/Ad');
 
 class MaterialAvailabilityService {
@@ -57,90 +56,17 @@ class MaterialAvailabilityService {
   }
   
   /**
-   * Validate if a plan can be used (has available materials)
+   * Removed validatePlanAvailability - no longer using AdsPlan
    */
   static async validatePlanAvailability(planId, desiredStartDate) {
-    try {
-      const plan = await AdsPlan.findById(planId).populate('materials');
-      if (!plan) {
-        throw new Error('Plan not found');
-      }
-      
-      const materialIds = plan.materials.map(m => m._id);
-      const availabilities = await this.getMaterialsAvailability(materialIds);
-      
-      // Check if any materials are available
-      const availableMaterials = availabilities.filter(avail => avail.canAcceptAd);
-      const totalAvailableSlots = availabilities.reduce((sum, avail) => sum + avail.availableSlots, 0);
-      
-      return {
-        canCreate: availableMaterials.length > 0,
-        plan,
-        materialAvailabilities: availabilities,
-        totalAvailableSlots,
-        availableMaterialsCount: availableMaterials.length,
-        nextAvailableDate: availabilities.length > 0 ? 
-          Math.min(...availabilities.map(avail => 
-            avail.nextAvailableDate ? new Date(avail.nextAvailableDate).getTime() : Infinity
-          )) : null
-      };
-    } catch (error) {
-      console.error('Error validating plan availability:', error);
-      throw error;
-    }
+    throw new Error('AdsPlan functionality has been removed');
   }
   
   /**
-   * Assign ad to materials based on plan
+   * Removed assignAdToMaterials - no longer using AdsPlan
    */
   static async assignAdToMaterials(adId, planId, startTime, endTime) {
-    try {
-      const plan = await AdsPlan.findById(planId).populate('materials');
-      if (!plan) {
-        throw new Error('Plan not found');
-      }
-      
-      const materialIds = plan.materials.map(m => m._id);
-      const assignments = [];
-      
-      for (const materialId of materialIds) {
-        // Initialize availability if not exists
-        let availability = await MaterialAvailability.findOne({ materialId });
-        if (!availability) {
-          availability = await this.initializeMaterialAvailability(materialId);
-        }
-        
-        // Check if material can accept the ad
-        if (availability.canAcceptAd(startTime, endTime)) {
-          availability.addAd(adId, startTime, endTime);
-          await availability.save();
-          
-          assignments.push({
-            materialId,
-            success: true,
-            slotNumber: availability.currentAds.find(ad => 
-              ad.adId.toString() === adId.toString()
-            )?.slotNumber
-          });
-        } else {
-          assignments.push({
-            materialId,
-            success: false,
-            reason: availability.availableSlots <= 0 ? 'No available slots' : 'Time conflict'
-          });
-        }
-      }
-      
-      return {
-        adId,
-        planId,
-        assignments,
-        success: assignments.some(a => a.success)
-      };
-    } catch (error) {
-      console.error('Error assigning ad to materials:', error);
-      throw error;
-    }
+    throw new Error('AdsPlan functionality has been removed');
   }
   
   /**
@@ -165,31 +91,10 @@ class MaterialAvailabilityService {
   }
   
   /**
-   * Get next available slots for a plan
+   * Removed getNextAvailableSlots - no longer using AdsPlan
    */
   static async getNextAvailableSlots(planId) {
-    try {
-      const plan = await AdsPlan.findById(planId).populate('materials');
-      if (!plan) {
-        throw new Error('Plan not found');
-      }
-      
-      const materialIds = plan.materials.map(m => m._id);
-      const availabilities = await this.getMaterialsAvailability(materialIds);
-      
-      const nextAvailableSlots = availabilities
-        .filter(avail => avail.availableSlots > 0)
-        .sort((a, b) => new Date(a.nextAvailableDate) - new Date(b.nextAvailableDate));
-      
-      return {
-        plan,
-        nextAvailableSlots,
-        totalAvailableSlots: availabilities.reduce((sum, avail) => sum + avail.availableSlots, 0)
-      };
-    } catch (error) {
-      console.error('Error getting next available slots:', error);
-      throw error;
-    }
+    throw new Error('AdsPlan functionality has been removed');
   }
   
   /**
@@ -201,8 +106,9 @@ class MaterialAvailabilityService {
       if (!ad) return { success: false, message: 'Ad not found' };
       
       if (newStatus === 'ACTIVE' && ad.status !== 'ACTIVE') {
-        // Ad is being activated, assign to materials
-        return await this.assignAdToMaterials(adId, ad.planId, ad.startTime, ad.endTime);
+        // Ad is being activated - material assignment is handled by ad deployment service
+        // Removed planId reference - no longer using AdsPlan
+        return { success: true, message: 'Ad activation handled by deployment service' };
       } else if (newStatus === 'INACTIVE' && ad.status === 'ACTIVE') {
         // Ad is being deactivated, remove from materials
         return await this.removeAdFromMaterials(adId);

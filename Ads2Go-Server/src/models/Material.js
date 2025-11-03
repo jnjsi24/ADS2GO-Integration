@@ -53,7 +53,6 @@ const MaterialSchema = new mongoose.Schema({
   },
   driverId: {
     type: String,   // DRV-001, not ObjectId
-    default: null,
     index: true,
     sparse: true,
   },
@@ -82,6 +81,19 @@ const MaterialSchema = new mongoose.Schema({
     default: null
   },
   nextInspectionDue: {
+    type: Date,
+    default: null
+  },
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
     type: Date,
     default: null
   }
@@ -166,9 +178,12 @@ MaterialSchema.index(
   { driverId: 1 },
   { 
     unique: true, 
-    partialFilterExpression: { driverId: { $exists: true } },
+    // Ensure uniqueness only when driverId has a non-null string value
+    partialFilterExpression: { driverId: { $exists: true, $type: 'string' } },
     name: 'driverId_unique_when_set'
   }
 );
+MaterialSchema.index({ isArchived: 1 }); // Archive filter for queries
+MaterialSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 module.exports = mongoose.models.Material || mongoose.model('Material', MaterialSchema);

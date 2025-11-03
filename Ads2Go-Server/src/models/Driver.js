@@ -82,13 +82,21 @@ const DriverSchema = new mongoose.Schema(
     profilePicture: { type: String, trim: true, default: null }, // Stores the URL after upload processing
 
     licenseNumber: { type: String, required: true, trim: true, uppercase: true },
-    licensePictureURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
+  // Legacy single license image (kept optional for backward compatibility)
+  licensePictureURL: { type: String, required: false, trim: true, default: null },
+  // New split license images
+  licenseFrontURL: { type: String, trim: true, default: null },
+  licenseBackURL: { type: String, trim: true, default: null },
     vehiclePlateNumber: { type: String, required: true, trim: true, uppercase: true },
     vehicleType: { type: String, required: true, enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'], set: v => v.toUpperCase() },
     vehicleModel: { type: String, required: true, trim: true },
     vehicleYear: { type: Number, required: true, min: 1900 },
     vehiclePhotoURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
-    orCrPictureURL: { type: String, required: false, trim: true }, // Stores the URL after upload processing
+  // Legacy combined OR/CR image
+  orCrPictureURL: { type: String, required: false, trim: true, default: null },
+  // New separate OR and CR images
+  orPictureURL: { type: String, trim: true, default: null },
+  crPictureURL: { type: String, trim: true, default: null },
 
     accountStatus: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
     reviewStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },

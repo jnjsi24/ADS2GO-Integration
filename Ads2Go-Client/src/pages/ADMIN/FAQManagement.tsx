@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_FAQS } from '../../graphql/faq/queries/GetAllFAQs';
-import { CREATE_FAQ, UPDATE_FAQ, DELETE_FAQ, REORDER_FAQS } from '../../graphql/faq/mutations/FAQMutations';
+import { CREATE_FAQ, UPDATE_FAQ, DELETE_FAQ, RESTORE_FAQ, REORDER_FAQS } from '../../graphql/faq/mutations/FAQMutations';
 import { UPDATE_CATEGORY_ORDER } from '../../graphql/admin/mutations/updateCategoryOrder';
 import { 
-  Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, AlertCircle, HelpCircle, ChevronDown, ChevronUp, CalendarPlus, CalendarArrowUp
+  Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, AlertCircle, HelpCircle, ChevronDown, ChevronUp, CalendarPlus, CalendarArrowUp, Archive, RotateCcw
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 type FAQCategory = 'ADVERTISERS' | 'DRIVERS' | 'EVERYONE';
 type FAQStatus = 'all' | 'active' | 'inactive';
@@ -21,6 +22,9 @@ interface FAQ {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 interface FAQCategoryOrder {
@@ -42,6 +46,7 @@ const FAQManagement: React.FC = () => {
   const [editingFAQ, setEditingFAQ] = useState<FAQ | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<FAQCategory | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<FAQStatus>('all');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [draggedCategory, setDraggedCategory] = useState<FAQCategory | null>(null);
@@ -56,7 +61,12 @@ const FAQManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [faqToDelete, setFaqToDelete] = useState<string | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [faqToRestore, setFaqToRestore] = useState<string | null>(null);
 
   const categoryFilterOptions = ['all', 'ADVERTISERS', 'DRIVERS', 'EVERYONE'];
   const statusFilterOptions = ['all', 'active', 'inactive'];
@@ -91,6 +101,7 @@ const FAQManagement: React.FC = () => {
   const [createFAQ] = useMutation(CREATE_FAQ);
   const [updateFAQ] = useMutation(UPDATE_FAQ);
   const [deleteFAQ] = useMutation(DELETE_FAQ);
+  const [restoreFAQ] = useMutation(RESTORE_FAQ);
   const [reorderFAQs] = useMutation(REORDER_FAQS);
   const [updateCategoryOrder] = useMutation(UPDATE_CATEGORY_ORDER);
 
@@ -99,6 +110,10 @@ const FAQManagement: React.FC = () => {
 
   // Filter FAQs based on selected filters
   const filteredFAQs = faqs.filter((faq: FAQ) => {
+    // Filter by archive status based on active tab
+    const isArchivedMatch = activeTab === 'archived' ? faq.isArchived === true : faq.isArchived !== true;
+    if (!isArchivedMatch) return false;
+    
     const categoryMatch = selectedCategory === 'all' || faq.category === selectedCategory;
     const statusMatch = selectedStatus === 'all' || 
       (selectedStatus === 'active' && faq.isActive) || 
@@ -214,20 +229,58 @@ const FAQManagement: React.FC = () => {
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete this FAQ?')) {
-      setIsDeleting(true);
-      
-      try {
-        await deleteFAQ({
-          variables: { id }
-        });
-        refetch();
-      } catch (error) {
-        console.error('Error deleting FAQ:', error);
-      } finally {
-        setIsDeleting(false);
-      }
+    setFaqToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!faqToDelete) return;
+
+    setIsDeleting(true);
+    
+    try {
+      await deleteFAQ({
+        variables: { id: faqToDelete }
+      });
+      refetch();
+    } catch (error) {
+      console.error('Error deleting FAQ:', error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setFaqToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setFaqToDelete(null);
+  };
+
+  const handleRestoreFAQ = async (id: string) => {
+    if (isRestoring) return;
+    setFaqToRestore(id);
+    setShowRestoreModal(true);
+  };
+
+  const confirmRestore = async () => {
+    if (!faqToRestore) return;
+    setIsRestoring(true);
+    try {
+      await restoreFAQ({ variables: { id: faqToRestore } });
+      refetch();
+    } catch (error) {
+      console.error('Error restoring FAQ:', error);
+    } finally {
+      setIsRestoring(false);
+      setShowRestoreModal(false);
+      setFaqToRestore(null);
+    }
+  };
+
+  const cancelRestore = () => {
+    setShowRestoreModal(false);
+    setFaqToRestore(null);
   };
 
   const handleToggleStatus = async (faq: FAQ) => {
@@ -578,6 +631,32 @@ const FAQManagement: React.FC = () => {
               </div>
             </div>
           </div>
+          {/* Archive Tabs */}
+          <div className="flex gap-2 mb-4 border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Active FAQs
+              {activeTab === 'active' && (
+                <span className="absolute bottom-0 left-0 h-[2px] bg-[#3674B5] w-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Archive className="w-4 h-4 mr-2" />
+              Archived
+              {activeTab === 'archived' && (
+                <span className="absolute bottom-0 left-0 h-[2px] bg-[#3674B5] w-full" />
+              )}
+            </button>
+          </div>
           <div className="flex justify-end sm:justify-end mt-2 sm:mt-0">
             <button
               onClick={() => setIsCreateModalOpen(true)}
@@ -718,28 +797,52 @@ const FAQManagement: React.FC = () => {
                               </span>
                             </button>
 
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => handleDeleteFAQ(faq.id)}
-                              disabled={isDeleting}
-                              className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300 ${
-                                isDeleting
-                                  ? 'text-gray-400 cursor-not-allowed'
-                                  : 'text-red-700'
-                              }`}
-                              title={isDeleting ? "Processing..." : "Delete FAQ"}
-                            >
-                              {isDeleting ? (
-                                <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full mx-auto" />
-                              ) : (
-                                <>
-                                  <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                                  <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
-                                    Delete
-                                  </span>
-                                </>
-                              )}
-                            </button>
+                            {/* Delete / Restore Button */}
+                            {faq.isArchived ? (
+                              <button
+                                onClick={() => handleRestoreFAQ(faq.id)}
+                                disabled={isRestoring}
+                                className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-22 transition-[width] duration-300 ${
+                                  isRestoring
+                                    ? 'text-gray-400 cursor-not-allowed'
+                                    : 'text-green-700'
+                                }`}
+                                title={isRestoring ? "Processing..." : "Restore FAQ"}
+                              >
+                                {isRestoring ? (
+                                  <div className="w-4 h-4 animate-spin border-2 border-green-600 border-t-transparent rounded-full mx-auto" />
+                                ) : (
+                                  <>
+                                    <RotateCcw className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
+                                      Restore
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleDeleteFAQ(faq.id)}
+                                disabled={isDeleting}
+                                className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                                  isDeleting
+                                    ? 'text-gray-400 cursor-not-allowed'
+                                    : 'text-red-700'
+                                }`}
+                                title={isDeleting ? "Processing..." : "Delete FAQ"}
+                              >
+                                {isDeleting ? (
+                                  <div className="w-4 h-4 animate-spin border-2 border-red-600 border-t-transparent rounded-full mx-auto" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
+                                      Delete
+                                    </span>
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -992,6 +1095,33 @@ const FAQManagement: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Delete Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={cancelDelete}
+          onConfirm={confirmDelete}
+          title="Delete FAQ"
+          message="Are you sure you want to delete this FAQ? It will be archived and permanently deleted after 30 days."
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmButtonClass="bg-red-600 hover:bg-red-700"
+          isProcessing={isDeleting}
+        />
+
+        {/* Restore Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showRestoreModal}
+          onClose={cancelRestore}
+          onConfirm={confirmRestore}
+          title="Restore FAQ"
+          message="Are you sure you want to restore this FAQ?"
+          confirmText="Restore"
+          cancelText="Cancel"
+          confirmButtonClass="bg-green-600 hover:bg-green-700"
+          isProcessing={isRestoring}
+        />
+
       </div>
     </div>
   );

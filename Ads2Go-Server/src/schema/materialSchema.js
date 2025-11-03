@@ -58,6 +58,10 @@ module.exports = gql`
     photoComplianceStatus: String
     lastInspectionDate: String
     nextInspectionDue: String
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type InspectionPhoto {
@@ -171,6 +175,7 @@ extend type Query {
     createMaterial(input: CreateMaterialInput!): Material
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
+    restoreMaterial(id: ID!): String
 
     # Material Assignment (Admin-only)
     assignMaterialToDriver(driverId: String!, materialId: ID): MaterialAssignmentResult

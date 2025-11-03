@@ -146,6 +146,19 @@ const AdminSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  // Soft delete / Archive fields (30-day deferred deletion like Facebook)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -169,6 +182,8 @@ AdminSchema.pre('save', function(next) {
 
 // Ensure email uniqueness (case-insensitive)
 AdminSchema.index({ email: 1 }, { unique: true });
+AdminSchema.index({ isArchived: 1 }); // Archive filter for queries
+AdminSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 const Admin = mongoose.model('Admin', AdminSchema);
 

@@ -16,6 +16,10 @@ const faqSchema = gql`
     isActive: Boolean!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type FAQCategoryOrder {
@@ -78,6 +82,7 @@ const faqSchema = gql`
     createFAQ(input: CreateFAQInput!): FAQResponse!
     updateFAQ(id: ID!, input: UpdateFAQInput!): FAQResponse!
     deleteFAQ(id: ID!): FAQResponse!
+    restoreFAQ(id: ID!): FAQResponse!
     reorderFAQs(faqIds: [ID!]!): FAQResponse!
     fixFAQOrders(category: FAQCategory!): FixOrdersResponse!
     fixAllFAQOrders: FixOrdersResponse!

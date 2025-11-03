@@ -14,11 +14,6 @@ export const CREATE_AD = gql`
         materialType
         vehicleType
       }
-      planId {
-        id
-        name
-        durationDays
-      }
       price
       totalPrice
       status

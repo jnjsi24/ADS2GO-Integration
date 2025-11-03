@@ -307,6 +307,130 @@ class CronJobs {
     this.jobs.set('adDeletion', adDeletionTask);
     this.jobs.set('driverDeletion', driverDeletionTask);
 
+    // Daily admin deletion job - runs at 2:45 AM PH time to permanently delete archived admins
+    const adminDeletionTask = cron.schedule('45 2 * * *', async () => {
+      console.log('🗑️ Admin deletion job triggered at 2:45 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredAdmins();
+        console.log(`✅ Admin deletion job completed: ${result.deletedCount} admins permanently deleted`);
+      } catch (error) {
+        console.error('❌ Admin deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily super admin deletion job - runs at 3:00 AM PH time to permanently delete archived super admins
+    const superAdminDeletionTask = cron.schedule('0 3 * * *', async () => {
+      console.log('🗑️ Super admin deletion job triggered at 3:00 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredSuperAdmins();
+        console.log(`✅ Super admin deletion job completed: ${result.deletedCount} super admins permanently deleted`);
+      } catch (error) {
+        console.error('❌ Super admin deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily material deletion job - runs at 3:15 AM PH time to permanently delete archived materials
+    const materialDeletionTask = cron.schedule('15 3 * * *', async () => {
+      console.log('🗑️ Material deletion job triggered at 3:15 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredMaterials();
+        console.log(`✅ Material deletion job completed: ${result.deletedCount} materials permanently deleted`);
+      } catch (error) {
+        console.error('❌ Material deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Removed ads plan deletion job - no longer using AdsPlan
+
+    // Daily company ad deletion job - runs at 3:45 AM PH time to permanently delete archived company ads
+    const companyAdDeletionTask = cron.schedule('45 3 * * *', async () => {
+      console.log('🗑️ Company ad deletion job triggered at 3:45 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredCompanyAds();
+        console.log(`✅ Company ad deletion job completed: ${result.deletedCount} company ads permanently deleted`);
+      } catch (error) {
+        console.error('❌ Company ad deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily FAQ deletion job - runs at 4:00 AM PH time to permanently delete archived FAQs
+    const faqDeletionTask = cron.schedule('0 4 * * *', async () => {
+      console.log('🗑️ FAQ deletion job triggered at 4:00 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredFAQs();
+        console.log(`✅ FAQ deletion job completed: ${result.deletedCount} FAQs permanently deleted`);
+      } catch (error) {
+        console.error('❌ FAQ deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily deployment deletion job - runs at 4:15 AM PH time to permanently delete archived deployments
+    const deploymentDeletionTask = cron.schedule('15 4 * * *', async () => {
+      console.log('🗑️ Deployment deletion job triggered at 4:15 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredDeployments();
+        console.log(`✅ Deployment deletion job completed: ${result.deletedCount} deployments permanently deleted`);
+      } catch (error) {
+        console.error('❌ Deployment deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily payment deletion job - runs at 4:30 AM PH time to permanently delete archived payments
+    const paymentDeletionTask = cron.schedule('30 4 * * *', async () => {
+      console.log('🗑️ Payment deletion job triggered at 4:30 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredPayments();
+        console.log(`✅ Payment deletion job completed: ${result.deletedCount} payments permanently deleted`);
+      } catch (error) {
+        console.error('❌ Payment deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily driver salary pricing deletion job - runs at 4:45 AM PH time to permanently delete archived driver salary pricing
+    const driverSalaryPricingDeletionTask = cron.schedule('45 4 * * *', async () => {
+      console.log('🗑️ Driver salary pricing deletion job triggered at 4:45 AM (Philippines time)');
+      try {
+        const result = await userDeletionJob.deleteExpiredDriverSalaryPricing();
+        console.log(`✅ Driver salary pricing deletion job completed: ${result.deletedCount} driver salary pricing records permanently deleted`);
+      } catch (error) {
+        console.error('❌ Driver salary pricing deletion job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    this.jobs.set('adminDeletion', adminDeletionTask);
+    this.jobs.set('superAdminDeletion', superAdminDeletionTask);
+    this.jobs.set('materialDeletion', materialDeletionTask);
+    // Removed adsPlanDeletion job - no longer using AdsPlan
+    this.jobs.set('companyAdDeletion', companyAdDeletionTask);
+    this.jobs.set('faqDeletion', faqDeletionTask);
+    this.jobs.set('deploymentDeletion', deploymentDeletionTask);
+    this.jobs.set('paymentDeletion', paymentDeletionTask);
+    this.jobs.set('driverSalaryPricingDeletion', driverSalaryPricingDeletionTask);
+
     // Start all cron jobs
     this.jobs.forEach((job, name) => {
       job.start();

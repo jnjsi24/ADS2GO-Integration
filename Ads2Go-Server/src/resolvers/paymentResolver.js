@@ -1,6 +1,5 @@
 const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
-const AdsPlan = require('../models/AdsPlan');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const mongoose = require('mongoose');
 
@@ -204,15 +203,13 @@ const paymentResolvers = {
       // Fetch payments
       const payments = await Payment.find(filter).sort({ createdAt: -1 });
 
-      // Populate durationDays from adsId and planID
+      // Populate durationDays from adsId
       const results = await Promise.all(
         payments.map(async (p) => {
           const ad = await Ad.findById(p.adsId).select('id title durationDays');
-          const plan = await AdsPlan.findById(p.planID).select('id title durationDays');
           return {
             ...p.toObject(),
             adsId: ad,
-            planID: plan,
           };
         })
       );
@@ -310,7 +307,7 @@ const paymentResolvers = {
       const newPayment = new Payment({
         ...input,
         userId: user.id,
-        planID: ad.planId || null, // Add planID from the ad (null for flexible ads)
+        // Removed planID - no longer using AdsPlan
         receiptId,
         paymentStatus: 'PAID', // Use 'PAID' instead of 'COMPLETED'
         paymentDate: paymentDate || new Date(),
@@ -373,7 +370,7 @@ const paymentResolvers = {
         console.log('💳 Creating payment with data:', {
           userId: user.id,
           adsId: adsId,
-          planID: ad.planId,
+          // Removed planID - no longer using AdsPlan
           paymentType: paymentType,
           amount: ad.totalPrice,
           receiptId: receiptId,
@@ -604,13 +601,59 @@ const paymentResolvers = {
       if (!payment) throw new Error('Payment not found');
       if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
       if (payment.paymentStatus === 'PAID') throw new Error('Cannot delete a paid payment');
-
-      await Payment.findByIdAndDelete(id);
+      
+      // Check if already archived
+      if (payment.isArchived) {
+        throw new Error('Payment is already archived');
+      }
+      
+      console.log(`🗑️ Archiving payment: ${id} - 30-day deferred deletion`);
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      payment.isArchived = true;
+      payment.archivedAt = now;
+      payment.scheduledDeletionDate = deletionDate;
+      
+      await payment.save();
+      
+      console.log(`✅ Payment ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
 
       return {
         success: true,
-        message: 'Payment deleted successfully',
+        message: 'Payment archived successfully. Scheduled for deletion in 30 days.',
         payment: null,
+      };
+    },
+
+    restorePayment: async (_, { id }, { user }) => {
+      checkAuth(user);
+
+      const payment = await Payment.findById(id);
+      if (!payment) throw new Error('Payment not found');
+      if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
+      
+      if (!payment.isArchived) {
+        throw new Error('Payment is not archived');
+      }
+      
+      console.log(`✅ Restoring payment: ${id}`);
+      
+      payment.isArchived = false;
+      payment.archivedAt = null;
+      payment.scheduledDeletionDate = null;
+      
+      await payment.save();
+      
+      console.log(`✅ Payment ${id} restored successfully`);
+
+      return {
+        success: true,
+        message: 'Payment restored successfully.',
+        payment: payment,
       };
     },
 
@@ -637,11 +680,7 @@ const paymentResolvers = {
       const ad = await Ad.findById(parent.adsId);
       return ad || null;
     },
-    planID: async (parent) => {
-      if (!parent.planID) return null; // Handle flexible ads without plans
-      const plan = await AdsPlan.findById(parent.planID);
-      return plan || null;
-    },
+    // Removed planID resolver - no longer using AdsPlan
   },
 };
 

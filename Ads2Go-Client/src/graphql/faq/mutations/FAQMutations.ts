@@ -55,3 +55,12 @@ export const REORDER_FAQS = gql`
     }
   }
 `;
+
+export const RESTORE_FAQ = gql`
+  mutation RestoreFAQ($id: ID!) {
+    restoreFAQ(id: $id) {
+      success
+      message
+    }
+  }
+`;

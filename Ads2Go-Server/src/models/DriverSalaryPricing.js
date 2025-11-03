@@ -47,6 +47,20 @@ const DriverSalaryPricingSchema = new mongoose.Schema({
   notes: {
     type: String,
     trim: true
+  },
+  
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -59,6 +73,8 @@ DriverSalaryPricingSchema.index(
   { vehicleType: 1, category: 1, materialType: 1 }, 
   { unique: true }
 );
+DriverSalaryPricingSchema.index({ isArchived: 1 }); // Archive filter for queries
+DriverSalaryPricingSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Virtual for display name
 DriverSalaryPricingSchema.virtual('displayName').get(function() {

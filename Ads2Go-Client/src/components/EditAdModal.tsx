@@ -280,8 +280,9 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
       newErrors.numberOfDevices = 'At least 1 device is required';
     }
 
-    if (pricingCalculation?.maxDevices && formData.numberOfDevices > pricingCalculation.maxDevices) {
-      newErrors.numberOfDevices = `Maximum ${pricingCalculation.maxDevices} devices allowed`;
+    // Note: maxDevices removed from pricing config - constraint now based on available devices only
+    if (pricingCalculation?.availableDevices && formData.numberOfDevices > pricingCalculation.availableDevices) {
+      newErrors.numberOfDevices = `Only ${pricingCalculation.availableDevices} device${pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available`;
     }
 
     if (!formData.startTime) {
@@ -747,14 +748,14 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
               <input
                 type="number"
                 min="1"
-                max={pricingCalculation?.maxDevices || 10}
+                max={pricingCalculation?.availableDevices || 10}
                 value={formData.numberOfDevices}
                 onChange={(e) => setFormData(prev => ({ ...prev, numberOfDevices: parseInt(e.target.value) || 1 }))}
                 className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-blue-500"
               />
-              {pricingCalculation && (
+              {pricingCalculation && pricingCalculation.availableDevices !== undefined && (
                 <p className="mt-1 text-sm text-gray-600">
-                  Max: {pricingCalculation.maxDevices}
+                  {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'} available
                 </p>
               )}
               {errors.numberOfDevices && (

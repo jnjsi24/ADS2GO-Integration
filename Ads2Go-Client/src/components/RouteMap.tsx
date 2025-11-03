@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { snapPointsToRoads } from '../utils/roadSnapping';
 
 // Fix for default markers in development
 if (process.env.NODE_ENV === 'development') {
@@ -185,8 +186,69 @@ const RouteMap: React.FC<RouteMapProps> = ({
   const route = routeData.route;
   const metrics = routeData.metrics;
 
-  // Create polyline coordinates
-  const polylineCoords = route.map(point => [point.lat, point.lng] as [number, number]);
+  // Create raw polyline coordinates
+  const rawPolylineCoords = useMemo(() => {
+    return route.map(point => [point.lat, point.lng] as [number, number]);
+  }, [route]);
+
+  // State for snapped coordinates (with safe fallback)
+  const [snappedPolylineCoords, setSnappedPolylineCoords] = useState<[number, number][]>(rawPolylineCoords);
+  const [lastProcessedRoute, setLastProcessedRoute] = useState<string>('');
+
+  // Apply road snapping when route changes (safe fallback to raw coordinates if fails)
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Create a stable key for this route
+    const routeKey = JSON.stringify(rawPolylineCoords);
+    
+    // Skip if we've already processed this exact route
+    if (routeKey === lastProcessedRoute) {
+      return;
+    }
+    
+    // Initialize with raw coordinates (immediate fallback)
+    if (isMounted) {
+      setSnappedPolylineCoords(rawPolylineCoords);
+    }
+    
+    const applyRoadSnapping = async () => {
+      if (rawPolylineCoords.length === 0) {
+        if (isMounted) {
+          setSnappedPolylineCoords([]);
+          setLastProcessedRoute(routeKey);
+        }
+        return;
+      }
+
+      try {
+        // Apply road snapping (with automatic fallback if API unavailable)
+        const snappedCoords = await snapPointsToRoads(rawPolylineCoords);
+        
+        if (isMounted) {
+          setSnappedPolylineCoords(snappedCoords);
+          setLastProcessedRoute(routeKey);
+        }
+      } catch (error) {
+        console.error('❌ [Road Snapping] Error:', error);
+        // Safe fallback: use raw coordinates if snapping fails
+        if (isMounted) {
+          setSnappedPolylineCoords(rawPolylineCoords);
+          setLastProcessedRoute(routeKey);
+        }
+      }
+    };
+
+    applyRoadSnapping();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [rawPolylineCoords, lastProcessedRoute]);
+
+  // Use snapped coordinates (or raw if snapping failed/not available)
+  const polylineCoords = snappedPolylineCoords.length > 0 ? snappedPolylineCoords : rawPolylineCoords;
 
   // Get center point for map
   const centerLat = route.reduce((sum, point) => sum + point.lat, 0) / route.length;

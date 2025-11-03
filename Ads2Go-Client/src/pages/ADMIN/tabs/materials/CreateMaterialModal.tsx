@@ -105,8 +105,6 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
     if (!createForm.requirements.trim()) {
       if (onValidationError) {
         onValidationError('Please fill out this field');
-      } else {
-        alert('Please fill out this field');
       }
       return;
     }

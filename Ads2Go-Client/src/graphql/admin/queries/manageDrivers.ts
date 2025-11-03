@@ -20,6 +20,10 @@ export const GET_ALL_DRIVERS = gql`
       licenseNumber
       licensePictureURL
       orCrPictureURL
+      licenseFrontURL
+      licenseBackURL
+      orPictureURL
+      crPictureURL
       vehiclePhotoURL
       profilePicture
       dateJoined
@@ -33,6 +37,9 @@ export const GET_ALL_DRIVERS = gql`
         category
         description
       }
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;

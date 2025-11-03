@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useLocation } from 'react-router-dom';
-import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail, CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
+import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail, CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight, Archive, RotateCcw } from 'lucide-react';
 import { GET_ALL_DRIVERS, GET_DRIVER_USAGE_HISTORY } from '../../graphql/admin/queries/manageDrivers';
 import { GET_ALL_MATERIALS } from '../../graphql/admin/queries/materials';
 import { GET_DRIVER_MATERIALS } from '../../graphql/admin/queries/driverMaterials';
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin/mutations/compliance';
-import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
+import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER, RESTORE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
+import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
 import { GET_DRIVER_SALARY_SUMMARY } from '../../graphql/superadmin/queries/driverSalaryQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -30,8 +31,12 @@ interface Driver {
   installedMaterialType?: string;
   address?: string;
   licenseNumber?: string;
-  licensePictureURL?: string;
-  orCrPictureURL?: string;
+  licensePictureURL?: string; // legacy single license
+  orCrPictureURL?: string; // legacy combined OR/CR
+  licenseFrontURL?: string;
+  licenseBackURL?: string;
+  orPictureURL?: string;
+  crPictureURL?: string;
   vehiclePhotoURL?: string;
   profilePicture?: string;
   dateJoined: string;
@@ -45,6 +50,10 @@ interface Driver {
     category: string;
     description?: string;
   };
+  // Archive fields
+  isArchived?: boolean;
+  archivedAt?: string | null;
+  scheduledDeletionDate?: string | null;
 }
 
 // === Helper ===
@@ -159,9 +168,12 @@ const yearOptions = generateYearOptions();
 
 const ManageDrivers: React.FC = () => {
   const location = useLocation();
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [driverToRestore, setDriverToRestore] = useState<string | null>(null);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('All Months');
@@ -176,6 +188,9 @@ const ManageDrivers: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [driverToReject, setDriverToReject] = useState<string | null>(null);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [driverToSuspend, setDriverToSuspend] = useState<string | null>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -191,6 +206,7 @@ const ManageDrivers: React.FC = () => {
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
   const [isProcessingRejection, setIsProcessingRejection] = useState(false);
   const [isProcessingDeletion, setIsProcessingDeletion] = useState(false);
+  const [isProcessingSuspension, setIsProcessingSuspension] = useState(false);
   
   // Bulk actions state
   const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
@@ -281,6 +297,14 @@ const ManageDrivers: React.FC = () => {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
+  const [restoreDriver] = useMutation(RESTORE_DRIVER, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const [updateDriver] = useMutation(UPDATE_DRIVER, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
   const [approveMonthlyPhoto] = useMutation(APPROVE_MONTHLY_PHOTO, {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
@@ -291,6 +315,11 @@ const ManageDrivers: React.FC = () => {
   const drivers: Driver[] = data?.getAllDrivers || [];
 
   const filteredDrivers = drivers.filter((r: Driver) => {
+    // Filter by archive status based on active tab
+    const isArchivedMatch = activeTab === 'archived' ? r.isArchived === true : r.isArchived !== true;
+    
+    if (!isArchivedMatch) return false;
+
     const fullName = `${r.firstName} ${r.middleName || ''} ${r.lastName}`.toLowerCase();
     const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
                          r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -508,6 +537,171 @@ const ManageDrivers: React.FC = () => {
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setDriverToDelete(null);
+  };
+
+  const handleRestore = (driverId: string) => {
+    setDriverToRestore(driverId);
+    setShowRestoreModal(true);
+  };
+
+  const confirmRestore = async () => {
+    if (!driverToRestore) return;
+    
+    try {
+      const result = await restoreDriver({ variables: { driverId: driverToRestore } });
+      if (result.data?.restoreDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver restored successfully.',
+          duration: 5000
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Restore Failed',
+          message: result.data?.restoreDriver?.message || 'Failed to restore driver',
+          duration: 6000
+        });
+      }
+      setShowRestoreModal(false);
+      setDriverToRestore(null);
+      refetch();
+    } catch (error: any) {
+      console.error('Error restoring driver:', error);
+      addToast({
+        type: 'error',
+        title: 'Restore Failed',
+        message: error.message || 'Failed to restore driver',
+        duration: 6000
+      });
+      setShowRestoreModal(false);
+      setDriverToRestore(null);
+    }
+  };
+
+  const cancelRestore = () => {
+    setShowRestoreModal(false);
+    setDriverToRestore(null);
+  };
+
+  const handleSuspend = (driverId: string) => {
+    setDriverToSuspend(driverId);
+    setShowSuspendModal(true);
+  };
+
+  const handleUnsuspend = async (driverId: string) => {
+    if (isProcessingSuspension) return;
+    
+    setIsProcessingSuspension(true);
+    
+    try {
+      const result = await updateDriver({
+        variables: {
+          driverId,
+          input: {
+            accountStatus: 'ACTIVE'
+          }
+        }
+      });
+      
+      if (result.data?.updateDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been unsuspended successfully.',
+          duration: 4000
+        });
+        refetch();
+        if (selectedDriverDetails?.driverId === driverId) {
+          setSelectedDriverDetails({ ...selectedDriverDetails, accountStatus: 'ACTIVE' });
+        }
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Unsuspension Failed',
+          message: result.data?.updateDriver?.message || 'Failed to unsuspend driver',
+          duration: 6000
+        });
+      }
+    } catch (error: any) {
+      console.error('Error unsuspending driver:', error);
+      addToast({
+        type: 'error',
+        title: 'Unsuspension Failed',
+        message: error.message || 'Failed to unsuspend driver',
+        duration: 6000
+      });
+    } finally {
+      setIsProcessingSuspension(false);
+    }
+  };
+
+  const submitSuspend = async () => {
+    if (!driverToSuspend) return;
+    
+    if (isProcessingSuspension) return;
+    
+    setIsProcessingSuspension(true);
+    
+    try {
+      const result = await updateDriver({
+        variables: {
+          driverId: driverToSuspend,
+          input: {
+            accountStatus: 'SUSPENDED',
+            rejectedReason: suspendReason.trim() || undefined
+          }
+        }
+      });
+      
+      if (result.data?.updateDriver?.success) {
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been suspended successfully.',
+          duration: 4000
+        });
+        refetch();
+        setShowSuspendModal(false);
+        setSuspendReason('');
+        setDriverToSuspend(null);
+        if (selectedDriverDetails?.driverId === driverToSuspend) {
+          setSelectedDriverDetails({ ...selectedDriverDetails, accountStatus: 'SUSPENDED' });
+        }
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Suspension Failed',
+          message: result.data?.updateDriver?.message || 'Failed to suspend driver',
+          duration: 6000
+        });
+      }
+    } catch (error: any) {
+      console.error('Error suspending driver:', error);
+      let errorMessage = 'Failed to suspend driver';
+      if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+        errorMessage = error.graphQLErrors[0].message;
+      } else if (error.networkError) {
+        errorMessage = `Network Error: ${error.networkError.message}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      addToast({
+        type: 'error',
+        title: 'Suspension Failed',
+        message: errorMessage,
+        duration: 6000
+      });
+    } finally {
+      setIsProcessingSuspension(false);
+    }
+  };
+
+  const cancelSuspend = () => {
+    setShowSuspendModal(false);
+    setSuspendReason('');
+    setDriverToSuspend(null);
   };
 
   const handleViewDetails = (driver: Driver) => {
@@ -837,6 +1031,40 @@ const ManageDrivers: React.FC = () => {
         </div>
       )}
 
+      {/* Tabs Section */}
+      <div className="mb-4">
+        <nav className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <User className="w-4 h-4 mr-2" />
+            Active Drivers
+            <span
+              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+              }`}
+            />
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Archive className="w-4 h-4 mr-2" />
+            Archived Drivers
+            <span
+              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+              }`}
+            />
+          </button>
+        </nav>
+      </div>
+
       {/* Header with Title and Filters */}
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
         {!isMobile && (
@@ -1039,7 +1267,9 @@ const ManageDrivers: React.FC = () => {
         <div className="flex-1 flex flex-col">
           <div className="rounded-xl mb-4 overflow-hidden flex-1">
             {!isMobile && (
-              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-black">
+              <div className={`hidden md:grid gap-4 px-4 py-2 text-sm font-semibold text-black ${
+                activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+              }`}>
                 <div className="flex items-center gap-2 col-span-3">
                   <input
                     type="checkbox"
@@ -1050,12 +1280,13 @@ const ManageDrivers: React.FC = () => {
                   />
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-3">Email</div>
+                <div className="col-span-2">Email</div>
                 <div className="col-span-2">Contact</div>
                 <div className="col-span-1">Vehicle</div>
                 <div className="col-span-1 flex items-center gap-1">
                   <span>Status</span>
                 </div>
+                {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
                 <div className="col-span-2 text-center">Action</div>
               </div>
             )}
@@ -1109,34 +1340,47 @@ const ManageDrivers: React.FC = () => {
                       >
                         {driver.accountStatus}
                       </span>
-                      {driver.accountStatus === 'PENDING' && (
+                      {activeTab === 'archived' ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRestore(driver.driverId); }}
+                          className="flex items-center text-green-700 px-1 py-1 rounded shadow-md hover:bg-green-50"
+                        >
+                          <RotateCcw size={14}/>
+                        </button>
+                      ) : (
                         <>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openApprovalWithMaterialSelection(driver); }}
-                            className="flex items-center bg-green-200 text-green-700 px-3 py-1 rounded border border-green-200 hover:bg-green-50"
-                          >
-                            <Check size={14} className="mr-1" />
-                            <span className="text-xs">Accept</span>
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleReject(driver.driverId); }}
-                            className="flex items-center bg-red-200 text-red-700 px-3 py-1 rounded border border-red-200 hover:bg-red-50"
-                          >
-                            <X size={14} className="mr-1" />
-                            <span className="text-xs">Reject</span>
-                          </button>
+                        {driver.accountStatus === 'PENDING' && (
+                          <>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openApprovalWithMaterialSelection(driver); }}
+                              className="flex items-center bg-green-200 text-green-700 px-3 py-1 rounded border border-green-200 hover:bg-green-50"
+                            >
+                              <Check size={14} className="mr-1" />
+                              <span className="text-xs">Accept</span>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleReject(driver.driverId); }}
+                              className="flex items-center bg-red-200 text-red-700 px-3 py-1 rounded border border-red-200 hover:bg-red-50"
+                            >
+                              <X size={14} className="mr-1" />
+                              <span className="text-xs">Reject</span>
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(driver.driverId); }}
+                          className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
+                        >
+                          <Trash size={14}/>
+                        </button>
                         </>
                       )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(driver.driverId); }}
-                        className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
-                      >
-                        <Trash size={14}/>
-                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg">
+                  <div className={`grid items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg ${
+                    activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+                  }`}>
                     <div className="col-span-3 gap-3 flex items-center">
                       <input
                         type="checkbox"
@@ -1152,7 +1396,7 @@ const ManageDrivers: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="col-span-3 truncate">{driver.email}</div>
+                    <div className="col-span-2 truncate">{driver.email}</div>
                     <div className="col-span-2 truncate">{driver.contactNumber}</div>
                     <div className="col-span-1 truncate">{driver.vehicleType}</div>
                     <div className="col-span-1">
@@ -1167,7 +1411,26 @@ const ManageDrivers: React.FC = () => {
                         {driver.accountStatus}
                       </span>
                     </div>
+                    {activeTab === 'archived' && (
+                      <div className="col-span-1 text-sm text-red-600 font-medium">
+                        {driver.scheduledDeletionDate ? formatDate(driver.scheduledDeletionDate) : 'N/A'}
+                      </div>
+                    )}
                     <div className="col-span-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {activeTab === 'archived' ? (
+                      <button
+                        onClick={() => handleRestore(driver.driverId)}
+                        className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                      >
+                        <RotateCcw 
+                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Restore
+                        </span>
+                      </button>
+                    ) : (
+                      <>
                       {driver.accountStatus === 'PENDING' && (
                         <>
                           <button
@@ -1199,6 +1462,8 @@ const ManageDrivers: React.FC = () => {
                           Delete
                         </span>
                       </button>
+                      </>
+                    )}
                     </div>
                   </div>
                 )}
@@ -1310,6 +1575,7 @@ const ManageDrivers: React.FC = () => {
                         selectedDriverDetails.accountStatus === 'ACTIVE' ? 'bg-green-200 text-green-800' :
                         selectedDriverDetails.accountStatus === 'PENDING' ? 'bg-yellow-200 text-yellow-800' :
                         selectedDriverDetails.accountStatus === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                        selectedDriverDetails.accountStatus === 'SUSPENDED' ? 'bg-orange-200 text-orange-800' :
                         'bg-gray-200 text-gray-800'
                       }`}
                     >
@@ -1593,8 +1859,11 @@ const ManageDrivers: React.FC = () => {
                 {(() => {
                   const documents = [
                     { src: selectedDriverDetails.profilePicture, title: 'Profile Picture' },
-                    { src: selectedDriverDetails.licensePictureURL, title: 'Driver License' },
-                    { src: selectedDriverDetails.orCrPictureURL, title: 'OR/CR Document' },
+                    // Prefer new separate fields; fall back to legacy
+                    { src: selectedDriverDetails.licenseFrontURL || selectedDriverDetails.licensePictureURL, title: 'Driver License (Front)' },
+                    { src: selectedDriverDetails.licenseBackURL, title: 'Driver License (Back)' },
+                    { src: selectedDriverDetails.orPictureURL || selectedDriverDetails.orCrPictureURL, title: 'OR (Official Receipt)' },
+                    { src: selectedDriverDetails.crPictureURL, title: 'CR (Certificate of Registration)' },
                     { src: selectedDriverDetails.vehiclePhotoURL, title: 'Vehicle Photo' }
                   ].filter(doc => doc.src);
                   if (documents.length === 0) {
@@ -1636,6 +1905,107 @@ const ManageDrivers: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-wrap gap-3 justify-center border-t pt-4">
+                {selectedDriverDetails.accountStatus === 'PENDING' && (
+                  <>
+                    <button
+                      onClick={() => openApprovalWithMaterialSelection(selectedDriverDetails)}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+                    >
+                      <CheckCircle size={16} />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleReject(selectedDriverDetails.driverId)}
+                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                    >
+                      <XCircle size={16} />
+                      Reject
+                    </button>
+                  </>
+                )}
+                {selectedDriverDetails.accountStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => handleSuspend(selectedDriverDetails.driverId)}
+                    className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors flex items-center gap-2"
+                  >
+                    <AlertCircle size={16} />
+                    Suspend Driver
+                  </button>
+                )}
+                {selectedDriverDetails.accountStatus === 'SUSPENDED' && (
+                  <button
+                    onClick={() => handleUnsuspend(selectedDriverDetails.driverId)}
+                    disabled={isProcessingSuspension}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isProcessingSuspension ? (
+                      <>
+                        <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle size={16} />
+                        Unsuspend Driver
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(selectedDriverDetails.driverId)}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                >
+                  <Trash size={16} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspend Modal */}
+      {showSuspendModal && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Suspend Driver</h3>
+              <button onClick={cancelSuspend} className="text-gray-500 hover:text-gray-700">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">Please provide a reason for suspending this driver (optional).</p>
+            <textarea
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              placeholder="Enter suspension reason..."
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+              rows={4}
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={cancelSuspend}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitSuspend}
+                disabled={isProcessingSuspension}
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  isProcessingSuspension
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-orange-600 hover:bg-orange-700'
+                }`}
+              >
+                {isProcessingSuspension && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {isProcessingSuspension ? 'Suspending...' : 'Suspend Driver'}
+              </button>
             </div>
           </div>
         </div>
@@ -1940,6 +2310,43 @@ const ManageDrivers: React.FC = () => {
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isBulkProcessing}
       />
+
+      {/* Restore Confirmation Modal */}
+      {showRestoreModal && driverToRestore && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Restore Driver</h2>
+              <button
+                onClick={cancelRestore}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to restore this driver?
+            </p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={cancelRestore}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRestore}
+                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <RotateCcw size={16} />
+                Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />

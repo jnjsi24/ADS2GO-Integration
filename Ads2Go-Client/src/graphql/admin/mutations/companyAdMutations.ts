@@ -52,6 +52,12 @@ export const DELETE_COMPANY_AD = gql`
   }
 `;
 
+export const RESTORE_COMPANY_AD = gql`
+  mutation RestoreCompanyAd($id: ID!) {
+    restoreCompanyAd(id: $id)
+  }
+`;
+
 export const TOGGLE_COMPANY_AD_STATUS = gql`
   mutation ToggleCompanyAdStatus($id: ID!) {
     toggleCompanyAdStatus(id: $id) {

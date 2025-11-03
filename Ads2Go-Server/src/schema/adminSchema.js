@@ -25,6 +25,10 @@ const typeDefs = gql`
     updatedAt: String!
     permissions: AdminPermissions!
     notificationPreferences: AdminNotificationPreferences!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type AdminPermissions {
@@ -157,9 +161,11 @@ const typeDefs = gql`
     deleteAdmin(id: ID!): AdminResponse!
     activateAdmin(id: ID!): AdminResponse!
     deactivateAdmin(id: ID!): AdminResponse!
+    restoreAdmin(id: ID!): AdminResponse!
 
     # User management
     deleteUser(id: ID!): ResponseMessage!
+    restoreUser(id: ID!): ResponseMessage!
 
     # Password management
     changeAdminPassword(currentPassword: String!, newPassword: String!): Boolean!

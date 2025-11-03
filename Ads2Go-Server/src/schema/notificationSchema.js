@@ -37,6 +37,39 @@ const notificationTypeDefs = gql`
     unreadCount: Int!
   }
 
+  type UserStatistics {
+    emailVerified: Int!
+    emailUnverified: Int!
+    hasLastLogin: Int!
+    neverLoggedIn: Int!
+    archived: Int!
+    accountLocked: Int!
+    googleAuth: Int!
+    localAuth: Int!
+  }
+
+  type DriverStatistics {
+    pendingApproval: Int!
+    active: Int!
+    suspended: Int!
+    rejected: Int!
+    resubmitted: Int!
+    newThisMonth: Int!
+    archived: Int!
+  }
+
+  type AdStatistics {
+    active: Int!
+    pending: Int!
+    approved: Int!
+    rejected: Int!
+    running: Int!
+    scheduled: Int!
+    ended: Int!
+    newThisMonth: Int!
+    archived: Int!
+  }
+
   type SuperAdminDashboardStats {
     totalUsers: Int!
     totalAdmins: Int!
@@ -47,10 +80,21 @@ const notificationTypeDefs = gql`
     unreadNotifications: Int!
     highPriorityNotifications: Int!
     planUsageStats: [PlanUsageStat!]!
+    userStatistics: UserStatistics
+    driverStatistics: DriverStatistics
+    adStatistics: AdStatistics
+  }
+
+  type MonthlyGrowthData {
+    month: String!
+    year: Int!
+    monthIndex: Int!
+    users: Int!
+    drivers: Int!
+    ads: Int!
   }
 
   type PlanUsageStat {
-    planId: ID!
     planName: String!
     userCount: Int!
     activeAdsCount: Int!
@@ -58,7 +102,6 @@ const notificationTypeDefs = gql`
   }
 
   type UserCountByPlan {
-    planId: ID!
     planName: String!
     planDescription: String!
     userCount: Int!
@@ -82,7 +125,6 @@ const notificationTypeDefs = gql`
     createdAt: String!
     user: User
     materialId: [ID]
-    planId: ID
   }
 
   type PendingMaterial {
@@ -151,6 +193,7 @@ const notificationTypeDefs = gql`
     getSuperAdminDashboardStats: SuperAdminDashboardStats!
     getUserCountsByPlan: [UserCountByPlan!]!
     getDriverNotifications(driverId: ID!): DriverNotifications!
+    getSuperAdminMonthlyGrowth(months: Int): [MonthlyGrowthData!]!
   }
 
   type Mutation {

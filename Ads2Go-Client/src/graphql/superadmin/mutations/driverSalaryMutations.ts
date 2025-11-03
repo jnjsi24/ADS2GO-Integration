@@ -81,6 +81,25 @@ export const DELETE_DRIVER_SALARY_PRICING = gql`
   }
 `;
 
+export const RESTORE_DRIVER_SALARY_PRICING = gql`
+  mutation RestoreDriverSalaryPricing($id: ID!) {
+    restoreDriverSalaryPricing(id: $id) {
+      success
+      message
+      pricing {
+        id
+        vehicleType
+        category
+        materialType
+        distanceRate
+        hoursRate
+        isActive
+        displayName
+      }
+    }
+  }
+`;
+
 export const CREATE_DRIVER_SALARY_CALCULATION = gql`
   mutation CreateDriverSalaryCalculation($input: CreateDriverSalaryCalculationInput!) {
     createDriverSalaryCalculation(input: $input) {

@@ -25,6 +25,12 @@ export const DELETE_MATERIAL = gql`
   }
 `;
 
+export const RESTORE_MATERIAL = gql`
+  mutation RestoreMaterial($id: ID!) {
+    restoreMaterial(id: $id)
+  }
+`;
+
 export const ASSIGN_MATERIAL_TO_DRIVER = gql`
   mutation AssignMaterialToDriver($driverId: String!, $materialId: ID) {
     assignMaterialToDriver(driverId: $driverId, materialId: $materialId) {

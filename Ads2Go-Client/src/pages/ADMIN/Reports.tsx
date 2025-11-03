@@ -640,12 +640,16 @@ const Reports: React.FC = () => {
                 address
                 licenseNumber
                 licensePictureURL
+                licenseFrontURL
+                licenseBackURL
                 vehiclePlateNumber
                 vehicleModel
                 vehicleType
                 vehicleYear
                 vehiclePhotoURL
                 orCrPictureURL
+                orPictureURL
+                crPictureURL
                 profilePicture
               }
             }
@@ -659,7 +663,6 @@ const Reports: React.FC = () => {
       // Check for GraphQL errors
       if (result.errors) {
         console.error('GraphQL errors:', result.errors);
-        alert(`Failed to load driver details: ${result.errors[0]?.message || 'Unknown error'}`);
         setIsDriverEditModalOpen(false);
         setIsLoadingDriverDetails(false);
         return;
@@ -669,12 +672,10 @@ const Reports: React.FC = () => {
         setDriverDetails(result.data.getDriverById);
       } else {
         console.error('No driver data returned');
-        alert('Failed to load driver details: No data returned');
         setIsDriverEditModalOpen(false);
       }
     } catch (error) {
       console.error('Error fetching driver details:', error);
-      alert(`Failed to load driver details: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsDriverEditModalOpen(false);
     } finally {
       setIsLoadingDriverDetails(false);
@@ -696,8 +697,16 @@ const Reports: React.FC = () => {
         // Map field keys to actual driver fields
         if (fieldKey === 'vehiclePhoto') {
           updateInput.vehiclePhotoURL = change.newValue;
-        } else if (fieldKey === 'orCrDocument') {
+        } else if (fieldKey === 'orCrDocument') { // legacy single field
           updateInput.orCrPictureURL = change.newValue;
+        } else if (fieldKey === 'orPicture') {
+          updateInput.orPictureURL = change.newValue;
+        } else if (fieldKey === 'crPicture') {
+          updateInput.crPictureURL = change.newValue;
+        } else if (fieldKey === 'licenseFront') {
+          updateInput.licenseFrontURL = change.newValue;
+        } else if (fieldKey === 'licenseBack') {
+          updateInput.licenseBackURL = change.newValue;
         } else if (fieldKey === 'profilePicture') {
           updateInput.profilePicture = change.newValue;
         } else if (change.newValue && change.newValue !== 'See attachment') {

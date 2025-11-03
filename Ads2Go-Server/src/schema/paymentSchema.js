@@ -31,21 +31,12 @@ const paymentTypeDefs = gql`
     paymentStatus: String
   }
 
-  type AdsPlan {
-    id: ID
-    title: String
-    description: String
-    durationDays: Int
-    playsPerDayPerDevice: Int
-    numberOfDevices: Int
-    pricePerPlay: Float
-  }
+  # Removed AdsPlan type - no longer using AdsPlan
 
   type Payment {
     id: ID!
     userId: ID!
     adsId: Ad
-    planID: AdsPlan
     paymentDate: String
     paymentType: PaymentType!
     amount: Float!
@@ -53,6 +44,10 @@ const paymentTypeDefs = gql`
     paymentStatus: PaymentStatus!
     createdAt: String!
     updatedAt: String!
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   input CreatePaymentInput {
@@ -88,6 +83,7 @@ const paymentTypeDefs = gql`
     createPayment(input: CreatePaymentInput!): PaymentResponse!
     updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse!
     deletePayment(id: ID!): PaymentResponse!
+    restorePayment(id: ID!): PaymentResponse!
   }
 `;
 

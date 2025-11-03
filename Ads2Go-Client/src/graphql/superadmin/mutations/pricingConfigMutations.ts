@@ -7,12 +7,7 @@ export const CREATE_PRICING_CONFIG = gql`
       materialType
       vehicleType
       category
-      pricingTiers {
-        durationDays
-        pricePerPlay
-        adLengthMultiplier
-      }
-      maxDevices
+      basePrice
       minAdLengthSeconds
       maxAdLengthSeconds
       isActive
@@ -30,12 +25,7 @@ export const UPDATE_PRICING_CONFIG = gql`
       materialType
       vehicleType
       category
-      pricingTiers {
-        durationDays
-        pricePerPlay
-        adLengthMultiplier
-      }
-      maxDevices
+      basePrice
       minAdLengthSeconds
       maxAdLengthSeconds
       isActive
@@ -61,26 +51,20 @@ export const TOGGLE_PRICING_CONFIG_STATUS = gql`
   }
 `;
 
-export interface PricingTierInput {
-  durationDays: number;
-  pricePerPlay: number;
-  adLengthMultiplier?: number;
-}
+// Removed PricingTierInput - no longer using pricing tiers
 
 export interface PricingConfigInput {
   materialType: string;
   vehicleType: string;
   category: string;
-  pricingTiers: PricingTierInput[];
-  maxDevices: number;
+  basePrice: number;
   minAdLengthSeconds?: number;
   maxAdLengthSeconds?: number;
   isActive?: boolean;
 }
 
 export interface PricingConfigUpdateInput {
-  pricingTiers?: PricingTierInput[];
-  maxDevices?: number;
+  basePrice?: number;
   minAdLengthSeconds?: number;
   maxAdLengthSeconds?: number;
   isActive?: boolean;
@@ -92,8 +76,7 @@ export interface CreatePricingConfigResponse {
     materialType: string;
     vehicleType: string;
     category: string;
-    pricingTiers: PricingTierInput[];
-    maxDevices: number;
+    basePrice: number;
     minAdLengthSeconds: number;
     maxAdLengthSeconds: number;
     isActive: boolean;
@@ -109,8 +92,7 @@ export interface UpdatePricingConfigResponse {
     materialType: string;
     vehicleType: string;
     category: string;
-    pricingTiers: PricingTierInput[];
-    maxDevices: number;
+    basePrice: number;
     minAdLengthSeconds: number;
     maxAdLengthSeconds: number;
     isActive: boolean;

@@ -93,6 +93,20 @@ const CompanyAdSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: 1000
+  },
+  
+  // Soft delete / Archive fields (30-day deferred deletion)
+  isArchived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date,
+    default: null
+  },
+  scheduledDeletionDate: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,
@@ -104,6 +118,8 @@ const CompanyAdSchema = new mongoose.Schema({
 CompanyAdSchema.index({ isActive: 1, priority: -1 });
 CompanyAdSchema.index({ createdAt: -1 });
 CompanyAdSchema.index({ isScheduled: 1, startDate: 1, endDate: 1 });
+CompanyAdSchema.index({ isArchived: 1 }); // Archive filter for queries
+CompanyAdSchema.index({ scheduledDeletionDate: 1 }); // For deletion cron job
 
 // Virtual for file size (if needed)
 CompanyAdSchema.virtual('fileSize').get(function() {

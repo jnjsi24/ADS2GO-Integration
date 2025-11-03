@@ -79,37 +79,56 @@ export const GET_SUPERADMIN_DASHBOARD_STATS = gql`
       totalRevenue
       unreadNotifications
       highPriorityNotifications
-      planUsageStats {
-        planId
-        planName
-        userCount
-        activeAdsCount
-        totalRevenue
+      userStatistics {
+        emailVerified
+        emailUnverified
+        hasLastLogin
+        neverLoggedIn
+        archived
+        accountLocked
+        googleAuth
+        localAuth
       }
+      driverStatistics {
+        pendingApproval
+        active
+        suspended
+        rejected
+        resubmitted
+        newThisMonth
+        archived
+      }
+      adStatistics {
+        active
+        pending
+        approved
+        rejected
+        running
+        scheduled
+        ended
+        newThisMonth
+        archived
+      }
+      # Removed planUsageStats - no longer using AdsPlan
     }
   }
 `;
 
-// Get user counts by plan
-export const GET_USER_COUNTS_BY_PLAN = gql`
-  query GetUserCountsByPlan {
-    getUserCountsByPlan {
-      planId
-      planName
-      planDescription
-      userCount
-      activeAdsCount
-      totalRevenue
-      planDetails {
-        materialType
-        vehicleType
-        numberOfDevices
-        durationDays
-        totalPrice
-      }
+// Get monthly growth data
+export const GET_SUPERADMIN_MONTHLY_GROWTH = gql`
+  query GetSuperAdminMonthlyGrowth($months: Int) {
+    getSuperAdminMonthlyGrowth(months: $months) {
+      month
+      year
+      monthIndex
+      users
+      drivers
+      ads
     }
   }
 `;
+
+// Removed GET_USER_COUNTS_BY_PLAN - no longer using AdsPlan
 
 // Type definitions for the queries
 export interface SuperAdminNotification {
@@ -136,33 +155,11 @@ export interface SuperAdminDashboardStats {
   totalAdmins: number;
   totalDrivers: number;
   totalAds: number;
-  totalPlans: number;
+  totalPlans: number; // Removed - no longer using AdsPlan (kept for compatibility)
   totalRevenue: number;
   unreadNotifications: number;
   highPriorityNotifications: number;
-  planUsageStats: PlanUsageStat[];
+  planUsageStats: any[]; // Removed PlanUsageStat - no longer using AdsPlan
 }
 
-export interface PlanUsageStat {
-  planId: string;
-  planName: string;
-  userCount: number;
-  activeAdsCount: number;
-  totalRevenue: number;
-}
-
-export interface UserCountByPlan {
-  planId: string;
-  planName: string;
-  planDescription: string;
-  userCount: number;
-  activeAdsCount: number;
-  totalRevenue: number;
-  planDetails: {
-    materialType: string;
-    vehicleType: string;
-    numberOfDevices: number;
-    durationDays: number;
-    totalPrice: number;
-  };
-}
+// Removed PlanUsageStat and UserCountByPlan interfaces - no longer using AdsPlan

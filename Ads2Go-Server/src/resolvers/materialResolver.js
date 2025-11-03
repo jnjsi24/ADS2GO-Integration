@@ -5,7 +5,6 @@ const Tablet = require('../models/Tablet');
 const DeviceCompliance = require('../models/deviceCompliance');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const MaterialAvailability = require('../models/MaterialAvailability');
-const AdsPlan = require('../models/AdsPlan');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const NotificationService = require('../services/notifications/NotificationService');
@@ -67,22 +66,7 @@ const cleanupMaterialRelatedRecords = async (materialId, materialStringId) => {
     console.error(`❌ Error cleaning up Tablet:`, tabletError);
   }
 
-  // Remove material from all plans
-  try {
-    const plans = await AdsPlan.find({ materials: materialId });
-    for (const plan of plans) {
-      plan.materials = plan.materials.filter(
-        planMaterialId => planMaterialId.toString() !== materialId.toString()
-      );
-      await plan.save();
-      console.log(`✅ Removed material from plan: ${plan.name}`);
-    }
-    if (plans.length > 0) {
-      cleanupResults.plans = true;
-    }
-  } catch (planCleanupError) {
-    console.error(`❌ Error removing material from plans:`, planCleanupError);
-  }
+  // Removed AdsPlan functionality - no longer using AdsPlan
 
   return cleanupResults;
 };
@@ -396,7 +380,6 @@ const materialResolvers = {
 
       const material = new Material({
         ...input,
-        driverId: null, // unassigned on creation
       });
 
       console.log(`🔄 Creating material with input:`, input);
@@ -447,47 +430,7 @@ const materialResolvers = {
         console.log(`⚠️ Material created but availability record creation failed. Run sync script to fix.`);
       }
 
-      // Automatically assign material to compatible plans
-      try {
-        console.log(`🔗 Auto-assigning material ${material.materialId} to compatible plans...`);
-        
-        // Find plans that match this material's criteria
-        const compatiblePlans = await AdsPlan.find({
-          materialType: material.materialType,
-          vehicleType: material.vehicleType,
-          category: material.category,
-          status: 'RUNNING'
-        });
-        
-        console.log(`📋 Found ${compatiblePlans.length} compatible plans for ${material.materialId}`);
-        
-        for (const plan of compatiblePlans) {
-          // Check if material is already assigned to this plan
-          const isAlreadyAssigned = plan.materials && plan.materials.some(
-            planMaterialId => planMaterialId.toString() === material._id.toString()
-          );
-          
-          if (!isAlreadyAssigned) {
-            // Add material to plan (limit to 3 materials per plan)
-            if (!plan.materials) plan.materials = [];
-            if (plan.materials.length < 3) {
-              plan.materials.push(material._id);
-              await plan.save();
-              console.log(`✅ Assigned ${material.materialId} to plan: ${plan.name}`);
-            } else {
-              console.log(`ℹ️ Plan ${plan.name} already has maximum materials (3), skipping assignment`);
-            }
-          } else {
-            console.log(`ℹ️ Material ${material.materialId} already assigned to plan: ${plan.name}`);
-          }
-        }
-        
-        console.log(`🎯 Auto-assignment completed for material: ${material.materialId}`);
-      } catch (planAssignmentError) {
-        console.error(`❌ Error auto-assigning material to plans:`, planAssignmentError);
-        // Don't throw error - plan assignment is helpful but shouldn't break material creation
-        console.log(`⚠️ Material created but plan assignment failed. Run sync script to fix.`);
-      }
+      // Removed AdsPlan auto-assignment - no longer using AdsPlan
 
       // Create tablet pair if the material type is HEADDRESS
       if (materialType === 'HEADDRESS') {
@@ -708,24 +651,55 @@ const materialResolvers = {
     deleteMaterial: async (_, { id }, { user }) => {
       checkAdmin(user);
 
-      const deleted = await Material.findByIdAndDelete(id);
-      if (!deleted) throw new Error('Material not found or already deleted');
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found or already deleted');
       
-      console.log(`🗑️ Deleting material: ${deleted.materialId} (ID: ${id})`);
+      // Check if already archived
+      if (material.isArchived) {
+        throw new Error('Material is already archived');
+      }
       
-      // Clean up all related records
-      const cleanupResults = await cleanupMaterialRelatedRecords(id, deleted.materialId);
+      console.log(`🗑️ Archiving material: ${material.materialId} (ID: ${id}) - 30-day deferred deletion`);
       
-      // Log cleanup summary
-      const cleanedRecords = Object.entries(cleanupResults)
-        .filter(([_, cleaned]) => cleaned)
-        .map(([record, _]) => record)
-        .join(', ');
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
       
-      console.log(`🎯 Material deletion completed: ${deleted.materialId}`);
-      console.log(`🧹 Cleaned up records: ${cleanedRecords || 'none found'}`);
+      material.isArchived = true;
+      material.archivedAt = now;
+      material.scheduledDeletionDate = deletionDate;
+      material.status = 'RETIRED'; // Change status so it won't be used
       
-      return 'Material and all related records deleted successfully.';
+      await material.save();
+      
+      console.log(`✅ Material ${material.materialId} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      console.log(`📌 Related records will be cleaned up after 30 days`);
+      
+      return 'Material archived successfully. Scheduled for deletion in 30 days.';
+    },
+
+    restoreMaterial: async (_, { id }, { user }) => {
+      checkAdmin(user);
+
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+      
+      if (!material.isArchived) {
+        throw new Error('Material is not archived');
+      }
+      
+      console.log(`✅ Restoring material: ${material.materialId} (ID: ${id})`);
+      
+      material.isArchived = false;
+      material.archivedAt = null;
+      material.scheduledDeletionDate = null;
+      
+      await material.save();
+      
+      console.log(`✅ Material ${id} restored successfully`);
+      
+      return material.materialId;
     },
 
     assignMaterialToDriver: async (_, { driverId, materialId }, { user }) => {

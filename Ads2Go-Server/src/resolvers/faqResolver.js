@@ -241,18 +241,76 @@ const faqResolver = {
         if (!faq) {
           throw new Error('FAQ not found');
         }
-
-        await FAQ.findByIdAndDelete(id);
+        
+        // Check if already archived
+        if (faq.isArchived) {
+          throw new Error('FAQ is already archived');
+        }
+        
+        console.log(`🗑️ Archiving FAQ: ${id} - 30-day deferred deletion`);
+        
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+        
+        faq.isArchived = true;
+        faq.archivedAt = now;
+        faq.scheduledDeletionDate = deletionDate;
+        faq.isActive = false; // Deactivate immediately
+        
+        await faq.save();
+        
+        console.log(`✅ FAQ ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
 
         return {
           success: true,
-          message: 'FAQ deleted successfully'
+          message: 'FAQ archived successfully. Scheduled for deletion in 30 days.'
         };
       } catch (error) {
         console.error('Error in deleteFAQ:', error);
         return {
           success: false,
-          message: error.message || 'Failed to delete FAQ'
+          message: error.message || 'Failed to archive FAQ'
+        };
+      }
+    },
+
+    restoreFAQ: async (_, { id }, context) => {
+      try {
+        // Check admin authentication
+        checkAdmin(context.user);
+
+        const faq = await FAQ.findById(id);
+        if (!faq) {
+          throw new Error('FAQ not found');
+        }
+        
+        if (!faq.isArchived) {
+          throw new Error('FAQ is not archived');
+        }
+        
+        console.log(`✅ Restoring FAQ: ${id}`);
+        
+        faq.isArchived = false;
+        faq.archivedAt = null;
+        faq.scheduledDeletionDate = null;
+        
+        await faq.save();
+        
+        console.log(`✅ FAQ ${id} restored successfully`);
+
+        return {
+          success: true,
+          message: 'FAQ restored successfully.',
+          faq: faq
+        };
+      } catch (error) {
+        console.error('Error in restoreFAQ:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to restore FAQ',
+          faq: null
         };
       }
     },

@@ -27,6 +27,7 @@ import {
   DELETE_ALL_ADMIN_NOTIFICATIONS
 } from '../../graphql/admin/queries';
 import { AnimatePresence, motion } from 'framer-motion';
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 interface Notification {
   id: string;
@@ -57,6 +58,7 @@ const AdminNotifications: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMarkingAllAsRead, setIsMarkingAllAsRead] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
   // Fetch general admin notifications (excluding device-specific notifications)
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
@@ -146,20 +148,27 @@ const AdminNotifications: React.FC = () => {
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete all notifications?')) {
-      setIsDeletingSelected(true);
-      
-      try {
-        await deleteAllNotifications();
-        await refetchNotifications();
-        setSelectedNotifications(new Set());
-        setIsSelectMode(false);
-      } catch (error) {
-        console.error('Error deleting all notifications:', error);
-      } finally {
-        setIsDeletingSelected(false);
-      }
+    setShowDeleteAllModal(true);
+  };
+
+  const confirmDeleteAll = async () => {
+    setIsDeletingSelected(true);
+    
+    try {
+      await deleteAllNotifications();
+      await refetchNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    } finally {
+      setIsDeletingSelected(false);
+      setShowDeleteAllModal(false);
     }
+  };
+
+  const cancelDeleteAll = () => {
+    setShowDeleteAllModal(false);
   };
 
   const handleRefresh = async () => {
@@ -747,6 +756,19 @@ const AdminNotifications: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete All Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteAllModal}
+        onClose={cancelDeleteAll}
+        onConfirm={confirmDeleteAll}
+        title="Delete All Notifications"
+        message="Are you sure you want to delete all notifications?"
+        confirmText="Delete All"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isDeletingSelected}
+      />
     </div>
   );
 };

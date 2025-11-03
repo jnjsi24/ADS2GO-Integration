@@ -26,6 +26,10 @@ const typeDefs = gql`
     permissions: SuperAdminPermissions!
     profilePicture: String
     notificationPreferences: SuperAdminNotificationPreferences
+    # Archive fields (30-day deferred deletion)
+    isArchived: Boolean!
+    archivedAt: String
+    scheduledDeletionDate: String
   }
 
   type SuperAdminPermissions {
@@ -181,6 +185,7 @@ const typeDefs = gql`
     deleteSuperAdmin(id: ID!): SuperAdminResponse!
     activateSuperAdmin(id: ID!): SuperAdminResponse!
     deactivateSuperAdmin(id: ID!): SuperAdminResponse!
+    restoreSuperAdmin(id: ID!): SuperAdminResponse!
 
     # Admin management (for SuperAdmins)
     createAdmin(input: CreateAdminInput!): AdminResponse!
@@ -188,9 +193,10 @@ const typeDefs = gql`
     deleteAdmin(id: ID!): AdminResponse!
     activateAdmin(id: ID!): AdminResponse!
     deactivateAdmin(id: ID!): AdminResponse!
+    restoreAdmin(id: ID!): AdminResponse!
 
     # User management (for SuperAdmins)
-    # Note: deleteUser is handled by adminResolver for both ADMIN and SUPERADMIN roles
+    # Note: deleteUser and restoreUser are handled by adminResolver for both ADMIN and SUPERADMIN roles
 
     # Password management
     changeSuperAdminPassword(currentPassword: String!, newPassword: String!): Boolean!

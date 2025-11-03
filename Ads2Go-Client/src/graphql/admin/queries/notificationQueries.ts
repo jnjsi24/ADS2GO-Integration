@@ -94,7 +94,7 @@ export const GET_PENDING_ADS = gql`
         lastName
       }
       materialId
-      planId
+      # Removed planId - no longer using AdsPlan
     }
   }
 `;

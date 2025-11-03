@@ -48,11 +48,9 @@ const adsDeploymentResolvers = {
       const deployments = await AdsDeployment.find({})
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate('driverId')
@@ -182,11 +180,9 @@ const adsDeploymentResolvers = {
       const deployments = await AdsDeployment.find({ driverId })
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate({
@@ -272,7 +268,7 @@ const adsDeploymentResolvers = {
 
     getDeploymentsByAd: async (_, { adId }, { user }) => {
       checkAuth(user);
-      const ad = await Ad.findById(adId).populate('planId');
+      const ad = await Ad.findById(adId);
       if (!ad) throw new Error('Ad not found');
       if (ad.userId.toString() !== user.id && user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view these deployments');
@@ -283,11 +279,9 @@ const adsDeploymentResolvers = {
       })
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate('driverId')
@@ -369,11 +363,9 @@ const adsDeploymentResolvers = {
       })
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate('driverId')
@@ -456,11 +448,9 @@ const adsDeploymentResolvers = {
       })
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate('driverId')
@@ -548,11 +538,9 @@ const adsDeploymentResolvers = {
       const deployment = await AdsDeployment.findById(id)
         .populate({
           path: 'adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate({
           path: 'lcdSlots.adId',
-          populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
         .populate('driverId')
@@ -608,8 +596,8 @@ const adsDeploymentResolvers = {
       checkAuth(user);
       // Single deployment doc per materialId; includes lcdSlots for HEADDRESS/LCD
       const deploymentDoc = await AdsDeployment.findOne({ materialId })
-        .populate({ path: 'adId', populate: { path: 'planId', model: 'AdsPlan' } })
-        .populate({ path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } })
+        .populate('adId')
+        .populate('lcdSlots.adId')
         .populate('driverId');
 
       if (!deploymentDoc) return null;
@@ -687,7 +675,7 @@ const adsDeploymentResolvers = {
       checkAdmin(user);
       const { adId, materialId, driverId, startTime, endTime } = input;
 
-      const ad = await Ad.findById(adId).populate('planId');
+      const ad = await Ad.findById(adId);
       if (!ad) throw new Error('Ad not found');
       if (ad.status !== 'APPROVED') throw new Error('Ad must be approved before deployment');
 
@@ -707,7 +695,7 @@ const adsDeploymentResolvers = {
         const deployment = await AdsDeployment.addToLCD(materialId, driverId, adId, startTime, endTime);
 
         await deployment.populate([
-          { path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } },
+          'lcdSlots.adId',
           'materialId',
           'driverId'
         ]);
@@ -728,7 +716,7 @@ const adsDeploymentResolvers = {
 
         await deployment.save();
         await deployment.populate([
-          { path: 'adId', populate: { path: 'planId', model: 'AdsPlan' } },
+          'adId',
           'materialId',
           'driverId'
         ]);
@@ -757,8 +745,8 @@ const adsDeploymentResolvers = {
 
       await deployment.save();
       await deployment.populate([
-        { path: 'adId', populate: { path: 'planId', model: 'AdsPlan' } },
-        { path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } },
+        'adId',
+        'lcdSlots.adId',
         'materialId',
         'driverId',
         { path: 'removedBy', model: 'User', select: 'firstName lastName email' }
@@ -809,7 +797,7 @@ const adsDeploymentResolvers = {
 
       await deployment.save();
       await deployment.populate([
-        { path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } },
+        'lcdSlots.adId',
         'materialId',
         'driverId'
       ]);
@@ -838,12 +826,53 @@ const adsDeploymentResolvers = {
       checkAdmin(user);
       const deployment = await AdsDeployment.findById(id);
       if (!deployment) throw new Error('Deployment not found');
+      
+      // Check if already archived
+      if (deployment.isArchived) {
+        throw new Error('Deployment is already archived');
+      }
 
       if (['RUNNING','COMPLETED'].includes(deployment.currentStatus)) {
         throw new Error('Cannot delete running or completed deployments');
       }
+      
+      console.log(`🗑️ Archiving deployment: ${id} - 30-day deferred deletion`);
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      deployment.isArchived = true;
+      deployment.archivedAt = now;
+      deployment.scheduledDeletionDate = deletionDate;
+      
+      await deployment.save();
+      
+      console.log(`✅ Deployment ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
+      return true;
+    },
 
-      await AdsDeployment.findByIdAndDelete(id);
+    restoreDeployment: async (_, { id }, { user }) => {
+      checkAdmin(user);
+      const deployment = await AdsDeployment.findById(id);
+      if (!deployment) throw new Error('Deployment not found');
+      
+      if (!deployment.isArchived) {
+        throw new Error('Deployment is not archived');
+      }
+      
+      console.log(`✅ Restoring deployment: ${id}`);
+      
+      deployment.isArchived = false;
+      deployment.archivedAt = null;
+      deployment.scheduledDeletionDate = null;
+      
+      await deployment.save();
+      
+      console.log(`✅ Deployment ${id} restored successfully`);
+      
       return true;
     }
   },
@@ -859,7 +888,7 @@ const adsDeploymentResolvers = {
       // If adId exists, try to fetch the ad
       if (parent.adId) {
         try {
-          const ad = await Ad.findById(parent.adId).populate('planId');
+          const ad = await Ad.findById(parent.adId);
           if (ad) {
             // Return the full ad object with all fields
             return ad;

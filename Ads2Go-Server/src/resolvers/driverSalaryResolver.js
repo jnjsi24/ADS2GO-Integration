@@ -485,18 +485,77 @@ const resolvers = {
           throw new Error('Driver salary pricing not found');
         }
         
-        await DriverSalaryPricing.findByIdAndDelete(id);
+        // Check if already archived
+        if (pricing.isArchived) {
+          throw new Error('Driver salary pricing is already archived');
+        }
+        
+        console.log(`🗑️ Archiving driver salary pricing: ${id} - 30-day deferred deletion`);
+        
+        // Soft delete: Mark as archived with 30-day deletion schedule
+        const now = new Date();
+        const deletionDate = new Date(now);
+        deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+        
+        pricing.isArchived = true;
+        pricing.archivedAt = now;
+        pricing.scheduledDeletionDate = deletionDate;
+        pricing.isActive = false; // Deactivate immediately
+        
+        await pricing.save();
+        
+        console.log(`✅ Driver salary pricing ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
         
         return {
           success: true,
-          message: 'Driver salary pricing deleted successfully',
+          message: 'Driver salary pricing archived successfully. Scheduled for deletion in 30 days.',
           pricing
         };
       } catch (error) {
-        console.error('Error deleting driver salary pricing:', error);
+        console.error('Error archiving driver salary pricing:', error);
         return {
           success: false,
-          message: error.message || 'Failed to delete driver salary pricing',
+          message: error.message || 'Failed to archive driver salary pricing',
+          pricing: null
+        };
+      }
+    },
+
+    restoreDriverSalaryPricing: async (_, { id }, { user }) => {
+      checkSuperAdmin(user);
+      
+      try {
+        const pricing = await DriverSalaryPricing.findById(id);
+        if (!pricing) {
+          throw new Error('Driver salary pricing not found');
+        }
+        
+        if (!pricing.isArchived) {
+          throw new Error('Driver salary pricing is not archived');
+        }
+        
+        console.log(`✅ Restoring driver salary pricing: ${id}`);
+        
+        pricing.isArchived = false;
+        pricing.archivedAt = null;
+        pricing.scheduledDeletionDate = null;
+        
+        await pricing.save();
+        await pricing.populate('createdBy', 'firstName lastName email');
+        await pricing.populate('updatedBy', 'firstName lastName email');
+        
+        console.log(`✅ Driver salary pricing ${id} restored successfully`);
+        
+        return {
+          success: true,
+          message: 'Driver salary pricing restored successfully.',
+          pricing
+        };
+      } catch (error) {
+        console.error('Error restoring driver salary pricing:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to restore driver salary pricing',
           pricing: null
         };
       }

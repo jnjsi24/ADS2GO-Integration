@@ -39,16 +39,6 @@ type Ad = {
   createdAt: string;
   startTime: string;
   endTime: string;
-  planId: {
-    id: string;
-    name: string;
-    durationDays: number;
-    playsPerDayPerDevice: number;
-    numberOfDevices: number;
-    adLengthSeconds: number;
-    pricePerPlay: number;
-    totalPrice: number;
-  };
   materialId: {
     id: string;
     materialType: string;
@@ -69,10 +59,8 @@ const Advertisements: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchTerm, setSearchTerm] = useState('');
-  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
-  const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
   const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
   const [dateFilter, setDateFilter] = useState('');
@@ -228,12 +216,6 @@ const Advertisements: React.FC = () => {
     navigate(`/advertisements/${ad.id}`);
   };
 
-  const showConfirmModal = (message: string, callback: () => void) => {
-    if (window.confirm(message)) {
-      callback();
-    }
-  };
-
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
@@ -279,10 +261,9 @@ const Advertisements: React.FC = () => {
       ad.title.toLowerCase().includes(searchLower) ||
       ad.description.toLowerCase().includes(searchLower);
     
-    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name.toLowerCase() === selectedPlanFilter.toLowerCase();
     const matchesStatus = selectedStatusFilter === 'All Status' || ad.status.toLowerCase() === selectedStatusFilter.toLowerCase();
     
-    return matchesSearch && matchesStatus && matchesPlan;
+    return matchesSearch && matchesStatus;
   }).sort((a: Ad, b: Ad) => {
     switch (selectedSortBy) {
       case 'Newest First':
@@ -326,10 +307,6 @@ const Advertisements: React.FC = () => {
     handlePageChange(currentPage + 1);
   };
 
-  const handlePlanFilterChange = (plan: string) => {
-    setSelectedPlanFilter(plan);
-    setShowPlanDropdown(false);
-  };
 
   const handleStatusFilterChange = (status: string) => {
     setSelectedStatusFilter(status);

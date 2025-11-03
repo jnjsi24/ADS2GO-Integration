@@ -29,10 +29,9 @@ class AdDeploymentService {
    */
   async deployAd(adId) {
     try {
-      // Find the ad with populated material and plan
+      // Find the ad with populated material
       const ad = await Ad.findById(adId)
-        .populate('materialId')
-        .populate('planId');
+        .populate('materialId');
 
       if (!ad) {
         throw new Error('Ad not found');

@@ -40,3 +40,12 @@ export const DELETE_DRIVER = gql`
     }
   }
 `;
+
+export const RESTORE_DRIVER = gql`
+  mutation RestoreDriver($driverId: ID!) {
+    restoreDriver(driverId: $driverId) {
+      success
+      message
+    }
+  }
+`;

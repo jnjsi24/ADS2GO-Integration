@@ -205,7 +205,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
           updatedAt: '',
           userId: null,
           materialId: null,
-          planId: null
         };
         
         processedAdIds.add(adId);

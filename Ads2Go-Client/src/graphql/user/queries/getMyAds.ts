@@ -22,16 +22,7 @@ export const GET_MY_ADS = gql`
       materialType
       category
 
-      planId {       # populated AdsPlan object
-        id
-        name
-        durationDays
-        playsPerDayPerDevice
-        numberOfDevices
-        adLengthSeconds
-        pricePerPlay
-        totalPrice
-      }
+      # Removed planId - no longer using AdsPlan
 
       materialId {   # populated Material object
         id

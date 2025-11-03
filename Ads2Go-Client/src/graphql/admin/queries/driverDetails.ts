@@ -13,12 +13,16 @@ export const GET_DRIVER_BY_ID = gql`
       address
       licenseNumber
       licensePictureURL
+      licenseFrontURL
+      licenseBackURL
       vehiclePlateNumber
       vehicleModel
       vehicleType
       vehicleYear
       vehiclePhotoURL
       orCrPictureURL
+      orPictureURL
+      crPictureURL
       profilePicture
       accountStatus
       reviewStatus

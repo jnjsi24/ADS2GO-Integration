@@ -1,8 +1,8 @@
 const Ad = require('../models/Ad');
 const User = require('../models/User');
-const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const MaterialAvailability = require('../models/MaterialAvailability');
+const PricingConfig = require('../models/PricingConfig');
 const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
 const Payment = require('../models/Payment');
@@ -13,32 +13,50 @@ const NotificationService = require('../services/notifications/NotificationServi
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
+// Helper function to calculate plays per day
+const calculatePlaysPerDay = (adLengthSeconds, screenHoursPerDay = 8) => {
+  const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
+  return Math.floor(screenSecondsPerDay / adLengthSeconds);
+};
+
+// Helper function to calculate pricing
+const calculatePricing = (pricePerPlay, adLengthSeconds, numberOfDevices, durationDays) => {
+  const playsPerDayPerDevice = calculatePlaysPerDay(adLengthSeconds);
+  const totalPlaysPerDay = playsPerDayPerDevice * numberOfDevices;
+  const dailyRevenue = totalPlaysPerDay * pricePerPlay;
+  const totalPrice = dailyRevenue * durationDays;
+
+  return {
+    playsPerDayPerDevice,
+    totalPlaysPerDay,
+    dailyRevenue,
+    totalPrice
+  };
+};
+
 const adResolvers = {
   Query: {
     getAllAds: async (_, __, { user }) => {
       checkAdmin(user);
-      // Filter out archived ads (30-day deferred deletion)
-      return await Ad.find({ isArchived: { $ne: true } })
+      // Return ALL ads including archived (client handles filtering by archive status)
+      return await Ad.find({})
         .populate('userId')
         .populate('driverId')
         .populate('materialId')
-        .populate('planId');
     },
 
     getAdsByUser: async (_, { userId }, { user }) => {
       checkAdmin(user);
-      // Filter out archived ads (30-day deferred deletion)
-      return await Ad.find({ userId, isArchived: { $ne: true } })
+      // Return ALL ads including archived (client handles filtering by archive status)
+      return await Ad.find({ userId })
         .populate('materialId')
-        .populate('planId');
     },
 
     getMyAds: async (_, __, { user }) => {
       checkAuth(user);
-      // Filter out archived ads (30-day deferred deletion)
-      return await Ad.find({ userId: user.id, isArchived: { $ne: true } })
+      // Return ALL ads including archived (client handles filtering by archive status)
+      return await Ad.find({ userId: user.id })
         .populate('materialId')
-        .populate('planId');
     },
 
     getAdById: async (_, { id }, { user }) => {
@@ -51,16 +69,126 @@ const adResolvers = {
 
       const ad = await Ad.findById(id)
         .populate('materialId')
-        .populate('planId')
         .populate('userId');
 
       if (!ad) throw new Error('Ad not found');
       return ad;
     },
+
+    // Get available field combinations for ad creation
+    getFlexibleFieldCombinations: async (_, __, { user }) => {
+      checkAuth(user);
+      return await PricingConfig.find({ isActive: true }).sort({ materialType: 1, vehicleType: 1, category: 1 });
+    },
+
+    // Calculate pricing for flexible ad creation
+    calculateFlexiblePricing: async (_, { materialType, vehicleType, category, durationDays, adLengthSeconds, numberOfDevices }, { user }) => {
+      // This can be called by both superadmin and regular users for pricing calculations
+
+      // Generate default time range for availability calculation (next 30 days)
+      const startTime = new Date();
+      const endTime = new Date();
+      endTime.setDate(endTime.getDate() + durationDays);
+
+      // Get pricing configuration
+      const pricingConfig = await PricingConfig.findPricingConfig(materialType, vehicleType, category);
+      if (!pricingConfig) {
+        throw new Error(`No pricing configuration found for ${materialType} ${vehicleType} ${category}`);
+      }
+
+      // Validate ad length - only allow 20, 40, or 60 seconds
+      const allowedAdLengths = [20, 40, 60];
+      if (!allowedAdLengths.includes(adLengthSeconds)) {
+        throw new Error('Ad length must be 20, 40, or 60 seconds');
+      }
+
+      // Validate duration - only allow 1-6 months (30-180 days)
+      const allowedDurations = [30, 60, 90, 120, 150, 180];
+      if (!allowedDurations.includes(durationDays)) {
+        throw new Error('Duration must be 1-6 months (30-180 days)');
+      }
+
+      // Validate number of devices (must be at least 1)
+      if (numberOfDevices < 1) {
+        throw new Error('Number of devices must be at least 1');
+      }
+
+      // Note: maxDevices removed - constraint is now based on available materials, not pricing config
+      // Get price for duration
+      const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
+      
+      // Calculate pricing
+      const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
+
+      // Get available materials to calculate available slots
+      const materials = await getMaterialsSortedByAvailability(materialType, vehicleType, category, startTime, endTime);
+      
+      // Calculate actual available devices (not slots)
+      let availableDevices = 0;
+      let devicesWithDriver = 0;
+      let devicesMounted = 0;
+      
+      for (const material of materials) {
+        const availability = await MaterialAvailability.findOne({ materialId: material._id });
+        
+        // Count devices with driver assigned
+        if (material.driverId) {
+          devicesWithDriver += 1;
+        }
+        
+        // Count devices that are physically mounted
+        if (material.mountedAt) {
+          devicesMounted += 1;
+        }
+        
+        // Check if device has been connected (has DeviceTracking record)
+        const DeviceTracking = require('../models/deviceTracking');
+        const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+        
+        if (availability) {
+          // Count devices that have at least one available slot AND meet all requirements
+          if (availability.availableSlots > 0 && 
+              material.driverId && 
+              material.mountedAt && 
+              !material.dismountedAt &&
+              deviceTracking) { // Device has been connected before
+            availableDevices += 1;
+          }
+        } else {
+          // If no availability record, check if material meets requirements
+          if (material.driverId && 
+              material.mountedAt && 
+              !material.dismountedAt &&
+              deviceTracking) { // Device has been connected before
+            availableDevices += 1;
+          }
+        }
+      }
+
+      return {
+        materialType: pricingConfig.materialType,
+        vehicleType: pricingConfig.vehicleType,
+        category: pricingConfig.category,
+        durationDays,
+        adLengthSeconds,
+        numberOfDevices,
+        pricePerPlay,
+        playsPerDayPerDevice: pricing.playsPerDayPerDevice,
+        totalPlaysPerDay: pricing.totalPlaysPerDay,
+        dailyRevenue: pricing.dailyRevenue,
+        totalPrice: pricing.totalPrice,
+        availableDevices: availableDevices, // Count of devices that meet ALL requirements
+        devicesWithDriver: devicesWithDriver, // Count of devices with driver assigned
+        devicesMounted: devicesMounted, // Count of devices that are physically mounted
+        minAdLengthSeconds: pricingConfig.minAdLengthSeconds,
+        maxAdLengthSeconds: pricingConfig.maxAdLengthSeconds
+      };
+    }
   },
 
   Mutation: {
-    createAd: async (_, { input }, { user }) => {
+    // Create ad with flexible configuration (replaces unused createAd mutation)
+    createFlexibleAd: async (_, { input }, { user }) => {
       checkAuth(user);
 
       const dbUser = await User.findById(user.id);
@@ -69,154 +197,168 @@ const adResolvers = {
         throw new Error('Please verify your email before creating an advertisement');
       }
 
-      const plan = await Plan.findById(input.planId).populate('materials');
-      if (!plan) throw new Error('Invalid plan selected');
+      const {
+        title,
+        description,
+        website,
+        materialType,
+        vehicleType,
+        category,
+        durationDays,
+        adLengthSeconds,
+        numberOfDevices,
+        adType,
+        adFormat,
+        status,
+        startTime,
+        endTime,
+        mediaFile,
+        price
+      } = input;
 
-      if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
-        throw new Error('Invalid adType');
+      // Get pricing configuration
+      const pricingConfig = await PricingConfig.findPricingConfig(materialType, vehicleType, category);
+      if (!pricingConfig) {
+        throw new Error(`No pricing configuration found for ${materialType} ${vehicleType} ${category}`);
       }
 
-      if (!input.adFormat) throw new Error('adFormat is required');
-
-      // IMPORTANT: Ensure mediaFile is a Firebase Storage URL
-      if (!input.mediaFile || !input.mediaFile.startsWith('http')) {
-        throw new Error('Media file must be uploaded to Firebase first');
+      // Validate ad length - only allow 20, 40, or 60 seconds
+      const allowedAdLengths = [20, 40, 60];
+      if (!allowedAdLengths.includes(adLengthSeconds)) {
+        throw new Error('Ad length must be 20, 40, or 60 seconds');
       }
 
-      // Validate plan availability
-      const userDesiredStartDate = new Date(input.startTime);
-      const availability = await MaterialAvailabilityService.validatePlanAvailability(
-        input.planId, 
-        userDesiredStartDate
-      );
+      // ✅ TRUST FRONTEND VALIDATION: Frontend already validates video duration with HTML5 video element
+      // Backend re-detection often fails with Firebase URLs, causing false errors
+      // The frontend auto-selects the correct ad length based on detected video duration
+      console.log(`✅ Using user-selected ad length: ${adLengthSeconds}s (frontend-validated)`);
+      
+      // Set actualVideoDuration to match the selected length (frontend already validated this)
+      let actualVideoDuration = adLengthSeconds;
 
-      if (!availability.canCreate) {
-        const nextAvailable = availability.nextAvailableDate ? 
-          new Date(availability.nextAvailableDate).toLocaleDateString() : 'Unknown';
-        throw new Error(`No available materials or slots for selected plan. Next available: ${nextAvailable}`);
+      // Validate duration - only allow 1-6 months (30-180 days)
+      const allowedDurations = [30, 60, 90, 120, 150, 180];
+      if (!allowedDurations.includes(durationDays)) {
+        throw new Error('Duration must be 1-6 months (30-180 days)');
       }
 
-      // Auto-detect video duration from uploaded file
-      const VideoDurationService = require('../services/videoDurationService');
-      let actualVideoDuration = plan.adLengthSeconds; // Default to plan duration
+      // Validate number of devices (must be at least 1)
+      if (numberOfDevices < 1) {
+        throw new Error('Number of devices must be at least 1');
+      }
+
+      // Note: maxDevices removed - constraint is now based on available materials, not pricing config
+      // Get price for duration (use selected length for pricing, since that's what user chose)
+      const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
+      
+      // Calculate pricing (use actual duration for accurate play count calculations)
+      const pricing = calculatePricing(pricePerPlay, actualVideoDuration, numberOfDevices, durationDays);
+      
+      // Use provided price if available, otherwise use calculated price
+      const finalPrice = price || pricing.totalPrice;
+
+      // Use smart material selection for multiple devices
+      let selectedMaterials = [];
       
       try {
-        console.log('🎬 Auto-detecting video duration...');
-        actualVideoDuration = await VideoDurationService.getVideoDuration(input.mediaFile);
-        console.log(`✅ Video duration detected: ${actualVideoDuration}s (plan limit: ${plan.adLengthSeconds}s)`);
-        
-        // Validate video duration against plan limits
-        if (actualVideoDuration > plan.adLengthSeconds) {
-          throw new Error(`Video duration (${actualVideoDuration}s) exceeds plan limit (${plan.adLengthSeconds}s). Please choose a shorter video or upgrade to a plan with longer ad duration.`);
-        }
-        
-        if (actualVideoDuration < 5) {
-          throw new Error(`Video duration (${actualVideoDuration}s) is too short. Minimum duration is 5 seconds.`);
-        }
-        
-      } catch (error) {
-        if (error.message.includes('exceeds plan limit') || error.message.includes('too short')) {
-          throw error; // Re-throw validation errors
-        }
-        console.warn('⚠️ Could not detect video duration, using plan duration:', error.message);
-      }
-
-      // Calculate total price using actual video duration
-      const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
-      const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
-
-      // Use the user's desired start date directly (no 7-day buffer for testing)
-      const startTime = new Date(userDesiredStartDate);
-      const endTime = new Date(userDesiredStartDate);
-      endTime.setDate(endTime.getDate() + plan.durationDays);
-
-      // Use smart material selection instead of plan's materials array
-      let selectedMaterial = null;
-      
-      // Import the smart selection function from utility
-      const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
-      
-      try {
-        console.log('🧠 Using smart material selection for ad creation...');
+        console.log(`🧠 Using smart material selection for ${numberOfDevices} devices...`);
         const sortedMaterials = await getMaterialsSortedByAvailability(
-          plan.materialType,
-          plan.vehicleType,
-          plan.category,
-          startTime,
-          endTime
+          materialType,
+          vehicleType,
+          category,
+          new Date(startTime),
+          new Date(endTime)
         );
         
-        if (sortedMaterials.length > 0) {
-          // Find the first material that has availability for the desired time period
-          for (const material of sortedMaterials) {
-            const availability = await MaterialAvailability.findOne({ materialId: material._id });
-            if (availability && availability.canAcceptAd(startTime, endTime)) {
-              selectedMaterial = material;
-              console.log(`🎯 Smart selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType}) - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
-              break;
-            }
+        if (sortedMaterials.length === 0) {
+          throw new Error('No compatible materials found for this configuration. All materials are either full, not mounted, or have no driver assigned.');
+        }
+        
+        // ✅ NEW: Check if we have enough materials BEFORE trying to select
+        if (sortedMaterials.length < numberOfDevices) {
+          throw new Error(`Only ${sortedMaterials.length} device${sortedMaterials.length === 1 ? '' : 's'} available, but you requested ${numberOfDevices}. Please reduce the number of devices or wait for more slots to become available.`);
+        }
+
+        // Select materials for the requested number of devices
+        let devicesSelected = 0;
+        for (const material of sortedMaterials) {
+          if (devicesSelected >= numberOfDevices) break;
+          
+          // Additional validation: ensure material has driver and is mounted
+          if (!material.driverId) {
+            console.log(`❌ Skipping ${material.materialId}: No driver assigned`);
+            continue;
           }
           
-          // If no available material found, use the first material (fallback)
-          if (!selectedMaterial) {
-            selectedMaterial = sortedMaterials[0];
-            console.log(`⚠️ No available material found, using first smart material: ${selectedMaterial.materialId}`);
+          if (!material.mountedAt) {
+            console.log(`❌ Skipping ${material.materialId}: Not physically mounted`);
+            continue;
           }
-        } else {
-          throw new Error('No compatible materials found for this plan');
+          
+          if (material.dismountedAt) {
+            console.log(`❌ Skipping ${material.materialId}: Already dismounted`);
+            continue;
+          }
+          
+          // Check if device has been connected (has DeviceTracking record)
+          const DeviceTracking = require('../models/deviceTracking');
+          const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+          if (!deviceTracking) {
+            console.log(`❌ Skipping ${material.materialId}: No connected device (no DeviceTracking record)`);
+            continue;
+          }
+          
+          const availability = await MaterialAvailability.findOne({ materialId: material._id });
+          if (availability && availability.canAcceptAd(new Date(startTime), new Date(endTime))) {
+            selectedMaterials.push(material);
+            devicesSelected++;
+            console.log(`🎯 Selected device ${devicesSelected}/${numberOfDevices}: ${material.materialId} (${material.materialType} ${material.vehicleType}) - Driver: ${material.driverId}, Mounted: ${material.mountedAt ? 'Yes' : 'No'} - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+          }
+        }
+        
+        // Check if we have enough devices
+        if (selectedMaterials.length < numberOfDevices) {
+          throw new Error(`Only ${selectedMaterials.length} device${selectedMaterials.length === 1 ? '' : 's'} available with open slots, but you requested ${numberOfDevices}. Please reduce the number of devices or try a different date.`);
         }
       } catch (error) {
-        console.error('❌ Smart material selection failed, falling back to plan materials:', error.message);
-        // Fallback to plan's materials if smart selection fails
-        if (plan.materials && plan.materials.length > 0) {
-          // ✅ ENHANCED: Validate that fallback material has a registered device
-          const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
-          
-          for (const material of plan.materials) {
-            const deviceValidation = await validateMaterialHasDevice(material.materialId);
-            
-            if (deviceValidation.hasDevice) {
-              selectedMaterial = material;
-              console.log(`✅ Fallback to plan material with device: ${selectedMaterial.materialId}`);
-              break;
-            } else {
-              console.log(`⚠️ Skipping plan material ${material.materialId}: ${deviceValidation.reason}`);
-            }
-          }
-          
-          if (!selectedMaterial) {
-            throw new Error('No plan materials have registered devices available for ad deployment');
-          }
-        } else {
-          throw new Error('No materials assigned to this plan');
-        }
+        console.error('❌ Smart material selection failed:', error.message);
+        // Pass through the detailed error message instead of generic one
+        throw error;
       }
 
       // ✅ Set reservation expiration BEFORE creating the ad (7 days from now)
       const reservationExpires = new Date();
       reservationExpires.setDate(reservationExpires.getDate() + 7);
 
+      // Create a single ad that handles multiple devices
       const ad = new Ad({
-        ...input,
-        userId: user.id,
-        materialId: [selectedMaterial._id], // Use array with the selected material
-        durationDays: plan.durationDays,
-        numberOfDevices: plan.numberOfDevices,
-        adLengthSeconds: actualVideoDuration, // Use detected video duration instead of plan duration
-        playsPerDayPerDevice: plan.playsPerDayPerDevice,
-        totalPlaysPerDay,
-        pricePerPlay: plan.pricePerPlay,
-        totalPrice,
-        price: totalPrice,
-        startTime: startTime, // Use user's desired start time directly
-        endTime,
-        userDesiredStartTime: userDesiredStartDate, // Store user's desired start time
+        title,
+        description,
+        website: website || null,
+        materialId: selectedMaterials.map(m => m._id), // All materials as array
+        targetDevices: selectedMaterials.map(m => m._id), // All target devices
+        // Removed planId - no longer using AdsPlan
+        adType,
+        adFormat,
+        price: finalPrice,
+        durationDays,
+        numberOfDevices, // This is the key - store the number of devices in the ad
+        adLengthSeconds: actualVideoDuration, // ✅ Use actual detected duration, not user selection
+        playsPerDayPerDevice: pricing.playsPerDayPerDevice,
+        totalPlaysPerDay: pricing.totalPlaysPerDay, // Total plays across all devices
+        pricePerPlay,
+        totalPrice: finalPrice,
         status: 'PENDING',
-        adStatus: 'INACTIVE', // Will be activated after admin approval
+        adStatus: 'ACTIVE',
+        paymentStatus: 'PENDING',
         impressions: 0,
-        reasonForReject: null,
-        approveTime: null,
-        rejectTime: null,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        mediaFile,
+        userId: user.id,
+        materialType,
+        vehicleType,
+        category,
         reservationExpires: reservationExpires // ✅ Set reservation expiration at creation
       });
 
@@ -232,49 +374,54 @@ const adResolvers = {
         // Don't fail the ad creation if notification fails
       }
 
-      // ✅ NEW: Reserve slot immediately upon ad creation (before payment)
+      // ✅ NEW: Reserve slots for all target devices with expiration
       try {
-        console.log(`🔄 Reserving slot for ad: ${savedAd._id}`);
-        let availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
         
-        // Create availability record if it doesn't exist
-        if (!availability) {
-          availability = new MaterialAvailability({
-            materialId: selectedMaterial._id,
-            totalSlots: 5,
-            occupiedSlots: 0,
-            availableSlots: 5,
-            currentAds: [],
-            scheduledAds: [],
-            status: 'AVAILABLE'
-          });
+        for (const material of selectedMaterials) {
+          let availability = await MaterialAvailability.findOne({ materialId: material._id });
+          if (!availability) {
+            availability = new MaterialAvailability({ 
+              materialId: material._id, 
+              totalSlots: 5,
+              occupiedSlots: 0,
+              availableSlots: 5,
+              currentAds: [],
+              scheduledAds: [],
+              status: 'AVAILABLE'
+            });
+          }
+
+          // Check if slots are still available (double-check for race conditions)
+          if (!availability.canAcceptAd(savedAd.startTime, savedAd.endTime)) {
+            // If slots are not available, delete the ad and throw error
+            await Ad.findByIdAndDelete(savedAd._id);
+            throw new Error(`Slots no longer available for device ${material.materialId}. Another user may have reserved them.`);
+          }
+
+          // Reserve slot using the new method
+          const slotNumber = availability.reserveSlot(savedAd._id, savedAd.startTime, savedAd.endTime, reservationExpires);
+          await availability.save();
+
+          console.log(`✅ Reserved slot ${slotNumber} for ad on ${material.materialId} (expires: ${reservationExpires.toISOString()})`);
+          console.log(`📊 Material ${material.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);
         }
-        
-        // ✅ reservationExpires was already set before ad creation, so we can use it from savedAd
-        const reservationExpires = savedAd.reservationExpires;
-        
-        // Reserve slot for the ad
-        const slotNumber = availability.reserveSlot(savedAd._id, startTime, endTime, reservationExpires);
-        await availability.save();
         
         // ✅ No second save needed - reservationExpires was already set before the first save
         
-        console.log(`✅ Reserved slot ${slotNumber} for ad ${savedAd._id} (expires: ${reservationExpires.toISOString()})`);
-        console.log(`📊 Material ${selectedMaterial.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);
       } catch (availabilityError) {
-        console.error('❌ Error reserving slot:', availabilityError);
-        // If slot reservation fails, delete the ad to prevent orphaned records
-        await Ad.findByIdAndDelete(savedAd._id);
-        throw new Error(`Cannot create ad: ${availabilityError.message}`);
+        console.error('❌ Error reserving slots:', availabilityError);
+        // If slot reservation fails, delete the ad to maintain consistency
+        try {
+          await Ad.findByIdAndDelete(savedAd._id);
+        } catch (deleteError) {
+          console.error('❌ Error deleting ad after slot reservation failure:', deleteError);
+        }
+        throw new Error(`Failed to reserve slots: ${availabilityError.message}`);
       }
 
-      // Note: Ad deployment is handled by the Ad model's post-save hook
-      // when the ad status is PAID and adStatus is ACTIVE
-
-      return await Ad.findById(savedAd._id)
-        .populate('planId')
-        .populate('materialId')
-        .populate('userId');
+      console.log(`✅ Flexible ad created successfully: ${savedAd.title} for ${numberOfDevices} devices (${savedAd._id})`);
+      console.log(`📹 Video duration: ${actualVideoDuration}s (user selected: ${adLengthSeconds}s ad slot)`);
+      return savedAd;
     },
 
     updateAd: async (_, { id, input }, { user }) => {
@@ -284,27 +431,7 @@ const adResolvers = {
 
       const isAdmin = ['ADMIN', 'SUPERADMIN'].includes(user.role);
 
-      const applyPlanChanges = async (planId, startTime) => {
-        const plan = await Plan.findById(planId);
-        if (!plan) throw new Error('Invalid plan selected');
-
-        ad.planId = plan._id;
-        ad.numberOfDevices = plan.numberOfDevices;
-        ad.adLengthSeconds = plan.adLengthSeconds;
-        ad.playsPerDayPerDevice = plan.playsPerDayPerDevice;
-        ad.totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
-        ad.pricePerPlay = plan.pricePerPlay;
-
-        const days = plan.durationDays;
-        ad.totalPrice = ad.totalPlaysPerDay * plan.pricePerPlay * days;
-        ad.price = ad.totalPrice;
-
-        if (startTime) {
-          const endTime = new Date(startTime);
-          endTime.setDate(endTime.getDate() + days);
-          ad.endTime = endTime;
-        }
-      };
+      // Removed applyPlanChanges - no longer using AdsPlan
 
       if (input.materialId) {
         const materialExists = await Material.exists({ _id: input.materialId });
@@ -374,15 +501,9 @@ const adResolvers = {
           }
         }
 
-        if (input.planId) {
-          await applyPlanChanges(input.planId, input.startTime || ad.startTime);
-        }
-
+        // Removed planId handling - no longer using AdsPlan
         if (input.startTime) {
           ad.startTime = new Date(input.startTime);
-          if (ad.planId) {
-            await applyPlanChanges(ad.planId, input.startTime);
-          }
         }
 
         if (input.adType && ["DIGITAL", "NON_DIGITAL"].includes(input.adType)) ad.adType = input.adType;
@@ -403,12 +524,9 @@ const adResolvers = {
         if (ad.userId.toString() !== user.id) throw new Error("Not authorized to update this ad");
         if (input.status && input.status !== ad.status) throw new Error("You are not authorized to update the status");
 
-        if (input.planId) {
-          await applyPlanChanges(input.planId, input.startTime || ad.startTime);
-        }
-
-        // Handle flexible ad updates (no plan)
-        if (!ad.planId) {
+        // Removed planId handling - no longer using AdsPlan
+        // Handle flexible ad updates
+        if (true) {
           // Check if material type or vehicle type is changing
           const typeChanged = (input.materialType && input.materialType !== ad.materialType) ||
                             (input.vehicleType && input.vehicleType !== ad.vehicleType);
@@ -626,9 +744,7 @@ const adResolvers = {
 
         if (input.startTime) {
           ad.startTime = new Date(input.startTime);
-          if (ad.planId) {
-            await applyPlanChanges(ad.planId, input.startTime);
-          } else if (ad.durationDays) {
+          if (ad.durationDays) {
             // Recalculate end time for flexible ads
             const endTime = new Date(input.startTime);
             endTime.setDate(endTime.getDate() + ad.durationDays);
@@ -704,6 +820,45 @@ const adResolvers = {
         console.error('❌ Error archiving ad:', error);
         throw new Error(`Failed to archive ad: ${error.message}`);
       }
+    },
+
+    restoreAd: async (_, { id }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const ad = await Ad.findById(id);
+        if (!ad) {
+          throw new Error('Ad not found');
+        }
+
+        const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const isOwner = ad.userId.toString() === user.id;
+
+        if (!isAdmin && !isOwner) {
+          throw new Error('Not authorized to restore this advertisement');
+        }
+
+        if (!ad.isArchived) {
+          throw new Error('Ad is not archived');
+        }
+
+        console.log(`✅ Restoring ad: ${id} (${ad.title})`);
+
+        ad.isArchived = false;
+        ad.archivedAt = null;
+        ad.scheduledDeletionDate = null;
+        ad.status = 'PENDING'; // Reset to pending status
+        
+        await ad.save();
+
+        console.log(`✅ Ad ${id} restored successfully`);
+
+        return true;
+
+      } catch (error) {
+        console.error('❌ Error restoring ad:', error);
+        throw new Error(`Failed to restore ad: ${error.message}`);
+      }
     }
   },
 
@@ -715,7 +870,7 @@ const adResolvers = {
     },
     userId: async (parent) => await User.findById(parent.userId),
     materialId: async (parent) => await Material.find({ _id: { $in: parent.materialId } }),
-    planId: async (parent) => await Plan.findById(parent.planId),
+    // Removed planId resolver - no longer using AdsPlan
     // Ensure date fields are consistent ISO strings to avoid client-side Invalid Date
     startTime: (parent) => {
       try {
@@ -751,9 +906,6 @@ const adResolvers = {
     },
   },
 
-  AdsPlan: {
-    id: (parent) => parent._id.toString(),
-  },
 };
 
 module.exports = adResolvers;

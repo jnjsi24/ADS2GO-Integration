@@ -4,7 +4,6 @@ const Ad = require('../models/Ad');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const Admin = require('../models/Admin');
-const AdsPlan = require('../models/AdsPlan');
 const Payment = require('../models/Payment');
 const { checkAuth } = require('../middleware/auth');
 const NotificationService = require('../services/notifications/NotificationService');
@@ -234,7 +233,7 @@ const notificationResolvers = {
           createdAt: ad.createdAt,
           user: ad.userId,
           materialId: ad.materialId || [], // Return as array to match schema
-          planId: ad.planId
+          // Removed planId - no longer using AdsPlan
         }));
         
         logger.notification('🔔 Backend: Pending ads details:', transformedAds.map(ad => ({
@@ -398,14 +397,13 @@ const notificationResolvers = {
           totalAdmins,
           totalDrivers,
           totalAds,
-          totalPlans,
           userNotifications
         ] = await Promise.all([
           User.countDocuments(),
           Admin.countDocuments(),
           Driver.countDocuments(),
           Ad.countDocuments(),
-          AdsPlan.countDocuments(),
+          0, // Removed AdsPlan count - no longer using AdsPlan
           UserNotifications.findOne({ userId: user.id })
         ]);
 
@@ -420,45 +418,174 @@ const notificationResolvers = {
         ]);
         const totalRevenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
 
-        // Get plan usage stats
-        const planUsageStats = await AdsPlan.aggregate([
+        // Calculate user statistics
+        const userStats = await User.aggregate([
           {
-            $lookup: {
-              from: 'ads',
-              localField: '_id',
-              foreignField: 'planId',
-              as: 'ads'
-            }
-          },
-          {
-            $lookup: {
-              from: 'payments',
-              localField: '_id',
-              foreignField: 'planID',
-              as: 'payments'
-            }
-          },
-          {
-            $project: {
-              planId: '$_id',
-              planName: '$name',
-              userCount: { $size: { $setUnion: '$ads.userId' } },
-              activeAdsCount: { $size: { $filter: { input: '$ads', cond: { $eq: ['$$this.status', 'APPROVED'] } } } },
-              totalRevenue: { $sum: { $filter: { input: '$payments', cond: { $eq: ['$$this.paymentStatus', 'PAID'] } } } }
+            $group: {
+              _id: null,
+              emailVerified: { $sum: { $cond: ['$isEmailVerified', 1, 0] } },
+              emailUnverified: { $sum: { $cond: [{ $not: '$isEmailVerified' }, 1, 0] } },
+              hasLastLogin: { $sum: { $cond: [{ $ne: ['$lastLogin', null] }, 1, 0] } },
+              neverLoggedIn: { $sum: { $cond: [{ $eq: ['$lastLogin', null] }, 1, 0] } },
+              archived: { $sum: { $cond: ['$isArchived', 1, 0] } },
+              accountLocked: { $sum: { $cond: ['$accountLocked', 1, 0] } },
+              googleAuth: { $sum: { $cond: [{ $eq: ['$authProvider', 'google'] }, 1, 0] } },
+              localAuth: { $sum: { $cond: [{ $eq: ['$authProvider', 'local'] }, 1, 0] } }
             }
           }
         ]);
+
+        const userStatistics = userStats.length > 0 ? userStats[0] : {
+          emailVerified: 0,
+          emailUnverified: 0,
+          hasLastLogin: 0,
+          neverLoggedIn: 0,
+          archived: 0,
+          accountLocked: 0,
+          googleAuth: 0,
+          localAuth: 0
+        };
+
+        // Calculate driver statistics
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const driverStats = await Driver.aggregate([
+          {
+            $group: {
+              _id: null,
+              pendingApproval: { 
+                $sum: { 
+                  $cond: [
+                    { $and: [
+                      { $eq: ['$accountStatus', 'PENDING'] },
+                      { $in: ['$reviewStatus', ['PENDING', null]] }
+                    ]}, 
+                    1, 
+                    0
+                  ] 
+                } 
+              },
+              active: { $sum: { $cond: [{ $eq: ['$accountStatus', 'ACTIVE'] }, 1, 0] } },
+              suspended: { $sum: { $cond: [{ $eq: ['$accountStatus', 'SUSPENDED'] }, 1, 0] } },
+              rejected: { $sum: { $cond: [{ $eq: ['$accountStatus', 'REJECTED'] }, 1, 0] } },
+              resubmitted: { $sum: { $cond: [{ $eq: ['$accountStatus', 'RESUBMITTED'] }, 1, 0] } },
+              newThisMonth: { 
+                $sum: { 
+                  $cond: [
+                    { $gte: ['$createdAt', startOfMonth] }, 
+                    1, 
+                    0
+                  ] 
+                } 
+              },
+              archived: { $sum: { $cond: ['$isArchived', 1, 0] } }
+            }
+          }
+        ]);
+
+        const driverStatistics = driverStats.length > 0 ? driverStats[0] : {
+          pendingApproval: 0,
+          active: 0,
+          suspended: 0,
+          rejected: 0,
+          resubmitted: 0,
+          newThisMonth: 0,
+          archived: 0
+        };
+
+        // Calculate ad statistics
+        const adStats = await Ad.aggregate([
+          {
+            $group: {
+              _id: null,
+              active: { 
+                $sum: { 
+                  $cond: [
+                    { $and: [
+                      { $eq: ['$status', 'APPROVED'] },
+                      { $eq: ['$adStatus', 'ACTIVE'] }
+                    ]}, 
+                    1, 
+                    0
+                  ] 
+                } 
+              },
+              pending: { $sum: { $cond: [{ $eq: ['$status', 'PENDING'] }, 1, 0] } },
+              approved: { $sum: { $cond: [{ $eq: ['$status', 'APPROVED'] }, 1, 0] } },
+              rejected: { $sum: { $cond: [{ $eq: ['$status', 'REJECTED'] }, 1, 0] } },
+              running: { $sum: { $cond: [{ $eq: ['$status', 'RUNNING'] }, 1, 0] } },
+              scheduled: { $sum: { $cond: [{ $eq: ['$status', 'SCHEDULED'] }, 1, 0] } },
+              ended: { $sum: { $cond: [{ $eq: ['$status', 'ENDED'] }, 1, 0] } },
+              newThisMonth: { 
+                $sum: { 
+                  $cond: [
+                    { $gte: ['$createdAt', startOfMonth] }, 
+                    1, 
+                    0
+                  ] 
+                } 
+              },
+              archived: { $sum: { $cond: ['$isArchived', 1, 0] } }
+            }
+          }
+        ]);
+
+        const adStatistics = adStats.length > 0 ? adStats[0] : {
+          active: 0,
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          running: 0,
+          scheduled: 0,
+          ended: 0,
+          newThisMonth: 0,
+          archived: 0
+        };
+
+        // Removed AdsPlan usage stats - no longer using AdsPlan
+        const planUsageStats = [];
 
         const stats = {
           totalUsers,
           totalAdmins,
           totalDrivers,
           totalAds,
-          totalPlans,
+          totalPlans: 0, // Removed - no longer using AdsPlan
           totalRevenue,
           unreadNotifications,
           highPriorityNotifications,
-          planUsageStats
+          planUsageStats,
+          userStatistics: {
+            emailVerified: userStatistics.emailVerified || 0,
+            emailUnverified: userStatistics.emailUnverified || 0,
+            hasLastLogin: userStatistics.hasLastLogin || 0,
+            neverLoggedIn: userStatistics.neverLoggedIn || 0,
+            archived: userStatistics.archived || 0,
+            accountLocked: userStatistics.accountLocked || 0,
+            googleAuth: userStatistics.googleAuth || 0,
+            localAuth: userStatistics.localAuth || 0
+          },
+          driverStatistics: {
+            pendingApproval: driverStatistics.pendingApproval || 0,
+            active: driverStatistics.active || 0,
+            suspended: driverStatistics.suspended || 0,
+            rejected: driverStatistics.rejected || 0,
+            resubmitted: driverStatistics.resubmitted || 0,
+            newThisMonth: driverStatistics.newThisMonth || 0,
+            archived: driverStatistics.archived || 0
+          },
+          adStatistics: {
+            active: adStatistics.active || 0,
+            pending: adStatistics.pending || 0,
+            approved: adStatistics.approved || 0,
+            rejected: adStatistics.rejected || 0,
+            running: adStatistics.running || 0,
+            scheduled: adStatistics.scheduled || 0,
+            ended: adStatistics.ended || 0,
+            newThisMonth: adStatistics.newThisMonth || 0,
+            archived: adStatistics.archived || 0
+          }
         };
 
         logger.notification('🔔 Backend: Super admin dashboard stats:', stats);
@@ -480,47 +607,162 @@ const notificationResolvers = {
           throw new Error('Unauthorized: Super admin access required');
         }
 
-        const planCounts = await AdsPlan.aggregate([
-          {
-            $lookup: {
-              from: 'ads',
-              localField: '_id',
-              foreignField: 'planId',
-              as: 'ads'
-            }
-          },
-          {
-            $lookup: {
-              from: 'payments',
-              localField: '_id',
-              foreignField: 'planID',
-              as: 'payments'
-            }
-          },
-          {
-            $project: {
-              planId: '$_id',
-              planName: '$name',
-              planDescription: '$description',
-              userCount: { $size: { $setUnion: '$ads.userId' } },
-              activeAdsCount: { $size: { $filter: { input: '$ads', cond: { $eq: ['$$this.status', 'APPROVED'] } } } },
-              totalRevenue: { $sum: { $filter: { input: '$payments', cond: { $eq: ['$$this.paymentStatus', 'PAID'] } } } },
-              planDetails: {
-                materialType: '$materialType',
-                vehicleType: '$vehicleType',
-                numberOfDevices: '$numberOfDevices',
-                durationDays: '$durationDays',
-                totalPrice: '$totalPrice'
-              }
-            }
-          }
-        ]);
+        // Removed AdsPlan functionality - no longer using AdsPlan
+        const planCounts = [];
 
         logger.notification('🔔 Backend: User counts by plan:', planCounts);
         return planCounts;
       } catch (error) {
         console.error('Error fetching user counts by plan:', error);
         throw new Error('Failed to fetch user counts by plan');
+      }
+    },
+
+    getSuperAdminMonthlyGrowth: async (_, { months = 12 }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        logger.notification(`🔔 Backend: Fetching monthly growth data for last ${months} months`);
+        
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const User = require('../models/User');
+        const Driver = require('../models/Driver');
+        const Ad = require('../models/Ad');
+
+        // Calculate date range
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setMonth(startDate.getMonth() - months);
+
+        // Get users grouped by month
+        const userGrowth = await User.aggregate([
+          {
+            $match: {
+              createdAt: { $gte: startDate }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { '_id.year': 1, '_id.month': 1 }
+          }
+        ]);
+
+        // Get drivers grouped by month
+        const driverGrowth = await Driver.aggregate([
+          {
+            $match: {
+              createdAt: { $gte: startDate }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { '_id.year': 1, '_id.month': 1 }
+          }
+        ]);
+
+        // Get ads grouped by month
+        const adGrowth = await Ad.aggregate([
+          {
+            $match: {
+              createdAt: { $gte: startDate }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { '_id.year': 1, '_id.month': 1 }
+          }
+        ]);
+
+        // Create maps for quick lookup
+        const userMap = new Map();
+        userGrowth.forEach(item => {
+          const key = `${item._id.year}-${item._id.month}`;
+          userMap.set(key, item.count);
+        });
+
+        const driverMap = new Map();
+        driverGrowth.forEach(item => {
+          const key = `${item._id.year}-${item._id.month}`;
+          driverMap.set(key, item.count);
+        });
+
+        const adMap = new Map();
+        adGrowth.forEach(item => {
+          const key = `${item._id.year}-${item._id.month}`;
+          adMap.set(key, item.count);
+        });
+
+        // Generate all months in range with cumulative totals (total up to that month)
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const result = [];
+        let cumulativeUsers = 0;
+        let cumulativeDrivers = 0;
+        let cumulativeAds = 0;
+
+        // Get total counts before start date
+        const usersBeforeStart = await User.countDocuments({ createdAt: { $lt: startDate } });
+        const driversBeforeStart = await Driver.countDocuments({ createdAt: { $lt: startDate } });
+        const adsBeforeStart = await Ad.countDocuments({ createdAt: { $lt: startDate } });
+
+        cumulativeUsers = usersBeforeStart;
+        cumulativeDrivers = driversBeforeStart;
+        cumulativeAds = adsBeforeStart;
+
+        for (let i = 0; i < months; i++) {
+          const date = new Date(now);
+          date.setMonth(date.getMonth() - (months - 1 - i));
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1;
+          const key = `${year}-${month}`;
+
+          // Add new registrations for this month
+          cumulativeUsers += userMap.get(key) || 0;
+          cumulativeDrivers += driverMap.get(key) || 0;
+          cumulativeAds += adMap.get(key) || 0;
+
+          result.push({
+            month: monthNames[month - 1],
+            year,
+            monthIndex: month,
+            users: cumulativeUsers,
+            drivers: cumulativeDrivers,
+            ads: cumulativeAds
+          });
+        }
+
+        logger.notification(`🔔 Backend: Monthly growth data: ${result.length} months`);
+        return result;
+      } catch (error) {
+        console.error('Error fetching monthly growth data:', error);
+        throw new Error('Failed to fetch monthly growth data');
       }
     },
 

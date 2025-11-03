@@ -220,7 +220,6 @@ const AdDetailsPage: React.FC = () => {
   useEffect(() => {
     if (deleteError) {
       console.error('Error deleting ad:', deleteError);
-      alert('Failed to delete advertisement. Please try again.');
     }
     if (deleteData) {
       setDeleteSuccess(true);
@@ -1236,9 +1235,8 @@ const AdDetailsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Lower right: Plan, Duration, Format */}
+                {/* Lower right: Duration, Format */}
                 <div className="flex flex-col items-end space-y-2 mt-4">
-                  <p className="text-sm font-semibold text-center text-black/90">{ad.planId?.name}</p>
                   <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
                   <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
                 </div>

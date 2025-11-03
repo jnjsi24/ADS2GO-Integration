@@ -15,6 +15,7 @@ import {
 } from '../../graphql/superadmin/mutations/driverSalaryMutations';
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminLoader } from "../../components/ProtectedRoute";
+import ConfirmationModal from "../../components/ConfirmationModal";
 
 const SadminDriverSalary: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +26,8 @@ const SadminDriverSalary: React.FC = () => {
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [pricingToDelete, setPricingToDelete] = useState<DriverSalaryPricing | null>(null);
 
   // Form states
   const [formData, setFormData] = useState<CreateDriverSalaryPricingInput>({
@@ -162,9 +165,21 @@ const SadminDriverSalary: React.FC = () => {
   };
 
   const handleDeletePricing = (pricing: DriverSalaryPricing) => {
-    if (window.confirm(`Are you sure you want to delete the salary pricing for ${pricing.displayName}?`)) {
-      deleteDriverSalaryPricing({ variables: { id: pricing.id } });
+    setPricingToDelete(pricing);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = () => {
+    if (pricingToDelete) {
+      deleteDriverSalaryPricing({ variables: { id: pricingToDelete.id } });
+      setShowDeleteModal(false);
+      setPricingToDelete(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setPricingToDelete(null);
   };
 
 
@@ -227,56 +242,8 @@ const SadminDriverSalary: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Tabs */}
       <div className="px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-full">
-                <DollarSign className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{pricingList.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Calculator className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{pricingList.filter(p => p.isActive).length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-purple-100 rounded-full">
-                <Users className="w-6 h-6 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Vehicle Types</p>
-                <p className="text-2xl font-bold text-gray-900">{new Set(pricingList.map(p => p.vehicleType)).size}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-md p-6 shadow-md">
-            <div className="flex items-center">
-              <div className="p-3 bg-orange-100 rounded-full">
-                <Clock className="w-6 h-6 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Material Types</p>
-                <p className="text-2xl font-bold text-gray-900">{new Set(pricingList.map(p => p.materialType)).size}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
         <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
           {/* Tabs on the left */}
           <div className="flex space-x-1 p-1">
@@ -700,6 +667,18 @@ const SadminDriverSalary: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Salary Pricing"
+        message={pricingToDelete ? `Are you sure you want to delete the salary pricing for ${pricingToDelete.displayName}?` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

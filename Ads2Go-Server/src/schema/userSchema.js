@@ -309,6 +309,7 @@ const typeDefs = gql`
     # User management
     updateUser(input: UpdateUserInput!): UserUpdateResponse!
     deleteOwnAccount: ResponseMessage!
+    restoreOwnAccount: ResponseMessage!
 
     # Email verification
     verifyEmail(code: String!): VerificationResponse

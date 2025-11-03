@@ -3,7 +3,7 @@ import { Bell, AlertTriangle, CheckCircle, Check, Users, FileText, DollarSign, P
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_DEVICE_NOTIFICATIONS, MARK_DEVICE_NOTIFICATION_READ, DELETE_DEVICE_NOTIFICATION, DELETE_ALL_DEVICE_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries/deviceNotificationQueries';
 import { motion, AnimatePresence } from "framer-motion";
-
+import ConfirmationModal from "../../../../components/ConfirmationModal";
 
 interface Notification {
   id: string;
@@ -29,7 +29,6 @@ interface PendingAd {
     lastName: string;
   } | null;
   materialId?: string[];
-  planId?: string;
 }
 
 interface PendingMaterial {
@@ -63,6 +62,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const [markingAsReadId, setMarkingAsReadId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
 
   
   // Fetch device notifications
@@ -124,7 +124,6 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     },
     onError: (error) => {
       console.error('Error deleting notification:', error);
-      alert('Failed to delete notification: ' + error.message);
     }
   });
 
@@ -137,7 +136,6 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     },
     onError: (error) => {
       console.error('Error deleting all notifications:', error);
-      alert('Failed to delete all notifications: ' + error.message);
     }
   });
 
@@ -248,19 +246,26 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
-      setIsDeletingSelected(true);
-      
-      try {
-        await deleteAllNotifications();
-        setSelectedNotifications(new Set());
-        setIsSelectMode(false);
-      } catch (error) {
-        console.error('Error deleting all notifications:', error);
-      } finally {
-        setIsDeletingSelected(false);
-      }
+    setShowDeleteAllModal(true);
+  };
+
+  const confirmDeleteAll = async () => {
+    setIsDeletingSelected(true);
+    
+    try {
+      await deleteAllNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    } finally {
+      setIsDeletingSelected(false);
+      setShowDeleteAllModal(false);
     }
+  };
+
+  const cancelDeleteAll = () => {
+    setShowDeleteAllModal(false);
   };
 
   const handleRefresh = async () => {
@@ -918,6 +923,19 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
           </div>
         </div>
       )}
+
+      {/* Delete All Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteAllModal}
+        onClose={cancelDeleteAll}
+        onConfirm={confirmDeleteAll}
+        title="Delete All Notifications"
+        message="Are you sure you want to delete all notifications? This action cannot be undone."
+        confirmText="Delete All"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isDeletingSelected}
+      />
     </div>
   );
 };

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { Archive, RotateCcw, Users } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 // SadminAdmin specific GraphQL operations
 import { GET_ALL_ADMINS, Admin } from '../../graphql/superadmin/queries/sadminAdminQueries';
-import { CREATE_ADMIN, UPDATE_ADMIN, DELETE_ADMIN } from '../../graphql/superadmin/mutations/sadminAdminMutations';
+import { CREATE_ADMIN, UPDATE_ADMIN, DELETE_ADMIN, RESTORE_ADMIN } from '../../graphql/superadmin/mutations/sadminAdminMutations';
 import { uploadAdminProfilePicture } from '../../utils/fileUpload';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
@@ -26,6 +28,7 @@ import {
 
 const SadminDashboard: React.FC = () => {
   // State management
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showCreateAdminPopup, setShowCreateAdminPopup] = useState(false);
@@ -33,6 +36,7 @@ const SadminDashboard: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [adminToDelete, setAdminToDelete] = useState<Admin | null>(null);
   const [adminToEdit, setAdminToEdit] = useState<Admin | null>(null);
+  const [adminToRestore, setAdminToRestore] = useState<Admin | null>(null);
 
   const [newAdminFormData, setNewAdminFormData] = useState<AdminFormData>({
     firstName: '',
@@ -122,6 +126,18 @@ const SadminDashboard: React.FC = () => {
     }
   });
 
+  // Restore Admin Mutation
+  const [restoreAdminMutation] = useMutation(RESTORE_ADMIN, {
+    onCompleted: () => {
+      addToast('Admin user restored successfully!', 'success');
+      setAdminToRestore(null);
+      refetch();
+    },
+    onError: (error) => {
+      addToast(`Error restoring admin: ${error.message}`, 'error');
+    }
+  });
+
 // Set admins filtered by role ADMIN whenever data changes
 useEffect(() => {
   if (data && data.getAllAdmins && data.getAllAdmins.admins) {
@@ -197,9 +213,14 @@ useEffect(() => {
     }
   };
 
-  // Filter and sort admins
+  // Filter and sort admins based on active tab
   const filteredAndSortedAdmins = admins
     .filter((admin) => {
+      // Filter by archive status based on active tab
+      const isArchivedMatch = activeTab === 'archived' ? admin.isArchived === true : admin.isArchived !== true;
+      
+      if (!isArchivedMatch) return false;
+      
       const lowerSearch = searchTerm.toLowerCase();
       const createdAtStr = admin.createdAt ? String(admin.createdAt) : '';
       return (
@@ -340,6 +361,24 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
     }
   };
 
+  // Restore admin handlers
+  const confirmRestoreAdmin = (admin: Admin) => {
+    setAdminToRestore(admin);
+  };
+
+  const executeRestoreAdmin = async () => {
+    if (!adminToRestore) {
+      console.error('No admin selected for restore');
+      return;
+    }
+    
+    try {
+      await restoreAdminMutation({ variables: { id: adminToRestore.id } });
+    } catch {
+      // Handled by onError
+    }
+  };
+
   // Edit admin handlers
   const handleEditAdmin = (admin: Admin) => {
     setAdminToEdit(admin);
@@ -450,6 +489,40 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
 
   return (
   <div className="min-h-screen ml-60 bg-gray-50">
+      {/* Tabs Section */}
+      <div className="p-6 pb-0">
+        <nav className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Active Admins
+            <span
+              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+              }`}
+            />
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Archive className="w-4 h-4 mr-2" />
+            Archived Admins
+            <span
+              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+              }`}
+            />
+          </button>
+        </nav>
+      </div>
+
       {/* Header Section */}
       <AdminSearchHeader
         searchTerm={searchTerm}
@@ -464,7 +537,9 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
         admins={filteredAndSortedAdmins}
         onEditAdmin={handleEditAdmin}
         onDeleteAdmin={confirmDeleteAdmin}
+        onRestoreAdmin={confirmRestoreAdmin}
         formatDate={formatDate}
+        activeTab={activeTab}
       />
 
       {/* New Admin Popup */}
@@ -496,6 +571,45 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
         onConfirm={executeDeleteAdmin}
         admin={adminToDelete}
       />
+
+      {/* Restore Confirmation Modal */}
+      <AnimatePresence>
+        {adminToRestore && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <h3 className="text-lg font-semibold mb-4">Restore Admin</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to restore <strong>{adminToRestore.firstName} {adminToRestore.lastName}</strong>?
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setAdminToRestore(null)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeRestoreAdmin}
+                  className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                  <RotateCcw size={16} />
+                  Restore
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Toast Notifications */}
       <ToastNotifications toasts={toasts} onRemove={removeToast} />

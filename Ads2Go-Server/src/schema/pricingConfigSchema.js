@@ -1,19 +1,12 @@
 const { gql } = require('apollo-server-express');
 
 module.exports = gql`
-  type PricingTier {
-    durationDays: Int!
-    pricePerPlay: Float!
-    adLengthMultiplier: Float
-  }
-
   type PricingConfig {
     id: ID!
     materialType: String!
     vehicleType: String!
     category: String!
-    pricingTiers: [PricingTier!]!
-    maxDevices: Int!
+    basePrice: Float!
     minAdLengthSeconds: Int!
     maxAdLengthSeconds: Int!
     isActive: Boolean!
@@ -22,26 +15,18 @@ module.exports = gql`
     updatedAt: String!
   }
 
-  input PricingTierInput {
-    durationDays: Int!
-    pricePerPlay: Float!
-    adLengthMultiplier: Float
-  }
-
   input PricingConfigInput {
     materialType: String!
     vehicleType: String!
     category: String!
-    pricingTiers: [PricingTierInput!]!
-    maxDevices: Int!
+    basePrice: Float!
     minAdLengthSeconds: Int
     maxAdLengthSeconds: Int
     isActive: Boolean
   }
 
   input PricingConfigUpdateInput {
-    pricingTiers: [PricingTierInput!]
-    maxDevices: Int
+    basePrice: Float
     minAdLengthSeconds: Int
     maxAdLengthSeconds: Int
     isActive: Boolean
@@ -51,15 +36,15 @@ module.exports = gql`
     materialType: String!
     vehicleType: String!
     category: String!
-    durationDays: Int!
+    basePrice: Float!
     adLengthSeconds: Int!
-    numberOfDevices: Int!
-    pricePerPlay: Float!
-    playsPerDayPerDevice: Int!
-    totalPlaysPerDay: Int!
-    dailyRevenue: Float!
+    durationMonths: Int!
+    numberOfVehicles: Int!
+    adLengthMultiplier: Float!
+    durationDiscountMultiplier: Float!
+    subtotal: Float!
+    discount: Float!
     totalPrice: Float!
-    maxDevices: Int!
     minAdLengthSeconds: Int!
     maxAdLengthSeconds: Int!
   }
@@ -76,9 +61,9 @@ module.exports = gql`
       materialType: String!
       vehicleType: String!
       category: String!
-      durationDays: Int!
+      durationMonths: Int!
       adLengthSeconds: Int!
-      numberOfDevices: Int!
+      numberOfVehicles: Int!
     ): PricingCalculation
   }
 

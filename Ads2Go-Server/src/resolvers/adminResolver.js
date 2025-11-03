@@ -26,7 +26,8 @@ const resolvers = {
   Query: {
     getAllAdmins: async (_, __, { admin }) => {
       checkSuperAdmin(admin);
-      const admins = await Admin.find({ isActive: true });
+      // Return ALL admins including archived (client handles filtering by archive status)
+      const admins = await Admin.find({});
       return {
         success: true,
         message: 'Admins retrieved successfully',
@@ -54,8 +55,9 @@ const resolvers = {
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view users');
       }
-      // Only return non-archived users
-      return await User.find({ isArchived: { $ne: true } });
+      // Return ALL users including archived (client handles filtering by archive status)
+      // Add safety filter to ensure only USER role records are returned (extra safety check)
+      return await User.find({ role: 'USER' });
     },
 
     getAdminNotificationPreferences: async (_, __, { admin }) => {
@@ -246,12 +248,32 @@ const resolvers = {
       checkSuperAdmin(admin);
       const adminToDelete = await Admin.findById(id);
       if (!adminToDelete) throw new Error('Admin not found');
-
-      await Admin.findByIdAndDelete(id);
+      
+      // Check if already archived
+      if (adminToDelete.isArchived) {
+        return {
+          success: false,
+          message: 'Admin is already archived'
+        };
+      }
+      
+      // Soft delete: Mark as archived with 30-day deletion schedule
+      const now = new Date();
+      const deletionDate = new Date(now);
+      deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+      
+      adminToDelete.isArchived = true;
+      adminToDelete.archivedAt = now;
+      adminToDelete.scheduledDeletionDate = deletionDate;
+      adminToDelete.tokenVersion += 1; // Invalidate all sessions
+      
+      await adminToDelete.save();
+      
+      console.log(`✅ Admin ${adminToDelete.email} archived. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
+      
       return { 
         success: true, 
-        message: 'Admin deleted successfully',
-        admin: adminToDelete
+        message: 'Admin deleted successfully'
       };
     },
 
@@ -401,6 +423,70 @@ const resolvers = {
       return {
         success: true,
         message: 'User deleted successfully'
+      };
+    },
+
+    restoreAdmin: async (_, { id }, { admin }) => {
+      checkSuperAdmin(admin);
+      const adminToRestore = await Admin.findById(id);
+      if (!adminToRestore) throw new Error('Admin not found');
+      
+      if (!adminToRestore.isArchived) {
+        return {
+          success: false,
+          message: 'Admin is not archived'
+        };
+      }
+      
+      adminToRestore.isArchived = false;
+      adminToRestore.archivedAt = null;
+      adminToRestore.scheduledDeletionDate = null;
+      adminToRestore.tokenVersion += 1; // Invalidate all sessions
+      
+      await adminToRestore.save();
+      
+      console.log(`✅ Admin ${adminToRestore.email} restored successfully`);
+      
+      return {
+        success: true,
+        message: 'Admin restored successfully',
+        admin: adminToRestore
+      };
+    },
+
+    restoreUser: async (_, { id }, { admin }) => {
+      checkAuth(admin);
+      if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
+        throw new Error('Not authorized to restore users');
+      }
+      
+      const user = await User.findById(id);
+      if (!user) {
+        return {
+          success: false,
+          message: 'User not found'
+        };
+      }
+      
+      if (!user.isArchived) {
+        return {
+          success: false,
+          message: 'User is not archived'
+        };
+      }
+      
+      user.isArchived = false;
+      user.archivedAt = null;
+      user.scheduledDeletionDate = null;
+      user.tokenVersion += 1; // Invalidate all sessions
+      
+      await user.save();
+      
+      console.log(`✅ User ${user.email} restored successfully`);
+      
+      return {
+        success: true,
+        message: 'User restored successfully'
       };
     },
 
