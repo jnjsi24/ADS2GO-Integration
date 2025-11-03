@@ -85,7 +85,7 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

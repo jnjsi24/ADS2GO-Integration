@@ -250,7 +250,7 @@ const Payment: React.FC<PaymentProps> = ({
 
   return (
   <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-2 md:p-4">
-    <div className={`bg-white rounded-md shadow-xl w-full max-w-[92vw] ${isPending ? "md:max-w-4xl" : "md:max-w-lg"} p-4 md:p-8 relative max-h-[90vh] overflow-y-auto`}>
+    <div className={`bg-white rounded-md shadow-xl w-full max-w-[85vw] ${isPending ? "md:max-w-4xl" : "md:max-w-lg"} p-4 md:p-8 relative max-h-[90vh] overflow-y-auto`}>
       {/* Close button */}
       <button
         onClick={onClose}

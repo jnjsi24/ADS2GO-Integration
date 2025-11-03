@@ -206,14 +206,9 @@ const Help: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
     {/* Background Image */}
     <div
-      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-      style={{
-        backgroundImage: "url('/image/bg2.jpg')",
-      }}
-    ></div>
-  
-    {/* Overlay (optional subtle tint) */}
-    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+      className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
+      style={{ backgroundImage: "url('/image/bg.jpg')" }}/>
+    <div className="fixed inset-0 bg-white/40 backdrop-blur-xl" />
   
     {/* Main Content */}
     <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 py-6 lg:py-0">

@@ -1254,8 +1254,7 @@ const ManageDrivers: React.FC = () => {
             </div>
             <div className="flex gap-3 pt-8 justify-between">
               <button
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-                onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"                onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
                 disabled={isProcessingApproval}
               >
                 Cancel
@@ -1723,35 +1722,47 @@ const ManageDrivers: React.FC = () => {
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full m-4">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-3">
               <h2 className="text-xl font-bold">Reject Driver</h2>
-              <button onClick={() => setShowRejectModal(false)} className="text-gray-500 hover:text-gray-700">
-                <X size={20} />
-              </button>
             </div>
-            <p className="text-sm text-gray-600 mb-3">Please provide a reason for rejecting this driver.</p>
-            <textarea
-              className="w-full p-2 border rounded-lg"
-              rows={4}
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Enter reason for rejection..."
-            />
-            <div className="flex gap-3 justify-end mt-4">
+            <div className="relative w-full">
+              <textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={2}
+                required
+                className={`peer w-full px-0 pb-2 text-gray-900 bg-white pt-6 border-b bg-transparent focus:outline-none focus:border-blue-500 ${
+                  !rejectReason ? 'border-gray-300' : 'border-gray-400'
+                }`}
+                style={{ backgroundColor: 'transparent' }}
+              />
+              <label
+                htmlFor="reject-reason"
+                className={`absolute left-0 top-12 text-gray-700 bg-white w-full transition-all duration-200 ${
+                  rejectReason
+                    ? '-top-0 text-sm text-gray-700 font-bold'
+                    : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                } peer-focus:-top-0 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
+              >
+                Reason for Rejection
+              </label>
+            </div>
+
+            <div className="flex gap-3 justify-between mt-4">
               <button
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-                onClick={() => setShowRejectModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"                onClick={() => setShowRejectModal(false)}
                 disabled={isProcessingRejection}
               >
                 Cancel
               </button>
               <button
-                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                className={`px-4 py-2 rounded hover:shadow-md transition-colors flex items-center gap-2 ${
                   isProcessingRejection
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-red-600 hover:bg-red-700'
+                    : 'bg-red-500 text-white font-semibold'
                 }`}
                 onClick={submitReject}
                 disabled={isProcessingRejection}
@@ -1759,7 +1770,7 @@ const ManageDrivers: React.FC = () => {
                 {isProcessingRejection && (
                   <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
                 )}
-                {isProcessingRejection ? 'Processing...' : 'Reject'}
+                {isProcessingRejection ? 'Processing...' : 'Reject Driver'}
               </button>
             </div>
           </div>

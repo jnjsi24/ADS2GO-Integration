@@ -703,7 +703,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </label>
 
           <div
-            className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center text-center
+            className={`border-2 border-dashed rounded-md p-6 transition-colors flex flex-col items-center justify-center text-center
               ${isDragging
                 ? 'border-blue-500 bg-blue-50'
                 : mediaFileError
@@ -838,7 +838,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <button
                 type="button"
                 onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
-                className="flex items-center bg-white/70 justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none gap-2"
+                className="flex items-center bg-white/70 justify-between w-full text-sm text-black rounded-md pl-6 pr-4 py-4 shadow-md focus:outline-none gap-2"
               >
                 {formData.vehicleType ? formData.vehicleType : 'Select Vehicle Type'}
                 <ChevronDown
@@ -855,7 +855,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     <button
                       key="select-vehicle-type"
@@ -897,7 +897,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 onClick={() =>
                   formData.vehicleType && setShowMaterialTypeDropdown(!showMaterialTypeDropdown)
                 }
-                className={`flex items-center justify-between w-full text-sm rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                className={`flex items-center justify-between w-full text-sm rounded-md pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 ${
                   formData.vehicleType
                     ? 'text-black cursor-pointer'
                     : 'text-gray-400 cursor-not-allowed'
@@ -919,7 +919,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {getAvailableMaterialTypes().map((materialType, index) => (
                       <button
@@ -958,7 +958,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowDurationDropdown(!showDurationDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
+            className="flex items-center justify-between rounded-md w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.durationDays
               ? `${
@@ -985,8 +985,8 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute z-10 top-20 w-full shadow-lg bg-white overflow-hidden"
-              >
+                className="absolute z-10 top-20 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                >
                 <button
                   key="select-duration"
                   type="button"
@@ -1035,7 +1035,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
+            className="flex items-center justify-between rounded-md w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.adLengthSeconds
               ? `${formData.adLengthSeconds} seconds`
@@ -1054,7 +1054,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute z-10 top-20 w-full shadow-lg bg-white overflow-hidden"
+                className="absolute z-10 top-20 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
               >
                 <button
                   key="select-ad-length"
@@ -1139,7 +1139,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   );
                 } else {
                   return (
-                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
                       <p className="text-sm text-blue-800">
                         ℹ️ Your video (~{detectedVideoDuration}s) may not match the selected {formData.adLengthSeconds}s ad slot.
                         Consider selecting <strong>{recommendedLength}s</strong> instead.
@@ -1241,12 +1241,11 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             {/* Calendar Dropdown */}
             {showCalendar && (
               <div 
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-[9999]"
                 onClick={() => setShowCalendar(false)}
               >
                 <div 
-                  className="bg-white rounded-lg shadow-2xl border border-gray-200 calendar-container ml-16"
-                  onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-md shadow-2xl border border-gray-200 calendar-container mx-4 sm:ml-16"                  onClick={(e) => e.stopPropagation()}
                 >
                   <CalendarWidget
                     selectedDate={selectedDate}
@@ -1430,7 +1429,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
         </div>
       ) : pricingCalculationError ? (
-        <div className="p-6 mb-6 mt-6 bg-red-50 border border-red-200 rounded-lg">
+        <div className="p-6 mb-6 mt-6 bg-red-50 border border-red-200 rounded-md">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 mt-0.5">
               <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
@@ -1472,14 +1471,9 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div className="relative min-h-screen overflow-hidden">
     {/* Background Image */}
     <div
-      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-      style={{
-        backgroundImage: "url('/image/bg2.jpg')",
-      }}
-    ></div>
-
-    {/* Overlay (optional subtle tint) */}
-    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+      className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
+      style={{ backgroundImage: "url('/image/bg2.jpg')" }}/>
+    <div className="fixed inset-0 bg-white/40 backdrop-blur-xl" />
 
     {/* Content */}
     <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
@@ -1498,33 +1492,86 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         </div>
       </div>
       <div>
-        <div className="max-w-md mx-auto px-2 sm:px-4 py-4">
-          <div className="flex items-center justify-between overflow-x-auto">
-            {steps.map((step, index) => {
-              const StepIcon = step.icon;
-              const isActive = currentStep === step.number;
+      <div className="max-w-md mx-auto px-2 sm:px-4 py-4">
+        {/* Desktop / larger screens – keep your original layout */}
+        <div className="hidden sm:flex items-center justify-between">
+          {steps.map((step, index) => {
+            const StepIcon = step.icon;
+            const isActive   = currentStep === step.number;
+            const isCompleted = currentStep > step.number;
+
+            return (
+              <div key={step.number} className="flex items-center">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                    isActive
+                      ? "border-[#3674B5] bg-[#3674B5] text-white"
+                      : isCompleted
+                      ? "border-green-500 bg-green-500 text-white"
+                      : "border-black/70 text-black/70"
+                  }`}
+                >
+                  {isCompleted ? (
+                    <span className="text-sm font-bold">✓</span>
+                  ) : (
+                    <StepIcon className="w-5 h-5" />
+                  )}
+                </div>
+
+                <div className="ml-2">
+                  <p
+                    className={`text-sm font-medium ${
+                      isActive
+                        ? "text-[#3674B5]"
+                        : isCompleted
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {step.title}
+                  </p>
+                </div>
+
+                {index < steps.length - 1 && (
+                  <div
+                    className={`w-10 h-0.5 mx-2 ${
+                      isCompleted ? "bg-green-500" : "bg-gray-300"
+                    }`}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {/* Mobile – the UI from your image */}
+        <div className="flex sm:hidden flex-col items-center space-y-2">
+          {/* Circles + connecting line */}
+          <div className="flex items-center justify-center">
+            {steps.map((step, idx) => {
+              const isActive    = currentStep === step.number;
               const isCompleted = currentStep > step.number;
+              const isLast      = idx === steps.length - 1;
 
               return (
                 <div key={step.number} className="flex items-center">
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                      isActive
-                        ? "border-[#3674B5] bg-[#3674B5] text-white"
-                        : isCompleted
-                        ? "border-green-500 bg-green-500 text-white"
-                        : "border-black/70 text-black/70"
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <span className="text-sm font-bold">✓</span>
-                    ) : (
-                      <StepIcon className="w-5 h-5" />
-                    )}
-                  </div>
-                  <div className="ml-2">
+                  {/* Circle and Title Container */}
+                  <div className="flex flex-col items-center">
+                    {/* Circle */}
+                    <div
+                      className={`relative flex items-center justify-center w-10 h-10 rounded-full text-base font-bold transition-colors ${
+                        isActive
+                          ? "border border-[#3674B5] text-[#3674B5]"
+                          : isCompleted
+                          ? "bg-green-500 text-white"
+                          : "bg-gray-300 text-gray-600"
+                      }`}
+                    >
+                      {isCompleted ? "✓" : step.number}
+                    </div>
+                    
+                    {/* Title under the circle */}
                     <p
-                      className={`text-sm font-medium ${
+                      className={`mt-1 text-xs font-medium w-16 text-center ${
                         isActive
                           ? "text-[#3674B5]"
                           : isCompleted
@@ -1535,9 +1582,11 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                       {step.title}
                     </p>
                   </div>
-                  {index < steps.length - 1 && (
+
+                  {/* Connecting line (skip after last) */}
+                  {!isLast && (
                     <div
-                      className={`w-10 h-0.5 mx-2 ${
+                      className={`w-8 h-0.5 mx-1 ${
                         isCompleted ? "bg-green-500" : "bg-gray-300"
                       }`}
                     />
@@ -1547,22 +1596,27 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             })}
           </div>
         </div>
+
+      </div>
       </div>
       <div className="max-w-3xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
         <form onSubmit={handleSubmit}>
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8">
+          <div className="flex flex-row justify-between items-center gap-2 mt-8">
+            {/* Previous Button - Always visible except maybe on step 1 */}
             <button
               type="button"
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
               disabled={currentStep === 1}
-              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
+              className="flex items-center justify-center gap-2 px-4 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed sm:bg-transparent text-black/60 sm:text-gray-600 sm:hover:text-gray-800 sm:hover:bg-transparent transition-all duration-300 sm:flex-none"
             >
               <ChevronLeft className="w-5 h-5" />
-              Previous
+              <span className="sm:block">Previous</span>
             </button>
+
+            {/* Next / Submit Button */}
             {currentStep < 3 ? (
               <button
                 type="button"
@@ -1575,11 +1629,11 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   button.style.setProperty('--x', `${x}px`);
                   button.style.setProperty('--y', `${y}px`);
                 }}
-                className="relative flex items-center justify-center gap-2 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] order-1 sm:order-2 w-full sm:w-auto"
+                className="relative flex items-center justify-center gap-2 px-4 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] sm:bg-gradient-to-r sm:from-[#1B5087] sm:to-[#3674B5] bg-[#3674B5] flex-1 sm:flex-none"
               >
-                {/* Shiny Hover Effect */}
+                {/* Shiny Hover Effect - Hidden on mobile */}
                 <span
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden sm:block"
                   style={{
                     background:
                       'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
@@ -1589,34 +1643,31 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 <ChevronRight className="w-5 h-5 relative z-10" />
               </button>
             ) : (
-              <div className="flex flex-col items-stretch sm:items-end space-y-2 w-full sm:w-auto order-1 sm:order-2">
-                
-                <button
-                  type="submit"
-                  disabled={isSubmissionInProgress}
-                  onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    const button = e.currentTarget;
-                    const rect = button.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    button.style.setProperty('--x', `${x}px`);
-                    button.style.setProperty('--y', `${y}px`);
+              <button
+                type="submit"
+                disabled={isSubmissionInProgress}
+                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  const button = e.currentTarget;
+                  const rect = button.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const y = e.clientY - rect.top;
+                  button.style.setProperty('--x', `${x}px`);
+                  button.style.setProperty('--y', `${y}px`);
+                }}
+                className="relative px-4 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] sm:bg-gradient-to-r sm:from-[#1B5087] sm:to-[#3674B5] bg-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-1 sm:flex-none"
+              >
+                {/* Shiny Hover Effect - Hidden on mobile */}
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 disabled:opacity-0 hidden sm:block"
+                  style={{
+                    background:
+                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
                   }}
-                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full sm:w-auto"
-                >
-                  {/* Shiny Hover Effect */}
-                  <span
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 disabled:opacity-0"
-                    style={{
-                      background:
-                        'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
-                    }}
-                  />
-                  <span className="relative z-10">
-                    {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
-                  </span>
-                </button>
-              </div>
+                />
+                <span className="relative z-10">
+                  {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
+                </span>
+              </button>
             )}
           </div>
         </form>

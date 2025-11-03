@@ -868,15 +868,9 @@ const AdDetailsPage: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-5 pt-20 lg:pt-5">
     {/* Background Image */}
     <div
-      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-      style={{
-        backgroundImage: "url('/image/bg.jpg')",
-      }}
-    >
-    </div>
-
-    {/* Overlay (adds soft tint and readability over the image) */}
-    <div className="absolute inset-0 bg-white/30 backdrop-blur-lg"></div>
+      className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
+      style={{ backgroundImage: "url('/image/bg.jpg')" }}/>
+    <div className="fixed inset-0 bg-white/40 backdrop-blur-xl" />
 
     <AnimatePresence>
         {shouldShowRejectionToast && (
