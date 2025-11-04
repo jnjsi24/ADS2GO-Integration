@@ -1,0 +1,45 @@
+%% ============================================
+%% ADS2GO SYSTEM - IPO MODEL OF THE PROPOSED SYSTEM
+%% Copy this code to: https://mermaid.live/
+%% ============================================
+
+flowchart LR
+    subgraph INPUT["INPUT"]
+        direction TB
+        I1["Gathering USER (Advertiser) information:<br/>First Name, Middle Name, Last Name<br/>Email, Password<br/>Contact Number<br/>Company Name<br/>Company Address<br/>House Address<br/>Profile Picture (Optional)<br/>Auth Provider (Local/Google)"]
+        I2["Gathering DRIVER information:<br/>First Name, Middle Name, Last Name<br/>Email, Password<br/>Contact Number, Address<br/>License Number, License Picture<br/>Vehicle Plate Number<br/>Vehicle Type, Model, Year<br/>Vehicle Photos<br/>OR/CR Pictures<br/>Preferred Material Type"]
+        I3["Gathering ADMIN information (by SuperAdmin):<br/>First Name, Middle Name, Last Name<br/>Email, Password<br/>Contact Number<br/>Company Name<br/>Company Address<br/>Profile Picture (Optional)<br/>Permissions Configuration"]
+        I4["Gathering SUPERADMIN information (by SuperAdmin):<br/>First Name, Middle Name, Last Name<br/>Email, Password<br/>Contact Number<br/>Company Name<br/>Company Address<br/>Profile Picture (Optional)<br/>Full System Permissions"]
+        I5["Gathering AD CAMPAIGN information (by USER):<br/>Ad Title, Description<br/>Media File (Video/Image)<br/>Website URL<br/>Duration (Days)<br/>Number of Devices<br/>Plays per Day per Device<br/>Material Type, Vehicle Type<br/>Desired Start Time<br/>Plan ID (Optional)"]
+        I6["Gathering PAYMENT information (by USER):<br/>Payment Method<br/>(Credit Card/GCash/PayPal/Bank Transfer/Cash)<br/>Payment Amount<br/>Payment Date<br/>Ad ID<br/>Receipt/Transaction Proof<br/>Note: Mock/Simulated Payment"]
+        I7["Gathering TRACKING information:<br/>Material ID, GPS Coordinates<br/>Device Status (Online/Offline)<br/>Ad Playback Events<br/>QR Scan Events<br/>Distance Traveled (km)<br/>Hours Active<br/>Slot Information (for LCD)"]
+    end
+    
+    subgraph PROCESS["PROCESS"]
+        direction TB
+        P1["USER Process:<br/>User sign-up to the system<br/>Email verification via code<br/>User log-in (Local/Google OAuth)<br/>Password authentication<br/>Modifying / Updating user information<br/>JWT token generation"]
+        P2["DRIVER Process:<br/>Driver registration and sign-up<br/>Recording driver information<br/>Document verification<br/>Admin review and approval<br/>Material assignment to driver<br/>QR code identifier generation<br/>Modifying / Updating driver information<br/>Status: PENDING → APPROVED → ACTIVE"]
+        P3["ADMIN Process:<br/>Admin account creation (by SuperAdmin)<br/>Recording admin information<br/>Setting permissions configuration<br/>Email verification (default: true)<br/>Account activation<br/>Modifying / Updating admin information"]
+        P4["SUPERADMIN Process:<br/>SuperAdmin account creation (by SuperAdmin)<br/>Recording superAdmin information<br/>Setting full system permissions<br/>Email verification (default: true)<br/>Account activation<br/>Modifying / Updating superAdmin information"]
+        P5["AD CAMPAIGN Process:<br/>Recording ad campaign information<br/>Validating ad content compliance<br/>Calculating pricing (pricePerPlay, totalPrice)<br/>Reserving materials/devices<br/>Admin/SuperAdmin approval workflow<br/>Processing payment transactions<br/>Deploying ads to materials/devices<br/>LCD slot management (1-5 slots)"]
+        P6["PAYMENT Process:<br/>Verifying ad exists and is APPROVED<br/>Validating payment amount matches totalPrice<br/>Validating payment method selection<br/>Simulating payment processing (Mock)<br/>Generating receipt ID (REC-XXXX)<br/>Updating payment status to PAID<br/>Activating ad deployment"]
+        P7["TRACKING & ANALYTICS Process:<br/>Receiving real-time tracking data<br/>Aggregating data by material per day<br/>Recording ad playback in DeviceTracking<br/>Processing QR scan data<br/>Computing analytics and reports<br/>Calculating driver salaries<br/>(Distance × Rate + Hours × Rate)"]
+    end
+    
+    subgraph OUTPUT["OUTPUT"]
+        direction TB
+        O1["USER Output:<br/>Receives account verification status<br/>Gains access to system features<br/>Receives JWT authentication token<br/>Receives notifications and alerts<br/>Access to analytics dashboard<br/>Can create ad campaigns<br/>Can view payment history"]
+        O2["DRIVER Output:<br/>Receives driver verification status<br/>Gets assigned material/device<br/>Receives QR code identifier<br/>Access to driver dashboard<br/>Receives salary calculations<br/>Receives notifications<br/>Can view earnings and balance"]
+        O3["ADMIN Output:<br/>Receives admin account (created by SuperAdmin)<br/>Gains access to admin dashboard<br/>Receives JWT authentication token<br/>Can manage users, ads, drivers<br/>Can approve/reject content<br/>Can respond to reports<br/>Receives notifications"]
+        O4["SUPERADMIN Output:<br/>Receives superAdmin account<br/>Gains full system access<br/>Receives JWT authentication token<br/>Can manage admins, users, ads, drivers<br/>Can configure pricing and salary rates<br/>Can manage system settings<br/>Receives notifications"]
+        O5["AD CAMPAIGN Output:<br/>Active ad campaigns deployed<br/>Ads displayed on LCD screens<br/>Ads scheduled in slots (1-5)<br/>Campaign status updates<br/>Performance metrics and reports<br/>Ad impression tracking<br/>Deployment status updates"]
+        O6["PAYMENT Output:<br/>Payment records with receipt ID<br/>Payment status (PENDING/PAID/FAILED)<br/>Payment confirmation notifications<br/>Updated ad payment status<br/>Transaction history<br/>Note: Simulated payment records"]
+        O7["TRACKING & ANALYTICS Output:<br/>Real-time device tracking data<br/>Daily aggregated DeviceTracking records<br/>Ad impression reports<br/>QR scan analytics<br/>Conversion tracking data<br/>Driver salary calculations<br/>Performance analytics reports<br/>UserAnalytics summaries"]
+    end
+    
+    INPUT --> PROCESS
+    PROCESS --> OUTPUT
+    
+    style INPUT fill:#4a90e2,stroke:#2980b9,stroke-width:3px,color:#fff
+    style PROCESS fill:#f39c12,stroke:#d68910,stroke-width:3px,color:#fff
+    style OUTPUT fill:#27ae60,stroke:#1e8449,stroke-width:3px,color:#fff
