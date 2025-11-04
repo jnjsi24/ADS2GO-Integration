@@ -28,10 +28,6 @@ const adTypeDefs = gql`
     basePrice: Float!
     adLengthMultiplier: Float!
     durationDiscountMultiplier: Float!
-    pricePerPlay: Float!
-    playsPerDayPerDevice: Int!
-    totalPlaysPerDay: Int!
-    dailyRevenue: Float!
     subtotal: Float!
     discount: Float!
     totalPrice: Float!

@@ -41,10 +41,6 @@ export const CALCULATE_FLEXIBLE_PRICING = gql`
       basePrice
       adLengthMultiplier
       durationDiscountMultiplier
-      pricePerPlay
-      playsPerDayPerDevice
-      totalPlaysPerDay
-      dailyRevenue
       subtotal
       discount
       totalPrice
@@ -78,10 +74,6 @@ export interface FlexiblePricingCalculation {
   basePrice: number;
   adLengthMultiplier: number;
   durationDiscountMultiplier: number;
-  pricePerPlay: number;
-  playsPerDayPerDevice: number;
-  totalPlaysPerDay: number;
-  dailyRevenue: number;
   subtotal: number;
   discount: number;
   totalPrice: number;
