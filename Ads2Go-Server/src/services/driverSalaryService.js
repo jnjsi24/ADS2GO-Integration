@@ -80,26 +80,37 @@ class DriverSalaryService {
         materialId: materialId
       });
 
-      if (!deviceHistory) {
-        throw new Error('No tracking data found for this material');
-      }
-
       // Convert dates to Date objects for comparison
       const start = new Date(startDate);
       const end = new Date(endDate);
 
+      // If no tracking data exists, return zero values (allows calculation creation for new drivers)
+      if (!deviceHistory) {
+        console.log(`⚠️  [DriverSalaryService] No tracking data found for material ${materialId}. Returning zero values.`);
+        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        const maxDaysWorked = Math.min(daysDiff, 30); // Cap at 30 days as per formula
+        
+        return {
+          totalDistance: 0,
+          totalHours: 0,
+          daysWorked: 0
+        };
+      }
+
       // Filter daily data for the specified period
-      const periodData = deviceHistory.dailyData.filter(dailyData => {
+      const periodData = deviceHistory.dailyData ? deviceHistory.dailyData.filter(dailyData => {
         const dataDate = new Date(dailyData.date);
         return dataDate >= start && dataDate <= end;
-      });
+      }) : [];
 
       console.log(`📊 [DriverSalaryService] Found ${periodData.length} days of data for period ${startDate} to ${endDate}`);
-      console.log(`📊 [DriverSalaryService] Period data:`, periodData.map(d => ({
-        date: d.date,
-        distance: d.totalDistanceTraveled,
-        hours: d.totalHoursOnline
-      })));
+      if (periodData.length > 0) {
+        console.log(`📊 [DriverSalaryService] Period data:`, periodData.map(d => ({
+          date: d.date,
+          distance: d.totalDistanceTraveled,
+          hours: d.totalHoursOnline
+        })));
+      }
 
       // Calculate totals for the period
       let totalDistance = 0;
@@ -118,7 +129,7 @@ class DriverSalaryService {
       console.log(`📊 [DriverSalaryService] Calculated totals - Distance: ${totalDistance}km, Hours: ${totalHours}h, Days: ${daysWorked}`);
 
       // If no data found for the period, try to get lifetime totals as fallback
-      if (periodData.length === 0) {
+      if (periodData.length === 0 && deviceHistory.lifetimeTotals) {
         console.log(`No daily data found for period ${startDate} to ${endDate}, using lifetime totals`);
         totalDistance = deviceHistory.lifetimeTotals?.totalDistanceTraveled || 0;
         totalHours = deviceHistory.lifetimeTotals?.totalHoursOnline || 0;
@@ -137,7 +148,17 @@ class DriverSalaryService {
       };
     } catch (error) {
       console.error('Error getting driver tracking data:', error);
-      throw error;
+      // Return zero values instead of throwing error to allow calculation creation
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      
+      console.log(`⚠️  [DriverSalaryService] Error occurred, returning zero values for material ${materialId}`);
+      return {
+        totalDistance: 0,
+        totalHours: 0,
+        daysWorked: 0
+      };
     }
   }
 

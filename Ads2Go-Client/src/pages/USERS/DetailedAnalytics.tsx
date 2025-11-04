@@ -86,13 +86,15 @@ const DetailedAnalytics: React.FC = () => {
     },
     fetchPolicy: 'cache-first',
     nextFetchPolicy: 'cache-and-network',
-    errorPolicy: 'all',
-    onError: (error) => {
-      if (error.message !== 'Failed to fetch analytics data') {
-        console.error('Unexpected analytics error:', error);
-      }
-    }
+    errorPolicy: 'all'
   });
+
+  // Handle analytics errors using useEffect (replaces deprecated onError callback)
+  useEffect(() => {
+    if (analyticsError && analyticsError.message !== 'Failed to fetch analytics data') {
+      console.error('Unexpected analytics error:', analyticsError);
+    }
+  }, [analyticsError]);
 
   // Fetch overall analytics data for Top Performing Ads (always uses 'all' period)
   const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
@@ -928,13 +930,13 @@ const DetailedAnalytics: React.FC = () => {
                   </div>
 
                   {/* Row 2: Value */}
-                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
                     {analyticsLoading ? (
                       <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                     ) : (
                       (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -953,13 +955,13 @@ const DetailedAnalytics: React.FC = () => {
                   </div>
 
                   {/* Row 2: Value */}
-                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
                     {analyticsLoading ? (
                       <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                     ) : (
                       (analyticsSummary.totalQRScans || 0).toLocaleString()
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -975,13 +977,13 @@ const DetailedAnalytics: React.FC = () => {
                     </div>
                     <p className="text-sm text-black/70 font-medium ml-1">Active Devices</p>
                   </div>
-                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
                     {analyticsLoading ? (
                       <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                     ) : (
                       (analyticsSummary.totalMaterials || 0).toLocaleString()
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -997,13 +999,13 @@ const DetailedAnalytics: React.FC = () => {
                     </div>
                     <p className="text-sm text-black/70 font-medium ml-1">Online Devices</p>
                   </div>
-                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
                     {analyticsLoading ? (
                       <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                     ) : (
                       availableDevices.filter((device) => device.isOnline).length
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -1019,13 +1021,13 @@ const DetailedAnalytics: React.FC = () => {
                     </div>
                     <p className="text-sm text-black/70 font-medium ml-1">Completion Rate</p>
                   </div>
-                  <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
                     {analyticsLoading ? (
                       <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                     ) : (
                       `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 

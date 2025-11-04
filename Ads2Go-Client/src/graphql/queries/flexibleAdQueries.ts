@@ -35,12 +35,18 @@ export const CALCULATE_FLEXIBLE_PRICING = gql`
       vehicleType
       category
       durationDays
+      durationMonths
       adLengthSeconds
       numberOfDevices
+      basePrice
+      adLengthMultiplier
+      durationDiscountMultiplier
       pricePerPlay
       playsPerDayPerDevice
       totalPlaysPerDay
       dailyRevenue
+      subtotal
+      discount
       totalPrice
       availableDevices
       devicesWithDriver
@@ -66,12 +72,18 @@ export interface FlexiblePricingCalculation {
   vehicleType: string;
   category: string;
   durationDays: number;
+  durationMonths: number;
   adLengthSeconds: number;
   numberOfDevices: number;
+  basePrice: number;
+  adLengthMultiplier: number;
+  durationDiscountMultiplier: number;
   pricePerPlay: number;
   playsPerDayPerDevice: number;
   totalPlaysPerDay: number;
   dailyRevenue: number;
+  subtotal: number;
+  discount: number;
   totalPrice: number;
   availableDevices: number;
   devicesWithDriver: number;

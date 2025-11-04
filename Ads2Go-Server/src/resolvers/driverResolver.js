@@ -1424,6 +1424,14 @@ createDriver: async (_, { input }) => {
     approvalDate: (driver) => {
       if (!driver.approvalDate) return null;
       return driver.approvalDate.toISOString();
+    },
+    archivedAt: (driver) => {
+      if (!driver.archivedAt) return null;
+      return driver.archivedAt.toISOString();
+    },
+    scheduledDeletionDate: (driver) => {
+      if (!driver.scheduledDeletionDate) return null;
+      return driver.scheduledDeletionDate.toISOString();
     }
   },
 };

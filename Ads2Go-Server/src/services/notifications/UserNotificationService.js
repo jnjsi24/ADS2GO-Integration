@@ -374,9 +374,9 @@ class UserNotificationService extends BaseNotificationService {
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/ad-details/${adId}" 
                  style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                View Your Dashboard
+                View Ad Details
               </a>
             </div>
             

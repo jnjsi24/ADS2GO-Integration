@@ -22,12 +22,18 @@ const adTypeDefs = gql`
     vehicleType: String!
     category: String!
     durationDays: Int!
+    durationMonths: Float!
     adLengthSeconds: Int!
     numberOfDevices: Int!
+    basePrice: Float!
+    adLengthMultiplier: Float!
+    durationDiscountMultiplier: Float!
     pricePerPlay: Float!
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     dailyRevenue: Float!
+    subtotal: Float!
+    discount: Float!
     totalPrice: Float!
     availableDevices: Int!
     devicesWithDriver: Int!

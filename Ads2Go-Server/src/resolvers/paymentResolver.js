@@ -306,6 +306,42 @@ const paymentResolvers = {
         throw new Error('You are not authorized to pay for this advertisement.');
       }
 
+      // ✅ NEW: Auto-adjust start date if it's in the past (before slot validation)
+      const now = new Date();
+      let startDateAdjusted = false;
+      const originalStartTime = new Date(ad.startTime);
+      
+      // Check if the start date is in the past
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const startDateOnly = new Date(ad.startTime);
+      startDateOnly.setUTCHours(0, 0, 0, 0);
+      
+      if (startDateOnly < today) {
+        // Start date is in the past - auto-adjust to tomorrow at 8:00 AM Manila time (00:00 UTC)
+        console.log(`📅 Original start date (${originalStartTime.toISOString()}) is in the past, auto-adjusting to tomorrow...`);
+        
+        // Calculate tomorrow at 8:00 AM Manila time (00:00 UTC tomorrow)
+        const tomorrow = new Date();
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        tomorrow.setUTCHours(0, 0, 0, 0);
+        
+        // Update start time to tomorrow
+        ad.startTime = tomorrow;
+        
+        // Recalculate end time to maintain original duration
+        // End time = start time + durationDays, ending at 11:59 PM Manila time (15:59 UTC)
+        const newEndDate = new Date(tomorrow);
+        newEndDate.setUTCDate(newEndDate.getUTCDate() + ad.durationDays);
+        newEndDate.setUTCHours(15, 59, 59, 999); // 15:59 UTC = 11:59 PM Manila
+        
+        ad.endTime = newEndDate;
+        startDateAdjusted = true;
+        
+        console.log(`✅ Start date adjusted from ${originalStartTime.toISOString()} to ${tomorrow.toISOString()}`);
+        console.log(`✅ End date recalculated to ${newEndDate.toISOString()} (maintaining ${ad.durationDays} days duration)`);
+      }
+
       let receiptId;
       let isUnique = false;
       let attempts = 0;
@@ -458,18 +494,15 @@ const paymentResolvers = {
         await newPayment.save({ session });
         console.log('✅ Payment saved successfully to database with ID:', newPayment._id);
 
-        // ✅ NEW: Set status based on start time
+        // ✅ Set status based on (potentially adjusted) start time
         const now = new Date();
-        const adStartTime = new Date(ad.startTime);
-        
-        // If ad starts now or in the past, set to RUNNING
-        // If ad starts in the future, set to SCHEDULED
-        if (adStartTime <= now) {
+        const finalStartTime = new Date(ad.startTime);
+        if (finalStartTime <= now) {
           ad.status = 'RUNNING';
-          console.log(`📅 Ad starts immediately or in the past (${adStartTime.toISOString()}), status set to RUNNING`);
+          console.log(`📅 Ad starts immediately or in the past (${finalStartTime.toISOString()}), status set to RUNNING`);
         } else {
           ad.status = 'SCHEDULED';
-          console.log(`📅 Ad starts in the future (${adStartTime.toISOString()}), status set to SCHEDULED`);
+          console.log(`📅 Ad starts in the future (${finalStartTime.toISOString()}), status set to SCHEDULED`);
         }
         
         ad.adStatus = 'ACTIVE';
@@ -500,7 +533,16 @@ const paymentResolvers = {
               year: 'numeric'
             });
             notificationTitle = '✅ Payment Confirmed - Your Ad is Now Running!';
-            notificationMessage = `Payment received! Your ad "${ad.title}" is now running and being displayed on the selected devices. It will run until ${endDate}.`;
+            let message = `Payment received! Your ad "${ad.title}" is now running and being displayed on the selected devices. It will run until ${endDate}.`;
+            if (startDateAdjusted) {
+              const newStartDate = new Date(ad.startTime).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              });
+              message += ` Note: Your original start date was in the past, so the ad start date has been adjusted to ${newStartDate} to ensure it runs properly.`;
+            }
+            notificationMessage = message;
             notificationCategory = 'AD_STARTED';
           } else if (ad.status === 'SCHEDULED') {
             // Ad is scheduled for future
@@ -515,7 +557,16 @@ const paymentResolvers = {
               year: 'numeric'
             });
             notificationTitle = '✅ Payment Confirmed - Ad Slot Secured!';
-            notificationMessage = `Payment received! Your ad "${ad.title}" is scheduled to run from ${startDate} to ${endDate}. We'll notify you when it starts.`;
+            let message = `Payment received! Your ad "${ad.title}" is scheduled to run from ${startDate} to ${endDate}. We'll notify you when it starts.`;
+            if (startDateAdjusted) {
+              const originalDate = originalStartTime.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              });
+              message += ` Note: Your original start date (${originalDate}) was in the past, so the ad start date has been adjusted to ${startDate} to ensure it runs properly.`;
+            }
+            notificationMessage = message;
             notificationCategory = 'AD_SCHEDULED';
           }
           

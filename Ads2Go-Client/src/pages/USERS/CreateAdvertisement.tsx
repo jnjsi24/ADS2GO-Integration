@@ -551,6 +551,9 @@ const CreateAdvertisement: React.FC = () => {
 
   // Update the handleFileInputChange function to be more strict
 const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  e.preventDefault(); // Prevent any form submission
+  e.stopPropagation(); // Stop event bubbling
+  
   const file = e.target.files?.[0] || null;
   
   // Clear previous errors
@@ -781,7 +784,6 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               onChange={handleFileInputChange}
               className="hidden"
               id="media-upload"
-              required
             />
 
             {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
@@ -1371,13 +1373,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <div className="flex justify-between">
               <span className="text-gray-600">Duration:</span>
               <span className="font-medium">
-                {pricingCalculation.durationDays === 30 ? '1 month' :
-                 pricingCalculation.durationDays === 60 ? '2 months' :
-                 pricingCalculation.durationDays === 90 ? '3 months' :
-                 pricingCalculation.durationDays === 120 ? '4 months' :
-                 pricingCalculation.durationDays === 150 ? '5 months' :
-                 pricingCalculation.durationDays === 180 ? '6 months' :
-                 `${pricingCalculation.durationDays} days`}
+                {pricingCalculation.durationMonths} month{pricingCalculation.durationMonths !== 1 ? 's' : ''} ({pricingCalculation.durationDays} days)
               </span>
             </div>
             <div className="flex justify-between">
@@ -1386,7 +1382,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Devices:</span>
-              <span className="font-medium">{pricingCalculation.numberOfDevices} device/s</span>
+              <span className="font-medium">{pricingCalculation.numberOfDevices} device{pricingCalculation.numberOfDevices !== 1 ? 's' : ''}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Available now:</span>
@@ -1398,25 +1394,43 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Device play/day:</span>
-              <span className="font-medium">{pricingCalculation.playsPerDayPerDevice}</span>
+            <div className="border-t border-gray-300 pt-3 mt-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Base Price:</span>
+                  <span className="font-medium">{formatCurrency(pricingCalculation.basePrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ad Length Multiplier ({pricingCalculation.adLengthSeconds}s):</span>
+                  <span className="font-medium">× {pricingCalculation.adLengthMultiplier.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Duration ({pricingCalculation.durationMonths} month{pricingCalculation.durationMonths !== 1 ? 's' : ''}):</span>
+                  <span className="font-medium">× {pricingCalculation.durationMonths.toFixed(1)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Number of Devices ({pricingCalculation.numberOfDevices}):</span>
+                  <span className="font-medium">× {pricingCalculation.numberOfDevices}</span>
+                </div>
+              </div>
+              <div className="border-t border-gray-300 pt-2 mt-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-700 font-medium">Subtotal:</span>
+                  <span className="font-semibold">{formatCurrency(pricingCalculation.subtotal)}</span>
+                </div>
+              </div>
+              {pricingCalculation.discount > 0 && (
+                <div className="pt-2 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Duration Discount ({((1 - pricingCalculation.durationDiscountMultiplier) * 100).toFixed(1)}%):</span>
+                    <span className="font-medium text-green-600">-{formatCurrency(pricingCalculation.discount)}</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total plays/day:</span>
-              <span className="font-medium">{pricingCalculation.totalPlaysPerDay}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Price/play:</span>
-              <span className="font-medium">{formatCurrency(pricingCalculation.pricePerPlay)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Daily revenue:</span>
-              <span className="font-medium">{formatCurrency(pricingCalculation.dailyRevenue)}</span>
-            </div>
-            <div className="border-t border-black/40 pt-3">
+            <div className="border-t-2 border-black/40 pt-3 mt-3">
               <div className="flex justify-between font-semibold">
-                <span>Total Price:</span>
+                <span className="text-lg">Total Price:</span>
                 <span className="text-xl text-[#3674B5]">{formatCurrency(pricingCalculation.totalPrice)}</span>
               </div>
             </div>
@@ -1594,7 +1608,26 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       </div>
       </div>
       <div className="max-w-3xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
-        <form onSubmit={handleSubmit}>
+        <form 
+          onSubmit={(e) => {
+            // Always prevent default form submission
+            // Only allow submission via explicit button click handler
+            e.preventDefault();
+          }}
+          onKeyDown={(e) => {
+            // Prevent form submission when Enter is pressed in input fields
+            // This prevents accidental ad creation when typing
+            if (e.key === 'Enter') {
+              const target = e.target as HTMLElement;
+              // Allow Enter in textarea for new lines
+              if (target.tagName === 'TEXTAREA') {
+                return;
+              }
+              // Prevent form submission for all other inputs
+              e.preventDefault();
+            }
+          }}
+        >
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
@@ -1638,7 +1671,13 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               </button>
             ) : (
               <button
-                type="submit"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Only submit when button is explicitly clicked
+                  handleSubmit(e as any);
+                }}
                 disabled={isSubmissionInProgress}
                 onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
                   const button = e.currentTarget;

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Material = require('../models/Material');
 const MaterialAvailability = require('../models/MaterialAvailability');
 const PricingConfig = require('../models/PricingConfig');
+const GlobalPricingMultipliers = require('../models/GlobalPricingMultipliers');
 const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
 const Payment = require('../models/Payment');
@@ -172,19 +173,55 @@ const adResolvers = {
         throw new Error('Number of devices must be at least 1');
       }
 
-      // Note: maxDevices removed - constraint is now based on available materials, not pricing config
-      // Get price for duration
-      console.log(`💵 [calculateFlexiblePricing] Getting price per play...`);
+      // Calculate duration in months
+      const durationMonths = durationDays / 30;
+      
+      // Get global pricing multipliers
+      console.log(`💵 [calculateFlexiblePricing] Getting global pricing multipliers...`);
+      const multipliers = await GlobalPricingMultipliers.getMultipliers();
+      
+      // Convert to plain object if needed
+      const multipliersObj = multipliers.toObject ? multipliers.toObject() : multipliers;
+      
+      // Get ad length multiplier from global multipliers
+      const adLengthMultiplier = multipliersObj.adLengthMultipliers?.[adLengthSeconds.toString()] || 
+        (adLengthSeconds === 20 ? 1.0 : adLengthSeconds === 40 ? 2.0 : 3.0);
+      
+      // Get duration discount multiplier (round to nearest integer for lookup)
+      const durationMonthsKey = Math.round(durationMonths).toString();
+      const durationDiscountMultiplier = multipliersObj.durationDiscountMultipliers?.[durationMonthsKey] || 1.0;
+      
+      console.log(`💵 [calculateFlexiblePricing] Multipliers: adLength=${adLengthMultiplier}, durationDiscount=${durationDiscountMultiplier}`);
+      
+      // Calculate subtotal: Base Price × Ad Length Multiplier × Duration (months) × Number of Devices
+      const subtotal = pricingConfig.basePrice * adLengthMultiplier * durationMonths * numberOfDevices;
+      
+      // Calculate discount amount
+      const discount = subtotal * (1 - durationDiscountMultiplier);
+      
+      // Calculate total price: Subtotal × Duration Discount Multiplier
+      const totalPrice = subtotal * durationDiscountMultiplier;
+      
+      console.log(`💰 [calculateFlexiblePricing] Pricing breakdown:`, { 
+        basePrice: pricingConfig.basePrice,
+        adLengthMultiplier,
+        durationMonths,
+        numberOfDevices,
+        durationDiscountMultiplier,
+        subtotal,
+        discount,
+        totalPrice
+      });
+      
+      // Get price per play (for backward compatibility)
       const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
       console.log(`💵 [calculateFlexiblePricing] Price per play: ${pricePerPlay}`);
       
-      // Calculate pricing
-      console.log(`💰 [calculateFlexiblePricing] Calculating pricing...`);
+      // Calculate pricing (for backward compatibility - still needed for playsPerDayPerDevice, etc.)
       const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
-      console.log(`💰 [calculateFlexiblePricing] Pricing calculated:`, { 
+      console.log(`💰 [calculateFlexiblePricing] Plays calculated:`, { 
         playsPerDayPerDevice: pricing.playsPerDayPerDevice, 
-        totalPlaysPerDay: pricing.totalPlaysPerDay,
-        totalPrice: pricing.totalPrice 
+        totalPlaysPerDay: pricing.totalPlaysPerDay
       });
 
       // Get available materials to calculate available slots
@@ -228,13 +265,19 @@ const adResolvers = {
         vehicleType: pricingConfig.vehicleType,
         category: pricingConfig.category,
         durationDays,
+        durationMonths,
         adLengthSeconds,
         numberOfDevices,
+        basePrice: pricingConfig.basePrice,
+        adLengthMultiplier,
+        durationDiscountMultiplier,
         pricePerPlay,
         playsPerDayPerDevice: pricing.playsPerDayPerDevice,
         totalPlaysPerDay: pricing.totalPlaysPerDay,
         dailyRevenue: pricing.dailyRevenue,
-        totalPrice: pricing.totalPrice,
+        subtotal,
+        discount,
+        totalPrice,
         availableDevices: availableDevices, // Count of devices that meet ALL requirements
         devicesWithDriver: devicesWithDriver, // Count of devices with driver assigned
         devicesMounted: devicesMounted, // Count of devices that are physically mounted
@@ -866,11 +909,103 @@ const adResolvers = {
         await ad.save();
 
         console.log(`✅ Ad ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
-        console.log(`📌 Deployment slots preserved - devices will show company ads instead`);
 
-        // ✅ DON'T remove from deployments - slots stay intact!
-        // Devices will skip this ad because status = 'ARCHIVED'
-        // Company ad filler system will automatically fill the slot
+        // ✅ CLEANUP: Remove from deployments and material availability immediately
+        try {
+          const AdsDeployment = require('../models/adsDeployment');
+          const MaterialAvailability = require('../models/MaterialAvailability');
+
+          // 1. Remove from AdsDeployment (both LCD slots and HEADDRESS/non-LCD deployments)
+          console.log(`🧹 Cleaning up deployments for archived ad ${id}...`);
+          
+          // Find all deployments containing this ad
+          // HEADDRESS ads are also stored in lcdSlots, so we check both lcdSlots and adId
+          const deployments = await AdsDeployment.find({
+            $or: [
+              { adId: id },
+              { 'lcdSlots.adId': id }
+            ]
+          });
+
+          for (const deployment of deployments) {
+            let deploymentModified = false;
+
+            // Remove from LCD/HEADDRESS slots (both types use lcdSlots array)
+            if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+              const initialLength = deployment.lcdSlots.length;
+              deployment.lcdSlots = deployment.lcdSlots.filter(slot => 
+                slot.adId.toString() !== id.toString()
+              );
+              if (deployment.lcdSlots.length < initialLength) {
+                deploymentModified = true;
+                console.log(`   ✅ Removed ad from slots in deployment ${deployment._id} (${initialLength - deployment.lcdSlots.length} slot(s) removed)`);
+              }
+            }
+
+            // Remove from non-LCD deployment (single adId field)
+            if (deployment.adId && deployment.adId.toString() === id.toString()) {
+              deployment.adId = null;
+              deploymentModified = true;
+              console.log(`   ✅ Removed ad from non-LCD deployment ${deployment._id}`);
+            }
+
+            if (deploymentModified) {
+              await deployment.save();
+            }
+          }
+
+          // 2. Remove from MaterialAvailability (both currentAds and scheduledAds)
+          console.log(`🧹 Cleaning up material availability for archived ad ${id}...`);
+          
+          // Get all materials that might have this ad
+          const targetDeviceIds = ad.targetDevices || (ad.materialId ? (Array.isArray(ad.materialId) ? ad.materialId : [ad.materialId]) : []);
+          
+          if (targetDeviceIds.length > 0) {
+            for (const deviceId of targetDeviceIds) {
+              try {
+                const availability = await MaterialAvailability.findOne({ materialId: deviceId });
+                if (availability) {
+                  const initialCurrent = availability.currentAds.length;
+                  const initialScheduled = availability.scheduledAds.length;
+                  
+                  // Remove from currentAds
+                  availability.currentAds = availability.currentAds.filter(adSlot => 
+                    adSlot.adId.toString() !== id.toString()
+                  );
+                  
+                  // Remove from scheduledAds
+                  availability.scheduledAds = availability.scheduledAds.filter(adSlot => 
+                    adSlot.adId.toString() !== id.toString()
+                  );
+                  
+                  // Update slot counts
+                  availability.occupiedSlots = availability.currentAds.length;
+                  availability.availableSlots = availability.totalSlots - availability.occupiedSlots;
+                  
+                  // Update availability dates
+                  availability.updateAvailabilityDates();
+                  
+                  await availability.save();
+                  
+                  const removedCurrent = initialCurrent - availability.currentAds.length;
+                  const removedScheduled = initialScheduled - availability.scheduledAds.length;
+                  
+                  if (removedCurrent > 0 || removedScheduled > 0) {
+                    console.log(`   ✅ Removed ad from material ${deviceId}: ${removedCurrent} current, ${removedScheduled} scheduled slots freed`);
+                  }
+                }
+              } catch (availabilityError) {
+                console.error(`   ⚠️ Error cleaning up material availability for device ${deviceId}:`, availabilityError.message);
+                // Continue with other devices even if one fails
+              }
+            }
+          }
+
+          console.log(`✅ Cleanup completed - ad removed from deployments and material availability`);
+        } catch (cleanupError) {
+          console.error(`❌ Error during cleanup (non-critical):`, cleanupError);
+          // Don't fail the archive if cleanup fails - ad is already archived
+        }
 
         return true;
 

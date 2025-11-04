@@ -2082,12 +2082,17 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
     if (effectiveUserId) {
       console.log(`🔍 Filtering ad analytics for user: ${effectiveUserId}`);
       
-      // Get all ads created by this user
+      // Get all ads created by this user (exclude PENDING ads)
       const Ad = require('../models/Ad');
-      const userAds = await Ad.find({ userId: effectiveUserId });
+      const userAds = await Ad.find({ 
+        userId: effectiveUserId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+      });
       const userAdIds = userAds.map(ad => ad._id.toString());
       
-      console.log(`📊 Found ${userAdIds.length} ads for user ${effectiveUserId}:`, userAdIds);
+      console.log(`📊 Found ${userAdIds.length} active ads (excluding PENDING) for user ${effectiveUserId}:`, userAdIds);
       
       // Filter analytics to only include devices playing ads from this user
       analytics = analytics.filter(tablet => {
@@ -2095,7 +2100,7 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
         return currentAdId && userAdIds.includes(currentAdId);
       });
       
-      console.log(`📱 Filtered to ${analytics.length} devices playing user's ads`);
+      console.log(`📱 Filtered to ${analytics.length} devices playing user's active ads`);
     }
 
     // Calculate summary statistics

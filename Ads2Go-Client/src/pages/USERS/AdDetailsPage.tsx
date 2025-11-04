@@ -269,8 +269,8 @@ const AdDetailsPage: React.FC = () => {
   
   // Strict requirements: Both PAID and APPROVED/RUNNING to show detailed information
   const isFullyPaidAndApproved = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
-  // Mobile tab visibility rules by status
-  const showAnalyticsTab = adStatus === 'APPROVED' || adStatus === 'RUNNING';
+  // Mobile tab visibility rules by status - Analytics only shows for PAID ads
+  const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
   const showDevicesTab = adStatus === 'RUNNING';
   
   // Ensure mobile active tab is valid for current status
@@ -1522,8 +1522,8 @@ const AdDetailsPage: React.FC = () => {
                 </div>
               )}
               
-              {/* Analytics button - show if running */}
-              {(ad.status === 'RUNNING' || ad.status === 'APPROVED') && (
+              {/* Analytics button - show only if paid and approved/running */}
+              {showAnalyticsTab && (
                 <div className="relative">
                   <button
                     onClick={() => navigate(`/detailed-analytics?adId=${id}`)}
