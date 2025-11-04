@@ -335,7 +335,7 @@ const typeDefs = gql`
   }
 
   type Query {
-    getAllDrivers: [Driver!]!
+    getAllDrivers(includeArchived: Boolean): [Driver!]!
     getDriverById(driverId: ID!): Driver
     getDriver(driverId: ID!): DriverResponse!
     checkDriverVerificationStatus(driverId: ID!): DriverVerificationStatus

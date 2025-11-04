@@ -5,15 +5,18 @@ const SuperAdmin = require('../models/SuperAdmin');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-const getUser = async (token) => {
+const getUser = async (paramToken) => {
   try {
-    if (!token) return null;
-    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!paramToken) return null;
+    const decoded = jwt.verify(paramToken, JWT_SECRET);
 
     // Check for admin token
-    if (decoded.adminId) {
-      const admin = await Admin.findById(decoded.adminId).select('id firstName lastName email role isEmailVerified tokenVersion');
-      if (!admin || admin.tokenVersion !== decoded.tokenVersion) return null;
+    if (decoded && decoded.adminId) {
+      const admin = await Admin.findById(decoded.adminId).select('id firstName lastName email role isEmailVerified tokenVersion isArchived');
+      if (!admin) return null;
+      // Deny archived admins
+      if (admin.isArchived) return null;
+      if (admin.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: admin.id,
@@ -26,9 +29,11 @@ const getUser = async (token) => {
     }
 
     // Check for superadmin token
-    if (decoded.superAdminId) {
-      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id firstName lastName email role isEmailVerified tokenVersion');
-      if (!superAdmin || superAdmin.tokenVersion !== decoded.tokenVersion) return null;
+    if (decoded && decoded.superAdminId) {
+      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id firstName lastName email role isEmailVerified tokenVersion isArchived');
+      if (!superAdmin) return null;
+      if (superAdmin.isArchived) return null;
+      if (superAdmin.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: superAdmin.id,
@@ -41,9 +46,12 @@ const getUser = async (token) => {
     }
 
     // Check for regular user token
-    if (decoded.userId) {
-      const user = await User.findById(decoded.userId).select('id firstName lastName email role isEmailVerified tokenVersion');
-      if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
+    if (decoded && decoded.userId) {
+      const user = await User.findById(decoded.userId).select('id firstName lastName email role isEmailVerified tokenVersion isArchived');
+      if (!user) return null;
+      // Deny archived users
+      if (user.isArchived) return null;
+      if (user.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: user.id,
@@ -67,17 +75,17 @@ const getUser = async (token) => {
 
 const authMiddleware = async ({ req }) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '') || '';
-    const isVerifyEmailRequest = req.body?.query?.includes?.('verifyEmail') || false;
+    const token = req.headers?.authorization ? req.headers.authorization.replace('Bearer ', '') : '';
+    const isVerifyEmailRequest = typeof req.body?.["query"] === 'string' && req.body.query.includes('verify');
 
     if (isVerifyEmailRequest) return { user: null };
 
     const user = await getUser(token);
-    
+
     // For admins and regular users only
     // Drivers are handled by driverAuth.js middleware
-    return { 
-      user: user || null
+    return {
+        user: user || null
     };
   } catch (error) {
     console.error('Auth Middleware Error:', error);
@@ -106,33 +114,31 @@ const checkAdmin = (user) => {
   return user;
 };
 
-
-
 // ✅ Express middleware for protecting admin routes
 const checkAdminMiddleware = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '') || '';
-    const user = await getUser(token);
-    
+    const token = req.headers?.authorization ? req.headers.authorization : '';
+    const user = await getUser(token.replace('Bearer ', ''));
+
     if (!user) {
-      return res.status(401).json({
+      return res.status(401).send({
         success: false,
         message: 'Authentication required'
       });
     }
-    
+
     if (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') {
-      return res.status(403).json({
+      return res.status(403).send({
         success: false,
         message: 'Admin access required'
       });
     }
-    
+
     req.user = user;
     next();
   } catch (error) {
     console.error('Admin Auth Middleware Error:', error);
-    return res.status(401).json({
+    return res.status(401).send({
       success: false,
       message: 'Invalid token'
     });

@@ -143,7 +143,7 @@ class UserNotificationService extends BaseNotificationService {
   /**
    * Send payment confirmation notification
    */
-  static async sendPaymentConfirmationNotification(userId, amount, adTitle) {
+  static async sendPaymentConfirmationNotification(userId, amount, adTitle, adId) {
     try {
       console.log('🔔 UserNotificationService: Starting payment confirmation notification for user:', userId);
       
@@ -168,6 +168,7 @@ class UserNotificationService extends BaseNotificationService {
           userRole: 'USER',
           category: 'PAYMENT_CONFIRMATION',
           priority: 'HIGH',
+          adId: adId,
           adTitle: adTitle
         }
       );
@@ -176,7 +177,7 @@ class UserNotificationService extends BaseNotificationService {
       // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
       try {
-        const emailData = await this.getPaymentConfirmationEmailData(user.firstName, amount, adTitle);
+        const emailData = await this.getPaymentConfirmationEmailData(user.firstName, amount, adTitle, adId);
         const result = await EnhancedEmailNotificationService.sendEmailNotification(
           user._id,
           'USER',
@@ -583,7 +584,7 @@ class UserNotificationService extends BaseNotificationService {
   /**
    * Get email data for payment confirmation notification
    */
-  static async getPaymentConfirmationEmailData(firstName, amount, adTitle) {
+  static async getPaymentConfirmationEmailData(firstName, amount, adTitle, adId) {
     return {
       subject: 'Payment Confirmed - Thank You!',
       html: `
@@ -605,9 +606,9 @@ class UserNotificationService extends BaseNotificationService {
             </p>
             
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/ad-details/${adId}" 
                  style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                View Your Dashboard
+                View Ad Details
               </a>
             </div>
             
@@ -620,7 +621,8 @@ class UserNotificationService extends BaseNotificationService {
       templateData: {
         firstName,
         amount,
-        adTitle
+        adTitle,
+        adId
       }
     };
   }

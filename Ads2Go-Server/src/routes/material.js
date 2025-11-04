@@ -59,13 +59,17 @@ router.get('/:materialId', async (req, res) => {
   try {
     const { materialId } = req.params;
 
-    const material = await Material.findOne({ materialId })
+    // ✅ Exclude archived materials - they should be treated as deleted
+    const material = await Material.findOne({ 
+      materialId,
+      isArchived: { $ne: true }
+    })
       .populate('driver', 'driverId firstName lastName');
 
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Material not found'
+        message: 'Material not found or has been archived'
       });
     }
 

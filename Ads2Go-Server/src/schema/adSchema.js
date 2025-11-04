@@ -144,7 +144,7 @@ const adTypeDefs = gql`
   }
 
   type Query {
-    getAllAds: [Ad!]!
+    getAllAds(includeArchived: Boolean): [Ad!]!
     getAdById(id: ID!): Ad
     getAdsByUser(userId: ID!): [Ad!]!
     getMyAds: [Ad!]!

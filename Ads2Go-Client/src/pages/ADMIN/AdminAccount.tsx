@@ -98,6 +98,25 @@ const AccountSettings: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Helper function to construct full image URL
+  const getImageUrl = (imagePath: string | undefined | null) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // If it starts with /uploads, prepend server URL
+    if (imagePath.startsWith('/uploads')) {
+      const serverUrl = process.env.REACT_APP_SERVER_URL;
+      if (!serverUrl) {
+        console.error('REACT_APP_SERVER_URL not configured');
+        return imagePath; // Return original path as fallback
+      }
+      return `${serverUrl}${imagePath}`;
+    }
+    return imagePath;
+  };
+
   // Update form when admin changes
   useEffect(() => {
     if (admin) {
@@ -113,6 +132,13 @@ const AccountSettings: React.FC = () => {
         companyName: admin.companyName,
         houseAddress: admin.houseAddress,
       });
+      // Set profile image from admin profilePicture
+      if (admin.profilePicture) {
+        const processedUrl = getImageUrl(admin.profilePicture);
+        setProfileImage(processedUrl);
+      } else {
+        setProfileImage(null);
+      }
     }
   }, [admin]);
 
@@ -197,7 +223,14 @@ const AccountSettings: React.FC = () => {
         <aside className="flex flex-col items-center justify-center p-8 bg-black/10 lg:w-1/3">
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-[#FF9D3D] text-white text-3xl font-bold">
             {profileImage ? (
-              <img src={profileImage} alt="Profile" className="object-cover w-full h-full" onError={() => setProfileImage(null)} />
+              <img 
+                src={profileImage} 
+                alt="Profile" 
+                className="object-cover w-full h-full" 
+                onError={() => {
+                  setProfileImage(null);
+                }} 
+              />
             ) : (
               <span>{getInitials(`${formData.firstName} ${formData.middleName || ''} ${formData.lastName}`)}</span>
             )}

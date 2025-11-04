@@ -50,14 +50,18 @@ const resolvers = {
       return adminRecord;
     },
 
-    getAllUsers: async (_, __, { admin }) => {
+    getAllUsers: async (_, { includeArchived = false }, { admin }) => {
       checkAuth(admin);
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to view users');
       }
-      // Return ALL users including archived (client handles filtering by archive status)
+      // ✅ Exclude archived by default - only include if explicitly requested
       // Add safety filter to ensure only USER role records are returned (extra safety check)
-      return await User.find({ role: 'USER' });
+      const query = { role: 'USER' };
+      if (!includeArchived) {
+        query.isArchived = { $ne: true };
+      }
+      return await User.find(query);
     },
 
     getAdminNotificationPreferences: async (_, __, { admin }) => {
@@ -124,15 +128,20 @@ const resolvers = {
     },
 
     loginAdmin: async (_, { email, password, deviceInfo }) => {
-      console.log(`Admin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
+      console.log(`Admin login from: ${deviceInfo?.deviceType || ''}${deviceInfo?.deviceName ? ' - ' + deviceInfo.deviceName : ''}`);
 
       const admin = await Admin.findOne({ email });
       if (!admin || admin.role !== 'ADMIN')
         throw new Error('No admin found with this email');
 
+      // Block archived admins from logging in
+      if (admin.isArchived) {
+        throw new Error('This admin account has been deleted or archived and cannot log in');
+      }
+
       if (!admin.isActive) throw new Error('Admin account is deactivated');
 
-      if (admin.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+      if (admin.isLocked()) throw new Error('Account is temporarily locked. Try again later.');
 
       const valid = await bcrypt.compare(password, admin.password);
       if (!valid) {
@@ -190,10 +199,33 @@ const resolvers = {
       } = input;
 
       // Validate contact number if provided
-      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
-      if (normalizedNumber) {
-        const phoneRegex = /^(\+63|0)?\d{10}$/;
-        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      let normalizedNumber = null;
+      if (contactNumber) {
+        // Remove spaces and non-digit characters except +
+        let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+
+        // Accept the same four formats across the app:
+        // 1) 09167912627 (11 digits starting with 09)
+        // 2) +639167912627 (10 digits after +63)
+        // 3) 639167912627 (10 digits after 63)
+        // 4) 9167912627 (10 digits starting with 9)
+        let isValid = false;
+        if (/^09\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        } else if (/^\+639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        } else if (/^639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        } else if (/^9\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+
+        if (!isValid) {
+          throw new Error('Invalid Philippine mobile number. Must be 11 digits starting with 09, or 10 digits starting with 9. Accepted: 09167912627, +639167912627, 639167912627, or 9167912627');
+        }
+
+        // Normalize to +63 format
+        normalizedNumber = cleanNumber;
         if (!normalizedNumber.startsWith('+63')) {
           normalizedNumber = normalizedNumber.startsWith('0')
             ? '+63' + normalizedNumber.substring(1)

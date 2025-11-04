@@ -43,7 +43,6 @@ const CreateAdvertisement: React.FC = () => {
   const [showVehicleTypeDropdown, setShowVehicleTypeDropdown] = useState(false);
   const [showMaterialTypeDropdown, setShowMaterialTypeDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
-  const [showAdLengthDropdown, setShowAdLengthDropdown] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [mediaFileError, setMediaFileError] = useState<string>('');
   const [showCalendar, setShowCalendar] = useState(false);
@@ -805,15 +804,8 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   )}
                 </div>
                 <p className="text-sm text-green-600 text-center font-medium">
-                  ✓ Selected: {formData.mediaFile.name}
+                  ✓ Uploaded File: {formData.mediaFile.name}
                 </p>
-                {detectedVideoDuration !== null && (
-                  <>
-                    <p className="text-xs text-gray-500 mt-1 text-center">
-                      Note: This is an estimate. Final validation will occur when creating the ad.
-                    </p>
-                  </>
-                )}
               </div>
             )}
             
@@ -1037,137 +1029,18 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.durationDays}</p>
           )}
         </div>
-        <div className="relative">
+        <div>
           <label className="block text-sm font-bold text-gray-700 mb-3">
-            Advertisement Length 
+            Ad Length
           </label>
-          <button
-            type="button"
-            onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
-            className="flex items-center justify-between rounded-md w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
-          >
-            {formData.adLengthSeconds
-              ? `${formData.adLengthSeconds} seconds`
-              : 'Select Ad Length'}
-            <ChevronDown
-              size={16}
-              className={`transform transition-transform duration-200 ${
-                showAdLengthDropdown ? 'rotate-180' : 'rotate-0'
-              } text-black`}
-            />
-          </button>
-          <AnimatePresence>
-            {showAdLengthDropdown && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute z-10 top-20 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-              >
-                <button
-                  key="select-ad-length"
-                  type="button"
-                  onClick={() => {
-                    handleInputChange('adLengthSeconds', '');
-                    setShowAdLengthDropdown(false);
-                  }}
-                  className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                >
-                  Select Ad Length
-                </button>
-                {[
-                  { value: 20, label: '20 seconds' },
-                  { value: 40, label: '40 seconds' },
-                  { value: 60, label: '60 seconds' }
-                ].map((option) => (
-                  <button
-                    key={`ad-length-${option.value}`}
-                    type="button"
-                    onClick={() => {
-                      handleInputChange('adLengthSeconds', option.value);
-                      setShowAdLengthDropdown(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {detectedVideoDuration !== null ? (
-            <>
-              {(() => {
-                const allowedAdLengths = [20, 40, 60];
-                // ✅ Only show validation if a valid ad length is selected
-                if (!allowedAdLengths.includes(formData.adLengthSeconds)) {
-                  const recommendedLength = getRecommendedAdLength(detectedVideoDuration);
-                  
-                  // Check if video is in a "gap" range (won't perfectly match any slot)
-                  const isInGap = (detectedVideoDuration >= 26 && detectedVideoDuration <= 34) || 
-                                  (detectedVideoDuration >= 46 && detectedVideoDuration <= 54);
-                  
-                  if (isInGap) {
-                    return (
-                      <div className="mt-1">
-                        <p className="text-sm text-blue-600 font-medium">
-                          ✨ Recommended: {recommendedLength} seconds (based on your ~{detectedVideoDuration}s video)
-                        </p>
-                        <p className="text-xs text-yellow-700 mt-1 bg-yellow-50 p-2 rounded border border-yellow-200">
-                          ℹ️ Note: Frontend detection is approximate. Your video will be validated by the server when creating the ad.
-                          Accepted ranges: 20s slot (15-25s), 40s slot (35-45s), 60s slot (55-65s).
-                        </p>
-                      </div>
-                    );
-                  }
-                  
-                  return (
-                    <p className="text-sm text-blue-600 mt-1 font-medium">
-                      ✨ Recommended: {recommendedLength} seconds (based on your ~{detectedVideoDuration}s video)
-                    </p>
-                  );
-                }
-                
-                const tolerance = 5;
-                const minAllowed = formData.adLengthSeconds - tolerance;
-                const maxAllowed = formData.adLengthSeconds + tolerance;
-                const isMatch = detectedVideoDuration >= minAllowed && detectedVideoDuration <= maxAllowed;
-                const recommendedLength = getRecommendedAdLength(detectedVideoDuration);
-                
-                if (isMatch) {
-                  return (
-                    <div>
-                      <p className="text-sm text-green-600 mt-1 font-medium">
-                        ✓ Your ~{detectedVideoDuration}s video should fit the {formData.adLengthSeconds}s ad slot.
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Note: This is an estimate. Final validation will occur when creating the ad.
-                      </p>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <p className="text-sm text-blue-800">
-                        ℹ️ Your video (~{detectedVideoDuration}s) may not match the selected {formData.adLengthSeconds}s ad slot.
-                        Consider selecting <strong>{recommendedLength}s</strong> instead.
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        The server will validate your video when you create the ad (accepted range: {minAllowed}-{maxAllowed}s).
-                      </p>
-                    </div>
-                  );
-                }
-              })()}
-            </>
+          {formData.mediaFile && detectedVideoDuration !== null ? (
+            <p className="text-sm text-green-600 font-medium">
+              ✓ Uploaded File: {formData.mediaFile.name} ({detectedVideoDuration} sec)
+            </p>
           ) : (
-          <p className="text-sm text-gray-500 mt-1">
-            Choose from: 20, 40, or 60 seconds
-          </p>
-          )}
-          {errors.adLengthSeconds && (
-            <p className="text-sm text-red-600 mt-1">{errors.adLengthSeconds}</p>
+            <p className="text-sm text-gray-500">
+              Upload a video file to see the ad length
+            </p>
           )}
         </div>
         

@@ -36,9 +36,17 @@ const Notifications: React.FC = () => {
 
   const handleDeleteSelected = async () => {
     if (selectedNotifications.size === 0) return;
-    for (const id of selectedNotifications) {
-      await removeNotification(id);
+    
+    if (selectedNotifications.size === notifications.length) {
+      // If all notifications are selected, use deleteAllNotifications
+      await deleteAllNotifications();
+    } else {
+      // Delete selected notifications one by one
+      for (const id of selectedNotifications) {
+        await removeNotification(id);
+      }
     }
+    
     setSelectedNotifications(new Set());
   };
 

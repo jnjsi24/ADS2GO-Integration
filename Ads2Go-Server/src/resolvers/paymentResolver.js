@@ -52,18 +52,26 @@ async function triggerAdDeployment(ad) {
     if (ad.targetDevices && ad.targetDevices.length > 0) {
       // Multi-device ad: deploy to all target devices
       console.log(`🔄 Deploying multi-device Ad ${ad._id} to ${ad.targetDevices.length} devices`);
-      targetMaterials = await Material.find({ _id: { $in: ad.targetDevices } });
+      // ✅ Exclude archived materials - they should be treated as deleted
+      targetMaterials = await Material.find({ 
+        _id: { $in: ad.targetDevices },
+        isArchived: { $ne: true }
+      });
     } else if (ad.materialId && ad.materialId.length > 0) {
       // Use materialId array if targetDevices is empty
       console.log(`🔄 Deploying Ad ${ad._id} to ${ad.materialId.length} materials from materialId array`);
-      targetMaterials = await Material.find({ _id: { $in: ad.materialId } });
+      // ✅ Exclude archived materials - they should be treated as deleted
+      targetMaterials = await Material.find({ 
+        _id: { $in: ad.materialId },
+        isArchived: { $ne: true }
+      });
     } else {
       console.error(`❌ Cannot deploy Ad ${ad._id}: No materials specified`);
       return;
     }
     
     if (targetMaterials.length === 0) {
-      console.error(`❌ Cannot deploy Ad ${ad._id}: No target materials found`);
+      console.error(`❌ Cannot deploy Ad ${ad._id}: No target materials found (or all materials are archived)`);
       return;
     }
 
@@ -72,6 +80,13 @@ async function triggerAdDeployment(ad) {
     const deploymentResults = [];
     
     for (const material of targetMaterials) {
+      // ✅ Double-check material is not archived
+      if (material.isArchived) {
+        console.error(`❌ Cannot deploy Ad ${ad._id} to ${material.materialId}: Material is archived`);
+        deploymentSuccess = false;
+        continue;
+      }
+      
       if (!material.driverId) {
         console.error(`❌ Cannot deploy Ad ${ad._id} to ${material.materialId}: No driver assigned`);
         deploymentSuccess = false;
@@ -222,10 +237,14 @@ const paymentResolvers = {
       // Fetch payments
       const payments = await Payment.find(filter).sort({ createdAt: -1 });
 
-      // Populate durationDays from adsId
+      // Populate durationDays from adsId - exclude archived ads
       const results = await Promise.all(
         payments.map(async (p) => {
-          const ad = await Ad.findById(p.adsId).select('id title durationDays');
+          const ad = await Ad.findById(p.adsId).select('id title durationDays isArchived status');
+          // ✅ Filter out payments for archived ads
+          if (!ad || ad.isArchived || ad.status === 'ARCHIVED') {
+            return null; // Skip archived ads
+          }
           return {
             ...p.toObject(),
             adsId: ad,
@@ -233,7 +252,8 @@ const paymentResolvers = {
         })
       );
 
-      return results;
+      // Remove null entries (archived ads)
+      return results.filter(r => r !== null);
     },
 
     getPaymentById: async (_, { id }, { user }) => {
@@ -252,7 +272,12 @@ const paymentResolvers = {
         checkAuth(user);
         console.log('🔍 getUserAdsWithPayments - User ID:', user.id);
         
-        const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
+        // ✅ Exclude archived ads - they should be treated as deleted
+        const ads = await Ad.find({ 
+          userId: user.id,
+          isArchived: { $ne: true },
+          status: { $nin: ['ARCHIVED'] }
+        }).sort({ createdAt: -1 });
         console.log('🔍 getUserAdsWithPayments - Found ads:', ads.length);
         
         const payments = await Payment.find({
@@ -292,6 +317,11 @@ const paymentResolvers = {
 
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
+      
+      // ✅ Check if ad is archived - treat as deleted
+      if (ad.isArchived || ad.status === 'ARCHIVED') {
+        throw new Error('This ad has been archived and is no longer accessible');
+      }
       
       // Check if ad is approved AND paymentStatus is PENDING
       if (ad.status !== 'APPROVED' || ad.paymentStatus !== 'PENDING') {
@@ -673,7 +703,8 @@ const paymentResolvers = {
           await NotificationService.sendPaymentConfirmationNotification(
             user.id,
             ad.totalPrice,
-            ad.title
+            ad.title,
+            ad._id
           );
           console.log('✅ Payment confirmation notification sent successfully');
         } catch (notificationError) {

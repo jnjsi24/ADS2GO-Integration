@@ -143,7 +143,7 @@ const typeDefs = gql`
     getAllAdmins: AdminListResponse!
     getAdminById(id: ID!): Admin
     getOwnAdminDetails: Admin
-    getAllUsers: [User!]!
+    getAllUsers(includeArchived: Boolean): [User!]!
     getAdminNotificationPreferences: AdminNotificationPreferences!
   }
 

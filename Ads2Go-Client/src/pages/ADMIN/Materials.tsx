@@ -251,7 +251,7 @@ const Materials: React.FC = () => {
       addToast({
         type: 'success',
         title: 'Success!',
-        message: 'Material added successfully.',
+        message: 'Device added successfully.',
         duration: 4000
       });
       setShowCreateModal(false);
@@ -261,7 +261,7 @@ const Materials: React.FC = () => {
       addToast({
         type: 'error',
         title: 'Error!',
-        message: `Error creating material: ${error.message}`,
+        message: `Error creating device: ${error.message}`,
         duration: 5000
       });
     }
@@ -277,7 +277,7 @@ const Materials: React.FC = () => {
       addToast({
         type: 'success',
         title: 'Success!',
-        message: 'Material deleted successfully.',
+        message: 'Device deleted successfully.',
         duration: 4000
       });
       refetch();
@@ -286,7 +286,7 @@ const Materials: React.FC = () => {
       addToast({
         type: 'error',
         title: 'Error!',
-        message: `Error deleting material: ${error.message}`,
+        message: `Error deleting device: ${error.message}`,
         duration: 5000
       });
     }
@@ -302,7 +302,7 @@ const Materials: React.FC = () => {
       addToast({
         type: 'success',
         title: 'Success!',
-        message: 'Material restored successfully.',
+        message: 'Device restored successfully.',
         duration: 4000
       });
       refetch();
@@ -1209,7 +1209,7 @@ const Materials: React.FC = () => {
               }`}
             >
               <span className="w-4 h-4 mr-2 rounded-full bg-blue-500"></span>
-              Active Materials
+              Active Devices
               <span
                 className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
                   activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
@@ -1223,7 +1223,7 @@ const Materials: React.FC = () => {
               }`}
             >
               <Archive className="w-4 h-4 mr-2" />
-              Archived Materials
+              Archived Devices
               <span
                 className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
                   activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
@@ -1417,7 +1417,7 @@ const Materials: React.FC = () => {
                 );
               })}
               {filtered.length === 0 && (
-                <div className="p-4 text-center text-gray-500">No materials found.</div>
+                <div className="p-4 text-center text-gray-500">No devices found.</div>
               )}
             </>
           )}
@@ -1489,7 +1489,7 @@ const Materials: React.FC = () => {
         </div>
       </div>
 
-      {/* Create Material Modal */}
+      {/* Create Device Modal */}
       <CreateMaterialModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}

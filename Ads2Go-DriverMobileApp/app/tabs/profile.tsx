@@ -444,9 +444,17 @@ export default function ProfileScreen() {
       <View style={styles.errorContainer}>
         <Ionicons name="person-circle-outline" size={64} color="#CCCCCC" />
         <Text style={styles.errorText}>Failed to load profile</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <TouchableOpacity style={styles.retryButton} onPress={loadProfile}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: '#ef4444' }]}
+            onPress={handleSignOut}
+          >
+            <Text style={styles.retryButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }

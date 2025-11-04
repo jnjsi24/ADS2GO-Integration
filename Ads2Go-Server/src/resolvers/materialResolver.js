@@ -74,10 +74,15 @@ const cleanupMaterialRelatedRecords = async (materialId, materialStringId) => {
 const materialResolvers = {
   Query: {
     // Admin-only
-    getAllMaterials: async (_, __, { user }) => {
+    getAllMaterials: async (_, { includeArchived = false }, { user }) => {
       checkAdmin(user); // only admin can access
       try {
-        const materials = await Material.find()
+        const query = {};
+        // ✅ Exclude archived by default - only include if explicitly requested
+        if (!includeArchived) {
+          query.isArchived = { $ne: true };
+        }
+        const materials = await Material.find(query)
           .populate('driver', 'driverId firstName lastName fullName email contactNumber vehiclePlateNumber')
           .sort({ createdAt: -1 });
         console.log(`Found ${materials.length} materials`);
@@ -90,7 +95,11 @@ const materialResolvers = {
 
     getMaterialsByVehicleType: async (_, { vehicleType }, { user }) => {
       checkAdmin(user); // admin-only
-      return await Material.find({ vehicleType }).sort({ createdAt: -1 });
+      // ✅ Exclude archived materials
+      return await Material.find({ 
+        vehicleType,
+        isArchived: { $ne: true }
+      }).sort({ createdAt: -1 });
     },
 
     getMaterialsByCategory: async (_, { category }, { user }) => {
@@ -98,24 +107,43 @@ const materialResolvers = {
       if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
         throw new Error('Invalid material category');
       }
-      return await Material.find({ category }).sort({ createdAt: -1 });
+      // ✅ Exclude archived materials
+      return await Material.find({ 
+        category,
+        isArchived: { $ne: true }
+      }).sort({ createdAt: -1 });
     },
 
     // Accessible by User & Driver (login required)
     getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType }, { user, driver }) => {
       if (!user && !driver) throw new Error("Unauthorized");
-      return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
+      // ✅ Exclude archived materials - they should be treated as deleted
+      return await Material.find({ 
+        category, 
+        vehicleType,
+        isArchived: { $ne: true }
+      }).sort({ createdAt: -1 });
     },
 
     getMaterialsByCategoryVehicleAndType: async (_, { category, vehicleType, materialType }, { user, driver }) => {
       if (!user && !driver) throw new Error("Unauthorized");
-      return await Material.find({ category, vehicleType, materialType }).sort({ createdAt: -1 });
+      // ✅ Exclude archived materials - they should be treated as deleted
+      return await Material.find({ 
+        category, 
+        vehicleType, 
+        materialType,
+        isArchived: { $ne: true }
+      }).sort({ createdAt: -1 });
     },
 
     getMaterialById: async (_, { id }, { user }) => {
       checkAdmin(user); // admin-only
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
+      // ✅ Check if material is archived - treat as deleted
+      if (material.isArchived) {
+        throw new Error('This material has been archived and is no longer accessible');
+      }
       return material;
     },
 
@@ -150,8 +178,11 @@ const materialResolvers = {
           });
         }
 
-        // Find materials assigned to the driver
-        const materials = await Material.find({ driverId: effectiveDriverId }).sort({ createdAt: -1 });
+        // Find materials assigned to the driver - exclude archived
+        const materials = await Material.find({ 
+          driverId: effectiveDriverId,
+          isArchived: { $ne: true } // ✅ Exclude archived materials
+        }).sort({ createdAt: -1 });
         
         // Get material tracking information for each material
         const materialsWithTracking = await Promise.all(
@@ -709,6 +740,11 @@ const materialResolvers = {
       const driver = await Driver.findOne({ driverId });
       if (!driver) throw new Error('Driver not found');
 
+      // ✅ Check if driver is archived
+      if (driver.isArchived) {
+        throw new Error('Cannot assign material to archived driver. Driver account has been deleted.');
+      }
+
       // ✅ NEW: Only allow material assignment if driver is approved
       if (driver.reviewStatus !== 'APPROVED' || driver.accountStatus !== 'ACTIVE') {
         throw new Error('Cannot assign material to driver. Driver must be approved and active first.');
@@ -719,10 +755,26 @@ const materialResolvers = {
         throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
       }
 
+      // Find the material to assign
+      const material = await Material.findOne({ 
+        _id: materialId,
+        isArchived: { $ne: true } // ✅ Exclude archived materials
+      });
+      
+      if (!material) {
+        throw new Error('Material not found or has been archived');
+      }
+
+      // ✅ Check if material is archived (extra safety check)
+      if (material.isArchived) {
+        throw new Error('Cannot assign archived material. This material has been deleted.');
+      }
+
       // Check if this driver already has a material assigned
       const alreadyAssigned = await Material.findOne({ 
         driverId: driver.driverId,
-        dismountedAt: { $exists: false } // Only consider active assignments
+        dismountedAt: { $exists: false }, // Only consider active assignments
+        isArchived: { $ne: true } // ✅ Exclude archived materials
       });
       
       if (alreadyAssigned) {

@@ -102,6 +102,25 @@ const AdminSidebar: React.FC = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   }, []);
 
+  // Helper function to construct full image URL
+  const getImageUrl = useCallback((imagePath: string | undefined | null) => {
+    if (!imagePath) return null;
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    // If it starts with /uploads, prepend server URL
+    if (imagePath.startsWith('/uploads')) {
+      const serverUrl = process.env.REACT_APP_SERVER_URL;
+      if (!serverUrl) {
+        console.error('REACT_APP_SERVER_URL not configured');
+        return imagePath; // Return original path as fallback
+      }
+      return `${serverUrl}${imagePath}`;
+    }
+    return imagePath;
+  }, []);
+
   const menuItems = [
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
     { label: 'Advertisers', path: '/admin/users', icon: <Users size={20} /> },
@@ -163,9 +182,9 @@ const AdminSidebar: React.FC = () => {
               onClick={toggleDropup}
             >
               <div className="w-8 h-8 rounded-full flex border border-black/30 items-center justify-center relative overflow-hidden">
-                {admin?.profilePicture ? (
+                {admin?.profilePicture && getImageUrl(admin.profilePicture) ? (
                   <img
-                    src={admin.profilePicture}
+                    src={getImageUrl(admin.profilePicture) || ''}
                     alt={`${admin.firstName} ${admin.lastName}`}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -177,7 +196,7 @@ const AdminSidebar: React.FC = () => {
                 ) : null}
                 <span 
                   className="text-white font-semibold flex items-center justify-center w-full h-full text-xs bg-[#FF9D3D]"
-                  style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+                  style={{ display: (admin?.profilePicture && getImageUrl(admin.profilePicture)) ? 'none' : 'flex' }}
                 >
                   {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
                 </span>
@@ -321,9 +340,9 @@ const AdminSidebar: React.FC = () => {
             title={isCollapsed && !isHovered ? (admin ? `${admin.firstName} ${admin.lastName}` : 'Profile') : undefined}
           >
             <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative flex-shrink-0">
-              {admin?.profilePicture ? (
+              {admin?.profilePicture && getImageUrl(admin.profilePicture) ? (
                 <img
-                  src={admin.profilePicture}
+                  src={getImageUrl(admin.profilePicture) || ''}
                   alt={`${admin.firstName} ${admin.lastName}`}
                   className="w-full h-full object-cover rounded-full"
                   onError={(e) => {
@@ -335,7 +354,7 @@ const AdminSidebar: React.FC = () => {
               ) : null}
               <span 
                 className="text-white font-semibold flex items-center justify-center w-full h-full"
-                style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+                style={{ display: (admin?.profilePicture && getImageUrl(admin.profilePicture)) ? 'none' : 'flex' }}
               >
                 {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
               </span>

@@ -19,6 +19,23 @@ const AdminList: React.FC<AdminListProps> = ({
   formatDate,
   activeTab,
 }) => {
+  const formatContactNumber = (num?: string): string => {
+    if (!num) return 'N/A';
+    const digits = num.replace(/\D/g, '');
+    let tenDigits = '';
+    if (digits.startsWith('63') && digits.length >= 12) {
+      tenDigits = digits.slice(2, 12);
+    } else if (digits.startsWith('0') && digits.length >= 11) {
+      tenDigits = digits.slice(1, 11);
+    } else if (digits.startsWith('9') && digits.length >= 10) {
+      tenDigits = digits.slice(0, 10);
+    } else if (digits.length > 10) {
+      tenDigits = digits.slice(-10);
+    } else {
+      tenDigits = digits;
+    }
+    return tenDigits ? `+63 ${tenDigits}` : 'N/A';
+  };
   return (
     <div className="mx-6 mt-4 rounded-md overflow-hidden">
       {/* Header */}
@@ -71,7 +88,7 @@ const AdminList: React.FC<AdminListProps> = ({
 
               {/* Other Columns */}
               <p className="text-sm text-gray-900">{admin.companyName || 'N/A'}</p>
-              <p className="text-sm text-gray-900">{admin.contactNumber || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{formatContactNumber(admin.contactNumber)}</p>
               <p className="text-sm text-gray-900 truncate">{admin.email}</p>
               {activeTab === 'archived' && (
                 <div className="text-sm text-red-600 font-medium">

@@ -26,7 +26,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
   onCreateClick,
 }) => {
   const materialOptions = [
-    { label: 'All Materials', value: 'All' },
+    { label: 'All Devices', value: 'All' },
     { label: 'LCD', value: 'LCD' },
     { label: 'Banner', value: 'BANNER' },
     { label: 'Sticker', value: 'STICKER' },
@@ -65,7 +65,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
             isMobile ? 'pt-10' : ''
           }`}
         >
-          Materials List
+          Devices List
         </h1>
 
         {/* Filters */}
@@ -74,7 +74,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
           <input
             type="text"
             className="text-xs text-black rounded-lg pl-5 py-3 w-full md:w-80 shadow-md focus:outline-none bg-white"
-            placeholder="Search materials..."
+            placeholder="Search devices..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
           />
@@ -340,7 +340,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
           } hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2`}
         >
           <Plus size={16} />
-          {isMobile ? 'Create Material' : 'Create Material'}
+          {isMobile ? 'Create Device' : 'Create Device'}
         </button>
       </div>
     </div>

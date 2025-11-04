@@ -100,8 +100,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
       // If we have a complete location selected and the value contains it
       if (locationPart && value.includes(locationPart)) {
         // Extract user address (house number and street) - part before the location
-        const addressPart = value.replace(locationPart, '').replace(/,\s*$/, '').trim();
-        if (addressPart && addressPart !== userAddress) {
+        const addressPart = value.replace(locationPart, '').replace(/,\s*$/, '');
+        if (addressPart !== userAddress) {
           setUserAddress(addressPart);
         }
       } else {
@@ -137,8 +137,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               
               // Extract user address
               const extractedLocationPart = `${foundBarangay.name}${foundBarangay.postalCode ? ` (${foundBarangay.postalCode})` : ''}, ${foundCity.name}, ${foundRegion.name}`;
-              const addressPart = value.replace(extractedLocationPart, '').replace(/,\s*$/, '').trim();
-              if (addressPart && addressPart !== userAddress) {
+              const addressPart = value.replace(extractedLocationPart, '').replace(/,\s*$/, '');
+              if (addressPart !== userAddress) {
                 setUserAddress(addressPart);
               }
             }
@@ -231,7 +231,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     if (selectedRegion && selectedCity && selectedBarangay) {
       const locationPart = getLocationPart();
       
-      if (newAddress.trim() === '') {
+      if (newAddress.length === 0) {
         onChange(locationPart);
       } else {
         onChange(`${newAddress}, ${locationPart}`);
@@ -299,6 +299,10 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onChangeText={handleAddressChange}
             placeholder="Enter your house number and street..."
             placeholderTextColor="#999"
+            keyboardType="default"
+            autoCapitalize="words"
+            autoCorrect={false}
+            spellCheck={false}
           />
         </View>
       )}

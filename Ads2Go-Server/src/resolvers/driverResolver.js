@@ -67,7 +67,10 @@ async function assignMaterialToDriver(driver) {
 
   // Check if driver already has a material assigned
   if (driver.materialId) {
-    const existingMaterial = await Material.findById(driver.materialId);
+    const existingMaterial = await Material.findOne({ 
+      _id: driver.materialId,
+      isArchived: { $ne: true } // ✅ Exclude archived materials
+    });
     if (existingMaterial) {
       throw new Error('Driver already has an assigned material');
     }
@@ -80,10 +83,12 @@ async function assignMaterialToDriver(driver) {
       ? driver.preferredMaterialType 
       : allowedTypes;
 
+  // ✅ Exclude archived materials - they should be treated as deleted
   const availableMaterials = await Material.find({
     vehicleType: driver.vehicleType,
     materialType: { $in: materialTypesToSearch },
     driverId: null,
+    isArchived: { $ne: true } // Exclude archived materials
   }).sort({ createdAt: 1 }); // Get oldest material first
 
   if (!availableMaterials.length) {
@@ -168,10 +173,14 @@ Upload: GraphQLUpload,
         throw new Error('Failed to retrieve driver information');
       }
     },
-    getAllDrivers: async (_, __, { user }) => {
+    getAllDrivers: async (_, { includeArchived = false }, { user }) => {
       checkAdmin(user);
-      // Return ALL drivers including archived (client handles filtering by archive status)
-      return Driver.find({})
+      // ✅ Exclude archived by default - only include if explicitly requested
+      const query = {};
+      if (!includeArchived) {
+        query.isArchived = { $ne: true };
+      }
+      return Driver.find(query)
         .select('+createdAt +updatedAt +lastLogin +dateJoined +approvalDate')
         .populate({
           path: 'material',
@@ -184,6 +193,10 @@ Upload: GraphQLUpload,
       checkAdmin(user);
       const driver = await Driver.findOne({ driverId });
       if (!driver) throw new Error('Driver not found');
+      // ✅ Check if driver is archived - treat as deleted
+      if (driver.isArchived) {
+        throw new Error('This driver has been archived and is no longer accessible');
+      }
       return driver;
     },
 
@@ -212,6 +225,11 @@ Upload: GraphQLUpload,
         
         if (!driverProfile) {
           throw new Error('Driver not found');
+        }
+
+        // ✅ Check if driver is archived - treat as deleted
+        if (driverProfile.isArchived) {
+          throw new Error('This account has been archived and is no longer accessible');
         }
 
         console.log(`✅ Found driver profile for ${effectiveDriverId}`);
@@ -304,21 +322,36 @@ createDriver: async (_, { input }) => {
       throw new Error("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character");
     }
 
-    // Validate contact number (Philippine format: 09XXXXXXXXX or +639XXXXXXXXX)
-    // Normalize the contact number before validation (same as Driver model)
-    let normalizedContact = input.contactNumber.replace(/[^\d+]/g, '');
-    if (/^9\d{9}$/.test(normalizedContact)) {
-      normalizedContact = '0' + normalizedContact;
-    } else if (/^639\d{9}$/.test(normalizedContact)) {
-      normalizedContact = '+' + normalizedContact;
-    }
-    
-    const contactNumberRegex = /^(09\d{9}|\+639\d{9})$/;
+    // Validate contact number (accepted: 09123456789, +639123456789, 639123456789, or 9123456789)
     if (!input.contactNumber || !input.contactNumber.trim()) {
       throw new Error("Contact number is required");
     }
-    if (!contactNumberRegex.test(normalizedContact)) {
-      throw new Error("Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)");
+
+    // Clean input
+    let cleanNumber = input.contactNumber.replace(/[^\d+]/g, '');
+
+    // Check accepted formats
+    let isValidContact = false;
+    if (/^09\d{9}$/.test(cleanNumber)) {
+      isValidContact = true;
+    } else if (/^\+639\d{9}$/.test(cleanNumber)) {
+      isValidContact = true;
+    } else if (/^639\d{9}$/.test(cleanNumber)) {
+      isValidContact = true;
+    } else if (/^9\d{9}$/.test(cleanNumber)) {
+      isValidContact = true;
+    }
+
+    if (!isValidContact) {
+      throw new Error('Invalid Philippine mobile number. Must be 11 digits starting with 09, or 10 digits starting with 9. Accepted: 09123456789, +639123456789, 639123456789, or 9123456789');
+    }
+
+    // Normalize to +63 format for storage
+    let normalizedContact = cleanNumber;
+    if (!normalizedContact.startsWith('+63')) {
+      normalizedContact = normalizedContact.startsWith('0')
+        ? '+63' + normalizedContact.substring(1)
+        : '+63' + normalizedContact;
     }
 
     // Validate vehicle type

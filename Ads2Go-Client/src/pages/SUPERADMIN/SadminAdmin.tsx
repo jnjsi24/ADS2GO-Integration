@@ -382,12 +382,25 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
   // Edit admin handlers
   const handleEditAdmin = (admin: Admin) => {
     setAdminToEdit(admin);
-    // Set initialContactNumber to empty string if no contact number exists
-    const initialContactNumber = admin.contactNumber
-      ? admin.contactNumber.startsWith('+63 ')
-        ? admin.contactNumber
-        : `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}`
-      : '';
+    // Normalize and display contact number consistently with +63 prefix in the input UI
+    // Accept stored forms like "+639XXXXXXXXX", "639XXXXXXXXX", "09XXXXXXXXX", or "9XXXXXXXXX"
+    let initialContactNumber = '';
+    if (admin.contactNumber) {
+      const digits = admin.contactNumber.replace(/\D/g, '');
+      let tenDigits = '';
+      if (digits.startsWith('63') && digits.length >= 12) {
+        tenDigits = digits.slice(2, 12);
+      } else if (digits.startsWith('0') && digits.length >= 11) {
+        tenDigits = digits.slice(1, 11);
+      } else if (digits.startsWith('9') && digits.length >= 10) {
+        tenDigits = digits.slice(0, 10);
+      } else if (digits.length > 10) {
+        tenDigits = digits.slice(-10);
+      } else {
+        tenDigits = digits;
+      }
+      initialContactNumber = `+63 ${tenDigits}`;
+    }
 
     setEditAdminFormData({
       id: admin.id,

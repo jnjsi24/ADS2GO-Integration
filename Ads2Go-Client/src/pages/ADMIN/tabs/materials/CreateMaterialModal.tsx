@@ -135,7 +135,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className={`bg-white rounded-md ${isMobile ? 'p-4 w-full max-w-[90vw] max-h-[70vh] overflow-y-auto' : 'p-6 w-full max-w-md'} mx-4`}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>Create New Material</h2>
+          <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>Create New Device</h2>
           <button
             onClick={handleClose}
             className="p-1 rounded-full hover:bg-gray-200"
@@ -235,7 +235,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
 
           <div className="relative">
             <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
-              Material Type
+              Device Type
             </label>
             <button
               type="button"
@@ -298,7 +298,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
               value={createForm.requirements}
               onChange={(e) => setCreateForm({...createForm, requirements: e.target.value})}
               className={`w-full ${isMobile ? 'px-2 py-1 text-sm h-20' : 'px-3 py-2 text-sm'} border border-gray-200 shadow-md rounded-md focus:outline-none`}
-              placeholder="Enter material requirements"
+              placeholder="Enter device requirements"
               rows={isMobile ? 2 : 3}
             />
           </div>
@@ -313,7 +313,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
               disabled={creating}
               className={`px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors disabled:bg-gray-400 ${isMobile ? 'w-40 text-xs' : 'w-36 text-sm'}`}
             >
-              {creating ? 'Creating...' : 'Create Material'}
+              {creating ? 'Creating...' : 'Create Device'}
             </button>
           </div>
         </form>

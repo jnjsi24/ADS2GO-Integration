@@ -149,7 +149,7 @@ module.exports = gql`
 
 extend type Query {
   # Admin-only
-  getAllMaterials: [Material!]!
+  getAllMaterials(includeArchived: Boolean): [Material!]!
   getMaterialById(id: ID!): Material
   
   # Filtered queries (usable by user and driver)

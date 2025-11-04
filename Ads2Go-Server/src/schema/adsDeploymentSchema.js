@@ -107,7 +107,7 @@ const adsDeploymentTypeDefs = gql`
   # Extend existing Query type
   extend type Query {
     # Get all deployments (Admin only)
-    getAllDeployments: [AdsDeployment!]!
+    getAllDeployments(includeArchived: Boolean): [AdsDeployment!]!
     
     # Get deployments by driver
     getDeploymentsByDriver(driverId: ID!): [AdsDeployment!]!

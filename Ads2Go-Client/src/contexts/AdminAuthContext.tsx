@@ -150,6 +150,25 @@ export const AdminAuthProvider: React.FC<{
             throw new Error('Admin not found');
           }
 
+          // Helper function to construct full image URL
+          const getImageUrl = (imagePath: string | undefined | null) => {
+            if (!imagePath) return null;
+            // If it's already a full URL, return as is
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+              return imagePath;
+            }
+            // If it starts with /uploads, prepend server URL
+            if (imagePath.startsWith('/uploads')) {
+              const serverUrl = process.env.REACT_APP_SERVER_URL;
+              if (!serverUrl) {
+                console.error('REACT_APP_SERVER_URL not configured');
+                return imagePath; // Return original path as fallback
+              }
+              return `${serverUrl}${imagePath}`;
+            }
+            return imagePath;
+          };
+
           freshAdmin = {
             userId: freshAdminRaw.id,
             email: freshAdminRaw.email,
@@ -161,7 +180,7 @@ export const AdminAuthProvider: React.FC<{
             companyName: freshAdminRaw.companyName,
             companyAddress: freshAdminRaw.companyAddress,
             contactNumber: freshAdminRaw.contactNumber,
-            profilePicture: freshAdminRaw.profilePicture,
+            profilePicture: getImageUrl(freshAdminRaw.profilePicture),
           };
         } else if (decoded.role === 'SUPERADMIN') {
           
@@ -180,6 +199,25 @@ export const AdminAuthProvider: React.FC<{
             throw new Error('SuperAdmin not found');
           }
 
+          // Helper function to construct full image URL
+          const getImageUrl = (imagePath: string | undefined | null) => {
+            if (!imagePath) return null;
+            // If it's already a full URL, return as is
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+              return imagePath;
+            }
+            // If it starts with /uploads, prepend server URL
+            if (imagePath.startsWith('/uploads')) {
+              const serverUrl = process.env.REACT_APP_SERVER_URL;
+              if (!serverUrl) {
+                console.error('REACT_APP_SERVER_URL not configured');
+                return imagePath; // Return original path as fallback
+              }
+              return `${serverUrl}${imagePath}`;
+            }
+            return imagePath;
+          };
+
           freshAdmin = {
             userId: freshAdminRaw.id,
             email: freshAdminRaw.email,
@@ -192,7 +230,7 @@ export const AdminAuthProvider: React.FC<{
             companyName: freshAdminRaw.companyName,
             companyAddress: freshAdminRaw.companyAddress,
             contactNumber: freshAdminRaw.contactNumber,
-            profilePicture: freshAdminRaw.profilePicture,
+            profilePicture: getImageUrl(freshAdminRaw.profilePicture),
           };
         } else {
           throw new Error('Invalid admin role');
@@ -265,6 +303,25 @@ export const AdminAuthProvider: React.FC<{
         const { token, superAdmin: superAdminRaw } = result.data.loginSuperAdmin;
         localStorage.setItem('adminToken', token);
 
+        // Helper function to construct full image URL
+        const getImageUrl = (imagePath: string | undefined | null) => {
+          if (!imagePath) return null;
+          // If it's already a full URL, return as is
+          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+          }
+          // If it starts with /uploads, prepend server URL
+          if (imagePath.startsWith('/uploads')) {
+            const serverUrl = process.env.REACT_APP_SERVER_URL;
+            if (!serverUrl) {
+              console.error('REACT_APP_SERVER_URL not configured');
+              return imagePath; // Return original path as fallback
+            }
+            return `${serverUrl}${imagePath}`;
+          }
+          return imagePath;
+        };
+
         const adminUser: Admin = {
           userId: superAdminRaw.id,
           email: superAdminRaw.email,
@@ -276,7 +333,7 @@ export const AdminAuthProvider: React.FC<{
           companyName: superAdminRaw.companyName,
           companyAddress: superAdminRaw.companyAddress,
           contactNumber: superAdminRaw.contactNumber,
-          profilePicture: superAdminRaw.profilePicture,
+          profilePicture: getImageUrl(superAdminRaw.profilePicture),
         };
 
         // Superadmin-only login successful
@@ -341,6 +398,25 @@ export const AdminAuthProvider: React.FC<{
         const { token, admin: adminRaw } = result.data.loginAdmin;
         localStorage.setItem('adminToken', token);
 
+        // Helper function to construct full image URL
+        const getImageUrl = (imagePath: string | undefined | null) => {
+          if (!imagePath) return null;
+          // If it's already a full URL, return as is
+          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+          }
+          // If it starts with /uploads, prepend server URL
+          if (imagePath.startsWith('/uploads')) {
+            const serverUrl = process.env.REACT_APP_SERVER_URL;
+            if (!serverUrl) {
+              console.error('REACT_APP_SERVER_URL not configured');
+              return imagePath; // Return original path as fallback
+            }
+            return `${serverUrl}${imagePath}`;
+          }
+          return imagePath;
+        };
+
         const adminUser: Admin = {
           userId: adminRaw.id,
           email: adminRaw.email,
@@ -352,7 +428,7 @@ export const AdminAuthProvider: React.FC<{
           companyName: adminRaw.companyName,
           companyAddress: adminRaw.companyAddress,
           contactNumber: adminRaw.contactNumber,
-          profilePicture: adminRaw.profilePicture,
+          profilePicture: getImageUrl(adminRaw.profilePicture),
         };
         setAdminWithDebug(adminUser);
         setAdminEmail(adminUser.email);

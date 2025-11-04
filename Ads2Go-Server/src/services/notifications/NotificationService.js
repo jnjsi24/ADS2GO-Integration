@@ -46,8 +46,8 @@ class NotificationService {
     return await UserNotificationService.sendAdRejectionNotification(adId, reason);
   }
 
-  static async sendPaymentConfirmationNotification(userId, amount, adTitle) {
-    return await UserNotificationService.sendPaymentConfirmationNotification(userId, amount, adTitle);
+  static async sendPaymentConfirmationNotification(userId, amount, adTitle, adId) {
+    return await UserNotificationService.sendPaymentConfirmationNotification(userId, amount, adTitle, adId);
   }
 
   static async sendAdPerformanceNotification(userId, adTitle, impressions, plays) {

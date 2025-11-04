@@ -527,19 +527,21 @@ const resolvers = {
       } = input;
 
       // Validate contact number if provided
+      let normalizedNumber = null;
       if (contactNumber) {
         // Clean the number (remove spaces and non-digit characters except +)
         let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
         
         // Handle different input formats:
-        // 1. 09748717212 -> should be valid (10 digits starting with 09)
-        // 2. +639748717212 -> should be valid (10 digits after +63)
-        // 3. 639748717212 -> should be valid (10 digits after 63)
+        // 1. 09748717212 -> valid (11 digits: 09 + 9 more digits)
+        // 2. +639748717212 -> valid (10 digits after +63)
+        // 3. 639748717212 -> valid (10 digits after 63)
+        // 4. 9748717212 -> valid (10 digits starting with 9)
         
         let isValid = false;
         
-        // Check if it's 10 digits starting with 09
-        if (/^09\d{8}$/.test(cleanNumber)) {
+        // Check if it's 11 digits starting with 09
+        if (/^09\d{9}$/.test(cleanNumber)) {
           isValid = true;
         }
         // Check if it's 10 digits after +63
@@ -556,7 +558,15 @@ const resolvers = {
         }
         
         if (!isValid) {
-          throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212, +639748717212, or 9748717212');
+          throw new Error('Invalid Philippine mobile number. Must be 11 digits starting with 09, or 10 digits starting with 9. Accepted: 09167912627, +639167912627, 639167912627, or 9167912627');
+        }
+
+        // Normalize to +63 format for storage
+        normalizedNumber = cleanNumber;
+        if (!normalizedNumber.startsWith('+63')) {
+          normalizedNumber = normalizedNumber.startsWith('0')
+            ? '+63' + normalizedNumber.substring(1)
+            : '+63' + normalizedNumber;
         }
       }
 

@@ -43,9 +43,14 @@ function toISOString(value) {
 
 const adsDeploymentResolvers = {
   Query: {
-    getAllDeployments: async (_, __, { user }) => {
+    getAllDeployments: async (_, { includeArchived = false }, { user }) => {
       checkAdmin(user);
-      const deployments = await AdsDeployment.find({})
+      // ✅ Exclude archived by default - only include if explicitly requested
+      const query = {};
+      if (!includeArchived) {
+        query.isArchived = { $ne: true };
+      }
+      const deployments = await AdsDeployment.find(query)
         .populate({
           path: 'adId',
         })
@@ -180,7 +185,11 @@ const adsDeploymentResolvers = {
         throw new Error('Not authorized to view these deployments');
       }
 
-      const deployments = await AdsDeployment.find({ driverId })
+      // ✅ Exclude archived deployments - they should be treated as deleted
+      const deployments = await AdsDeployment.find({ 
+        driverId,
+        isArchived: { $ne: true }
+      })
         .populate({
           path: 'adId',
         })

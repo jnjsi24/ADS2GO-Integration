@@ -7,7 +7,13 @@ const { validateMaterialHasDevice } = require('./materialDeviceValidator');
 const getMaterialsSortedByAvailability = async (materialType, vehicleType, category, startTime = null, endTime = null) => {
   try {
     console.log(`🔍 [getMaterialsSortedByAvailability] Searching for: ${materialType} ${vehicleType} ${category}`);
-    const materials = await Material.find({ materialType, vehicleType, category });
+    // ✅ Exclude archived materials - they should be treated as deleted
+    const materials = await Material.find({ 
+      materialType, 
+      vehicleType, 
+      category,
+      isArchived: { $ne: true } // Exclude archived materials
+    });
     console.log(`📦 [getMaterialsSortedByAvailability] Found ${materials.length} materials matching criteria`);
     if (materials.length === 0) return [];
 
@@ -111,7 +117,12 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
     return sortedMaterials;
   } catch (error) {
     console.error('Error getting materials sorted by availability:', error);
-    return await Material.find({ materialType, vehicleType, category }).limit(3);
+    return await Material.find({ 
+      materialType, 
+      vehicleType, 
+      category,
+      isArchived: { $ne: true } // Exclude archived materials
+    }).limit(3);
   }
 };
 
@@ -120,7 +131,8 @@ const syncMaterialSlots = async () => {
   try {
     console.log('🔄 Syncing material slots with running ads...');
     
-    const materials = await Material.find({});
+    // ✅ Exclude archived materials from slot sync
+    const materials = await Material.find({ isArchived: { $ne: true } });
     console.log(`Found ${materials.length} materials to sync`);
 
     // Get AdsDeployment model

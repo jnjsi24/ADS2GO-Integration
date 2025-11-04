@@ -54,6 +54,15 @@ const getDriverFromToken = async (token) => {
       return null;
     }
 
+    // Block archived accounts explicitly
+    if (driver.isArchived) {
+      console.error('❌ Driver Auth Error: account archived', {
+        driverId: driver.driverId,
+        isArchived: driver.isArchived
+      });
+      return null;
+    }
+
     // Check account status
     if (driver.accountStatus !== 'ACTIVE') {
       console.error('❌ Driver Auth Error: account not ACTIVE', {

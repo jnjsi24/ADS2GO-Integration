@@ -69,10 +69,15 @@ const calculatePricing = (pricePerPlay, adLengthSeconds, numberOfDevices, durati
 
 const adResolvers = {
   Query: {
-    getAllAds: async (_, __, { user }) => {
+    getAllAds: async (_, { includeArchived = false }, { user }) => {
       checkAdmin(user);
-      // Return ALL ads including archived (client handles filtering by archive status)
-      const ads = await Ad.find({})
+      // ✅ Exclude archived by default - only include if explicitly requested
+      const query = {};
+      if (!includeArchived) {
+        query.isArchived = { $ne: true };
+        query.status = { $nin: ['ARCHIVED'] }; // Also exclude ARCHIVED status
+      }
+      const ads = await Ad.find(query)
         .populate('userId')
         .populate('driverId')
         .populate('materialId');
@@ -103,15 +108,23 @@ const adResolvers = {
 
     getAdsByUser: async (_, { userId }, { user }) => {
       checkAdmin(user);
-      // Return ALL ads including archived (client handles filtering by archive status)
-      return await Ad.find({ userId })
+      // ✅ Exclude archived ads - they should be treated as deleted
+      return await Ad.find({ 
+        userId,
+        isArchived: { $ne: true },
+        status: { $nin: ['ARCHIVED'] }
+      })
         .populate('materialId')
     },
 
     getMyAds: async (_, __, { user }) => {
       checkAuth(user);
-      // Return ALL ads including archived (client handles filtering by archive status)
-      return await Ad.find({ userId: user.id })
+      // ✅ Exclude archived ads - they should be treated as deleted
+      return await Ad.find({ 
+        userId: user.id,
+        isArchived: { $ne: true },
+        status: { $nin: ['ARCHIVED'] }
+      })
         .populate('materialId')
     },
 
@@ -128,6 +141,12 @@ const adResolvers = {
         .populate('userId');
 
       if (!ad) throw new Error('Ad not found');
+      
+      // ✅ Check if ad is archived - treat as deleted
+      if (ad.isArchived || ad.status === 'ARCHIVED') {
+        throw new Error('This ad has been archived and is no longer accessible');
+      }
+      
       return ad;
     },
 
