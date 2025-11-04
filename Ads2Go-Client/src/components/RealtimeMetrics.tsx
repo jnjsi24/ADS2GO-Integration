@@ -274,8 +274,11 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
   }, []);
 
   // Calculate metrics from user's actual ads
-  const userAds = adsData?.getMyAds || [];
-  const totalAds = userAds.length; // Total ad campaigns created by user
+  // ✅ Exclude archived and rejected ads from the count
+  const userAds = (adsData?.getMyAds || []).filter((ad: any) => 
+    !ad.isArchived && ad.status !== 'REJECTED' && ad.status !== 'ARCHIVED'
+  );
+  const totalAds = userAds.length; // Total ad campaigns created by user (excluding archived/rejected)
   
   // Calculate total unique devices with ads assigned (from running/approved ads)
   const runningAdsData = userAds.filter((ad: any) => 

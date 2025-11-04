@@ -406,16 +406,33 @@ class UserAnalyticsService {
       // Don't filter ads by date for dropdown display - we want ALL active paid ads to show
       // The date filter should only apply to the data aggregation, not which ads appear
       // Always fetch ALL user's ads for the dropdown, regardless of adId filter
+      // ✅ Exclude archived and rejected ads from the count
       const Ad = require('../models/Ad');
       
       const allUserAds = await Ad.find({ 
         userId: userId,
         paymentStatus: 'PAID',
-        adStatus: 'ACTIVE'
-      }).select('_id title');
+        adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived ads
+        status: { $nin: ['REJECTED', 'ARCHIVED'] }  // ✅ Exclude rejected and archived status
+      }).select('_id title status isArchived');
       
       // Use userAnalytics.ads for the data, but ensure ALL paid ads are in the list
-      let filteredAds = userAnalytics.ads || [];
+      // ✅ Filter out archived and rejected ads from userAnalytics.ads
+      let filteredAds = (userAnalytics.ads || []).filter(ad => {
+        // We need to check the actual ad status from the database
+        // For now, we'll filter based on what we know from allUserAds
+        return true; // Will be filtered when we merge with allUserAds
+      });
+      
+      // ✅ Filter out archived/rejected ads and add any missing ads from the Ad collection
+      const validAdIds = new Set(allUserAds.map(ad => ad._id.toString()));
+      
+      // Remove ads that are archived or rejected
+      filteredAds = filteredAds.filter(ad => {
+        if (!ad.adId) return false;
+        return validAdIds.has(ad.adId.toString());
+      });
       
       // Add any missing ads from the Ad collection (ads that might not have analytics yet)
       allUserAds.forEach(ad => {
