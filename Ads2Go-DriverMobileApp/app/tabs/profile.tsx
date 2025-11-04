@@ -35,6 +35,7 @@ interface DriverProfile {
   rating: number;
   joinDate: string;
   lastActive: string;
+  profilePicture?: string | null;
 }
 
 interface Material {
@@ -194,6 +195,7 @@ export default function ProfileScreen() {
           rating: 0,
           joinDate: driverData.dateJoined || new Date().toISOString(),
           lastActive: driverData.lastLogin || new Date().toISOString(),
+          profilePicture: driverData.profilePicture || null,
         };
       } else {
         // Fallback to stored driver info if API fails
@@ -217,6 +219,7 @@ export default function ProfileScreen() {
             rating: 0,
             joinDate: driver.dateJoined || new Date().toISOString(),
             lastActive: driver.lastLogin || new Date().toISOString(),
+            profilePicture: driver.profilePicture || null,
           };
         }
       }
@@ -635,7 +638,25 @@ export default function ProfileScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.profileAvatarContainer}>
-            <Ionicons name="person-circle" size={70} color="#5b8ec5" />
+            {
+              (() => {
+                const getImageUrl = (src?: string | null) => {
+                  if (!src) return null;
+                  if (/^https?:\/\//i.test(src)) return src;
+                  return `${API_CONFIG.BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`;
+                };
+                const imgUrl = getImageUrl(profile.profilePicture);
+                if (imgUrl) {
+                  return (
+                    <Image
+                      source={{ uri: imgUrl }}
+                      style={{ width: 70, height: 70, borderRadius: 35 }}
+                    />
+                  );
+                }
+                return <Ionicons name="person-circle" size={70} color="#5b8ec5" />;
+              })()
+            }
             {profile.isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.headerIcons}>

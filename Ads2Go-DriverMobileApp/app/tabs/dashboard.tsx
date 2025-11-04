@@ -1080,7 +1080,12 @@ const Dashboard: React.FC = () => {
             {/* Value in Center */}
             <View style={styles.gaugeValueContainer}>
               <Text style={styles.gaugeValue}>
-                {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
+                {(() => {
+                  const v = getCurrentMetricValue();
+                  if (selectedMetric === 'distance') return v.toFixed(1);
+                  if (selectedMetric === 'hours') return v.toFixed(2);
+                  return v.toFixed(0);
+                })()}
               </Text>
               <Text style={styles.gaugeUnit}>{getMetricUnit()}</Text>
             </View>
