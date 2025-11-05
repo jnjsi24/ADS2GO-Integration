@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Database, 
   Search, 
@@ -14,7 +14,10 @@ import {
   MapPin,
   TrendingUp,
   Clock,
-  Monitor, ChevronDown
+  Monitor, 
+  ChevronDown,
+  ChevronRight as ChevronRightIcon,
+  ChevronDown as ChevronDownIcon
 } from 'lucide-react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -41,7 +44,7 @@ interface DailyData {
 }
 
 interface Material {
-  _id: string;
+  _id?: string;
   materialId: string;
   carGroupId: string;
   dailyData: DailyData[];
@@ -50,7 +53,19 @@ interface Material {
     totalQRScans: number;
     totalDistanceTraveled: number;
     totalHoursOnline: number;
+    totalAdImpressions?: number;
+    totalAdPlayTime?: number;
+    totalDays?: number;
+    averageDailyHours?: number;
+    complianceRate?: number;
   };
+  // MongoDB returns these by default, so we can use them if available
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  lastDataUpdate?: string | Date;
+  lastArchiveUpdate?: string | Date;
+  totalUpdates?: number;
+  __v?: number;
 }
 
 const DeviceDataHistoryV2: React.FC = () => {
@@ -58,8 +73,8 @@ const DeviceDataHistoryV2: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  // Set default date to today
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  // Set default date to empty to show all data
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [materials, setMaterials] = useState<Material[]>([]);
   const [allMaterials, setAllMaterials] = useState<Material[]>([]);
 
@@ -68,11 +83,15 @@ const DeviceDataHistoryV2: React.FC = () => {
   const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('All Device');
   const [deviceFilterOptions, setDeviceFilterOptions] = useState<string[]>(['All Device']);
 
+  // Date dropdown state
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const itemsPerPage = 9;
+  const itemsPerPage = 10000; // Large number to fetch all data
 
   const [editingData, setEditingData] = useState<{ materialId: string; date: string; data: DailyData } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -81,13 +100,8 @@ const DeviceDataHistoryV2: React.FC = () => {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [expandedMaterials, setExpandedMaterials] = useState<Set<string>>(new Set());
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
-
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleButtonClick = () => {
-    inputRef.current?.showPicker(); // Opens the native date picker
-  };
 
 
 
@@ -141,8 +155,8 @@ const DeviceDataHistoryV2: React.FC = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: itemsPerPage.toString(),
+        page: '1',
+        limit: '10000', // Fetch all data
       });
 
       if (debouncedSearch) {
@@ -191,6 +205,23 @@ const DeviceDataHistoryV2: React.FC = () => {
       console.log('📱 Extracted devices from materials:', deviceIds);
       setDeviceFilterOptions(['All Device', ...deviceIds]);
       console.log('Updated deviceFilterOptions:', ['All Device', ...deviceIds]);
+
+      // Extract all unique dates from all materials' dailyData
+      const allDates = new Set<string>();
+      materials.forEach(material => {
+        material.dailyData.forEach(day => {
+          const dateStr = new Date(day.date).toISOString().split('T')[0];
+          allDates.add(dateStr);
+        });
+      });
+      
+      // Sort dates in descending order (newest first)
+      const sortedDates = Array.from(allDates).sort((a, b) => {
+        return new Date(b).getTime() - new Date(a).getTime();
+      });
+      
+      setAvailableDates(sortedDates);
+      console.log('📅 Available dates:', sortedDates);
     }
   }, [materials]);
 
@@ -320,15 +351,18 @@ const DeviceDataHistoryV2: React.FC = () => {
     }
   };
 
-  // Get all daily data items for display (server already paginated)
-  const allDailyDataItems: Array<{ material: Material; dailyData: DailyData }> = [];
-  materials.forEach(material => {
-    material.dailyData.forEach(dailyData => {
-      allDailyDataItems.push({ material, dailyData });
+  // Toggle expand/collapse for material dailyData
+  const toggleMaterialExpansion = (materialId: string) => {
+    setExpandedMaterials(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(materialId)) {
+        newSet.delete(materialId);
+      } else {
+        newSet.add(materialId);
+      }
+      return newSet;
     });
-  });
-  
-  const currentItems = allDailyDataItems;
+  };
 
   // Calculate margin based on screen size
   const contentMargin = isMobile ? 'ml-0' : 'ml-60';
@@ -414,42 +448,93 @@ const DeviceDataHistoryV2: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            {/* Date Picker */}
+            {/* Date Dropdown */}
             <div className="relative w-full sm:w-40">
               <button
-                onClick={handleButtonClick}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                onClick={() => setShowDateDropdown(!showDateDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-700">
-                    {selectedDate
-                      ? new Date(selectedDate).toLocaleDateString()
-                      : "Select Date"}
-                  </span>
+                <span className="truncate text-sm text-gray-700">
+                  {selectedDate
+                    ? new Date(selectedDate).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })
+                    : "All Dates"}
+                </span>
+                <div className="flex items-center gap-1">
+                  {selectedDate && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDate("");
+                        setShowDateDropdown(false);
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                      title="Clear date filter"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  <ChevronDown
+                    size={16}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showDateDropdown ? 'rotate-180' : ''}`}
+                  />
                 </div>
-
-                {selectedDate && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedDate("");
-                    }}
-                    className="text-gray-400 hover:text-gray-600"
-                    title="Clear date filter"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
               </button>
 
-              {/* Hidden native date input */}
-              <input
-                ref={inputRef}
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="absolute opacity-0 left-6 pointer-events-none"
-              />
+              <AnimatePresence>
+                {showDateDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedDate("");
+                        setShowDateDropdown(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                        !selectedDate
+                          ? 'bg-blue-50 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      All Dates
+                    </button>
+                    {availableDates.map((date) => {
+                      const dateObj = new Date(date);
+                      const isSelected = selectedDate === date;
+                      return (
+                        <button
+                          key={date}
+                          onClick={() => {
+                            setSelectedDate(date);
+                            setShowDateDropdown(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
+                            isSelected
+                              ? 'bg-blue-50 text-blue-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {dateObj.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -465,154 +550,211 @@ const DeviceDataHistoryV2: React.FC = () => {
             Refresh
           </button>
         </div>
-      </div>
-      </div>
-
-      {/* Data Table - Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-6">
-        <div className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-separate border-spacing-y-3"> {/* adds spacing between rows */}
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Material ID
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Car Group
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Ad Plays
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  QR Scans
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Distance (km)
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Hours Online
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <RefreshCw className="w-8 h-8 text-[#3674B5] animate-spin" />
-                      <p className="text-gray-600">Loading device data...</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : currentItems.length > 0 ? (
-                currentItems.map((item, index) => (
-                  <motion.tr
-                    key={`${item.material.materialId}-${item.dailyData.date}-${index}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-white rounded-md shadow-md hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap rounded-l-lg">
-                      <span className="text-sm font-medium text-gray-900">
-                        {item.material.materialId}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">{item.material.carGroupId}</span>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">{formatDate(item.dailyData.date)}</span>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.dailyData.totalAdPlays || 0}
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {item.dailyData.totalQRScans || 0}
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {(item.dailyData.totalDistanceTraveled || 0).toFixed(2)}
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        {(item.dailyData.totalHoursOnline || 0).toFixed(2)}
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4 whitespace-nowrap rounded-r-lg">
-                    <div className="flex items-center gap-3">
-                      {/* Edit Button */}
-                      <div className="relative w-8 h-8 flex items-center justify-center">
-                        <button
-                          onClick={() =>
-                            handleEdit(item.material.materialId, item.dailyData.date, item.dailyData)
-                          }
-                          className="group flex items-center text-gray-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                        >
-                          <Edit2
-                            size={16}
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                          />
-                          <span className="absolute left-6 opacity-0 group-hover:opacity-100 text-xs transition-opacity duration-300 whitespace-nowrap">
-                            Edit
-                          </span>
-                        </button>
-                      </div>
-
-                      {/* Delete Button */}
-                      <div className="relative w-8 h-8 flex items-center justify-center">
-                        <button
-                          onClick={() =>
-                            setShowDeleteConfirm({
-                              materialId: item.material.materialId,
-                              date: item.dailyData.date,
-                            })
-                          }
-                          className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                        >
-                          <Trash2
-                            size={16}
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                          />
-                          <span className="absolute left-6 opacity-0 group-hover:opacity-100 text-xs transition-opacity duration-300 whitespace-nowrap">
-                            Delete
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                  </motion.tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <Database className="w-12 h-12 text-gray-300" />
-                      <p className="text-gray-500">No data found</p>
-                      <p className="text-sm text-gray-400">Try adjusting your filters</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
+
+      {/* Data Table - Structured like Database */}
+      <div className="flex-1 overflow-y-auto px-6">
+        <div className="overflow-hidden">
+          <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <RefreshCw className="w-8 h-8 text-[#3674B5] animate-spin mb-3" />
+              <p className="text-gray-600">Loading device data...</p>
+            </div>
+          ) : materials.length > 0 ? (
+            <div className="space-y-4">
+              {materials.map((material, index) => {
+                const isExpanded = expandedMaterials.has(material.materialId);
+                const filteredDailyData = selectedDate 
+                  ? material.dailyData.filter(day => {
+                      const dayDate = new Date(day.date).toISOString().split('T')[0];
+                      return dayDate === selectedDate;
+                    })
+                  : material.dailyData;
+
+                return (
+                  <motion.div
+                    key={material._id || material.materialId}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden"
+                  >
+                    {/* Main Material Row */}
+                    <div className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 flex-1">
+                          <button
+                            onClick={() => toggleMaterialExpansion(material.materialId)}
+                            className="flex items-center justify-center w-8 h-8 rounded hover:bg-gray-200 transition-colors"
+                          >
+                            {isExpanded ? (
+                              <ChevronDownIcon className="w-5 h-5 text-gray-600" />
+                            ) : (
+                              <ChevronRightIcon className="w-5 h-5 text-gray-600" />
+                            )}
+                          </button>
+                          
+                          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase mb-1">Material ID</p>
+                              <p className="text-sm font-semibold text-gray-900">{material.materialId}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase mb-1">Car Group</p>
+                              <p className="text-sm text-gray-700">{material.carGroupId}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase mb-1">Daily Data</p>
+                              <p className="text-sm text-gray-700">Array ({material.dailyData.length})</p>
+                            </div>
+                            {material.lifetimeTotals && (
+                              <>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Total Ad Plays</p>
+                                  <p className="text-sm text-gray-700">{material.lifetimeTotals.totalAdPlays || 0}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Total Distance</p>
+                                  <p className="text-sm text-gray-700">{(material.lifetimeTotals.totalDistanceTraveled || 0).toFixed(2)} km</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase mb-1">Total Hours</p>
+                                  <p className="text-sm text-gray-700">{(material.lifetimeTotals.totalHoursOnline || 0).toFixed(2)}</p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Metadata - Only show if available from backend */}
+                        {(material.createdAt || material.updatedAt || material.totalUpdates !== undefined) && (
+                          <div className="hidden lg:flex flex-col items-end gap-1 text-xs text-gray-500">
+                            {material.createdAt && (
+                              <p>Created: {new Date(material.createdAt).toLocaleDateString()}</p>
+                            )}
+                            {material.updatedAt && (
+                              <p>Updated: {new Date(material.updatedAt).toLocaleDateString()}</p>
+                            )}
+                            {material.totalUpdates !== undefined && (
+                              <p>Updates: {material.totalUpdates}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded Daily Data Section */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="border-t border-gray-200 bg-gray-50 p-4">
+                            <div className="mb-3">
+                              <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                                Daily Data ({filteredDailyData.length} entries)
+                              </h3>
+                              {material.lifetimeTotals && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-white rounded mb-3">
+                                  <div>
+                                    <p className="text-xs text-gray-500">Lifetime Totals</p>
+                                    <p className="text-sm font-medium">Ad Plays: {material.lifetimeTotals.totalAdPlays || 0}</p>
+                                    <p className="text-sm font-medium">QR Scans: {material.lifetimeTotals.totalQRScans || 0}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Distance</p>
+                                    <p className="text-sm font-medium">{(material.lifetimeTotals.totalDistanceTraveled || 0).toFixed(2)} km</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">Hours Online</p>
+                                    <p className="text-sm font-medium">{(material.lifetimeTotals.totalHoursOnline || 0).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-white">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Date</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Ad Plays</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">QR Scans</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Distance (km)</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Hours Online</th>
+                                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {filteredDailyData.length > 0 ? (
+                                    filteredDailyData.map((dailyData, dayIndex) => (
+                                      <tr key={dayIndex} className="border-b border-gray-200 hover:bg-white transition-colors">
+                                        <td className="px-4 py-2">{formatDate(dailyData.date)}</td>
+                                        <td className="px-4 py-2">{dailyData.totalAdPlays || 0}</td>
+                                        <td className="px-4 py-2">{dailyData.totalQRScans || 0}</td>
+                                        <td className="px-4 py-2">{(dailyData.totalDistanceTraveled || 0).toFixed(2)}</td>
+                                        <td className="px-4 py-2">
+                                          <div className="flex items-center gap-2">
+                                            <Clock className="w-4 h-4 text-gray-400" />
+                                            {(dailyData.totalHoursOnline || 0).toFixed(2)}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              onClick={() => handleEdit(material.materialId, dailyData.date, dailyData)}
+                                              className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                              title="Edit"
+                                            >
+                                              <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                              onClick={() => setShowDeleteConfirm({
+                                                materialId: material.materialId,
+                                                date: dailyData.date,
+                                              })}
+                                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                              title="Delete"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan={6} className="px-4 py-4 text-center text-gray-500">
+                                        No daily data found {selectedDate && `for ${selectedDate}`}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Database className="w-12 h-12 text-gray-300 mb-2" />
+              <p className="text-gray-500">No data found</p>
+              <p className="text-sm text-gray-400">Try adjusting your filters</p>
+            </div>
+          )}
+          </div>
+        </div>
       </div>
 
       {/* Pagination - Sticky at Bottom */}
