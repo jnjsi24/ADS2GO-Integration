@@ -120,35 +120,36 @@ export default function HomeScreen() {
     try {
       console.log('🔍 [Lock Check] Checking for 8-hour completion lock and mandatory rest period...');
       
+      // ⚠️ TEMPORARILY DISABLED FOR TESTING: Rest period lock commented out
       // Check current time FIRST (mandatory rest period check)
       const now = new Date();
       const currentHour = now.getHours();
       
       // 🚨 MANDATORY REST PERIOD: 12:00 AM - 7:59 AM (ALL drivers must rest)
-      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      // const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
       
-      if (isMandatoryRestPeriod) {
-        console.log(`🌙 [Lock Check] MANDATORY REST PERIOD - Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`);
-        console.log('🔒 [Lock Check] Ad player is LOCKED during rest hours (12:00 AM - 8:00 AM)');
-        
-        // Check if driver completed 8 hours to determine message
-        const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
-        
-        if (completionDataStr) {
-          // Driver completed 8 hours
-          const completionData = JSON.parse(completionDataStr);
-          return {
-            isLocked: true,
-            message: `🔒 Ad Player Locked\n\nYou completed your 8-hour requirement!\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.`
-          };
-        } else {
-          // Driver did NOT complete 8 hours
-          return {
-            isLocked: true,
-            message: `🌙 Mandatory Rest Period\n\nAll drivers must rest between 12:00 AM - 8:00 AM.\n\nYour progress from yesterday has been reset.\n\nYou can start a new 8-hour session when the ad player unlocks at 8:00 AM.\n\nGood night! 😴`
-          };
-        }
-      }
+      // if (isMandatoryRestPeriod) {
+      //   console.log(`🌙 [Lock Check] MANDATORY REST PERIOD - Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`);
+      //   console.log('🔒 [Lock Check] Ad player is LOCKED during rest hours (12:00 AM - 8:00 AM)');
+      //   
+      //   // Check if driver completed 8 hours to determine message
+      //   const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
+      //   
+      //   if (completionDataStr) {
+      //     // Driver completed 8 hours
+      //     const completionData = JSON.parse(completionDataStr);
+      //     return {
+      //       isLocked: true,
+      //       message: `🔒 Ad Player Locked\n\nYou completed your 8-hour requirement!\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.`
+      //     };
+      //   } else {
+      //     // Driver did NOT complete 8 hours
+      //     return {
+      //       isLocked: true,
+      //       message: `🌙 Mandatory Rest Period\n\nAll drivers must rest between 12:00 AM - 8:00 AM.\n\nYour progress from yesterday has been reset.\n\nYou can start a new 8-hour session when the ad player unlocks at 8:00 AM.\n\nGood night! 😴`
+      //     };
+      //   }
+      // }
       
       // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
       console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Not in rest period`);
@@ -189,17 +190,18 @@ export default function HomeScreen() {
       
     } catch (error) {
       console.error('❌ [Lock Check] Error checking lock status:', error);
+      // ⚠️ TEMPORARILY DISABLED FOR TESTING: Rest period lock commented out
       // On error, check time at minimum for safety
-      const currentHour = new Date().getHours();
-      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
+      // const currentHour = new Date().getHours();
+      // const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
       
-      if (isMandatoryRestPeriod) {
-        console.log('⚠️ [Lock Check] Error occurred, but enforcing rest period lock for safety');
-        return { 
-          isLocked: true,
-          message: '🔒 Ad Player Locked\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.'
-        };
-      }
+      // if (isMandatoryRestPeriod) {
+      //   console.log('⚠️ [Lock Check] Error occurred, but enforcing rest period lock for safety');
+      //   return { 
+      //     isLocked: true,
+      //     message: '🔒 Ad Player Locked\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.'
+      //   };
+      // }
       
       console.log('⚠️ [Lock Check] Error occurred - defaulting to unlocked');
       return { isLocked: false, message: '' };
