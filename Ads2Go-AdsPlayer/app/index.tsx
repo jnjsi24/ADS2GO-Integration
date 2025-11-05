@@ -151,7 +151,7 @@ export default function HomeScreen() {
       }
       
       // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
-      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Outside rest period`);
+      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Not in rest period`);
       
       // Get 8-hour completion data from AsyncStorage
       const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
@@ -201,7 +201,7 @@ export default function HomeScreen() {
         };
       }
       
-      console.log('⚠️ [Lock Check] Error occurred outside rest period - defaulting to unlocked');
+      console.log('⚠️ [Lock Check] Error occurred - defaulting to unlocked');
       return { isLocked: false, message: '' };
     }
   };

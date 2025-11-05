@@ -11,6 +11,62 @@ import SubtleLoader from "../../components/SubtleLoader";
 import { screenComplianceService } from '../../services/screenComplianceService';
 import { Monitor, PlayCircle, Users, Car, FileText, ArrowUpRight } from "lucide-react";
 import { motion, Transition } from "framer-motion";
+
+// ✨ Client-side reverse geocoding helper with caching
+const geocodingCache = new Map<string, string>();
+const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> => {
+  // Round coordinates to 4 decimal places for caching (about 11m accuracy)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  
+  // Check cache first
+  if (geocodingCache.has(cacheKey)) {
+    return geocodingCache.get(cacheKey)!;
+  }
+  
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Ads2Go-AdminClient/1.0' // Required by Nominatim
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address from most specific to least specific
+      if (addr.house_number) addressParts.push(addr.house_number);
+      if (addr.road) addressParts.push(addr.road);
+      if (addr.neighbourhood || addr.suburb) addressParts.push(addr.neighbourhood || addr.suburb);
+      if (addr.city || addr.town || addr.village) addressParts.push(addr.city || addr.town || addr.village);
+      if (addr.state) addressParts.push(addr.state);
+      if (addr.country) addressParts.push(addr.country);
+      
+      const address = addressParts.join(', ') || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      geocodingCache.set(cacheKey, address); // Cache the result
+      return address;
+    }
+    
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  } catch (error) {
+    console.warn('Client-side geocoding failed:', error);
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  }
+};
 // Import ScreenStatus interface from ScreenTracking for consistency
 interface ScreenStatus {
   deviceId: string;
@@ -208,8 +264,42 @@ const Dashboard = () => {
       console.log('✅ [AdminDashboard] Compliance data received:', complianceData);
       
       if (complianceData.success && complianceData.data?.screens) {
-        setScreens(complianceData.data.screens);
-        console.log('📊 [AdminDashboard] Screens loaded:', complianceData.data.screens.length);
+        // ✨ Geocode addresses on client-side if missing OR is just coordinates
+        const screensWithAddresses = await Promise.all(
+          complianceData.data.screens.map(async (screen: ScreenStatus) => {
+            // If address is missing OR is just coordinates (starts with "Location:"), geocode on client
+            const needsGeocoding = screen.currentLocation?.lat && screen.currentLocation?.lng && 
+              (!screen.currentLocation?.address || screen.currentLocation.address.startsWith('Location:'));
+            
+            if (needsGeocoding) {
+              try {
+                const address = await reverseGeocodeClient(screen.currentLocation.lat, screen.currentLocation.lng);
+                return {
+                  ...screen,
+                  currentLocation: {
+                    ...screen.currentLocation,
+                    address: address
+                  }
+                };
+              } catch (error) {
+                console.warn(`Failed to geocode ${screen.currentLocation.lat}, ${screen.currentLocation.lng}:`, error);
+                return screen; // Return original if geocoding fails
+              }
+            }
+            return screen;
+          })
+        );
+        
+        setScreens(screensWithAddresses);
+        console.log('📊 [AdminDashboard] Screens loaded:', screensWithAddresses.length);
+        
+        // If this was initial load and we skipped geocoding, trigger a refresh with geocoding after a delay
+        if (skipGeocoding && !hasInitiallyLoaded) {
+          setTimeout(() => {
+            console.log('🔄 [AdminDashboard] Triggering geocoded refresh after initial load...');
+            fetchScreenData(false); // Fetch again with geocoding enabled
+          }, 3000); // Wait 3 seconds after initial load
+        }
       } else {
         console.error('❌ [AdminDashboard] Invalid compliance data format:', complianceData);
         setScreenError("Invalid data format received");

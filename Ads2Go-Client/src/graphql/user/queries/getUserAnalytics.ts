@@ -4,7 +4,6 @@ export const GET_USER_ANALYTICS = gql`
   query GetUserAnalytics($startDate: String, $endDate: String, $period: String, $adId: String) {
     getUserAnalytics(startDate: $startDate, endDate: $endDate, period: $period, adId: $adId) {
       summary {
-        totalAdImpressions
         totalAdsPlayed
         totalDisplayTime
         averageCompletionRate
@@ -21,7 +20,6 @@ export const GET_USER_ANALYTICS = gql`
         totalMaterials
         totalDevices
         totalAdPlayTime
-        totalAdImpressions
         totalQRScans
         averageAdCompletionRate
         qrScanConversionRate
@@ -31,7 +29,6 @@ export const GET_USER_ANALYTICS = gql`
           materialName
           carGroupId
           totalAdPlayTime
-          totalAdImpressions
           totalQRScans
           averageCompletionRate
           lastActivity
@@ -39,7 +36,6 @@ export const GET_USER_ANALYTICS = gql`
       }
       dailyStats {
         date
-        impressions
         adsPlayed
         displayTime
         qrScans
@@ -48,7 +44,6 @@ export const GET_USER_ANALYTICS = gql`
       deviceStats {
         deviceId
         materialId
-        impressions
         adsPlayed
         displayTime
         lastActivity
@@ -75,20 +70,17 @@ export const GET_USER_AD_DETAILS = gql`
       createdAt
       startTime
       endTime
-      totalImpressions
-      totalAdPlayTime
+      totalPlayTime
       averageAdCompletionRate
       devicePerformance {
         deviceId
         materialId
-        impressions
         playTime
         completionRate
         lastUpdated
       }
       dailyPerformance {
         date
-        impressions
         playTime
         completionRate
       }

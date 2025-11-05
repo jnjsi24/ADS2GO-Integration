@@ -21,6 +21,7 @@ import { formatDistanceToNow } from 'date-fns';
 import UserMaterialsMap from '../../components/UserMaterialsMap';
 import MultiMaterialRouteMap from '../../components/MultiMaterialRouteMap';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import AdProgressBar from '../../components/AdProgressBar';
 
 // NotificationList Component
 const transition: Transition = {
@@ -154,7 +155,6 @@ const Dashboard = () => {
   const [showQrPeriodDropdown, setShowQrPeriodDropdown] = useState(false);
   const [showQrAdDropdown, setShowQrAdDropdown] = useState(false);
   const [showAnalyticsPeriodDropdown, setShowAnalyticsPeriodDropdown] = useState(false);
-  const [showTotalAdPlayedPeriodDropdown, setShowTotalAdPlayedPeriodDropdown] = useState(false);
 
   // Map tab states
   const [mapActiveTab, setMapActiveTab] = useState<'today' | 'history'>('today');
@@ -162,7 +162,25 @@ const Dashboard = () => {
   const [selectedRouteDate, setSelectedRouteDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAdDropdown, setShowAdDropdown] = useState(false);
 
-  // Fetch analytics data
+  // Currently playing ads state
+  interface CurrentlyPlayingAd {
+    adId: string;
+    adTitle: string;
+    materialId: string;
+    deviceId: string;
+    slotNumber: 1 | 2;
+    duration: number;
+    currentTime: number;
+    progress: number;
+    state: 'playing' | 'paused' | 'buffering' | 'loading' | 'ended';
+    startTime: string;
+    isUserAd: boolean; // true if this is the user's ad, false if other user's ad
+    lastUpdate: number; // timestamp of last update
+  }
+  
+  const [currentlyPlayingAds, setCurrentlyPlayingAds] = useState<Map<string, CurrentlyPlayingAd>>(new Map());
+
+  // Fetch analytics data (for charts - filtered by period)
   // ✅ OPTIMIZATION: Increased poll interval from 30s to 5 minutes (analytics don't change that frequently)
   // Reduces queries by 90% while maintaining fresh data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
@@ -171,6 +189,20 @@ const Dashboard = () => {
     nextFetchPolicy: 'cache-first', // Subsequent queries use cache
     pollInterval: 300000, // Auto-refresh every 5 minutes (increased from 30s)
     errorPolicy: 'all', // Allow partial data even with errors
+    notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
+  });
+
+  // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
+  // This ensures "Total Ad Played" and other summary metrics always show cumulative totals
+  const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
+    variables: { 
+      period: 'all', // Always fetch overall data for Summary Metrics
+      adId: null // No adId filter - show all ads cumulative totals
+    },
+    fetchPolicy: 'cache-first',
+    nextFetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+    pollInterval: 300000, // Auto-refresh every 5 minutes
     notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
   });
 
@@ -228,6 +260,160 @@ const Dashboard = () => {
     const interval = setInterval(fetchUserData, 1000);
     setTimeout(() => clearInterval(interval), 5000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Build user's ad IDs and material IDs for filtering WebSocket updates
+  const userAdIds = React.useMemo(() => {
+    if (!myAdsData?.getMyAds) return new Set<string>();
+    const adIds = new Set<string>();
+    myAdsData.getMyAds.forEach((ad: any) => {
+      if (ad.id) {
+        adIds.add(ad.id);
+      }
+    });
+    return adIds;
+  }, [myAdsData]);
+
+  const userMaterialIds = React.useMemo(() => {
+    if (!myAdsData?.getMyAds) return new Set<string>();
+    const materialIds = new Set<string>();
+    myAdsData.getMyAds.forEach((ad: any) => {
+      if (ad.materialId && Array.isArray(ad.materialId)) {
+        ad.materialId.forEach((material: any) => {
+          if (material?.materialId) {
+            materialIds.add(material.materialId);
+          }
+        });
+      }
+    });
+    return materialIds;
+  }, [myAdsData]);
+
+  // WebSocket subscription for real-time ad playback updates
+  useEffect(() => {
+    if (!playbackWebSocketService) return;
+
+    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      // Only process adPlaybackUpdate and displayData updates
+      if (update.type === 'adPlaybackUpdate' || update.type === 'displayData') {
+        // Extract materialId and slotNumber from update
+        // For adPlaybackUpdate, materialId and slotNumber are now included in the update
+        // For displayData, materialId is in the update data
+        const materialId = (update as any).materialId || null;
+        const slotNumber = (update as any).slotNumber || (update.type === 'displayData' ? (update as any).sourceSlot : 1); // Default to slot 1 if not specified
+        const deviceId = update.deviceId;
+        
+        // Skip if we don't have materialId (can't properly track)
+        if (!materialId) {
+          return;
+        }
+        
+        // Create unique key for this device+slot combination
+        const key = `${materialId}-slot${slotNumber}`;
+        
+        // Check if this is the user's ad
+        const isUserAd = update.adId ? userAdIds.has(update.adId) : false;
+        
+        // Check if this device/material belongs to the user
+        const isUserDevice = materialId ? userMaterialIds.has(materialId) : false;
+        
+        // Only process if it's the user's ad OR if it's on the user's device (but not user's ad)
+        if (isUserAd || isUserDevice) {
+          setCurrentlyPlayingAds(prev => {
+            const newMap = new Map(prev);
+            
+            if (update.type === 'adPlaybackUpdate') {
+              // Handle adPlaybackUpdate
+              const adData: CurrentlyPlayingAd = {
+                adId: update.adId || '',
+                adTitle: update.adTitle || 'Unknown Ad',
+                materialId: materialId || '',
+                deviceId: deviceId || '',
+                slotNumber: slotNumber as 1 | 2,
+                duration: update.duration || 0,
+                currentTime: update.currentTime || 0,
+                progress: update.progress || 0,
+                state: (update.state || 'playing') as 'playing' | 'paused' | 'buffering' | 'loading' | 'ended',
+                startTime: update.startTime || update.timestamp || new Date().toISOString(),
+                isUserAd: isUserAd,
+                lastUpdate: Date.now()
+              };
+              
+              newMap.set(key, adData);
+            } else if (update.type === 'displayData') {
+              // Handle displayData (similar to admin client)
+              const displayData = (update as any).data;
+              const adDetails = displayData.adDetails;
+              
+              if (adDetails) {
+                // New ad started
+                const adData: CurrentlyPlayingAd = {
+                  adId: adDetails.adId || '',
+                  adTitle: adDetails.adTitle || 'Unknown Ad',
+                  materialId: materialId || '',
+                  deviceId: deviceId || '',
+                  slotNumber: slotNumber as 1 | 2,
+                  duration: adDetails.adDuration || 0,
+                  currentTime: displayData.currentTime || 0,
+                  progress: displayData.currentTime && adDetails.adDuration
+                    ? (displayData.currentTime / adDetails.adDuration) * 100
+                    : 0,
+                  state: displayData.isPaused ? 'paused' : 'playing',
+                  startTime: new Date().toISOString(),
+                  isUserAd: adDetails.adId ? userAdIds.has(adDetails.adId) : false,
+                  lastUpdate: Date.now()
+                };
+                
+                newMap.set(key, adData);
+              } else if (displayData.currentTime !== undefined) {
+                // Just update progress/time for existing ad
+                const existing = prev.get(key);
+                if (existing) {
+                  const updated: CurrentlyPlayingAd = {
+                    ...existing,
+                    currentTime: displayData.currentTime || existing.currentTime,
+                    progress: displayData.currentTime && existing.duration
+                      ? (displayData.currentTime / existing.duration) * 100
+                      : existing.progress,
+                    state: displayData.isPaused ? 'paused' : 'playing',
+                    lastUpdate: Date.now()
+                  };
+                  newMap.set(key, updated);
+                }
+              }
+            }
+            
+            return newMap;
+          });
+        }
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, [userAdIds, userMaterialIds]);
+
+  // Clean up stale entries (no update in last 10 seconds)
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      setCurrentlyPlayingAds(prev => {
+        const newMap = new Map(prev);
+        const now = Date.now();
+        const staleThreshold = 10000; // 10 seconds
+        
+        prev.forEach((ad, key) => {
+          if (now - ad.lastUpdate > staleThreshold) {
+            newMap.delete(key);
+          }
+        });
+        
+        return newMap;
+      });
+    }, 5000); // Check every 5 seconds
+
+    return () => clearInterval(cleanupInterval);
   }, []);
 
   const barData = [
@@ -449,13 +635,15 @@ const Dashboard = () => {
     // ⚡ No need to manually refetch! Apollo's useQuery automatically refetches when analyticsPeriod changes
   };
 
-  const analyticsSummary = analyticsData?.getUserAnalytics?.summary || {
-    totalAdImpressions: 0,
+  // ✅ Analytics summary - use overallAnalyticsData for summary metrics (all-time totals)
+  // Charts use analyticsData (filtered by period)
+  const analyticsSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
     totalAdsPlayed: 0,
     totalDisplayTime: 0,
     averageCompletionRate: 0,
     totalAds: 0,
     activeAds: 0,
+    totalQRScans: 0,
   };
 
   // Get list of user's ads from analytics data
@@ -626,19 +814,9 @@ const Dashboard = () => {
                     itemStyle={{ color: '#A8FF35' }}
                     labelFormatter={(value) => new Date(value).toLocaleDateString()}
                     formatter={(value, name) => [
-                      name === 'impressions' ? value.toLocaleString() :
                       name === 'adsPlayed' ? value.toLocaleString() : value,
-                      name === 'impressions' ? 'Impressions' :
                       name === 'adsPlayed' ? 'Ads Played' : 'Display Time'
                     ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="impressions"
-                    stroke="#A18FF35"
-                    fill="#2876c7"
-                    fillOpacity={0.6}
-                    name="impressions"
                   />
                   <Area
                     type="monotone"
@@ -650,6 +828,7 @@ const Dashboard = () => {
                   />
                 </AreaChart>
               </ResponsiveContainer>
+              {/* Currently Playing Ads - Real-time from WebSocket */}
               <div className="mt-6 mb-4">
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -659,21 +838,86 @@ const Dashboard = () => {
                       <span className="text-xs text-white/70">LIVE</span>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-16 h-12 bg-white/20 flex items-center justify-center">
-                      <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M8 5v14l11-7z"/>
-                      </svg>
+                  
+                  {Array.from(currentlyPlayingAds.values()).length > 0 ? (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {Array.from(currentlyPlayingAds.values()).map((ad, index) => {
+                        const timeRemaining = Math.max(0, ad.duration - ad.currentTime);
+                        const formatTime = (seconds: number) => {
+                          const mins = Math.floor(seconds / 60);
+                          const secs = Math.floor(seconds % 60);
+                          return `${mins}:${secs.toString().padStart(2, '0')}`;
+                        };
+                        
+                        return (
+                          <div key={`${ad.materialId}-slot${ad.slotNumber}-${index}`} className="bg-white/10 rounded-lg p-3">
+                            {ad.isUserAd ? (
+                              // User's ad - show full details
+                              <>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                    <div className="w-12 h-8 bg-white/20 flex items-center justify-center rounded flex-shrink-0">
+                                      <svg className="w-5 h-5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                      </svg>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="text-sm font-medium text-white truncate">{ad.adTitle}</h5>
+                                      <p className="text-xs text-white/60 truncate">
+                                        {ad.materialId} • Slot {ad.slotNumber}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0 ml-2">
+                                    <p className="text-xs text-white/60">Next in</p>
+                                    <p className="text-sm font-medium text-white">{Math.floor(timeRemaining)}s</p>
+                                  </div>
+                                </div>
+                                <div className="mt-2">
+                                  <AdProgressBar
+                                    adDuration={ad.duration}
+                                    isPlaying={ad.state === 'playing'}
+                                    className="w-full"
+                                    startTime={ad.startTime}
+                                    realTimeData={{
+                                      currentTime: ad.currentTime,
+                                      progress: ad.progress,
+                                      state: ad.state
+                                    }}
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              // Other user's ad - show slot status only
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2 flex-1">
+                                    <div className="w-12 h-8 bg-white/10 flex items-center justify-center rounded flex-shrink-0">
+                                      <Monitor className="w-4 h-4 text-white/50" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-white/70">
+                                        {ad.materialId} • Slot {ad.slotNumber}
+                                      </p>
+                                      <p className="text-xs text-white/50">Playing other ad</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right flex-shrink-0 ml-2">
+                                    <p className="text-xs text-white/60">Next in</p>
+                                    <p className="text-sm font-medium text-white/70">{Math.floor(timeRemaining)}s</p>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="flex-1">
-                      <h5 className="text-sm font-medium text-white truncate">Summer Sale Campaign</h5>
-                      <p className="text-xs text-white/60">Duration: 30s • Views: 1,234</p>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-white/60">No ads currently playing</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-white/60">Next in</p>
-                      <p className="text-sm font-medium text-white">15s</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
@@ -689,249 +933,82 @@ const Dashboard = () => {
                     {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
-                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+                  <p className="text-xs text-gray-400">All-time total</p>
                 </div>
                 <div className="bg-[#1b5087]/60 p-3">
                   <p className="text-xl sm:text-2xl font-bold">
                     {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
-                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+                  <p className="text-xs text-gray-400">All-time total</p>
                 </div>
               </div>
             </div>
           </div>
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-3">
+          <div className="lg:col-span-2 flex flex-col gap-4 sm:gap-3">
           {/* RealtimeMetrics at the top */}
-            <div className="sm:col-span-2">
+            <div>
               <RealtimeMetrics />
             </div>
-            {/* Column 2: QR Impressions */}
-            <div
-              className="relative p-4 shadow-xl cursor-pointer
-                        bg-white backdrop-blur-md border border-white/20
-                        hover:bg-white transition-all duration-300
-                        flex flex-col"
-              onClick={() => (window.location.href = '/detailed-analytics')}
-            >
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-black">QR Impressions</h2>
+            
+            {/* Top Row: QR Scans and Total Ad Played side by side */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-3">
+              {/* QR Scans */}
+              <div className="bg-white backdrop-blur-md p-4 shadow-lg hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-black text-lg font-semibold">QR Scans</span>
                   {analyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
                 </div>
-              </div>
-              <div className='mb-3'>
-                <div className="flex gap-2 justify-between" onClick={(e) => e.stopPropagation()}>
-                  {/* Ad Selection Dropdown */}
-                  <div className="relative w-full">
-                    <button
-                      onClick={() => setShowQrAdDropdown(!showQrAdDropdown)}
-                      className="flex items-center font-medium justify-between w-full text-xs text-black rounded-md pl-3 pr-2 py-3 shadow-md focus:outline-none bg-white gap-1"
-                    >
-                      <span className="truncate">
-                        {selectedAdId 
-                          ? adOptions.find(ad => ad.id === selectedAdId)?.title || 'All Ads'
-                          : 'All Ads'}
-                      </span>
-                      <ChevronDown
-                        size={14}
-                        className={`transform transition-transform duration-200 flex-shrink-0 ${showQrAdDropdown ? 'rotate-180' : 'rotate-0'}`}
-                      />
-                    </button>
-                    <AnimatePresence>
-                      {showQrAdDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute z-20 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-64 overflow-y-auto"
-                        >
-                          {adOptions.map((ad) => (
-                            <button
-                              key={ad.id || 'all'}
-                              onClick={() => handleQrAdChange(ad.id)}
-                              className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
-                                ad.id === selectedAdId
-                                  ? 'bg-blue-50 text-blue-700 font-medium'
-                                  : 'text-gray-700 hover:bg-gray-100'
-                              }`}
-                            >
-                              <div className="truncate">{ad.title}</div>
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Period Selection Dropdown */}
-                  <div className="relative w-24">
-                    <button
-                      onClick={() => setShowQrPeriodDropdown(!showQrPeriodDropdown)}
-                      className="flex items-center justify-between w-full text-xs text-black rounded- pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-                    >
-                      {qrSelectedPeriod}
-                      <ChevronDown
-                        size={16}
-                        className={`transform transition-transform duration-200 ${showQrPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
-                      />
-                    </button>
-                    <AnimatePresence>
-                      {showQrPeriodDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-                        >
-                          {qrPeriodOptions.map((period) => (
-                            <button
-                              key={period}
-                              onClick={() => handleQrPeriodChange(period as 'Weekly' | 'Daily' | 'Monthly')}
-                              className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                            >
-                              {period}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart */}
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={getQrChartData()}>
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 12 }}
-                      label={{ value: 'QR Scans', angle: -90, position: 'insideLeft' }}
-                    />
-                    <Tooltip
-                      formatter={(value, name) => [value + ' scans', 'QR Scans']}
-                      labelFormatter={(label) => `Period: ${label}`}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#0E2A47"
-                      strokeWidth={3}
-                      dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
-                      activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-
-              {/* View Analytics at the bottom */}
-              <div className="mt-auto pt-6 flex justify-center items-center">
-                <Link
-                  to="/advertisements"
-                  className="w-full text-center text-white px-4 py-2 bg-[#3674B5] rounded hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
-                  >
-                  View Analytics →
-                </Link>
-              </div>
-            </div>
-
-            {/* Column 3: Total Ad Played and Notification List */}
-            <div className="flex flex-col space-y-3">
-              {/* Total Ad Played */}
-              <div className="min-h-[100px] bg-white backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
-                {/* Header */}
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-black text-lg font-semibold">Total Ad Played</span>
-                    {analyticsLoading && (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
-                    )}
-                  </div>
-                </div>
-                <div className='flex justify-end'>
-                  {/* Period Dropdown */}
-                  <div className="relative" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => setShowTotalAdPlayedPeriodDropdown(!showTotalAdPlayedPeriodDropdown)}
-                      className="flex items-center justify-between w-24 text-xs text-black rounded-md px-3 py-2 shadow-md focus:outline-none bg-white gap-1"
-                    >
-                      <span>{analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}</span>
-                      <ChevronDown
-                        size={14}
-                        className={`transform transition-transform duration-200 ${showTotalAdPlayedPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
-                      />
-                    </button>
-                    <AnimatePresence>
-                      {showTotalAdPlayedPeriodDropdown && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="absolute right-0 top-full mt-2 w-24 bg-white rounded-md shadow-lg z-50 overflow-hidden"
-                        >
-                          {[
-                            { value: '1d', label: 'Daily' },
-                            { value: '7d', label: 'Weekly' },
-                            { value: '30d', label: 'Monthly' }
-                          ].map((option) => (
-                            <button
-                              key={option.value}
-                              onClick={() => {
-                                handleAnalyticsPeriodChange(option.value as '1d' | '7d' | '30d');
-                                setShowTotalAdPlayedPeriodDropdown(false);
-                              }}
-                              className={`w-full text-left px-4 py-2 text-xs hover:bg-gray-50 transition-colors ${
-                                analyticsPeriod === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                              }`}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
 
                 {/* Content */}
                 <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
-                  <p className="text-3xl font-bold text-[#1b5087] pl-4">
-                    {analyticsSummary.totalAdsPlayed.toLocaleString()}
+                  <p className="text-3xl font-bold text-[#1b5087]">
+                    {analyticsSummary.totalQRScans?.toLocaleString() || 0}
                   </p>
-                  {selectedAdId && (
-                    <p className="text-xs pt-3 pl-4 font-italic">
-                      This is filtered by selected advertisement in QR Impressions
-                    </p>
-                  )}
+                  <p className="text-xs pt-3 text-gray-500">
+                    All-time total (all ads)
+                  </p>
                 </div>
 
-                {/* Divider + Button (sticks to bottom) */}
+                {/* View Analytics Button */}
                 <div className="mt-auto pt-6 flex justify-center items-center">
                   <Link
                     to="/detailed-analytics"
                     className="w-full text-center text-white px-4 py-2 bg-[#3674B5] rounded hover:bg-[#2a5a94] text-xs font-medium transition-all duration-300"
-                    >
+                  >
                     View Analytics →
                   </Link>
                 </div>
               </div>
-              {/* Notification List */}
-              <div>
-                <NotificationList />
+
+              {/* Total Ad Played */}
+              <div className="bg-white backdrop-blur-md p-4 shadow-lg hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
+                {/* Header */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-black text-lg font-semibold">Total Ad Played</span>
+                  {analyticsLoading && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                  <p className="text-3xl font-bold text-[#1b5087]">
+                    {analyticsSummary.totalAdsPlayed.toLocaleString()}
+                  </p>
+                  <p className="text-xs pt-3 text-gray-500">
+                    All-time total (all ads)
+                  </p>
+                </div>
               </div>
+            </div>
+
+            {/* Bottom Row: Notifications spanning full width */}
+            <div>
+              <NotificationList />
             </div>
           </div>
         </div>

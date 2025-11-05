@@ -125,6 +125,7 @@ router.post('/registerTablet', async (req, res) => {
     // Time lock only applies to devices that have an existing ad deployment to that device/material
     const existingDeployment = await AdsDeployment.findOne({ materialId });
     
+    // ✅ TIME-BASED LOCK: Only apply if material has ad deployment
     const now = new Date();
     const currentHour = now.getHours(); // 0-23
     const isBeforeEightAM = currentHour >= 0 && currentHour < 8;

@@ -713,9 +713,16 @@ class DeviceStatusService {
       console.error(`Error fetching session status for ${deviceId}:`, error);
     }
     
+    // Get materialId and slotNumber from connection
+    const connection = this.activeConnections.get(deviceId);
+    const materialId = connection?.materialId || null;
+    const slotNumber = connection?.slotNumber || null;
+    
     const updateMessage = {
       type: 'adPlaybackUpdate',
       deviceId: deviceId,
+      materialId: materialId, // ✅ NEW: Include materialId for filtering by user's devices
+      slotNumber: slotNumber, // ✅ NEW: Include slotNumber for proper tracking
       adId: playbackData.adId,
       adTitle: playbackData.adTitle,
       state: playbackData.state,

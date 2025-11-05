@@ -27,7 +27,6 @@ export const GET_USER_MATERIALS_WITH_LOCATION = gql`
         totalAdPlays
         totalQRScans
         totalAdPlayTime
-        totalAdImpressions
         carGroupId
         screenType
         ads {

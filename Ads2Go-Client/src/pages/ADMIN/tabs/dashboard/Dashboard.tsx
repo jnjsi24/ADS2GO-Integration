@@ -17,6 +17,62 @@ import { ScreenData } from '../../../../types/screenTypes';
 import AdProgressBar from '../../../../components/AdProgressBar';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// ✨ Client-side reverse geocoding helper with caching
+const geocodingCache = new Map<string, string>();
+const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> => {
+  // Round coordinates to 4 decimal places for caching (about 11m accuracy)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  
+  // Check cache first
+  if (geocodingCache.has(cacheKey)) {
+    return geocodingCache.get(cacheKey)!;
+  }
+  
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Ads2Go-AdminClient/1.0' // Required by Nominatim
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address from most specific to least specific
+      if (addr.house_number) addressParts.push(addr.house_number);
+      if (addr.road) addressParts.push(addr.road);
+      if (addr.neighbourhood || addr.suburb) addressParts.push(addr.neighbourhood || addr.suburb);
+      if (addr.city || addr.town || addr.village) addressParts.push(addr.city || addr.town || addr.village);
+      if (addr.state) addressParts.push(addr.state);
+      if (addr.country) addressParts.push(addr.country);
+      
+      const address = addressParts.join(', ') || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      geocodingCache.set(cacheKey, address); // Cache the result
+      return address;
+    }
+    
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  } catch (error) {
+    console.warn('Client-side geocoding failed:', error);
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  }
+};
+
 interface DashboardProps {
   screens: ScreenData[];
   selectedScreens: string[];
@@ -38,7 +94,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
-  screens,
+  screens: initialScreens,
   selectedScreens,
   lastRefresh,
   isRefreshing,
@@ -56,6 +112,44 @@ const Dashboard: React.FC<DashboardProps> = ({
   devicePlayStates,
   deviceLockStates
 }) => {
+  // ✨ State to store screens with geocoded addresses
+  const [screens, setScreens] = React.useState(initialScreens);
+  
+  // ✨ Geocode addresses when screens change or coordinates are present but address is missing
+  React.useEffect(() => {
+    const geocodeScreens = async () => {
+      const screensWithAddresses = await Promise.all(
+        initialScreens.map(async (screen) => {
+          // If address is missing OR is just coordinates (starts with "Location:"), geocode on client
+          const currentLocation = (screen as any).currentLocation;
+          const needsGeocoding = currentLocation?.lat && currentLocation?.lng && 
+            (!currentLocation?.address || currentLocation.address.startsWith('Location:'));
+          
+          if (needsGeocoding) {
+            try {
+              const address = await reverseGeocodeClient(currentLocation.lat, currentLocation.lng);
+              return {
+                ...screen,
+                currentLocation: {
+                  ...currentLocation,
+                  address: address
+                }
+              };
+            } catch (error) {
+              console.warn(`Failed to geocode ${currentLocation.lat}, ${currentLocation.lng}:`, error);
+              return screen; // Return original if geocoding fails
+            }
+          }
+          return screen;
+        })
+      );
+      
+      setScreens(screensWithAddresses);
+    };
+    
+    geocodeScreens();
+  }, [initialScreens]);
+  
   // Close all dropdowns when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

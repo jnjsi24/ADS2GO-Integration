@@ -198,28 +198,63 @@ export class TabletRegistrationService {
   }
 
   async generateDeviceId(): Promise<string> {
-    // Create a more unique device identifier using multiple device properties
-    const deviceInfo = {
-      osInternalBuildId: Device.osInternalBuildId || 'unknown',
-      deviceName: Device.deviceName || 'unknown',
-      brand: Device.brand || 'unknown',
-      modelName: Device.modelName || 'unknown',
-      osName: Device.osName || 'unknown',
-      osVersion: Device.osVersion || 'unknown',
-      platform: Platform.OS || 'unknown'
-    };
+    // ✅ PERSISTENT DEVICE ID: Store and reuse the same device ID for this device
+    // This allows the same device to re-register even if local storage was cleared
+    const STORAGE_KEY = 'persistent_device_id';
     
-    // Create a unique base identifier by combining multiple device properties
-    const baseDeviceId = `${deviceInfo.brand}-${deviceInfo.modelName}-${deviceInfo.osName}-${deviceInfo.osVersion}`.replace(/[^a-zA-Z0-9-]/g, '-');
-    
-    // Add a random component to ensure uniqueness even if device properties are similar
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const timestamp = Date.now();
-    
-    // Remove any existing TABLET prefix to avoid duplication
-    const cleanDeviceId = baseDeviceId.replace(/^TABLET-/, '');
-    
-    return `TABLET-${cleanDeviceId}-${randomSuffix}-${timestamp}`;
+    try {
+      // First, try to load existing persistent device ID
+      const existingDeviceId = await AsyncStorage.getItem(STORAGE_KEY);
+      if (existingDeviceId) {
+        console.log('✅ Using persistent device ID:', existingDeviceId);
+        return existingDeviceId;
+      }
+      
+      // No existing device ID found - generate a new one
+      console.log('🆕 Generating new persistent device ID...');
+      
+      // Create a more unique device identifier using multiple device properties
+      const deviceInfo = {
+        osInternalBuildId: Device.osInternalBuildId || 'unknown',
+        deviceName: Device.deviceName || 'unknown',
+        brand: Device.brand || 'unknown',
+        modelName: Device.modelName || 'unknown',
+        osName: Device.osName || 'unknown',
+        osVersion: Device.osVersion || 'unknown',
+        platform: Platform.OS || 'unknown'
+      };
+      
+      // Create a unique base identifier by combining multiple device properties
+      const baseDeviceId = `${deviceInfo.brand}-${deviceInfo.modelName}-${deviceInfo.osName}-${deviceInfo.osVersion}`.replace(/[^a-zA-Z0-9-]/g, '-');
+      
+      // Add a random component to ensure uniqueness even if device properties are similar
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const timestamp = Date.now();
+      
+      // Remove any existing TABLET prefix to avoid duplication
+      const cleanDeviceId = baseDeviceId.replace(/^TABLET-/, '');
+      
+      const newDeviceId = `TABLET-${cleanDeviceId}-${randomSuffix}-${timestamp}`;
+      
+      // Store the new device ID for future use
+      await AsyncStorage.setItem(STORAGE_KEY, newDeviceId);
+      console.log('✅ Stored new persistent device ID:', newDeviceId);
+      
+      return newDeviceId;
+    } catch (error) {
+      console.error('❌ Error generating/storing device ID:', error);
+      // Fallback to generating a temporary device ID if storage fails
+      const deviceInfo = {
+        brand: Device.brand || 'unknown',
+        modelName: Device.modelName || 'unknown',
+        osName: Device.osName || 'unknown',
+        osVersion: Device.osVersion || 'unknown'
+      };
+      const baseDeviceId = `${deviceInfo.brand}-${deviceInfo.modelName}-${deviceInfo.osName}-${deviceInfo.osVersion}`.replace(/[^a-zA-Z0-9-]/g, '-');
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const timestamp = Date.now();
+      return `TABLET-${baseDeviceId.replace(/^TABLET-/, '')}-${randomSuffix}-${timestamp}`;
+    }
   }
 
   async migrateDeviceIdIfNeeded(): Promise<void> {
@@ -423,9 +458,19 @@ export class TabletRegistrationService {
         body: JSON.stringify(requestBody),
       });
 
+      console.log(`📡 [Registration] Server response status: ${response.status} ${response.statusText}`);
+
       const result: RegistrationResponse = await response.json();
+      console.log(`📡 [Registration] Server response data:`, JSON.stringify(result, null, 2));
+
+      if (!response.ok) {
+        console.error(`❌ [Registration] Server returned error status: ${response.status}`);
+        console.error(`❌ [Registration] Error message:`, result.message || 'No error message provided');
+      }
 
       if (result.success && result.tabletInfo) {
+        console.log('✅ [Registration] Registration successful! Saving to local storage...');
+        
         // Save registration data locally
         const registration: TabletRegistration = {
           deviceId: result.tabletInfo.deviceId,
@@ -437,6 +482,7 @@ export class TabletRegistrationService {
         };
 
         await AsyncStorage.setItem('tabletRegistration', JSON.stringify(registration));
+        console.log('✅ [Registration] Registration data saved to AsyncStorage:', registration);
         this.registration = registration;
         
         // Clear the "cleared" flag since we now have a valid registration
@@ -447,6 +493,10 @@ export class TabletRegistrationService {
         
         // Update WebSocket service with new device info
         await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId, registration.slotNumber);
+        console.log('✅ [Registration] WebSocket service updated with device info');
+      } else {
+        console.error('❌ [Registration] Registration failed:', result.message || 'Unknown error');
+        console.error('❌ [Registration] Response details:', result);
       }
 
       return result;

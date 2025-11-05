@@ -182,7 +182,6 @@ const resolvers = {
               totalAdPlays: material.currentStatus?.totalAdPlays || 0,
               totalQRScans: material.currentStatus?.totalQRScans || 0,
               totalAdPlayTime: material.currentStatus?.totalAdPlayTime || 0,
-              totalAdImpressions: material.currentStatus?.totalAdImpressions || 0,
               carGroupId: material.currentStatus?.carGroupId,
               screenType: material.currentStatus?.screenType,
               ads: material.ads || []

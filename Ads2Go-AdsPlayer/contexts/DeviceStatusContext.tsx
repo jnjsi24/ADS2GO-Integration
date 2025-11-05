@@ -86,44 +86,60 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     loadMaterialId();
     
     // Set up periodic check to sync material ID with registration data
-    const syncInterval = setInterval(async () => {
-      try {
-        // Check if we're already on the registration screen to avoid unnecessary checks
-        const { router } = require('expo-router');
-        const currentRoute = router.pathname || '';
-        if (currentRoute.includes('/registration')) {
-          console.log('Already on registration screen, skipping sync check');
-          return;
-        }
-
-        // Check if device is still registered
-        const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
-        if (!isRegistered) {
-          console.log('Device became unregistered, clearing material ID and stopping sync');
-          setMaterialIdState(null);
-          
-          // Clear the interval to prevent infinite loop
-          clearInterval(syncInterval);
-          
-          // Navigate to registration screen
-          router.replace('/registration?force=true');
-          return;
-        }
-
-        const currentMaterialId = await SecureStore.getItemAsync('device_material_id');
-        if (currentMaterialId && currentMaterialId !== materialId) {
-          console.log('Material ID changed, updating context:', currentMaterialId);
-          setMaterialIdState(currentMaterialId);
-        } else if (!currentMaterialId && materialId) {
-          console.log('Material ID was cleared, updating context');
-          setMaterialIdState(null);
-        }
-      } catch (error) {
-        console.error('Error syncing material ID:', error);
-      }
-    }, 60000); // Check every 60 seconds (reduced from 2 seconds)
+    // Only run if we have a materialId (device is registered)
+    // If no materialId, we shouldn't check registration status repeatedly
+    let syncInterval: NodeJS.Timeout | null = null;
     
-    return () => clearInterval(syncInterval);
+    if (materialId) {
+      // Only check registration status if we have a materialId
+      // If no materialId, the device is already unregistered and we shouldn't keep checking
+      syncInterval = setInterval(async () => {
+        try {
+          // Note: We can't use hooks in setInterval callbacks
+          // The check will run but navigation is prevented by the force=true flag
+          // which tells the registration screen to skip its own check
+
+          // Check if device is still registered
+          const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
+          if (!isRegistered) {
+            console.log('Device became unregistered, clearing material ID and stopping sync');
+            setMaterialIdState(null);
+            
+            // Clear the interval to prevent infinite loop
+            if (syncInterval) {
+              clearInterval(syncInterval);
+              syncInterval = null;
+            }
+            
+            // Navigate to registration screen
+            const { router } = require('expo-router');
+            router.replace('/registration?force=true');
+            return;
+          }
+
+          const currentMaterialId = await SecureStore.getItemAsync('device_material_id');
+          if (currentMaterialId && currentMaterialId !== materialId) {
+            console.log('Material ID changed, updating context:', currentMaterialId);
+            setMaterialIdState(currentMaterialId);
+          } else if (!currentMaterialId && materialId) {
+            console.log('Material ID was cleared, updating context');
+            setMaterialIdState(null);
+          }
+        } catch (error) {
+          console.error('Error syncing material ID:', error);
+        }
+      }, 60000); // Check every 60 seconds
+    } else {
+      // No materialId means device is not registered - don't check registration status
+      // This prevents the infinite loop when device is unregistered
+      console.log('No materialId - device not registered, skipping periodic registration check');
+    }
+    
+    return () => {
+      if (syncInterval) {
+        clearInterval(syncInterval);
+      }
+    };
   }, [materialId]);
 
   // Initialize WebSocket when materialId changes

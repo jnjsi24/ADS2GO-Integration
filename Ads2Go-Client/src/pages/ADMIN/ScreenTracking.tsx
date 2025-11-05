@@ -2,14 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Popup, Polyline, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
-import { LatLngTuple, Map, Icon } from 'leaflet';
+import { LatLngTuple, Map as LeafletMap, Icon } from 'leaflet';
 import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
 import { AdminLoader } from "../../components/ProtectedRoute";
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import { screenComplianceService } from '../../services/screenComplianceService';
-
-// Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
 import RouteMapped from '../../components/RouteMapped';
 import { 
@@ -122,6 +120,62 @@ interface Material {
   createdAt: string;
   updatedAt: string;
 }
+
+// ✨ Client-side reverse geocoding helper with caching
+const geocodingCache = new Map<string, string>();
+const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> => {
+  // Round coordinates to 4 decimal places for caching (about 11m accuracy)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  
+  // Check cache first
+  if (geocodingCache.has(cacheKey)) {
+    return geocodingCache.get(cacheKey)!;
+  }
+  
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Ads2Go-AdminClient/1.0' // Required by Nominatim
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address from most specific to least specific
+      if (addr.house_number) addressParts.push(addr.house_number);
+      if (addr.road) addressParts.push(addr.road);
+      if (addr.neighbourhood || addr.suburb) addressParts.push(addr.neighbourhood || addr.suburb);
+      if (addr.city || addr.town || addr.village) addressParts.push(addr.city || addr.town || addr.village);
+      if (addr.state) addressParts.push(addr.state);
+      if (addr.country) addressParts.push(addr.country);
+      
+      const address = addressParts.join(', ') || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      geocodingCache.set(cacheKey, address); // Cache the result
+      return address;
+    }
+    
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  } catch (error) {
+    console.warn('Client-side geocoding failed:', error);
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  }
+};
 
 const ScreenTracking: React.FC = () => {
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
@@ -350,19 +404,8 @@ const ScreenTracking: React.FC = () => {
         const screensData = complianceData.data?.screens || [];
         setScreens(screensData); // Individual device records for screen list
         
-        // Set material screens for map display with validation
-        if (complianceData.data?.materialScreens && Array.isArray(complianceData.data.materialScreens)) {
-          // Filter out any undefined or invalid entries
-          const validMaterialScreens = complianceData.data.materialScreens.filter((screen: any) => 
-            screen && 
-            typeof screen === 'object' && 
-            screen.deviceId && 
-            screen.materialId
-          );
-          setMaterialScreens(validMaterialScreens);
-        } else {
-          setMaterialScreens([]);
-        }
+        // Note: materialScreens are now handled via the screens state
+        // The screens array already contains all the necessary data for map display
         
         setConnectionStatus('connected');
 
@@ -662,6 +705,15 @@ const ScreenTracking: React.FC = () => {
             timestamp: new Date(newTimestamp).toISOString()
           });
           
+          // ✨ Preserve existing geocoded address if new one is just coordinates
+          let addressToUse = locationData.address || screen.currentLocation?.address;
+          if (addressToUse && addressToUse.startsWith('Location:')) {
+            // Server sent coordinates, preserve existing geocoded address if available
+            addressToUse = screen.currentLocation?.address && !screen.currentLocation.address.startsWith('Location:') 
+              ? screen.currentLocation.address 
+              : addressToUse;
+          }
+          
           const updatedScreen = {
             ...screen,
             currentLocation: {
@@ -670,13 +722,26 @@ const ScreenTracking: React.FC = () => {
               speed: locationData.speed || 0,
               heading: locationData.heading || 0,
               accuracy: locationData.accuracy || 0,
-              address: locationData.address || screen.currentLocation?.address || 'Location not available',
+              address: addressToUse || 'Location not available',
               timestamp: new Date(newTimestamp).toISOString(),
               source: source // Track source
             },
             isOnline: locationData.isOnline !== undefined ? locationData.isOnline : screen.isOnline,
             lastSeen: new Date(newTimestamp).toISOString()
           };
+          
+          // ✨ Geocode address if it's missing or just coordinates (async, update after geocoding)
+          if (updatedScreen.currentLocation.address.startsWith('Location:') || !updatedScreen.currentLocation.address) {
+            reverseGeocodeClient(updatedScreen.currentLocation.lat, updatedScreen.currentLocation.lng)
+              .then(address => {
+                setScreens(prevScreens => prevScreens.map(s => 
+                  s.materialId === screen.materialId 
+                    ? { ...s, currentLocation: { ...s.currentLocation, address } }
+                    : s
+                ));
+              })
+              .catch(err => console.warn('Failed to geocode location update:', err));
+          }
           
           return updatedScreen;
         }
@@ -1139,13 +1204,13 @@ const ScreenTracking: React.FC = () => {
                       key={`map-${selectedDate}`}
                       center={mapCenter}
                       zoom={zoom}
-                      onMapLoad={(map: Map) => {
+                      onMapLoad={(map: LeafletMap) => {
                         // Only log map load in verbose mode
                         if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_MAP === 'true') {
                           console.log(`🗺️ [Map Load] Map loaded with center:`, mapCenter, 'zoom:', zoom);
                         }
                         if (mapRef) {
-                          (mapRef as React.MutableRefObject<Map | null>).current = map;
+                          (mapRef as React.MutableRefObject<LeafletMap | null>).current = map;
                         }
                         // Any map initialization code can go here
                       }}

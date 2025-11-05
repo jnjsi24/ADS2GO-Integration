@@ -88,55 +88,129 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
       console.log('📍 [UserMaterialsMap] Received materials:', materialsData.length);
       
       // ✅ FILTER: Remove GPS data for devices that completed 8 hours (in company-ads-only mode)
-      const filteredMaterials = materialsData.map((m: MaterialWithLocation) => {
+      const newMaterialsFromPolling = materialsData.map((m: MaterialWithLocation) => {
         const deviceHours = deviceHoursMap.get(m.materialId || '');
         if (deviceHours !== undefined && deviceHours >= 8) {
           // Device completed 8 hours - remove GPS location for user client
           return {
             ...m,
-            currentLocation: undefined // Remove location but keep other data
+            currentLocation: undefined, // Remove location but keep other data
+            source: 'polling' as const
           };
         }
-        return m;
+        return {
+          ...m,
+          source: 'polling' as const
+        };
       });
       
-      setMaterials(filteredMaterials);
-
-      // Calculate map center from materials with valid locations (only non-filtered ones)
-      const validLocations = filteredMaterials.filter((m: MaterialWithLocation) => 
-        m.currentLocation && 
-        typeof m.currentLocation.lat === 'number' &&
-        typeof m.currentLocation.lng === 'number' &&
-        !isNaN(m.currentLocation.lat) &&
-        !isNaN(m.currentLocation.lng) &&
-        m.currentLocation.lat !== 0 &&
-        m.currentLocation.lng !== 0 &&
-        m.currentLocation.lat >= -90 &&
-        m.currentLocation.lat <= 90 &&
-        m.currentLocation.lng >= -180 &&
-        m.currentLocation.lng <= 180
-      );
-
-      if (validLocations.length > 0) {
-        const avgLat = validLocations.reduce((sum: number, m: MaterialWithLocation) => 
-          sum + (m.currentLocation?.lat || 0), 0) / validLocations.length;
-        const avgLng = validLocations.reduce((sum: number, m: MaterialWithLocation) => 
-          sum + (m.currentLocation?.lng || 0), 0) / validLocations.length;
+      // ✅ SMART MERGE: Merge polling data with existing WebSocket data
+      setMaterials(prevMaterials => {
+        const mergedMaterials = new Map<string, MaterialWithLocation>();
         
-        console.log('📍 [UserMaterialsMap] Setting map center to:', [avgLat, avgLng]);
-        setMapCenter([avgLat, avgLng]);
+        // First, add all existing materials (preserve WebSocket updates)
+        prevMaterials.forEach(mat => {
+          mergedMaterials.set(mat.materialId, mat);
+        });
         
-        // Adjust zoom based on number of materials
-        if (validLocations.length === 1) {
-          setZoom(15);
-        } else if (validLocations.length <= 3) {
-          setZoom(13);
-        } else {
-          setZoom(12);
-        }
-      }
+        // Then, merge new polling data (only update if newer or if material doesn't exist)
+        newMaterialsFromPolling.forEach(newMat => {
+          const existingMat = mergedMaterials.get(newMat.materialId);
+          
+          if (!existingMat) {
+            // New material - add it
+            mergedMaterials.set(newMat.materialId, newMat);
+          } else {
+            // Existing material - check timestamps
+            const existingTimestamp = existingMat.currentLocation?.timestamp 
+              ? new Date(existingMat.currentLocation.timestamp).getTime()
+              : existingMat.lastSeen 
+                ? new Date(existingMat.lastSeen).getTime()
+                : 0;
+            const newTimestamp = newMat.currentLocation?.timestamp
+              ? new Date(newMat.currentLocation.timestamp).getTime()
+              : newMat.lastSeen
+                ? new Date(newMat.lastSeen).getTime()
+                : 0;
+            const existingSource = (existingMat as any).source || 'unknown';
+            const isExistingFromWebSocket = existingSource === 'websocket';
+            
+            // ✅ PREFER WEBSOCKET: If existing is from WebSocket and polling is recent, ignore polling GPS
+            if (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000 && existingMat.currentLocation) {
+              // Keep existing WebSocket GPS (it's more recent)
+              mergedMaterials.set(newMat.materialId, {
+                ...existingMat,
+                // Keep WebSocket GPS, but update other fields from polling
+                isOnline: newMat.isOnline !== undefined ? newMat.isOnline : existingMat.isOnline,
+                lastSeen: newMat.lastSeen || existingMat.lastSeen,
+                source: existingSource // Keep WebSocket source
+              });
+              return;
+            }
+            
+            // ✅ PREFER NEWER: If polling data is newer, use it (but preserve WebSocket GPS if recent)
+            if (newTimestamp >= existingTimestamp) {
+              const mergedMat: MaterialWithLocation = {
+                ...existingMat,
+                // Keep WebSocket GPS if it exists and is recent, otherwise use polling
+                currentLocation: (isExistingFromWebSocket && existingMat.currentLocation && newTimestamp - existingTimestamp < 5000)
+                  ? existingMat.currentLocation // Keep WebSocket GPS
+                  : newMat.currentLocation, // Use polling GPS
+                // Always update other fields from polling
+                isOnline: newMat.isOnline !== undefined ? newMat.isOnline : existingMat.isOnline,
+                lastSeen: newMat.lastSeen || existingMat.lastSeen,
+                source: (existingMat as any).source || 'polling' // Keep original source
+              };
+              mergedMaterials.set(newMat.materialId, mergedMat);
+            } else {
+              // Existing data is newer - keep it
+              return;
+            }
+          }
+        });
+        
+        return Array.from(mergedMaterials.values());
+      });
+
+      // Map center calculation moved to separate effect below
     }
   }, [data, deviceHoursMap]);
+
+  // Calculate map center from materials with valid locations (runs after materials state updates)
+  useEffect(() => {
+    const validLocations = materials.filter((m: MaterialWithLocation) => 
+      m.currentLocation && 
+      typeof m.currentLocation.lat === 'number' &&
+      typeof m.currentLocation.lng === 'number' &&
+      !isNaN(m.currentLocation.lat) &&
+      !isNaN(m.currentLocation.lng) &&
+      m.currentLocation.lat !== 0 &&
+      m.currentLocation.lng !== 0 &&
+      m.currentLocation.lat >= -90 &&
+      m.currentLocation.lat <= 90 &&
+      m.currentLocation.lng >= -180 &&
+      m.currentLocation.lng <= 180
+    );
+
+    if (validLocations.length > 0) {
+      const avgLat = validLocations.reduce((sum: number, m: MaterialWithLocation) => 
+        sum + (m.currentLocation?.lat || 0), 0) / validLocations.length;
+      const avgLng = validLocations.reduce((sum: number, m: MaterialWithLocation) => 
+        sum + (m.currentLocation?.lng || 0), 0) / validLocations.length;
+      
+      console.log('📍 [UserMaterialsMap] Setting map center to:', [avgLat, avgLng]);
+      setMapCenter([avgLat, avgLng]);
+      
+      // Adjust zoom based on number of materials
+      if (validLocations.length === 1) {
+        setZoom(15);
+      } else if (validLocations.length <= 3) {
+        setZoom(13);
+      } else {
+        setZoom(12);
+      }
+    }
+  }, [materials]);
 
   // WebSocket subscription for real-time location updates
   useEffect(() => {
@@ -188,7 +262,8 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
                   heading: update.location.heading,
                   accuracy: update.location.accuracy,
                   address: update.location.address
-                }
+                },
+                source: 'websocket' as const // Mark as WebSocket update
               };
             }
             return material;

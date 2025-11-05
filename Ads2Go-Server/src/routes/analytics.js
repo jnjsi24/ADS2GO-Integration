@@ -709,18 +709,20 @@ router.post('/cache/clear-all', async (req, res) => {
 });
 
 // GET /analytics/user/:userId/direct - Direct API endpoint bypassing GraphQL
+// ✅ Updated to accept adId query parameter for filtering by specific ad
 router.get('/user/:userId/direct', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, period } = req.query;
+    const { startDate, endDate, period, adId } = req.query;
     
-    console.log('🔍 Direct API call for user:', userId, 'period:', period);
+    console.log('🔍 Direct API call for user:', userId, 'period:', period, 'adId:', adId || 'all');
     
     const analytics = await UserAnalyticsService.getUserAnalytics(
       userId,
       startDate,
       endDate,
-      period
+      period,
+      adId || null
     );
     
     if (!analytics.success) {
@@ -743,12 +745,13 @@ router.get('/user/:userId/direct', async (req, res) => {
 // ===========================================
 
 // GET /analytics/user/:userId/device/:deviceId - Get detailed analytics for a specific device
+// ✅ Updated to accept adId query parameter for filtering by specific ad
 router.get('/user/:userId/device/:deviceId', async (req, res) => {
   try {
     const { userId, deviceId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, adId } = req.query;
     
-    const analytics = await UserAnalyticsService.getDeviceSpecificAnalytics(userId, deviceId, startDate, endDate);
+    const analytics = await UserAnalyticsService.getDeviceSpecificAnalytics(userId, deviceId, startDate, endDate, adId || null);
     
     res.json({
       success: true,

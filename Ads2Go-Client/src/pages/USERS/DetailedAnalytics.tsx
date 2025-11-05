@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
@@ -79,14 +80,45 @@ const DetailedAnalytics: React.FC = () => {
     setShowDatePicker(false);
   };
 
+  // ✅ Helper function to check if current date is included in the selected range
+  const isCurrentDateIncluded = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (isCustomDateRange && dateRange.start && dateRange.end) {
+      const startDate = new Date(dateRange.start);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateRange.end);
+      endDate.setHours(0, 0, 0, 0);
+      return today >= startDate && today <= endDate;
+    } else {
+      // For preset periods, check if period includes today
+      // '1d' = last 1 day (includes today), '7d' = last 7 days (includes today), etc.
+      // 'all' = all time (includes today)
+      return selectedPeriod === '1d' || selectedPeriod === '7d' || selectedPeriod === '30d' || selectedPeriod === 'all';
+    }
+  }, [isCustomDateRange, dateRange, selectedPeriod]);
+
+  // Track initial load to distinguish from background refreshes
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const hasInitiallyLoadedRef = useRef(false);
+
   // Fetch analytics data with optimized cache policy
+  // ✅ Add polling when current date is included (for real-time updates)
+  // ✅ Pass date range parameters when custom date range is selected
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
-      period: selectedDevice === 'all' ? 'all' : selectedPeriod 
+      period: isCustomDateRange ? undefined : selectedPeriod,
+      startDate: isCustomDateRange && dateRange.start ? formatDateForAPI(dateRange.start) : undefined,
+      endDate: isCustomDateRange && dateRange.end ? formatDateForAPI(dateRange.end) : undefined
     },
     fetchPolicy: 'cache-first',
     nextFetchPolicy: 'cache-and-network',
-    errorPolicy: 'all'
+    errorPolicy: 'all',
+    // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
+    pollInterval: isCurrentDateIncluded ? 30000 : 0,
+    // ✅ Don't trigger loading state during polling (silent background refresh)
+    notifyOnNetworkStatusChange: false
   });
 
   // Handle analytics errors using useEffect (replaces deprecated onError callback)
@@ -96,11 +128,25 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [analyticsError]);
 
-  // Fetch overall analytics data for Top Performing Ads (always uses 'all' period)
+  // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
+  // This ensures summary metrics (Total Ad Plays, QR Scans, etc.) always show cumulative totals
+  // Performance Over Time chart uses directAnalyticsData which respects filters
   const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
-      period: 'all' // Always fetch overall data for Top Performing Ads
+      period: 'all', // Always fetch overall data for Summary Metrics
+      adId: null // No adId filter - show all ads cumulative totals
     },
+    fetchPolicy: 'cache-first',
+    nextFetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+    // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
+    pollInterval: isCurrentDateIncluded ? 30000 : 0,
+    // ✅ Don't trigger loading state during polling (silent background refresh)
+    notifyOnNetworkStatusChange: false
+  });
+
+  // ✅ Fetch user's ads with materialId to filter devices
+  const { data: myAdsData } = useQuery(GET_MY_ADS, {
     fetchPolicy: 'cache-first',
     errorPolicy: 'all'
   });
@@ -112,8 +158,89 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [user]);
 
-  // Memoized device extraction from analytics data
+  // ✅ Memoized mapping of adId to materialIds
+  // Maps ad.id (from GET_MY_ADS) to materialIds array
+  // ✅ Only includes active/paid ads with materials (same filter as extractedAds)
+  const adToMaterialIdsMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const filteredOutAds: any[] = [];
+    
+    if (myAdsData?.getMyAds) {
+      myAdsData.getMyAds.forEach((ad: any) => {
+        // Only include active/paid ads with materials (same filter as extractedAds)
+        const hasValidStatus = ad.status === 'APPROVED' || ad.status === 'RUNNING' || ad.status === 'SCHEDULED';
+        const isPaid = ad.paymentStatus === 'PAID';
+        const hasMaterials = ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0;
+        
+        if (hasValidStatus && isPaid && hasMaterials && ad.id) {
+          // Extract materialId strings from the materialId array
+          const materialIds = ad.materialId
+            .map((m: any) => m?.materialId)
+            .filter((id: string | undefined) => id); // Filter out undefined/null
+          if (materialIds.length > 0) {
+            // Map using ad.id (as string to ensure consistent lookups)
+            const adIdKey = ad.id.toString();
+            map.set(adIdKey, materialIds);
+            // Also set with original id format in case it's different
+            if (ad.id !== adIdKey) {
+              map.set(ad.id, materialIds);
+            }
+          } else {
+            filteredOutAds.push({ id: ad.id, title: ad.title, reason: 'No valid materialIds extracted' });
+          }
+        } else {
+          filteredOutAds.push({ 
+            id: ad.id, 
+            title: ad.title, 
+            status: ad.status, 
+            paymentStatus: ad.paymentStatus,
+            hasMaterials: hasMaterials,
+            reason: !hasValidStatus ? 'Invalid status' : !isPaid ? 'Not paid' : !hasMaterials ? 'No materials' : 'Unknown'
+          });
+        }
+      });
+    }
+    const mapEntries = Array.from(map.entries()).map(([id, materials]) => ({ adId: id, materialCount: materials.length, materials }));
+    console.log('📊 [DetailedAnalytics] Built adToMaterialIdsMap:', mapEntries);
+    console.log('📊 [DetailedAnalytics] Total ads in myAdsData:', myAdsData?.getMyAds?.length || 0);
+    console.log('📊 [DetailedAnalytics] Ads included in map:', mapEntries.length);
+    console.log('📊 [DetailedAnalytics] Ads filtered out:', filteredOutAds.length, filteredOutAds);
+    if (myAdsData?.getMyAds?.[0]) {
+      console.log('📊 [DetailedAnalytics] Sample ad structure:', {
+        id: myAdsData.getMyAds[0].id,
+        title: myAdsData.getMyAds[0].title,
+        status: myAdsData.getMyAds[0].status,
+        paymentStatus: myAdsData.getMyAds[0].paymentStatus,
+        materialIdCount: myAdsData.getMyAds[0].materialId?.length || 0,
+        materialIdStructure: myAdsData.getMyAds[0].materialId?.[0]
+      });
+    }
+    return map;
+  }, [myAdsData]);
+
+  // ✅ All-time devices extraction (for summary metrics - always shows all devices)
+  // This is NOT affected by date/ad/device filters
+  const allTimeDevices = useMemo(() => {
+    // Always use overallAnalyticsData (all-time, all ads) for summary metrics
+    if (overallAnalyticsData?.getUserAnalytics?.deviceStats && overallAnalyticsData.getUserAnalytics.deviceStats.length > 0) {
+      const devices = overallAnalyticsData.getUserAnalytics.deviceStats.map((device: any, index: number) => ({
+        id: device.materialId || device.deviceId || `device-${index}`,
+        name: device.materialId || device.deviceId || `Vehicle ${index + 1}`,
+        materialId: device.materialId || device.deviceId || `device-${index}`,
+        isOnline: device.isOnline || false,
+        deviceStatus: device.deviceStatus || null
+      }));
+      console.log('📊 [DetailedAnalytics] All-time devices from overallAnalyticsData:', devices.length);
+      return devices;
+    }
+    
+    console.log('⚠️ [DetailedAnalytics] No all-time devices found in overallAnalyticsData');
+    return [];
+  }, [overallAnalyticsData]);
+
+  // Memoized device extraction from analytics data (for dropdown - filtered by date/ad)
   const extractedDevices = useMemo(() => {
+    // Try to get devices from directAnalyticsData first (most up-to-date, filtered data)
     if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
       const devices = directAnalyticsData.deviceStats.map((device: any, index: number) => ({
         id: device.materialId || `device-${index}`,
@@ -122,13 +249,95 @@ const DetailedAnalytics: React.FC = () => {
         isOnline: device.isOnline || false,
         deviceStatus: device.deviceStatus || null
       }));
+      console.log('📊 [DetailedAnalytics] Extracted devices from directAnalyticsData (filtered):', devices.length);
       return devices;
     }
+    
+    // Fallback: Try to get devices from GraphQL analytics data (filtered)
+    if (analyticsData?.getUserAnalytics?.deviceStats && analyticsData.getUserAnalytics.deviceStats.length > 0) {
+      const devices = analyticsData.getUserAnalytics.deviceStats.map((device: any, index: number) => ({
+        id: device.materialId || device.deviceId || `device-${index}`,
+        name: device.materialId || device.deviceId || `Vehicle ${index + 1}`,
+        materialId: device.materialId || device.deviceId || `device-${index}`,
+        isOnline: device.isOnline || false,
+        deviceStatus: device.deviceStatus || null
+      }));
+      console.log('📊 [DetailedAnalytics] Extracted devices from analyticsData (GraphQL, filtered):', devices.length);
+      return devices;
+    }
+    
+    console.log('⚠️ [DetailedAnalytics] No devices found in filtered analytics data');
     return [];
   }, [analyticsData, directAnalyticsData]);
 
-  // Memoized ad extraction from analytics data
+  // ✅ Filter devices based on selected ad
+  // If devices aren't in analytics yet, create device entries from ad's materialIds
+  const filteredDevices = useMemo(() => {
+    if (selectedAd === 'all' || !selectedAd) {
+      // Show all devices when no ad is selected
+      return extractedDevices;
+    }
+
+    // Try to get materialIds for the selected ad (try both string and original format)
+    const selectedAdStr = selectedAd.toString();
+    let materialIdsForAd = adToMaterialIdsMap.get(selectedAdStr) || adToMaterialIdsMap.get(selectedAd);
+    
+    if (!materialIdsForAd || materialIdsForAd.length === 0) {
+      // Debug: Log what we're looking for
+      console.log('🔍 [DetailedAnalytics] No materialIds found for ad:', selectedAd, '(string:', selectedAdStr, ')');
+      console.log('🔍 [DetailedAnalytics] Available ad IDs in map:', Array.from(adToMaterialIdsMap.keys()));
+      // If no materialIds found for this ad, show all devices (fallback)
+      return extractedDevices;
+    }
+
+    console.log('✅ [DetailedAnalytics] Found materialIds for ad:', selectedAd, 'Materials:', materialIdsForAd);
+    console.log('🔍 [DetailedAnalytics] Available devices from analytics (materialIds):', extractedDevices.map(d => d.materialId));
+    
+    // Filter devices that match the ad's materialIds
+    const filteredFromAnalytics = extractedDevices.filter(device => materialIdsForAd.includes(device.materialId));
+    
+    // ✅ If no devices found in analytics but ad has materialIds, create device entries from materialIds
+    if (filteredFromAnalytics.length === 0 && materialIdsForAd.length > 0) {
+      console.log('⚠️ [DetailedAnalytics] No devices in analytics yet, creating device entries from ad materialIds');
+      const devicesFromMaterialIds = materialIdsForAd.map((materialId: string) => ({
+        id: materialId,
+        name: materialId,
+        materialId: materialId,
+        isOnline: false, // Default to offline since we don't have status yet
+        deviceStatus: null
+      }));
+      console.log('✅ [DetailedAnalytics] Created devices from materialIds:', devicesFromMaterialIds.length);
+      return devicesFromMaterialIds;
+    }
+
+    console.log('🔍 [DetailedAnalytics] Filtering devices. Total devices:', extractedDevices.length, 'Filtered:', filteredFromAnalytics.length);
+    console.log('🔍 [DetailedAnalytics] Filtered device materialIds:', filteredFromAnalytics.map(d => d.materialId));
+
+    return filteredFromAnalytics;
+  }, [extractedDevices, selectedAd, adToMaterialIdsMap, myAdsData]);
+
+  // ✅ Memoized ad extraction - use myAdsData for consistency (same source as mapping)
+  // This ensures ad IDs match between selection and materialId mapping
+  // ✅ Filter to only show active/paid ads with assigned materials (exclude PENDING, REJECTED)
   const extractedAds = useMemo(() => {
+    // Prefer myAdsData since it has materialId information
+    if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
+      // Filter ads: only show APPROVED, RUNNING, or SCHEDULED ads that are PAID and have materials assigned
+      const activeAds = myAdsData.getMyAds.filter((ad: any) => {
+        const hasValidStatus = ad.status === 'APPROVED' || ad.status === 'RUNNING' || ad.status === 'SCHEDULED';
+        const isPaid = ad.paymentStatus === 'PAID';
+        const hasMaterials = ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0;
+        return hasValidStatus && isPaid && hasMaterials;
+      });
+      
+      return activeAds.map((ad: any) => ({
+        id: ad.id,
+        title: ad.title || 'Unknown Ad'
+      }));
+    }
+    
+    // Fallback to analytics data if myAdsData not available
+    // Analytics data typically only contains ads that have analytics (active/paid ads)
     const adPerformance = overallAnalyticsData?.getUserAnalytics?.adPerformance || directAnalyticsData?.adPerformance || analyticsData?.getUserAnalytics?.adPerformance || [];
     
     if (adPerformance.length > 0) {
@@ -139,12 +348,21 @@ const DetailedAnalytics: React.FC = () => {
       return ads;
     }
     return [];
-  }, [overallAnalyticsData, directAnalyticsData, analyticsData]);
+  }, [myAdsData, overallAnalyticsData, directAnalyticsData, analyticsData]);
 
-  // Update available devices when extraction changes
+  // ✅ Update available devices when filtered devices change
   useEffect(() => {
-    setAvailableDevices(extractedDevices);
-  }, [extractedDevices]);
+    setAvailableDevices(filteredDevices);
+    
+    // ✅ If selected device is not in filtered devices, reset to 'all'
+    if (selectedDevice !== 'all' && filteredDevices.length > 0) {
+      const deviceExists = filteredDevices.some(device => device.materialId === selectedDevice);
+      if (!deviceExists) {
+        setSelectedDevice('all');
+        setSelectedDeviceLabel('All Devices');
+      }
+    }
+  }, [filteredDevices, selectedDevice]);
 
   // Update available ads when extraction changes
   useEffect(() => {
@@ -219,7 +437,9 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
-  const fetchDirectAnalytics = useCallback(async () => {
+  // ✅ Updated to include adId parameter when an ad is selected
+  // ✅ Added silent parameter to disable loading state during background refreshes
+  const fetchDirectAnalytics = useCallback(async (silent: boolean = false) => {
     if (!user?.userId) return;
 
     if (directFetchTimeoutRef.current) {
@@ -228,25 +448,41 @@ const DetailedAnalytics: React.FC = () => {
 
     directFetchTimeoutRef.current = setTimeout(async () => {
       try {
-        setDirectAnalyticsLoading(true);
+        // Only show loading state if not silent (initial load or manual refresh)
+        if (!silent) {
+          setDirectAnalyticsLoading(true);
+        }
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+
+        // ✅ Build query parameters including adId if selected
+        const queryParams = new URLSearchParams();
+        
+        // ✅ Add adId if an ad is selected (not 'all')
+        if (selectedAd && selectedAd !== 'all') {
+          queryParams.append('adId', selectedAd);
+        }
 
         let url;
         if (selectedDevice === 'all') {
           if (isCustomDateRange && dateRange.start && dateRange.end) {
             const startDateISO = formatDateForAPI(dateRange.start);
             const endDateISO = formatDateForAPI(dateRange.end);
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?startDate=${startDateISO}&endDate=${endDateISO}`;
+            queryParams.append('startDate', startDateISO);
+            queryParams.append('endDate', endDateISO);
+            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           } else {
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${selectedPeriod}`;
+            queryParams.append('period', selectedPeriod);
+            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           }
         } else {
           if (isCustomDateRange && dateRange.start && dateRange.end) {
             const startDateISO = formatDateForAPI(dateRange.start);
             const endDateISO = formatDateForAPI(dateRange.end);
-            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?startDate=${startDateISO}&endDate=${endDateISO}`;
+            queryParams.append('startDate', startDateISO);
+            queryParams.append('endDate', endDateISO);
+            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           } else {
-            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}`;
+            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           }
         }
 
@@ -255,6 +491,21 @@ const DetailedAnalytics: React.FC = () => {
 
         if (data.success) {
           if (selectedDevice === 'all') {
+            console.log('📊 [DetailedAnalytics] Received directAnalyticsData:', {
+              hasDeviceStats: !!data.data?.deviceStats,
+              deviceStatsCount: data.data?.deviceStats?.length || 0,
+              hasSummary: !!data.data?.summary,
+              summary: data.data?.summary ? {
+                totalAdsPlayed: data.data.summary.totalAdsPlayed,
+                totalDisplayTime: data.data.summary.totalDisplayTime,
+                totalQRScans: data.data.summary.totalQRScans,
+                totalDevices: data.data.summary.totalDevices,
+                totalMaterials: data.data.summary.totalMaterials
+              } : null,
+              hasAdPerformance: !!data.data?.adPerformance,
+              adPerformanceCount: data.data?.adPerformance?.length || 0,
+              selectedAd: selectedAd
+            });
             setDirectAnalyticsData(data.data);
             setDeviceAnalytics(null);
           } else {
@@ -262,6 +513,7 @@ const DetailedAnalytics: React.FC = () => {
             setDirectAnalyticsData(null);
           }
         } else {
+          console.log('⚠️ [DetailedAnalytics] API returned success: false', data);
           setDirectAnalyticsData(null);
           setDeviceAnalytics(null);
         }
@@ -270,15 +522,45 @@ const DetailedAnalytics: React.FC = () => {
         setDirectAnalyticsData(null);
         setDeviceAnalytics(null);
       } finally {
-        setDirectAnalyticsLoading(false);
+        // Only hide loading state if it was shown (not silent)
+        if (!silent) {
+          setDirectAnalyticsLoading(false);
+        }
       }
     }, 300);
-  }, [selectedDevice, selectedPeriod, user?.userId, isCustomDateRange, dateRange]);
+  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDateRange, dateRange]);
 
-  // Fetch analytics data when device selection changes
+  // ✅ Fetch analytics data when device, ad, period, or date range changes
   useEffect(() => {
-    fetchDirectAnalytics();
-  }, [selectedDevice, fetchDirectAnalytics]);
+    // Show loading for initial load or when filters change (user action)
+    fetchDirectAnalytics(false);
+    
+    // Mark initial load as complete after first successful load
+    if (!hasInitiallyLoadedRef.current && (directAnalyticsData || analyticsData)) {
+      hasInitiallyLoadedRef.current = true;
+      setIsInitialLoad(false);
+    }
+  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics]);
+  
+  // Mark initial load as complete once we have data
+  useEffect(() => {
+    if (isInitialLoad && (directAnalyticsData || analyticsData?.getUserAnalytics)) {
+      setIsInitialLoad(false);
+      hasInitiallyLoadedRef.current = true;
+    }
+  }, [directAnalyticsData, analyticsData, isInitialLoad]);
+
+  // ✅ Poll direct analytics when current date is included (silent background refresh)
+  useEffect(() => {
+    if (!isCurrentDateIncluded) return;
+    
+    // Poll every 30 seconds when viewing current day data (silent refresh)
+    const pollInterval = setInterval(() => {
+      fetchDirectAnalytics(true); // Silent background refresh
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(pollInterval);
+  }, [isCurrentDateIncluded, fetchDirectAnalytics]);
 
   // Cleanup all pending timeouts on unmount
   useEffect(() => {
@@ -312,124 +594,26 @@ const DetailedAnalytics: React.FC = () => {
     };
   }, []);
 
-  // Analytics summary calculation
+  // ✅ Analytics summary calculation - ALWAYS uses cumulative totals (all ads, all time)
+  // Performance Over Time chart uses directAnalyticsData which respects filters
   const analyticsSummary = useMemo(() => {
-    if (selectedDevice === 'all' && selectedAd === 'all') {
-      // All devices and all ads - use full summary
-      const summary = directAnalyticsData?.summary || {
-        totalAdImpressions: 0,
-        totalAdsPlayed: 0,
-        totalDisplayTime: 0,
-        averageCompletionRate: 0,
-        totalAds: 0,
-        activeAds: 0,
-        totalMaterials: 0,
-        totalDevices: 0,
-        totalQRScans: 0
-      };
-      return summary;
-    } else if (selectedDevice === 'all' && selectedAd !== 'all') {
-      // All devices but specific ad - filter by ad
-      const adPerformance = directAnalyticsData?.adPerformance || [];
-      const selectedAdData = adPerformance.find((ad: any) => ad.adId === selectedAd);
-      
-      if (selectedAdData) {
-        return {
-          totalAdImpressions: selectedAdData.totalAdImpressions || 0,
-          totalAdsPlayed: selectedAdData.totalMaterials || 0,
-          totalDisplayTime: selectedAdData.totalAdPlayTime || 0,
-          averageCompletionRate: selectedAdData.averageAdCompletionRate || 0,
-          totalAds: 1,
-          activeAds: 1,
-          totalMaterials: selectedAdData.totalMaterials || 0,
-          totalDevices: selectedAdData.totalDevices || 0,
-          totalQRScans: selectedAdData.totalQRScans || 0
-        };
-      }
-      
-      // Fallback: If ad performance array is empty but we have summary data, use summary data for single ad
-      // This handles the case where backend sync isn't populating adPerformance correctly
-      const summary = directAnalyticsData?.summary;
-      if (summary && availableAds.length === 1) {
-        // If user has only one ad, use the summary data for that ad
-        return {
-          totalAdImpressions: summary.totalAdImpressions || 0,
-          totalAdsPlayed: summary.totalAdsPlayed || 0,
-          totalDisplayTime: summary.totalDisplayTime || 0,
-          averageCompletionRate: summary.averageCompletionRate || 0,
-          totalAds: 1,
-          activeAds: 1,
-          totalMaterials: summary.totalMaterials || 0,
-          totalDevices: summary.totalDevices || 0,
-          totalQRScans: summary.totalQRScans || 0
-        };
-      }
-      
-      return {
-        totalAdImpressions: 0,
-        totalAdsPlayed: 0,
-        totalDisplayTime: 0,
-        averageCompletionRate: 0,
-        totalAds: 0,
-        activeAds: 0,
-        totalMaterials: 0,
-        totalDevices: 0,
-        totalQRScans: 0
-      };
-    } else if (selectedDevice !== 'all' && selectedAd === 'all' && deviceAnalytics) {
-      // Specific device and all ads - use device analytics
-      return {
-        totalAdImpressions: deviceAnalytics.totals?.totalAdImpressions || 0,
-        totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
-        totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
-        averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
-        totalAds: deviceAnalytics.adPerformance?.length || 0,
-        activeAds: deviceAnalytics.adPerformance?.length || 0,
-        totalMaterials: 1,
-        totalDevices: 1,
-        totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
-      };
-    } else if (selectedDevice !== 'all' && selectedAd !== 'all' && deviceAnalytics) {
-      // Specific device and specific ad - filter device analytics by ad
-      const selectedAdData = deviceAnalytics.adPerformance?.find((ad: any) => ad.adId === selectedAd);
-      if (selectedAdData) {
-        return {
-          totalAdImpressions: selectedAdData.totalImpressions || 0,
-          totalAdsPlayed: selectedAdData.totalPlays || 0,
-          totalDisplayTime: selectedAdData.totalViewTime || 0,
-          averageCompletionRate: selectedAdData.averageCompletionRate || 0,
-          totalAds: 1,
-          activeAds: 1,
-          totalMaterials: 1,
-          totalDevices: 1,
-          totalQRScans: selectedAdData.totalQRScans || 0
-        };
-      }
-      return {
-        totalAdImpressions: 0,
-        totalAdsPlayed: 0,
-        totalDisplayTime: 0,
-        averageCompletionRate: 0,
-        totalAds: 0,
-        activeAds: 0,
-        totalMaterials: 0,
-        totalDevices: 0,
-        totalQRScans: 0
-      };
-    } else {
-      return {
-        totalAdImpressions: 0,
-        totalAdsPlayed: 0,
-        totalDisplayTime: 0,
-        averageCompletionRate: 0,
-        totalAds: 0,
-        activeAds: 0,
-        totalMaterials: 0,
-        totalDevices: 0,
-        totalQRScans: 0
-      };
-    }
-  }, [selectedDevice, selectedAd, directAnalyticsData, deviceAnalytics]);
+    // ✅ Always use overallAnalyticsData (period='all', no adId filter) for summary metrics
+    // This ensures Total Ad Plays, QR Scans, Active Devices, etc. always show cumulative totals
+    const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
+      totalAdsPlayed: 0,
+      totalDisplayTime: 0,
+      averageCompletionRate: 0,
+      totalAds: 0,
+      activeAds: 0,
+      totalMaterials: 0,
+      totalDevices: 0,
+      totalQRScans: 0
+    };
+    
+    // ✅ Always return cumulative totals regardless of filters
+    // The filters only affect the Performance Over Time chart, not the summary metrics
+    return overallSummary;
+  }, [overallAnalyticsData]);
 
   // Format display time helper
   const formatDisplayTime = useCallback((seconds: number) => {
@@ -441,10 +625,10 @@ const DetailedAnalytics: React.FC = () => {
   // Daily stats for charts
   const dailyStats = useMemo(() => {
     if (selectedDevice === 'all') {
-      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      // ✅ Use directAnalyticsData first (filtered data from API), fallback to GraphQL analyticsData
+      const dailyStats = directAnalyticsData?.dailyStats || analyticsData?.getUserAnalytics?.dailyStats || [];
       return dailyStats.map((day: any) => ({
         date: day.date,
-        impressions: day.impressions || 0,
         adPlays: day.adsPlayed || 0,
         qrScans: day.qrScans || 0,
         completionRate: day.completionRate || 0
@@ -452,7 +636,6 @@ const DetailedAnalytics: React.FC = () => {
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
-        impressions: day.totalAdImpressions,
         adPlays: day.totalAdPlays,
         qrScans: day.totalQRScans,
         completionRate: day.adCompletionRate
@@ -460,7 +643,7 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return [];
     }
-  }, [selectedDevice, deviceAnalytics, analyticsData]);
+  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData]);
 
   // Top performing ads with proper QR scan calculation - ALWAYS use overall data regardless of device/date selection
   const topPerformingAds = useMemo(() => {
@@ -591,73 +774,6 @@ const DetailedAnalytics: React.FC = () => {
                 </AnimatePresence>
               </div>
 
-              {/* Device Dropdown */}
-              <div className="relative flex-1 min-w-auto device-dropdown-container">
-                <button
-                  onClick={() => {
-                    setShowDeviceDropdown(!showDeviceDropdown);
-                    setShowDatePicker(false);
-                    setShowAdDropdown(false);
-                  }}
-                  className="flex items-center justify-between w-full text-xs text-gray-700 rounded px-3 py-2 bg-white border border-gray-200 shadow-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="truncate">{selectedDeviceLabel}</span>
-                  </div>
-                  <ChevronDown size={14} className="text-gray-500" />
-                </button>
-
-                {/* Mobile Device Dropdown */}
-                <AnimatePresence>
-                  {showDeviceDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
-                    >
-                      <div className="p-2 max-h-60 overflow-y-auto">
-                        <button
-                          onClick={() => {
-                            setSelectedDevice("all");
-                            setSelectedDeviceLabel("All Devices");
-                            setShowDeviceDropdown(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm rounded ${
-                            selectedDevice === "all"
-                              ? "bg-blue-50 text-blue-700"
-                              : "text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          All Devices
-                        </button>
-                        {availableDevices.map((device) => (
-                          <button
-                            key={device.id}
-                            onClick={() => {
-                              setSelectedDevice(device.materialId);
-                              setSelectedDeviceLabel(device.name);
-                              setShowDeviceDropdown(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 text-sm rounded flex items-center justify-between ${
-                              selectedDevice === device.materialId
-                                ? "bg-blue-50 text-blue-700"
-                                : "text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <span className="truncate">{device.name}</span>
-                            <span className={`w-2 h-2 rounded-full ml-2 flex-shrink-0 ${
-                              device.isOnline ? "bg-green-500" : "bg-gray-300"
-                            }`} />
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
               {/* Ad Dropdown */}
               <div className="relative flex-1 min-w-auto ad-dropdown-container">
                 <button
@@ -714,6 +830,79 @@ const DetailedAnalytics: React.FC = () => {
                             }`}
                           >
                             {ad.title}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Device Dropdown */}
+              <div className="relative flex-1 min-w-auto device-dropdown-container">
+                <button
+                  onClick={() => {
+                    if (selectedAd === 'all') return;
+                    setShowDeviceDropdown(!showDeviceDropdown);
+                    setShowDatePicker(false);
+                    setShowAdDropdown(false);
+                  }}
+                  disabled={selectedAd === 'all'}
+                  className={`flex items-center justify-between w-full text-xs rounded px-3 py-2 bg-white border border-gray-200 shadow-sm ${
+                    selectedAd === 'all' 
+                      ? 'text-gray-400 cursor-not-allowed opacity-60' 
+                      : 'text-gray-700 cursor-pointer'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate">{selectedDeviceLabel}</span>
+                  </div>
+                  <ChevronDown size={14} className={`${selectedAd === 'all' ? 'text-gray-400' : 'text-gray-500'}`} />
+                </button>
+
+                {/* Mobile Device Dropdown */}
+                <AnimatePresence>
+                  {showDeviceDropdown && selectedAd !== 'all' && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
+                    >
+                      <div className="p-2 max-h-60 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setSelectedDevice("all");
+                            setSelectedDeviceLabel("All Devices");
+                            setShowDeviceDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm rounded ${
+                            selectedDevice === "all"
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          All Devices
+                        </button>
+                        {availableDevices.map((device) => (
+                          <button
+                            key={device.id}
+                            onClick={() => {
+                              setSelectedDevice(device.materialId);
+                              setSelectedDeviceLabel(device.name);
+                              setShowDeviceDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded flex items-center justify-between ${
+                              selectedDevice === device.materialId
+                                ? "bg-blue-50 text-blue-700"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <span className="truncate">{device.name}</span>
+                            <span className={`w-2 h-2 rounded-full ml-2 flex-shrink-0 ${
+                              device.isOnline ? "bg-green-500" : "bg-gray-300"
+                            }`} />
                           </button>
                         ))}
                       </div>
@@ -904,11 +1093,86 @@ const DetailedAnalytics: React.FC = () => {
                   </AnimatePresence>
                 </div>
 
+                {/* Ad Selection */}
+                <div className="relative w-full sm:w-44 ad-dropdown-container">
+                  <button
+                    onClick={() => setShowAdDropdown(!showAdDropdown)}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="">{selectedAdLabel}</span>
+                    </div>
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showAdDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showAdDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
+                      >
+                        <div className="p-3">
+                          {/* All Ads Option */}
+                          <button
+                            onClick={() => {
+                              setSelectedAd("all");
+                              setSelectedAdLabel("All Advertisement");
+                              setShowAdDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md ${
+                              selectedAd === "all"
+                                ? ""
+                                : "hover:bg-gray-50 text-gray-700"
+                            }`}
+                          >
+                            <div>All Advertisement</div>
+                          </button>
+
+                          {/* Individual Ads */}
+                          {availableAds.map((ad) => (
+                            <button
+                              key={ad.id}
+                              onClick={() => {
+                                setSelectedAd(ad.id);
+                                setSelectedAdLabel(ad.title);
+                                setShowAdDropdown(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md mt-1 ${
+                                selectedAd === ad.id
+                                  ? ""
+                                  : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <div>{ad.title}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {/* Device Selection */}
                 <div className="relative w-full sm:w-40 device-dropdown-container">
                   <button
-                    onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                    onClick={() => {
+                      if (selectedAd === 'all') return;
+                      setShowDeviceDropdown(!showDeviceDropdown);
+                    }}
+                    disabled={selectedAd === 'all'}
+                    className={`flex items-center justify-between w-full text-xs rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                      selectedAd === 'all' 
+                        ? 'text-gray-400 cursor-not-allowed opacity-60' 
+                        : 'text-black cursor-pointer'
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="">{selectedDeviceLabel}</span>
@@ -917,12 +1181,12 @@ const DetailedAnalytics: React.FC = () => {
                       size={16}
                       className={`transform transition-transform duration-200 ${
                         showDeviceDropdown ? "rotate-180" : "rotate-0"
-                      }`}
+                      } ${selectedAd === 'all' ? 'text-gray-400' : ''}`}
                     />
                   </button>
 
                   <AnimatePresence>
-                    {showDeviceDropdown && (
+                    {showDeviceDropdown && selectedAd !== 'all' && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -992,73 +1256,6 @@ const DetailedAnalytics: React.FC = () => {
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* Ad Selection */}
-                <div className="relative w-full sm:w-44 ad-dropdown-container">
-                  <button
-                    onClick={() => setShowAdDropdown(!showAdDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span className="">{selectedAdLabel}</span>
-                    </div>
-                    <ChevronDown
-                      size={16}
-                      className={`transform transition-transform duration-200 ${
-                        showAdDropdown ? "rotate-180" : "rotate-0"
-                      }`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {showAdDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
-                      >
-                        <div className="p-3">
-                          {/* All Ads Option */}
-                          <button
-                            onClick={() => {
-                              setSelectedAd("all");
-                              setSelectedAdLabel("All Advertisement");
-                              setShowAdDropdown(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md ${
-                              selectedAd === "all"
-                                ? ""
-                                : "hover:bg-gray-50 text-gray-700"
-                            }`}
-                          >
-                            <div>All Advertisement</div>
-                          </button>
-
-                          {/* Individual Ads */}
-                          {availableAds.map((ad) => (
-                            <button
-                              key={ad.id}
-                              onClick={() => {
-                                setSelectedAd(ad.id);
-                                setSelectedAdLabel(ad.title);
-                                setShowAdDropdown(false);
-                              }}
-                              className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md mt-1 ${
-                                selectedAd === ad.id
-                                  ? ""
-                                  : "hover:bg-gray-50 text-gray-700"
-                              }`}
-                            >
-                              <div>{ad.title}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
               </div>
             </div>
 
@@ -1099,8 +1296,8 @@ const DetailedAnalytics: React.FC = () => {
 
         {/* Main Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
-          {/* Loading State */}
-          {analyticsLoading && (
+          {/* Loading State - Only show on initial load */}
+          {analyticsLoading && isInitialLoad && (
             <div className="flex items-center justify-center mb-16">
               <div className="text-center">
                 <div className="flex items-center justify-center space-x-3">
@@ -1113,7 +1310,7 @@ const DetailedAnalytics: React.FC = () => {
           )}
 
           {/* Empty State */}
-          {!analyticsLoading && (!analyticsData?.getUserAnalytics && !directAnalyticsData) && (
+          {!analyticsLoading && !isInitialLoad && (!analyticsData?.getUserAnalytics && !directAnalyticsData) && (
             <div className="text-center mb-16">
               <div>
                 <div className="flex items-center justify-center space-x-3 mb-2">
@@ -1139,7 +1336,7 @@ const DetailedAnalytics: React.FC = () => {
                   <div>
                     <p className="text-sm text-black/70">Total Ad Plays</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading ? (
+                      {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
@@ -1159,7 +1356,7 @@ const DetailedAnalytics: React.FC = () => {
                   <div>
                     <p className="text-sm text-black/70">QR Scans</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading ? (
+                      {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalQRScans || 0).toLocaleString()
@@ -1178,7 +1375,7 @@ const DetailedAnalytics: React.FC = () => {
                   <div>
                     <p className="text-sm text-black/70">Active Devices</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading ? (
+                      {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         (analyticsSummary.totalMaterials || 0).toLocaleString()
@@ -1197,10 +1394,11 @@ const DetailedAnalytics: React.FC = () => {
                   <div>
                     <p className="text-sm text-black/70">Online Devices</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading ? (
+                      {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
-                        availableDevices.filter((device) => device.isOnline).length
+                        // ✅ Use allTimeDevices for summary metric (not affected by filters)
+                        allTimeDevices.filter((device) => device.isOnline).length
                       )}
                     </div>
                   </div>
@@ -1216,7 +1414,7 @@ const DetailedAnalytics: React.FC = () => {
                   <div>
                     <p className="text-sm text-black/70">Completion Rate</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading ? (
+                      {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
                         `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
@@ -1334,16 +1532,6 @@ const DetailedAnalytics: React.FC = () => {
                           </p>
                           <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
                             {selectedDevice !== 'all' ? 'Plays' : 'Devices'}
-                          </p>
-                        </div>
-                        
-                        {/* Views */}
-                        <div className="w-20">
-                          <p className="text-base font-bold text-black/70">
-                            {(ad.totalAdImpressions || 0).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
-                            Views
                           </p>
                         </div>
 

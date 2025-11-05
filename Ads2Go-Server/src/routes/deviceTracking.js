@@ -552,6 +552,18 @@ router.post('/ad-playback', async (req, res) => {
       deviceTracking.cleanupAdPlaybacks();
       
       await deviceTracking.save();
+      
+      // ✨ Clear analytics cache for this user so real-time updates are visible
+      if (userId) {
+        try {
+          const UserAnalyticsService = require('../services/userAnalyticsService');
+          UserAnalyticsService.clearUserCache(userId);
+          console.log(`🔄 [AdPlayback] Cleared analytics cache for user ${userId} to show real-time updates`);
+        } catch (error) {
+          console.warn('⚠️ [AdPlayback] Failed to clear analytics cache:', error.message);
+          // Don't fail the request if cache clearing fails
+        }
+      }
     } else {
       // Slave slot - just acknowledge without storing
       console.log(`💤 [AdPlayback] Slave slot - data not stored`);

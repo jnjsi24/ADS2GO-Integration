@@ -29,6 +29,62 @@ import { AdminLoader } from "../../components/ProtectedRoute";
 // ✨ OPTIMIZATION: Lazy load NotificationDashboard to speed up initial page load
 const NotificationDashboard = React.lazy(() => import('./tabs/dashboard/NotificationDashboard'));
 
+// ✨ Client-side reverse geocoding helper with caching
+const geocodingCache = new Map<string, string>();
+const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> => {
+  // Round coordinates to 4 decimal places for caching (about 11m accuracy)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  
+  // Check cache first
+  if (geocodingCache.has(cacheKey)) {
+    return geocodingCache.get(cacheKey)!;
+  }
+  
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Ads2Go-AdminClient/1.0' // Required by Nominatim
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address from most specific to least specific
+      if (addr.house_number) addressParts.push(addr.house_number);
+      if (addr.road) addressParts.push(addr.road);
+      if (addr.neighbourhood || addr.suburb) addressParts.push(addr.neighbourhood || addr.suburb);
+      if (addr.city || addr.town || addr.village) addressParts.push(addr.city || addr.town || addr.village);
+      if (addr.state) addressParts.push(addr.state);
+      if (addr.country) addressParts.push(addr.country);
+      
+      const address = addressParts.join(', ') || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      geocodingCache.set(cacheKey, address); // Cache the result
+      return address;
+    }
+    
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  } catch (error) {
+    console.warn('Client-side geocoding failed:', error);
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  }
+};
+
 const AdminAdsControl: React.FC = () => {
   // Component loaded
   
@@ -205,8 +261,30 @@ const AdminAdsControl: React.FC = () => {
           if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
             console.log(`✅ Found ${complianceData.data.screens.length} screens with real-time status`);
             
+            // ✨ Geocode addresses on client-side if missing OR is just coordinates
+            const screensWithAddresses = await Promise.all(
+              complianceData.data.screens.map(async (screen: any) => {
+                // If address is missing OR is just coordinates (starts with "Location:"), geocode on client
+                const needsGeocoding = screen.currentLocation?.lat && screen.currentLocation?.lng && 
+                  (!screen.currentLocation?.address || screen.currentLocation.address.startsWith('Location:'));
+                
+                if (needsGeocoding) {
+                  try {
+                    const address = await reverseGeocodeClient(screen.currentLocation.lat, screen.currentLocation.lng);
+                    screen.currentLocation = {
+                      ...screen.currentLocation,
+                      address: address
+                    };
+                  } catch (error) {
+                    console.warn(`Failed to geocode ${screen.currentLocation.lat}, ${screen.currentLocation.lng}:`, error);
+                  }
+                }
+                return screen;
+              })
+            );
+            
             // Process the screens data to create consolidated entries (one per device)
-            const processedScreens = complianceData.data.screens.map((screen: any) => {
+            const processedScreens = screensWithAddresses.map((screen: any) => {
               // Create consolidated entry with slot status information
               if (screen.slotStatus && (screen.slotStatus.slot1 || screen.slotStatus.slot2)) {
                 // Determine overall online status (at least one slot online)

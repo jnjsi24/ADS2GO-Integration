@@ -430,7 +430,7 @@ const AdDetailsPage: React.FC = () => {
           setMaterialSlots(slotInfoArray);
           
           // Map ALL relevant screens to DeviceLocation (don't filter by GPS for status display)
-          const allLocations: DeviceLocation[] = relevantScreens.map((screen: any) => ({
+          const newLocationsFromPolling: DeviceLocation[] = relevantScreens.map((screen: any) => ({
             deviceId: screen.materialId,
             materialId: screen.materialId,
             lat: screen.currentLocation?.lat || 0,
@@ -440,24 +440,137 @@ const AdDetailsPage: React.FC = () => {
             isOnline: screen.isOnline,
             lastSeen: screen.lastSeen,
             totalDistance: screen.totalDistance || 0,
-            currentHours: screen.totalHours || 0
+            currentHours: screen.totalHours || 0,
+            source: 'polling' as const // Track that this came from polling
           }));
           
-          // ✅ For MAP display only: filter out devices with invalid GPS coordinates
-          const locationsWithValidGPS: DeviceLocation[] = allLocations.filter((loc) => {
-            const hasValidLocation = loc.lat !== 0 && loc.lng !== 0;
-            if (!hasValidLocation) {
-              console.log(`⚠️ [AdDetailsPage] ${loc.materialId} has no valid GPS - will show status but not on map`);
-            }
-            return hasValidLocation;
+          // ✅ SMART MERGE: Merge polling data with existing WebSocket data
+          // Prefer WebSocket updates over polling if they're recent (within 5 seconds)
+          setAllDeviceLocations(prevLocations => {
+            const mergedLocations = new Map<string, DeviceLocation>();
+            
+            // First, add all existing locations (preserve WebSocket updates)
+            prevLocations.forEach(loc => {
+              mergedLocations.set(loc.deviceId, loc);
+            });
+            
+            // Then, merge new polling data (only update if newer or if device doesn't exist)
+            newLocationsFromPolling.forEach(newLoc => {
+              const existingLoc = mergedLocations.get(newLoc.deviceId);
+              
+              if (!existingLoc) {
+                // New device - add it
+                mergedLocations.set(newLoc.deviceId, newLoc);
+              } else {
+                // Existing device - check timestamps
+                const existingTimestamp = new Date(existingLoc.timestamp || existingLoc.lastSeen).getTime();
+                const newTimestamp = new Date(newLoc.timestamp || newLoc.lastSeen).getTime();
+                const existingSource = (existingLoc as any).source || 'unknown';
+                const isExistingFromWebSocket = existingSource === 'websocket';
+                
+                // ✅ PREFER WEBSOCKET: If existing is from WebSocket and polling is recent, ignore polling
+                if (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) {
+                  // Keep existing WebSocket data (it's more recent)
+                  return;
+                }
+                
+                // ✅ PREFER NEWER: If polling data is newer, use it
+                if (newTimestamp > existingTimestamp) {
+                  // Merge: keep WebSocket GPS if it exists and is recent, otherwise use polling
+                  const mergedLoc: DeviceLocation = {
+                    ...existingLoc,
+                    // Keep existing GPS if it's from WebSocket and recent, otherwise use polling
+                    lat: (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) 
+                      ? existingLoc.lat 
+                      : newLoc.lat,
+                    lng: (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) 
+                      ? existingLoc.lng 
+                      : newLoc.lng,
+                    // Always update other fields from polling
+                    address: newLoc.address || existingLoc.address,
+                    timestamp: newLoc.timestamp || existingLoc.timestamp,
+                    isOnline: newLoc.isOnline !== undefined ? newLoc.isOnline : existingLoc.isOnline,
+                    lastSeen: newLoc.lastSeen || existingLoc.lastSeen,
+                    totalDistance: newLoc.totalDistance || existingLoc.totalDistance,
+                    currentHours: newLoc.currentHours || existingLoc.currentHours,
+                    source: (existingLoc as any).source || 'polling' // Keep original source
+                  };
+                  mergedLocations.set(newLoc.deviceId, mergedLoc);
+                } else {
+                  // Existing data is newer - keep it
+                  return;
+                }
+              }
+            });
+            
+            return Array.from(mergedLocations.values());
           });
           
-          console.log(`📊 [AdDetailsPage] ${allLocations.length} total devices (${locationsWithValidGPS.length} with valid GPS for map)`);
+          // ✅ SMART MERGE for map locations (filtered GPS)
+          setDeviceLocations(prevLocations => {
+            const filteredPollingLocations = newLocationsFromPolling.filter((loc) => {
+              const hasValidLocation = loc.lat !== 0 && loc.lng !== 0;
+              return hasValidLocation;
+            });
+            
+            const mergedLocations = new Map<string, DeviceLocation>();
+            
+            // First, add all existing map locations (preserve WebSocket GPS updates)
+            prevLocations.forEach(loc => {
+              mergedLocations.set(loc.deviceId, loc);
+            });
+            
+            // Then, merge new polling data (only update if newer or if device doesn't exist)
+            filteredPollingLocations.forEach(newLoc => {
+              const existingLoc = mergedLocations.get(newLoc.deviceId);
+              
+              if (!existingLoc) {
+                // New device with valid GPS - add it
+                mergedLocations.set(newLoc.deviceId, newLoc);
+              } else {
+                // Existing device - check timestamps
+                const existingTimestamp = new Date(existingLoc.timestamp || existingLoc.lastSeen).getTime();
+                const newTimestamp = new Date(newLoc.timestamp || newLoc.lastSeen).getTime();
+                const existingSource = (existingLoc as any).source || 'unknown';
+                const isExistingFromWebSocket = existingSource === 'websocket';
+                
+                // ✅ PREFER WEBSOCKET: If existing is from WebSocket and polling is recent, ignore polling GPS
+                if (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) {
+                  // Keep existing WebSocket GPS (it's more recent)
+                  return;
+                }
+                
+                // ✅ PREFER NEWER: If polling data is newer, use it
+                if (newTimestamp > existingTimestamp) {
+                  // Merge: keep WebSocket GPS if it exists and is recent, otherwise use polling
+                  const mergedLoc: DeviceLocation = {
+                    ...existingLoc,
+                    // Keep existing GPS if it's from WebSocket and recent, otherwise use polling
+                    lat: (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) 
+                      ? existingLoc.lat 
+                      : newLoc.lat,
+                    lng: (isExistingFromWebSocket && newTimestamp - existingTimestamp < 5000) 
+                      ? existingLoc.lng 
+                      : newLoc.lng,
+                    // Always update other fields from polling
+                    address: newLoc.address || existingLoc.address,
+                    timestamp: newLoc.timestamp || existingLoc.timestamp,
+                    isOnline: newLoc.isOnline !== undefined ? newLoc.isOnline : existingLoc.isOnline,
+                    lastSeen: newLoc.lastSeen || existingLoc.lastSeen,
+                    source: (existingLoc as any).source || 'polling' // Keep original source
+                  };
+                  mergedLocations.set(newLoc.deviceId, mergedLoc);
+                } else {
+                  // Existing data is newer - keep it
+                  return;
+                }
+              }
+            });
+            
+            return Array.from(mergedLocations.values());
+          });
           
-          // Use ALL locations for status display (Details tab)
-          setAllDeviceLocations(allLocations);
-          // Use filtered locations for map display only
-          setDeviceLocations(locationsWithValidGPS);
+          console.log(`📊 [AdDetailsPage] Merged ${newLocationsFromPolling.length} devices from polling with existing data`);
         } else {
           console.error('❌ [AdDetailsPage] Invalid compliance data format:', complianceData);
         }
@@ -598,18 +711,33 @@ const AdDetailsPage: React.FC = () => {
 
   // Helper function to update device status in real-time
   const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
-    setDeviceLocations(prevLocations => {
+    // Find matching materialId for this deviceId
+    const matchingMaterial = materialSlots.find(m => 
+      m.slots.some(s => s.deviceId === deviceId) || m.masterDeviceId === deviceId
+    );
+    const materialId = matchingMaterial?.materialId;
+    
+    const updateStatus = (prevLocations: DeviceLocation[]) => {
       return prevLocations.map(location => {
-        if (location.deviceId === deviceId) {
+        // Match by deviceId (from WebSocket) or materialId (from polling)
+        const isMatchingDevice = location.deviceId === deviceId || 
+                                 location.materialId === deviceId ||
+                                 (materialId && location.materialId === materialId);
+        
+        if (isMatchingDevice) {
           return {
             ...location,
             isOnline,
-            lastSeen: lastSeen || location.lastSeen
+            lastSeen: lastSeen || location.lastSeen,
+            source: (location as any).source || 'websocket' // Preserve source or mark as WebSocket
           };
         }
         return location;
       });
-    });
+    };
+    
+    setDeviceLocations(updateStatus);
+    setAllDeviceLocations(updateStatus);
 
     // ✅ MASTER DEVICE FILTER: Only create notifications for master devices
     if (!isMasterDevice(deviceId)) {
@@ -633,7 +761,7 @@ const AdDetailsPage: React.FC = () => {
 
     setDeviceNotifications(prev => [notification, ...prev.slice(0, 49)]); // Keep last 50 notifications
     setLastUpdate(new Date());
-  }, [deviceLocations, isMasterDevice]);
+  }, [deviceLocations, isMasterDevice, materialSlots]);
 
   // Helper function to update device location in real-time
   const updateDeviceLocation = useCallback((deviceId: string, locationData: any) => {
@@ -641,22 +769,52 @@ const AdDetailsPage: React.FC = () => {
       return;
     }
     
-    setDeviceLocations(prevLocations => {
+    // ✅ TIMESTAMP VALIDATION: Only accept newer locations
+    const newTimestamp = new Date(locationData.timestamp || new Date()).getTime();
+    
+    // Find matching materialId for this deviceId (WebSocket sends deviceId, but we store by materialId)
+    const matchingMaterial = materialSlots.find(m => 
+      m.slots.some(s => s.deviceId === deviceId) || m.masterDeviceId === deviceId
+    );
+    const materialId = matchingMaterial?.materialId;
+    
+    // Update both allDeviceLocations and deviceLocations
+    const updateLocation = (prevLocations: DeviceLocation[]) => {
       return prevLocations.map(location => {
-        if (location.deviceId === deviceId) {
+        // Match by deviceId (from WebSocket) or materialId (from polling)
+        const isMatchingDevice = location.deviceId === deviceId || 
+                                 location.materialId === deviceId ||
+                                 (materialId && location.materialId === materialId);
+        
+        if (isMatchingDevice) {
+          const currentTimestamp = location.timestamp 
+            ? new Date(location.timestamp).getTime() 
+            : 0;
+          
+          // Only update if new timestamp is newer
+          if (newTimestamp <= currentTimestamp) {
+            return location; // Keep existing location (it's newer)
+          }
+          
           return {
             ...location,
             lat: locationData.lat,
             lng: locationData.lng,
             address: locationData.address || location.address,
-            timestamp: locationData.timestamp || new Date().toISOString()
+            timestamp: locationData.timestamp || new Date().toISOString(),
+            isOnline: locationData.isOnline !== undefined ? locationData.isOnline : location.isOnline,
+            lastSeen: locationData.timestamp || location.lastSeen,
+            source: 'websocket' as const // Mark as WebSocket update
           };
         }
         return location;
       });
-    });
+    };
+    
+    setDeviceLocations(updateLocation);
+    setAllDeviceLocations(updateLocation);
     setLastUpdate(new Date());
-  }, []);
+  }, [materialSlots]);
 
   // Helper function to handle QR scan updates
   const handleQRScanUpdate = useCallback((update: any) => {
