@@ -41,7 +41,7 @@ const AdminSidebar: React.FC = () => {
     const handleResize = () => {
       const width = window.innerWidth;
       setIsMobile(width < 1024); // mobile breakpoint (using lg: breakpoint)
-      setIsCollapsed(width >= 1024 && width < 1280); // tablet breakpoint
+      setIsCollapsed(false); // Don't show collapsed state - use menu icon instead
       if (width >= 1024) {
         setIsMobileMenuOpen(false); // close mobile menu on larger screens
       }
@@ -262,7 +262,7 @@ const AdminSidebar: React.FC = () => {
       <motion.div
         className={`mobile-menu h-screen fixed flex flex-col justify-between bg-white shadow-lg transition-all duration-500 ease-in-out ${
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+        } ${!isMobileMenuOpen && isMobile ? 'pointer-events-none' : ''}`}
         style={{ 
           width: isMobile ? '240px' : `${sidebarWidth}px`,
           willChange: 'auto',
@@ -270,6 +270,7 @@ const AdminSidebar: React.FC = () => {
           top: 0,
           left: 0,
           zIndex: 1000,
+          overflow: 'hidden',
         }}
         onMouseEnter={() => !isMobile && isCollapsed && setIsHovered(true)}
         onMouseLeave={() => !isMobile && isCollapsed && setIsHovered(false)}

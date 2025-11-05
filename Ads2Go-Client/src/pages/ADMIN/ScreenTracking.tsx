@@ -140,6 +140,17 @@ const ScreenTracking: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date()); // Current time for display
   const [routeRefreshTrigger, setRouteRefreshTrigger] = useState(0); // Trigger to force RouteMapped refresh
   const isInitialHistoricalLoadRef = useRef(true); // Track if this is the first historical load
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
@@ -863,15 +874,15 @@ const ScreenTracking: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 ml-56">
+    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-5' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 transition-all duration-300`}>
       {/* Header */}
       <div className="bg-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <div className="flex justify-between items-center py-4">
+          <div className={`flex ${isMobile ? 'flex-col gap-4' : 'justify-between items-center'} py-4`}>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Device Tracking Dashboard</h1>
+              <h1 className={`${isMobile ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>Device Tracking Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center space-x-2'}`}>
               <div className="flex items-center space-x-2">
                 <div className={`w-3 h-3 rounded-full ${
                   connectionStatus === 'connected' ? 'bg-green-500' : 
@@ -902,7 +913,7 @@ const ScreenTracking: React.FC = () => {
                     return thirtyDaysAgo.toISOString().split('T')[0];
                   })()}
                   max={new Date().toISOString().split('T')[0]}
-                  className="shadow-md rounded px-3 py-2"
+                  className={`shadow-md rounded px-3 py-2 ${isMobile ? 'w-full' : ''}`}
                   title={(() => {
                     if (selectedScreen && selectedScreen.materialId && materials.length > 0) {
                       const material = materials.find(m => m.materialId === selectedScreen.materialId);
@@ -922,10 +933,10 @@ const ScreenTracking: React.FC = () => {
               <button
                 onClick={fetchData}
                 disabled={refreshing}
-                className="flex items-center space-x-2 bg-[#3674B5] text-white px-4 py-2 rounded hover:shadow-md disabled:opacity-50"
+                className={`flex items-center ${isMobile ? 'justify-center w-full' : 'space-x-2'} bg-[#3674B5] text-white px-4 py-2 rounded hover:shadow-md disabled:opacity-50`}
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
+                {!isMobile && <span>Refresh</span>}
               </button>
             </div>
           </div>
@@ -934,7 +945,7 @@ const ScreenTracking: React.FC = () => {
 
       {/* Tab Navigation */}
       <div className="max-w-7xl bg-gray-100 mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex space-x-3">
+        <div className={`flex ${isMobile ? 'space-x-2 overflow-x-auto' : 'space-x-3'}`}>
           <button
             onClick={() => setActiveTab('live')}
             className={`relative py-4 px-1 font-medium text-sm transition-colors group ${
@@ -977,51 +988,51 @@ const ScreenTracking: React.FC = () => {
       {/* Compliance Summary */}
       {complianceReport && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-            <div className="bg-white rounded-lg shadow p-6">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'} gap-2`}>
+            <div className={`bg-white rounded-lg shadow ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-6 h-6 text-blue-600" />
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-blue-100 rounded-lg`}>
+                  <Users className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-blue-600`} />
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Screens</p>
-                  <p className="text-2xl font-bold text-gray-900">{screens?.length || 0}</p>
+                <div className={`${isMobile ? 'ml-3' : 'ml-4'}`}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Total Screens</p>
+                  <p className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>{screens?.length || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className={`bg-white rounded-lg shadow ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Activity className="w-6 h-6 text-green-600" />
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-green-100 rounded-lg`}>
+                  <Activity className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-600`} />
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Online</p>
-                  <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isOnline).length || 0}</p>
+                <div className={`${isMobile ? 'ml-3' : 'ml-4'}`}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Online</p>
+                  <p className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>{screens?.filter(s => s.isOnline).length || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className={`bg-white rounded-lg shadow ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-green-100 rounded-lg`}>
+                  <CheckCircle className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-green-600`} />
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
-                  <p className="text-2xl font-bold text-gray-900">{screens?.filter(s => s.isCompliant).length || 0}</p>
+                <div className={`${isMobile ? 'ml-3' : 'ml-4'}`}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Compliant (8h)</p>
+                  <p className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>{screens?.filter(s => s.isCompliant).length || 0}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className={`bg-white rounded-lg shadow ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-yellow-600" />
+                <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-yellow-100 rounded-lg`}>
+                  <Clock className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'} text-yellow-600`} />
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Hours</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                <div className={`${isMobile ? 'ml-3' : 'ml-4'}`}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Avg Hours</p>
+                  <p className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>
                     {screens && screens.length > 0 
                       ? (screens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / screens.length).toFixed(1)
                       : '0.0'
@@ -1036,17 +1047,17 @@ const ScreenTracking: React.FC = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-3'} gap-3`}>
           {/* Map */}
-          <div className="lg:col-span-2">
+          <div className={`${isMobile ? '' : 'lg:col-span-2'}`}>
             <div className="bg-white rounded-lg shadow">
-              <div className="p-4 border-b">
-                <div className="flex items-center justify-between">
+              <div className={`${isMobile ? 'p-3' : 'p-4'} border-b`}>
+                <div className={`flex ${isMobile ? 'flex-col gap-3' : 'items-center justify-between'}`}>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
+                    <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>
                       {activeTab === 'historical' ? 'Historical Routes' : 'Live Map'}
                     </h2>
-                    <p className="text-sm text-gray-600">
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>
                       {activeTab === 'historical' 
                         ? `Historical routes for ${selectedDate}` 
                         : 'Real-time tablet locations and routes'
@@ -1054,7 +1065,7 @@ const ScreenTracking: React.FC = () => {
                     </p>
                   </div>
                   {activeTab === 'historical' && (
-                    <div className="flex items-center space-x-4">
+                    <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center space-x-4'}`}>
                       <button
                         onClick={() => {
                           if (selectedScreen) {
@@ -1065,20 +1076,20 @@ const ScreenTracking: React.FC = () => {
                           }
                         }}
                         disabled={loadingHistorical || !selectedScreen}
-                        className="flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+                        className={`flex items-center ${isMobile ? 'justify-center w-full' : 'space-x-2'} px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 ${isMobile ? 'text-xs' : 'text-sm'}`}
                       >
                         <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
                       </button>
                       
-                      <div className="text-xs text-gray-500">
+                      <div className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500`}>
                         {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="h-96 relative">
+              <div className={`${isMobile ? 'h-64' : 'h-96'} relative`}>
                 {!showMap && (
                   <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
                     <div className="text-center">
@@ -1546,16 +1557,16 @@ const ScreenTracking: React.FC = () => {
             </div>
           </div>
                        {/* Screen List */}
-             <div className="lg:col-span-1">
+             <div className={`${isMobile ? '' : 'lg:col-span-1'}`}>
                <div className="bg-white rounded-lg shadow">
-                 <div className="p-4 border-b">
-                   <div className="flex items-start justify-between">
+                 <div className={`${isMobile ? 'p-3' : 'p-4'} border-b`}>
+                   <div className={`flex ${isMobile ? 'flex-col gap-2' : 'items-start justify-between'}`}>
                      <div>
-                       <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
-                       <p className="text-sm text-gray-600">Click to view details</p>
+                       <h2 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>Screens</h2>
+                       <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>Click to view details</p>
                      </div>
-                     <div className="text-right">
-                       <p className="text-sm font-medium text-gray-900">
+                     <div className={`${isMobile ? 'text-left' : 'text-right'}`}>
+                       <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-900`}>
                          {currentTime.toLocaleDateString('en-US', { 
                            month: 'short', 
                            day: 'numeric', 
@@ -1572,19 +1583,19 @@ const ScreenTracking: React.FC = () => {
                      </div>
                    </div>
                  </div>
-                 <div className="max-h-96 overflow-y-auto">
+                 <div className={`${isMobile ? 'max-h-64' : 'max-h-96'} overflow-y-auto`}>
                    {screens?.map((screen) => (
                      <div
                        key={screen.deviceId}
                        onClick={() => handleScreenSelect(screen)}
-                       className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
+                       className={`${isMobile ? 'p-3' : 'p-4'} border-b cursor-pointer hover:bg-gray-50 transition-colors ${
                          selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
                        }`}
                      >
-                       <div className="flex items-center justify-between mb-2">
+                       <div className={`flex items-center ${isMobile ? 'flex-col gap-2' : 'justify-between'} mb-2`}>
                          <div className="flex items-center space-x-2">
-                           <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
+                           <Car className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} text-gray-500`} />
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium truncate`}>{screen.displayId || screen.materialId}</span>
                          </div>
                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline)}`}>
                           {getStatusIcon(screen.isOnline)}
@@ -1594,7 +1605,7 @@ const ScreenTracking: React.FC = () => {
                         </div>
                        </div>
                        
-                       <div className="space-y-1 text-sm text-gray-600">
+                       <div className={`space-y-1 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>
                          <div className="flex justify-between">
                            <span>Hours Today:</span>
                            <span className="font-medium">{formatTime(screen.currentHours)}</span>
@@ -1633,14 +1644,14 @@ const ScreenTracking: React.FC = () => {
 
                {/* Selected Screen Details */}
                {selectedScreen && (
-                 <div className="mt-6 bg-white rounded-lg shadow">
-                   <div className="p-4 border-b">
-                     <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
+                 <div className={`${isMobile ? 'mt-3' : 'mt-6'} bg-white rounded-lg shadow`}>
+                   <div className={`${isMobile ? 'p-3' : 'p-4'} border-b`}>
+                     <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold text-gray-900`}>Screen Details</h3>
                    </div>
-                   <div className="p-4 space-y-4">
+                   <div className={`${isMobile ? 'p-3' : 'p-4'} space-y-4`}>
                      <div>
-                       <h4 className="font-medium text-gray-900">Device Info</h4>
-                       <div className="mt-2 space-y-1 text-sm text-gray-600">
+                       <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-medium text-gray-900`}>Device Info</h4>
+                       <div className={`mt-2 space-y-1 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>
                          <p>Device ID: {selectedScreen.materialId}</p>
                          {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
                          
@@ -1648,7 +1659,7 @@ const ScreenTracking: React.FC = () => {
                          <div className="mt-3 space-y-2">
                            <div>
                              <div className="flex items-center gap-2 mb-1">
-                               <label className="text-sm font-medium text-gray-600">Slot 1 Material ID</label>
+                               <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Slot 1 Material ID</label>
                                {shouldShowAnalyticsBadge(selectedScreen, selectedScreen.slot1DeviceId) && (
                                  <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
                                    <BarChart3 className="w-3 h-3" />
@@ -1656,7 +1667,7 @@ const ScreenTracking: React.FC = () => {
                                  </div>
                                )}
                              </div>
-                             <p className="text-sm font-medium text-gray-900">{shortenDeviceId(selectedScreen.slot1DeviceId)}</p>
+                             <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-900`}>{shortenDeviceId(selectedScreen.slot1DeviceId)}</p>
                              <div className="flex items-center gap-2 mt-1">
                                <div className={`w-2 h-2 rounded-full ${(selectedScreen.slot1Status || '').toLowerCase() === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                <p className="text-xs font-medium" style={{ color: (selectedScreen.slot1Status || '').toLowerCase() === 'online' ? '#10b981' : '#ef4444' }}>
@@ -1667,7 +1678,7 @@ const ScreenTracking: React.FC = () => {
                            
                            <div>
                              <div className="flex items-center gap-2 mb-1">
-                               <label className="text-sm font-medium text-gray-600">Slot 2 Material ID</label>
+                               <label className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-600`}>Slot 2 Material ID</label>
                                {shouldShowAnalyticsBadge(selectedScreen, selectedScreen.slot2DeviceId) && (
                                  <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
                                    <BarChart3 className="w-3 h-3" />
@@ -1675,7 +1686,7 @@ const ScreenTracking: React.FC = () => {
                                  </div>
                                )}
                              </div>
-                             <p className="text-sm font-medium text-gray-900">{shortenDeviceId(selectedScreen.slot2DeviceId)}</p>
+                             <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-900`}>{shortenDeviceId(selectedScreen.slot2DeviceId)}</p>
                              <div className="flex items-center gap-2 mt-1">
                                <div className={`w-2 h-2 rounded-full ${(selectedScreen.slot2Status || '').toLowerCase() === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                <p className="text-xs font-medium" style={{ color: (selectedScreen.slot2Status || '').toLowerCase() === 'online' ? '#10b981' : '#ef4444' }}>
@@ -1688,19 +1699,19 @@ const ScreenTracking: React.FC = () => {
                      </div>
 
                      <div>
-                       <h4 className="font-medium text-gray-900">Today's Progress</h4>
+                       <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-medium text-gray-900`}>Today's Progress</h4>
                        <div className="mt-2 space-y-2">
                          <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Online:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>Hours Online:</span>
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium`}>{formatTime(selectedScreen.currentHours)}</span>
                          </div>
                          <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Remaining:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>Hours Remaining:</span>
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium`}>{formatTime(selectedScreen.hoursRemaining)}</span>
                          </div>
                          <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Distance Traveled:</span>
-                           <span className="font-medium">
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>Distance Traveled:</span>
+                           <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium`}>
                              {formatDistance(selectedScreen.totalDistanceToday)}
                            </span>
                          </div>
@@ -1710,8 +1721,8 @@ const ScreenTracking: React.FC = () => {
 
                      {selectedScreen.currentLocation && (
                        <div>
-                         <h4 className="font-medium text-gray-900">Current Location</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
+                         <h4 className={`${isMobile ? 'text-sm' : 'text-base'} font-medium text-gray-900`}>Current Location</h4>
+                         <div className={`mt-2 space-y-1 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-600`}>
                            <p>Address: {selectedScreen.currentLocation.address}</p>
                            <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
                            <p>Heading: {selectedScreen.currentLocation.heading}°</p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X, Mail, Upload, Loader, Send, Image as ImageIcon } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -35,6 +35,10 @@ const NewsletterManagement: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortBy, setSortBy] = useState('Newest First');
+  
+  // Refs for dropdown click-outside handling
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
   
   // Bulk actions state
   const [selectedSubscribers, setSelectedSubscribers] = useState<string[]>([]);
@@ -96,13 +100,26 @@ const NewsletterManagement: React.FC = () => {
   // Handle resize
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      setItemsPerPage(mobile ? 5 : 9);
+      setIsMobile(window.innerWidth < 768);
     };
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Click outside handler for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+        setShowSortDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -632,7 +649,7 @@ const NewsletterManagement: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10">
+      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6`}>
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-[#3674B5] mb-2">Newsletter Management</h1>
@@ -696,28 +713,26 @@ const NewsletterManagement: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-        isMobile ? 'px-10 pl-28' : 'ml-56'
-      }`}
+      className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6 flex flex-col transition-all duration-300`}
     >
       <div className="max-w-7xl mx-auto w-full">
         {/* Mobile Header */}
         {isMobile && (
           <div className="flex items-center mb-4">
-            <h1 className="text-xl pt-7 font-bold text-gray-800">
+            <h1 className="text-2xl font-bold text-gray-800">
               Newsletter Management
             </h1>
           </div>
         )}
 
         {/* Header with Title and Filters */}
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+        <div className={`flex ${isMobile ? 'flex-col gap-4' : 'flex-row items-center justify-between pt-4'} mb-6`}>
           {!isMobile && (
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 flex-shrink-0">
               Newsletter Management
             </h1>
           )}
-            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-1'}`}>
+          <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'flex-row gap-2'}`}>
               <input
                 type="text"
                 className={`text-xs text-black rounded-md pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
@@ -725,7 +740,72 @@ const NewsletterManagement: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
               />
-              <div className={`relative ${isMobile ? 'w-full' : 'w-44'}`}>
+            {isMobile ? (
+              <div className="flex flex-row gap-2 w-full">
+                <div className="relative flex-1" ref={filterDropdownRef}>
+                  <button
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className={`flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
+                  >
+                    <span className="truncate">{selectedFilter}</span>
+                    <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                  </button>
+                  <AnimatePresence>
+                    {showFilterDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                      >
+                        {filterOptions.map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => handleFilterChange(filter)}
+                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {filter}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <div className="relative flex-1" ref={sortDropdownRef}>
+                  <button
+                    onClick={() => setShowSortDropdown(!showSortDropdown)}
+                    className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
+                  >
+                    <span className="truncate">{sortBy}</span>
+                    <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                  </button>
+                  <AnimatePresence>
+                    {showSortDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {sortByOptions.map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => handleSortChange(option)}
+                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className={`relative w-44`} ref={filterDropdownRef}>
                 <button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                   className={`flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
@@ -755,7 +835,7 @@ const NewsletterManagement: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-              <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
+                <div className={`relative w-48`} ref={sortDropdownRef}>
                 <button
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
                   className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
@@ -785,6 +865,8 @@ const NewsletterManagement: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
+              </>
+            )}
             </div>
           </div>
 
@@ -833,8 +915,7 @@ const NewsletterManagement: React.FC = () => {
             )}
           </div>
 
-          {!isMobile && (
-            <div className="grid md:grid-cols-5 gap-4 mb-8">
+          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-4 mb-8`}>
               {/* Total Subscribers */}
               <div className="bg-blue-50 shadow-md rounded-lg p-6">
                 <div className="flex items-center">
@@ -890,7 +971,6 @@ const NewsletterManagement: React.FC = () => {
                 </div>
               </div>
             </div>
-          )}
 
         </div>
 

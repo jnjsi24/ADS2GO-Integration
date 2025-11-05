@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Trash, 
@@ -80,6 +80,9 @@ const ManageAds: React.FC = () => {
   
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
+  
+  const [showTabsDropdown, setShowTabsDropdown] = useState(false);
+  const tabsDropdownRef = useRef<HTMLDivElement>(null);
   const [showAdDetailsModal, setShowAdDetailsModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
   const [isAdModalOpen, setIsAdModalOpen] = useState(false);
@@ -134,6 +137,24 @@ const ManageAds: React.FC = () => {
       setSelectedStatusFilter('Pending');
     }
   }, [location.search]);
+
+  // Close tabs dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showTabsDropdown && tabsDropdownRef.current && !tabsDropdownRef.current.contains(target)) {
+        setShowTabsDropdown(false);
+      }
+    };
+
+    if (showTabsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTabsDropdown]);
   const [deploymentStatusFilter, setDeploymentStatusFilter] = useState('All Status');
   
   // Date filter state for schedule tab
@@ -657,7 +678,7 @@ const ManageAds: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-10 transition-all duration-300`}>
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           <strong className="font-bold">Error loading ads: </strong>
           <span className="block sm:inline">{error.message}</span>
@@ -673,15 +694,15 @@ const ManageAds: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 md:ml-56 md:pr-5 p-4 md:p-10 flex flex-col">
+    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-10 flex flex-col transition-all duration-300`}>
       {/* Header with Title and Filters */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-3 gap-3">
-        <h1 className="text-xl md:text-3xl font-bold text-gray-800 pt-16 md:pt-0">Advertisements Management</h1>
+        <h1 className="text-xl md:text-3xl font-bold text-gray-800 md:pt-0">Advertisements Management</h1>
         {activeTab === 'ads' && (
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder={isMobile ? "Search..." : "Search by title, advertiser, or Ad ID..."}
+              placeholder="Search by title, advertiser, or Ad ID..."
               className="text-xs text-black rounded-md pl-3 md:pl-5 py-3 w-full md:w-80 shadow-md focus:outline-none bg-white"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -691,25 +712,71 @@ const ManageAds: React.FC = () => {
       </div>
 
       <div className="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-      {/* Tabs */}
-      <nav className="flex overflow-x-auto space-x-2 pb-2 md:pb-0">
-        {tabs.map(tab => (
+      {/* Tabs - Dropdown on Mobile, Horizontal on Desktop */}
+      {isMobile ? (
+        <div className="relative w-32" ref={tabsDropdownRef}>
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`relative flex items-center py-3 md:py-4 px-2 md:px-2 font-medium text-xs md:text-sm transition-colors group whitespace-nowrap ${
-              activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-            }`}
+            onClick={() => setShowTabsDropdown(!showTabsDropdown)}
+            className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
           >
-            {isMobile ? '' : tab.label}
-            <span
-              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
-                ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
-              `}
+            <span className="truncate">
+              {tabs.find(tab => tab.id === activeTab)?.label || 'Select Tab'}
+            </span>
+            <ChevronDown
+              size={16}
+              className={`flex-shrink-0 transform transition-transform duration-200 ${
+                showTabsDropdown ? 'rotate-180' : ''
+              }`}
             />
           </button>
-        ))}
-      </nav>
+
+          <AnimatePresence>
+            {showTabsDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+              >
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => {
+                      setActiveTab(tab.id as any);
+                      setShowTabsDropdown(false);
+                    }}
+                    className={`block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                      activeTab === tab.id ? 'bg-[#3674B5] text-white' : ''
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <nav className="flex overflow-x-auto space-x-2 pb-2 md:pb-0">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`relative flex items-center py-3 md:py-4 px-2 md:px-2 font-medium text-xs md:text-sm transition-colors group whitespace-nowrap ${
+                activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                  ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
+                `}
+              />
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* Filters on the right */}
       {['ads', 'schedule', 'deployment'].includes(activeTab) && (
@@ -726,7 +793,7 @@ const ManageAds: React.FC = () => {
                   <Calendar className="w-4 h-4" />
                   {calendarSelectedDate 
                     ? calendarSelectedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                    : 'Select Date'
+                    : 'Date'
                   }
                 </button>
                 

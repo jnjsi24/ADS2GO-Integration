@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -962,26 +962,22 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-56'}`}>
+    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6 flex flex-col transition-all duration-300`}>
   
       {/* Mobile Header */}
       {isMobile && (
-        <div className="flex items-center mb-4">
-          <h1 className="text-xl pt-7 font-bold text-gray-800">Reports Management</h1>
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold text-gray-800">Reports Management</h1>
         </div>
       )}
 
-      {/* Header with Title */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
+      {/* Header with Title and Filters */}
+      <div className={`flex ${isMobile ? 'flex-col' : 'flex-row items-center justify-between'} pt-4 gap-4 mb-6`}>
         {!isMobile && (
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Reports Management</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800 flex-shrink-0">Reports Management</h1>
         )}
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-6">
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex flex-col sm:flex-row gap-1 w-full">
+        <div className={`flex flex-col ${isMobile ? 'items-end gap-3' : 'flex-row items-center gap-2'}`}>
+          <div className={`flex ${isMobile ? 'flex-col sm:flex-row' : 'flex-row'} gap-1 ${isMobile ? 'w-full' : ''}`}>
             <input
               type="text"
               className="text-xs text-black rounded-md pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
@@ -1068,7 +1064,7 @@ const Reports: React.FC = () => {
               <div className="relative w-full sm:w-36">
                 <button
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   <span className="truncate">{sortBy}</span>
                   <ChevronDown
@@ -1083,7 +1079,7 @@ const Reports: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {sortByOptions.map((option) => (
                         <button
@@ -1231,7 +1227,7 @@ const Reports: React.FC = () => {
         }
 
         return (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <span className="text-sm font-medium text-blue-800">
@@ -1331,7 +1327,7 @@ const Reports: React.FC = () => {
           {/* Rows */}
           <div className="flex-1">
             {paginatedReports.map((report: Report | ContactMessage) => (
-            <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
+            <div key={report.id} className="bg-white mb-3 rounded-md shadow-md">
               {/* Mobile Card View */}
               <div className="md:hidden p-4">
                 <div className="flex items-start gap-2">
@@ -1403,7 +1399,7 @@ const Reports: React.FC = () => {
                         handleUpdateReport(report);
                       }}
                       title="Update Report"
-                      className="flex items-center shadow-md text-gray-700 px-1 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                      className="flex items-center text-gray-700 px-1 py-1 hover:bg-gray-50"
                     >
                       <Edit size={14} />
                     </button>
@@ -1413,7 +1409,7 @@ const Reports: React.FC = () => {
 
               {/* Desktop Table Row */}
               <div
-                className="hidden md:grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
+                className="hidden md:grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-md"
                 onClick={() => handleRowClick(report)}
               >
                 <div className="col-span-3 flex items-center gap-2">
@@ -1514,7 +1510,7 @@ const Reports: React.FC = () => {
       {expandedRow && selectedReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
         onClick={handleCloseDetailsModal}>
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+          <div className="bg-white rounded-md shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">Report Details</h2>
@@ -1531,7 +1527,7 @@ const Reports: React.FC = () => {
                       return (
                         <div className="mt-3 space-y-3">
                           {data.changes?.map((change: any, index: number) => (
-                            <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <div key={index} className="bg-gray-50 border border-gray-200 rounded-md p-4">
                               <p className="font-semibold text-gray-900 mb-2">{change.fieldLabel}</p>
                               <div className="grid grid-cols-2 gap-3 text-sm">
                                 <div>
@@ -1567,7 +1563,7 @@ const Reports: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <p className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none mt-1">
+                  <p className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-md focus:outline-none mt-1">
                     {selectedReport.adminNotes}
                   </p>
                   {selectedReport.adminNotesBy && selectedReport.adminNotesBy.adminName && (
@@ -1684,7 +1680,7 @@ const Reports: React.FC = () => {
                                 <img
                                   src={attachment}
                                   alt={fileName}
-                                  className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                  className="max-w-full h-auto rounded-md border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                                   onClick={() => window.open(attachment, "_blank")}
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";
@@ -1748,7 +1744,7 @@ const Reports: React.FC = () => {
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <button
                     onClick={() => handleOpenDriverEditModal(selectedReport)}
-                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-md transition-colors"
                   >
                     <Edit size={18} />
                     Review & Update Driver Details
@@ -1834,17 +1830,17 @@ const Reports: React.FC = () => {
       {/* Update Modal */}
       {isUpdateModalOpen && selectedReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6">
+          <div className={`bg-white rounded-md shadow-xl ${isMobile ? 'max-w-full w-full mx-4' : 'max-w-md w-full'} max-h-[90vh] overflow-y-auto`}>
+            <div className={`flex items-center justify-between ${isMobile ? 'p-4' : 'p-6'}`}>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Update Report Details</h2>
-                <p className="text-md text-gray-600 mt-1">
+                <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-semibold text-gray-900`}>Update Report Details</h2>
+                <p className={`${isMobile ? 'text-sm' : 'text-md'} text-gray-600 mt-1`}>
                   Title: <strong>{selectedReport?.title}</strong>
                 </p>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className={`${isMobile ? 'p-4' : 'p-6'} space-y-4`}>
               {/* Status Dropdown */}
               <div className="relative w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
@@ -1871,7 +1867,7 @@ const Reports: React.FC = () => {
                   if (availableStatuses.length === 0) {
                     // Show current status as read-only
                     return (
-                      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 text-gray-700 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 text-gray-700 rounded-md border border-gray-200">
                         <span className="text-sm font-medium">
                           {selectedReport.status.replace('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
                         </span>
@@ -1884,7 +1880,7 @@ const Reports: React.FC = () => {
                     <>
                       <button
                         onClick={() => setShowModalStatusDropdown(!showModalStatusDropdown)}
-                        className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                        className="flex items-center justify-between w-full text-sm text-black rounded-md pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                         {updateData.status
                           .replace('_', ' ')
                           .toLowerCase()
@@ -1904,7 +1900,7 @@ const Reports: React.FC = () => {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -5 }}
                             transition={{ duration: 0.2 }}
-                            className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                            className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                           >
                             {availableStatuses.map((status) => (
                               <button
@@ -1934,22 +1930,22 @@ const Reports: React.FC = () => {
                   value={updateData.adminNotes}
                   onChange={(e) => setUpdateData((prev) => ({ ...prev, adminNotes: e.target.value }))}
                   rows={4}
-                  className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none"
+                  className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-md focus:outline-none"
                   placeholder="Add admin notes..."
                 />
               </div>
             </div>
 
-            <div className="flex justify-between gap-3 p-6 border-t">
+            <div className={`flex ${isMobile ? 'justify-between' : 'justify-between'} gap-3 ${isMobile ? 'p-4' : 'p-6'}`}>
               <button
                 onClick={() => setIsUpdateModalOpen(false)}
-                className="px-4 py-2 text-gray-700 rounded-lg hover:text-gray-900 transition-colors"
+                className={`${isMobile ? '' : ''} px-4 py-2 text-gray-700 rounded-md hover:text-gray-900 transition-colors`}
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdateSubmit}
-                className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                className={`${isMobile ? 'w-full' : ''} px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors`}
               >
                 Save Changes
               </button>
@@ -1961,7 +1957,7 @@ const Reports: React.FC = () => {
       {/* Driver Edit Modal */}
       {isDriverEditModalOpen && selectedReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-md shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-xl font-semibold text-gray-900">Update Driver Profile Details</h2>
               <button
@@ -1985,7 +1981,7 @@ const Reports: React.FC = () => {
             ) : driverDetails && requestedChanges ? (
               <div className="p-6 space-y-6">
                 {/* Current Driver Details */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-gray-50 rounded-md p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <Users size={20} />
                     Current Driver Details
@@ -2045,7 +2041,7 @@ const Reports: React.FC = () => {
                       return (
                         <div
                           key={change.fieldKey}
-                          className="bg-white border-2 border-blue-100 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                          className="bg-white border-2 border-blue-100 rounded-md p-4 hover:border-blue-300 transition-colors"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -2075,7 +2071,7 @@ const Reports: React.FC = () => {
                                         <img
                                           src={attachment}
                                           alt={change.fieldLabel}
-                                          className="max-w-xs h-auto rounded-lg border border-gray-300 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                                          className="max-w-xs h-auto rounded-md border border-gray-300 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                                           onClick={() => window.open(attachment, '_blank')}
                                         />
                                         <a
@@ -2114,14 +2110,14 @@ const Reports: React.FC = () => {
                   <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
                     <button
                       onClick={() => setShowRejectPromptModal(true)}
-                      className="flex items-center gap-2 px-6 py-3 border-2 border-red-500 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-semibold"
+                      className="flex items-center gap-2 px-6 py-3 border-2 border-red-500 text-red-600 rounded-md hover:bg-red-50 transition-colors font-semibold"
                     >
                       <CloseIcon size={18} />
                       Reject Request
                     </button>
                     <button
                       onClick={() => setShowApproveConfirmModal(true)}
-                      className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-semibold"
+                      className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-semibold"
                     >
                       <Save size={18} />
                       Approve & Update Details
@@ -2129,7 +2125,7 @@ const Reports: React.FC = () => {
                   </div>
                 ) : (
                   <div className="pt-6 border-t border-gray-200">
-                    <div className={`text-center py-3 px-4 rounded-lg ${
+                    <div className={`text-center py-3 px-4 rounded-md ${
                       selectedReport?.status === 'RESOLVED' 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-gray-100 text-gray-800'
@@ -2155,7 +2151,7 @@ const Reports: React.FC = () => {
       {/* Approve Confirmation Modal */}
       {showApproveConfirmModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-md shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Approval</h3>
             <p className="text-gray-700 mb-6">
               Are you sure you want to approve and apply all these changes to the driver's profile?
@@ -2164,7 +2160,7 @@ const Reports: React.FC = () => {
               <button
                 onClick={() => setShowApproveConfirmModal(false)}
                 disabled={isApprovingChanges}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -2174,7 +2170,7 @@ const Reports: React.FC = () => {
                   handleApproveDriverChanges();
                 }}
                 disabled={isApprovingChanges}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isApprovingChanges && <Loader size={16} className="animate-spin" />}
                 Yes, Approve
@@ -2187,7 +2183,7 @@ const Reports: React.FC = () => {
       {/* Reject Prompt Modal */}
       {showRejectPromptModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-md shadow-xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Reject Request</h3>
             <p className="text-gray-700 mb-4">
               Please provide a reason for rejecting this request:
@@ -2197,7 +2193,7 @@ const Reports: React.FC = () => {
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Enter rejection reason..."
               disabled={isRejectingChanges}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               rows={4}
             />
             <div className="flex justify-end gap-3 mt-6">
@@ -2207,7 +2203,7 @@ const Reports: React.FC = () => {
                   setRejectReason('');
                 }}
                 disabled={isRejectingChanges}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -2219,7 +2215,7 @@ const Reports: React.FC = () => {
                   }
                 }}
                 disabled={!rejectReason.trim() || isRejectingChanges}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
                 {isRejectingChanges && <Loader size={16} className="animate-spin" />}
                 Reject Request
@@ -2232,7 +2228,7 @@ const Reports: React.FC = () => {
       {/* Success Modal */}
       {showSuccessModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-md shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle size={24} className="text-green-600" />
@@ -2246,7 +2242,7 @@ const Reports: React.FC = () => {
                   setShowSuccessModal(false);
                   setSuccessMessage('');
                 }}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors font-medium"
               >
                 OK
               </button>
@@ -2258,7 +2254,7 @@ const Reports: React.FC = () => {
       {/* Error Modal */}
       {showErrorModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="bg-white rounded-md shadow-xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
                 <AlertCircle size={24} className="text-red-600" />
@@ -2272,7 +2268,7 @@ const Reports: React.FC = () => {
                   setShowErrorModal(false);
                   setErrorMessage('');
                 }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors font-medium"
               >
                 OK
               </button>
@@ -2295,7 +2291,7 @@ const Reports: React.FC = () => {
           }}
         >
           <div 
-            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-md shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -2328,7 +2324,7 @@ const Reports: React.FC = () => {
             {/* Content */}
             <div className="p-6 space-y-6">
               {/* Contact Information */}
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="bg-gray-50 rounded-md p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <Users size={18} className="text-gray-600" />
                   <div>
@@ -2368,14 +2364,14 @@ const Reports: React.FC = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   User's Message
                 </label>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+                <div className="bg-white border border-gray-200 rounded-md p-4 max-h-48 overflow-y-auto">
                   <p className="text-gray-900 whitespace-pre-wrap">{selectedContactMessage.message}</p>
                 </div>
               </div>
 
               {/* Already Replied Notice */}
               {selectedContactMessage.adminReply && selectedContactMessage.adminReply.subject && selectedContactMessage.adminReply.message && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="bg-green-50 border border-green-200 rounded-md p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
@@ -2408,7 +2404,7 @@ const Reports: React.FC = () => {
                       onChange={(e) => setReplySubject(e.target.value)}
                       placeholder="Enter email subject..."
                       disabled={isSendingReply}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -2422,11 +2418,11 @@ const Reports: React.FC = () => {
                       placeholder="Enter your reply message..."
                       disabled={isSendingReply}
                       rows={6}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
 
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                     <p className="text-sm text-blue-800">
                       <strong>Note:</strong> This reply will be sent to <strong>{selectedContactMessage.email}</strong> via email. 
                       The message status will automatically change to "In Progress" after sending.
@@ -2446,7 +2442,7 @@ const Reports: React.FC = () => {
                   <button
                     onClick={() => handleUpdateContactStatus(selectedContactMessage.id, 'RESOLVED')}
                     disabled={isSendingReply}
-                    className="px-4 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    className="px-4 py-2 bg-green-100 text-green-800 rounded-md hover:bg-green-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                   >
                     Mark as Resolved
                   </button>
@@ -2479,7 +2475,7 @@ const Reports: React.FC = () => {
                   }
                 }}
                 disabled={isSendingReply}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Close
               </button>
@@ -2487,7 +2483,7 @@ const Reports: React.FC = () => {
                 <button
                   onClick={handleSendReply}
                   disabled={isSendingReply || !replySubject.trim() || !replyMessage.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   {isSendingReply && <Loader size={16} className="animate-spin" />}
                   {isSendingReply ? 'Sending...' : 'Send Reply via Email'}
@@ -2505,7 +2501,7 @@ const Reports: React.FC = () => {
           onClick={handleCloseContactDetailsModal}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-md shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -2565,14 +2561,14 @@ const Reports: React.FC = () => {
               {/* User's Message */}
               <div>
                 <strong className="text-sm font-bold text-gray-700 block mb-2">User's Message:</strong>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
                   <p className="text-gray-900 whitespace-pre-wrap">{selectedContactForDetails.message}</p>
                 </div>
               </div>
 
               {/* Admin Reply (if exists) */}
               {selectedContactForDetails.adminReply && selectedContactForDetails.adminReply.subject && selectedContactForDetails.adminReply.message && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="bg-green-50 border border-green-200 rounded-md p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle size={20} className="text-green-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
@@ -2637,7 +2633,7 @@ const Reports: React.FC = () => {
             <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
               <button
                 onClick={handleCloseContactDetailsModal}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium"
               >
                 Close
               </button>

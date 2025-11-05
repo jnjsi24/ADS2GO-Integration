@@ -60,7 +60,7 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
         {/* Heading */}
         <h1
           className={`text-2xl md:text-3xl font-bold text-gray-800 ${
-            isMobile ? 'pt-10' : ''
+            isMobile ? '' : ''
           }`}
         >
           Devices List

@@ -1192,7 +1192,7 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'pt-10 ml-60';
+  const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'pt-10 pl-72';
 
   if (error) return <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex items-center justify-center text-red-500 transition-all duration-300`}>Error: {error.message}</div>;
 

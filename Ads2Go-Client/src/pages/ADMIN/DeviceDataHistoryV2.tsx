@@ -331,7 +331,7 @@ const DeviceDataHistoryV2: React.FC = () => {
   const currentItems = allDailyDataItems;
 
   // Calculate margin based on screen size
-  const contentMargin = isMobile ? 'ml-0' : 'ml-60';
+  const contentMargin = isMobile ? 'ml-0' : 'pl-64';
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

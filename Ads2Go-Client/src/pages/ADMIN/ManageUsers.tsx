@@ -195,7 +195,7 @@ const ManageUsers: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   // Dynamic margin based on sidebar state and screen size
-  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
+  const contentMargin = isMobile ? "ml-0 pt-16" : "ml-0 md:ml-16 lg:ml-60";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -703,20 +703,20 @@ const ManageUsers: React.FC = () => {
 
   return (
       <div
-      className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}
+      className={`min-h-screen bg-gray-100 p-4 md:p-6 ${contentMargin} flex flex-col transition-all duration-300`}
     >
     
         {/* Mobile Header */}
         {isMobile && (
           <div className="flex items-center mb-4">
-            <h1 className="text-xl pt-4 font-bold text-gray-800">Advertisers Management</h1>
+            <h1 className="text-xl font-bold text-gray-800">Advertisers Management</h1>
           </div>
         )}
 
         {/* Header with Title and Filters */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
           {!isMobile && (
-            <h1 className="text-2xl pt-4 lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
+            <h1 className="text-2xl pt-5 lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
           )}
         
         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">

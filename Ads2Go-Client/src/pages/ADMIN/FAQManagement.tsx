@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_FAQS } from '../../graphql/faq/queries/GetAllFAQs';
 import { CREATE_FAQ, UPDATE_FAQ, DELETE_FAQ, RESTORE_FAQ, REORDER_FAQS } from '../../graphql/faq/mutations/FAQMutations';
@@ -56,6 +56,48 @@ const FAQManagement: React.FC = () => {
   const [showEditCategoryDropdown, setShowEditCategoryDropdown] = useState(false); // New state for Edit modal
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [sortBy, setSortBy] = useState('Newest First');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Refs for dropdown click-outside handling
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const createCategoryDropdownRef = useRef<HTMLDivElement>(null);
+  const editCategoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Click outside handler for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setShowCategoryDropdown(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setShowStatusDropdown(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+        setShowSortDropdown(false);
+      }
+      if (createCategoryDropdownRef.current && !createCategoryDropdownRef.current.contains(event.target as Node)) {
+        setShowCreateCategoryDropdown(false);
+      }
+      if (editCategoryDropdownRef.current && !editCategoryDropdownRef.current.contains(event.target as Node)) {
+        setShowEditCategoryDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Processing states for double-click prevention
   const [isCreating, setIsCreating] = useState(false);
@@ -503,7 +545,7 @@ const FAQManagement: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
+      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6 flex items-center justify-center`}>
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600">Error loading FAQs: {error.message}</p>
@@ -519,26 +561,35 @@ const FAQManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:ml-56 lg:pr-5">
-      <div className="max-w-8xl mx-auto">
+    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6 flex flex-col transition-all duration-300`}>
+      <div className="max-w-8xl mx-auto w-full">
+        {/* Mobile Header */}
+        {isMobile && (
+          <div className="flex items-center mb-4">
+            <h1 className="text-xl font-bold text-gray-800">FAQ Management</h1>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
-            <div className="flex items-center gap-3">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800">FAQ Management</h1>
+          <div className={`flex ${isMobile ? 'flex-col' : 'flex-row items-center justify-between pt-4'} mb-4 gap-4`}>
+            {!isMobile && (
+              <div className="flex items-center gap-3">
+                <div>
+                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">FAQ Management</h1>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-1">
-              <div className="relative w-40">
+            )}
+            <div className={`flex ${isMobile ? 'flex-row gap-2 w-full min-w-0' : 'flex-wrap items-center gap-3 sm:gap-1'}`}>
+              <div className={`relative ${isMobile ? 'flex-1 min-w-0' : 'w-40'}`} ref={categoryDropdownRef}>
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2 min-w-0"
                 >
-                  {getCategoryLabel(selectedCategory)}
+                  <span className="truncate min-w-0">{getCategoryLabel(selectedCategory)}</span>
                   <ChevronDown
                     size={16}
-                    className={`transform transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : 'rotate-0'}`}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : 'rotate-0'}`}
                   />
                 </button>
                 <AnimatePresence>
@@ -563,15 +614,15 @@ const FAQManagement: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-              <div className="relative w-32">
+              <div className={`relative ${isMobile ? 'flex-1 min-w-0' : 'w-32'}`} ref={statusDropdownRef}>
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2 min-w-0"
                 >
-                  {selectedStatus === 'all' ? 'All Status' : selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
+                  <span className="truncate min-w-0">{selectedStatus === 'all' ? 'All Status' : selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}</span>
                   <ChevronDown
                     size={16}
-                    className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
                   />
                 </button>
                 <AnimatePresence>
@@ -596,15 +647,15 @@ const FAQManagement: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-              <div className="relative w-36">
+              <div className={`relative ${isMobile ? 'flex-1 min-w-0' : 'w-36'}`} ref={sortDropdownRef}>
                 <button
                   onClick={() => setShowSortDropdown(!showSortDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2 min-w-0"
                 >
-                  {sortBy}
+                  <span className="truncate min-w-0">{sortBy}</span>
                   <ChevronDown
                     size={16}
-                    className={`transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
                   />
                 </button>
                 <AnimatePresence>
@@ -632,44 +683,47 @@ const FAQManagement: React.FC = () => {
             </div>
           </div>
 
-          {/* Archive Tabs */}
-          <div className="flex gap-2 mb-4 pt-2">
-            <button
-              onClick={() => setActiveTab('active')}
-              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
-                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Active FAQs
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 pt-2">
+            {/* Archive Tabs - Left Side */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab('active')}
+                className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
+                  activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
                 }`}
-              />
-            </button>
-            <button
-              onClick={() => setActiveTab('archived')}
-              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
-                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Archived
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+              >
+                Active FAQs
+                <span
+                  className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                    activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                  }`}
+                />
+              </button>
+              <button
+                onClick={() => setActiveTab('archived')}
+                className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
+                  activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                Archived
+                <span
+                  className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                    activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                  }`}
+                />
+              </button>
+            </div>
 
-          <div className="flex justify-end sm:justify-end mt-2 sm:mt-0">
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Add FAQ
-            </button>
+            {/* Add Button - Right Side */}
+            <div className={`flex ${isMobile ? 'justify-end' : ''}`}>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Add FAQ
+              </button>
+            </div>
           </div>
         </div>
 
@@ -889,8 +943,8 @@ const FAQManagement: React.FC = () => {
 
         {/* Create FAQ Modal */}
         {isCreateModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-            <div className="bg-white rounded-lg p-4 sm:p-6 w-[95%] sm:w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+            <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full mx-4' : 'p-6 w-full'} max-w-xl max-h-[90vh] overflow-y-auto`}>
               <h2 className="text-2xl font-bold mb-4">Create New FAQ</h2>
               <form onSubmit={handleCreateFAQ} className="space-y-4">
                 <div>
@@ -913,7 +967,7 @@ const FAQManagement: React.FC = () => {
                     required
                   />
                 </div>
-                <div className="relative">
+                <div className="relative" ref={createCategoryDropdownRef}>
                   <label className="block text-sm font-bold text-black/80 mb-2">Category</label>
                   <button
                     type="button"
@@ -996,8 +1050,8 @@ const FAQManagement: React.FC = () => {
 
         {/* Edit FAQ Modal */}
         {isEditModalOpen && editingFAQ && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+            <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full mx-4' : 'p-6 w-full'} max-w-2xl max-h-[90vh] overflow-y-auto`}>
               <h2 className="text-2xl font-bold mb-4">Edit FAQ</h2>
               <form onSubmit={handleEditFAQ} className="space-y-4">
                 <div>
@@ -1020,7 +1074,7 @@ const FAQManagement: React.FC = () => {
                     required
                   />
                 </div>
-                <div className="relative">
+                <div className="relative" ref={editCategoryDropdownRef}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                   <button
                     type="button"

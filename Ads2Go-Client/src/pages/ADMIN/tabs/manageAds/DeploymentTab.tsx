@@ -28,10 +28,21 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   onStatusChange
 }) => {
   const [deploymentFilter, setDeploymentFilter] = useState(parentFilter || 'all');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (parentFilter) setDeploymentFilter(parentFilter);
@@ -118,11 +129,11 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
   if (deploymentsLoading) {
     return (
-      <div className="p-6">
+      <div className={`${isMobile ? 'p-4' : 'p-6'}`}>
         <div className="flex items-center justify-center h-64">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-lg text-gray-600">Loading deployments...</span>
+            <div className={`${isMobile ? 'w-6 h-6 border-2' : 'w-8 h-8 border-4'} border-blue-500 border-t-transparent rounded-full animate-spin`}></div>
+            <span className={`${isMobile ? 'text-sm' : 'text-lg'} text-gray-600`}>Loading deployments...</span>
           </div>
         </div>
       </div>
@@ -132,16 +143,16 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   return (
     <div>
       {/* Deployment Stats */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-3xl text-center font-bold text-blue-600">
+      <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-4 mb-6`}>
+        <div className={`bg-white ${isMobile ? 'p-3' : 'p-4'} rounded-lg shadow`}>
+          <p className={`${isMobile ? 'text-2xl' : 'text-3xl'} text-center font-bold text-blue-600`}>
             {deploymentsData?.getAllDeployments?.length || 0}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Total Devices</h3>
+          <h3 className={`${isMobile ? 'text-xs' : 'text-sm'} text-center font-medium text-gray-500`}>Total Devices</h3>
           <p className="text-xs text-center text-gray-400 mt-1">with deployments</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-3xl text-center font-bold text-green-600">
+        <div className={`bg-white ${isMobile ? 'p-3' : 'p-4'} rounded-lg shadow`}>
+          <p className={`${isMobile ? 'text-2xl' : 'text-3xl'} text-center font-bold text-green-600`}>
             {(() => {
               const now = new Date();
               // Count UNIQUE ads that are ACTUALLY PLAYING based on dates
@@ -166,11 +177,11 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               return uniqueAdIds.size;
             })()}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Running Ads</h3>
+          <h3 className={`${isMobile ? 'text-xs' : 'text-sm'} text-center font-medium text-gray-500`}>Running Ads</h3>
           <p className="text-xs text-center text-gray-400 mt-1">actively playing</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-3xl text-center font-bold text-purple-600">
+        <div className={`bg-white ${isMobile ? 'p-3' : 'p-4'} rounded-lg shadow`}>
+          <p className={`${isMobile ? 'text-2xl' : 'text-3xl'} text-center font-bold text-purple-600`}>
             {(() => {
               const now = new Date();
               // Count UNIQUE ads that are PAID but haven't started yet (start date in future)
@@ -193,22 +204,22 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               return uniqueScheduledAdIds.size;
             })()}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Scheduled Ads</h3>
+          <h3 className={`${isMobile ? 'text-xs' : 'text-sm'} text-center font-medium text-gray-500`}>Scheduled Ads</h3>
           <p className="text-xs text-center text-gray-400 mt-1">waiting to start</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-3xl text-center font-bold text-gray-600">
+        <div className={`bg-white ${isMobile ? 'p-3' : 'p-4'} rounded-lg shadow`}>
+          <p className={`${isMobile ? 'text-2xl' : 'text-3xl'} text-center font-bold text-gray-600`}>
             {(() => {
               // Total slots = number of devices × 5 slots per device
               const totalDevices = deploymentsData?.getAllDeployments?.length || 0;
               return totalDevices * 5;
             })()}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Total Slots</h3>
+          <h3 className={`${isMobile ? 'text-xs' : 'text-sm'} text-center font-medium text-gray-500`}>Total Slots</h3>
           <p className="text-xs text-center text-gray-400 mt-1">all device slots</p>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <p className="text-3xl text-center font-bold text-orange-600">
+        <div className={`bg-white ${isMobile ? 'p-3' : 'p-4'} rounded-lg shadow`}>
+          <p className={`${isMobile ? 'text-2xl' : 'text-3xl'} text-center font-bold text-orange-600`}>
             {(() => {
               // Calculate available slots: (devices × 5 slots) - paid ads
               const totalDevices = deploymentsData?.getAllDeployments?.length || 0;
@@ -222,7 +233,7 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               return totalPossibleSlots - paidAdsCount;
             })()}
           </p>
-          <h3 className="text-sm text-center font-medium text-gray-500">Available Slots</h3>
+          <h3 className={`${isMobile ? 'text-xs' : 'text-sm'} text-center font-medium text-gray-500`}>Available Slots</h3>
           <p className="text-xs text-center text-gray-400 mt-1">remaining capacity</p>
         </div>
       </div>
@@ -235,34 +246,34 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       ) : (
         <div className="space-y-4">
           {paginatedDeployments.map((deployment: AdDeployment) => (
-            <div key={deployment.id} className="border border-gray-200 rounded-lg p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+            <div key={deployment.id} className={`border border-gray-200 rounded-lg ${isMobile ? 'p-4' : 'p-6'} bg-white shadow-sm hover:shadow-md transition-shadow`}>
               {/* Header with Material ID and Status */}
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-blue-700">
+              <div className={`flex ${isMobile ? 'flex-col gap-3' : 'justify-between items-start'} mb-4`}>
+                <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
+                  <div className={`flex ${isMobile ? 'flex-col gap-2 items-start' : 'items-center gap-3'} mb-2`}>
+                    <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-blue-700 break-words`}>
                       {deployment.materialId || 'Unknown Device'}
                     </h3>
                     {/* Deployment status - show RUNNING (finished ads are removed from slots) */}
-                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-200 text-green-800">
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full bg-green-200 text-green-800 ${isMobile ? 'self-start' : ''}`}>
                       RUNNING
                     </span>
                   </div>
                   
                   {/* Deployment ID */}
-                  <div className="text-sm text-gray-600 mb-1">
-                    <span className="font-medium">Deployment ID:</span> <span className="font-mono text-xs">{deployment.adDeploymentId || deployment.id}</span>
+                  <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mb-1 break-words`}>
+                    <span className="font-medium">Deployment ID:</span> <span className={`font-mono ${isMobile ? 'text-xs' : 'text-xs'}`}>{deployment.adDeploymentId || deployment.id}</span>
                   </div>
                   
                   {/* Driver ID */}
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">Driver:</span> <span className="font-mono text-xs">{deployment.driverId || 'Not assigned'}</span>
+                  <div className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 break-words`}>
+                    <span className="font-medium">Driver:</span> <span className={`font-mono ${isMobile ? 'text-xs' : 'text-xs'}`}>{deployment.driverId || 'Not assigned'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Deployment Metadata */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-xs">
+              <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-4'} gap-3 mb-4 text-xs`}>
                 <div className="bg-blue-50 p-2 rounded border border-blue-200">
                   <div className="flex items-center gap-1 mb-1">
                     <Clock className="w-3 h-3 text-blue-600" />
@@ -336,15 +347,15 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               {deployment.lcdSlots && deployment.lcdSlots.length > 0 && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Settings className="w-4 h-4 text-gray-600" />
-                    <h4 className="text-sm font-medium text-gray-700">Ad Slots ({deployment.lcdSlots.length})</h4>
+                    <Settings className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} text-gray-600`} />
+                    <h4 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>Ad Slots ({deployment.lcdSlots.length})</h4>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} gap-3`}>
                     {deployment.lcdSlots.map((slot: LCDSlot, index: number) => (
-                      <div key={slot.id || index} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-800">Slot {slot.slotNumber}</span>
-                          <div className="flex gap-1 flex-wrap justify-end">
+                      <div key={slot.id || index} className={`bg-gray-50 border border-gray-200 rounded-lg ${isMobile ? 'p-2' : 'p-3'}`}>
+                        <div className={`flex items-center ${isMobile ? 'flex-col gap-2 items-start' : 'justify-between'} mb-2`}>
+                          <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-800`}>Slot {slot.slotNumber}</span>
+                          <div className={`flex gap-1 flex-wrap ${isMobile ? 'justify-start' : 'justify-end'}`}>
                             {/* Show RUNNING badge if ad is currently playing */}
                             {(() => {
                               const now = new Date();
@@ -487,64 +498,66 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
           {/* Pagination Controls */}
           {filteredDeployments.length > 0 && (
-            <div className="flex items-center justify-center px-4 py-4 mt-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1}
-                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  <span>Previous</span>
-                </button>
+            <div className={`flex items-center justify-center ${isMobile ? 'px-2 py-3' : 'px-4 py-4'} mt-4`}>
+              <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center gap-2'}`}>
+                <div className={`flex ${isMobile ? 'justify-between w-full' : 'items-center gap-2'}`}>
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className={`flex items-center ${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1 text-sm'} rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <ChevronLeft className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} ${isMobile ? '' : 'mr-1'}`} />
+                    {!isMobile && <span>Previous</span>}
+                  </button>
 
-                <div className="flex gap-1">
-                  {(() => {
-                    const pages = [];
-                    const maxVisiblePages = 5;
-                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                  <div className={`flex gap-1 ${isMobile ? 'overflow-x-auto' : ''}`}>
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = isMobile ? 3 : 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-                    if (endPage - startPage < maxVisiblePages - 1) {
-                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                    }
+                      if (endPage - startPage < maxVisiblePages - 1) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
 
-                    for (let i = startPage; i <= endPage; i++) {
-                      pages.push(
-                        <button
-                          key={i}
-                          onClick={() => handlePageChange(i)}
-                          className={`px-3 py-1 text-sm rounded ${
-                            currentPage === i
-                              ? "border border-gray-300 text-black"
-                              : "text-gray-700 hover:border border-gray-300"
-                          }`}
-                        >
-                          {i}
-                        </button>
-                      );
-                    }
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1 text-sm'} rounded ${
+                              currentPage === i
+                                ? "border border-gray-300 text-black"
+                                : "text-gray-700 hover:border border-gray-300"
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
 
-                    if (endPage < totalPages) {
-                      pages.push(
-                        <span key="ellipsis" className="px-2 text-gray-500">
-                          …
-                        </span>
-                      );
-                    }
+                      if (endPage < totalPages) {
+                        pages.push(
+                          <span key="ellipsis" className={`${isMobile ? 'px-1' : 'px-2'} text-gray-500`}>
+                            …
+                          </span>
+                        );
+                      }
 
-                    return pages;
-                  })()}
+                      return pages;
+                    })()}
+                  </div>
+
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className={`flex items-center ${isMobile ? 'px-2 py-1 text-xs' : 'px-3 py-1 text-sm'} rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {!isMobile && <span>Next</span>}
+                    <ChevronRight className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} ${isMobile ? '' : 'ml-1'}`} />
+                  </button>
                 </div>
-
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span>Next</span>
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
               </div>
             </div>
           )}

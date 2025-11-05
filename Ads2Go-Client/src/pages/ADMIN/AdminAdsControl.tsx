@@ -1048,7 +1048,7 @@ const AdminAdsControl: React.FC = () => {
     return <AdminLoader />;
   }
 
-  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "pl-72";
 
   if (error) {
     return (
@@ -1073,7 +1073,7 @@ const AdminAdsControl: React.FC = () => {
       <div className="mb-8">
         <div className="flex justify-between items-center pt-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">LCD Control</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">LCD Control</h1>
             {/* Show subtle loader during auto-refresh */}
             {isRefreshing && (
               <div className="flex items-center text-xs text-gray-400 mt-1">
@@ -1238,30 +1238,27 @@ const AdminAdsControl: React.FC = () => {
 
       {/* Tabs */}
       <div className="mb-8">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-              { id: 'notifications', label: 'Notifications', icon: AlertTriangle }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-                  activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <tab.icon className="w-4 h-4 mr-2" />
-                {tab.label}
-                <span
-                  className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
-                    ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
-                  `}
-                />
-              </button>
-            ))}
-          </nav>
-        </div>
+        <nav className="flex space-x-2 px-6">
+          {[
+            { id: 'dashboard', label: 'Dashboard' },
+            { id: 'notifications', label: 'Notifications' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                  ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
+                `}
+              />
+            </button>
+          ))}
+        </nav>
 
         {/* Tab Content */}
         <div className="p-6">

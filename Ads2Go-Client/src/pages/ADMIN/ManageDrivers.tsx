@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useLocation } from 'react-router-dom';
 import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail, CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight, Archive, RotateCcw } from 'lucide-react';
@@ -199,8 +199,7 @@ const ManageDrivers: React.FC = () => {
   const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // Processing states for double-click prevention
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
@@ -216,17 +215,40 @@ const ManageDrivers: React.FC = () => {
   const [bulkSelectedMaterials, setBulkSelectedMaterials] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
+  // Refs for dropdown click-outside handling
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const monthDropdownRef = useRef<HTMLDivElement>(null);
+  const yearDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) {
-        setSidebarCollapsed(true);
-      }
+      setIsMobile(window.innerWidth < 768);
     };
     window.addEventListener('resize', handleResize);
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Click outside handler for dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setShowStatusDropdown(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+        setShowSortDropdown(false);
+      }
+      if (monthDropdownRef.current && !monthDropdownRef.current.contains(event.target as Node)) {
+        setShowMonthDropdown(false);
+      }
+      if (yearDropdownRef.current && !yearDropdownRef.current.contains(event.target as Node)) {
+        setShowYearDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Check URL parameters for status filter
@@ -1018,34 +1040,31 @@ const ManageDrivers: React.FC = () => {
     }
   };
 
-  // Dynamic margin based on sidebar state and screen size
-  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-60" : "ml-60";
-
   return (
     <div
-      className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}
+      className={`min-h-screen bg-gray-100 ${isMobile ? 'ml-0 pt-16' : 'ml-0 md:ml-16 lg:ml-60'} md:pr-5 p-4 md:p-6 flex flex-col transition-all duration-300`}
     >
       {/* Mobile Header */}
       {isMobile && (
-        <div className="flex items-center mb-4">
-          <h1 className="text-xl pt-7 font-bold text-gray-800">Drivers Management</h1>
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold text-gray-800">Drivers Management</h1>
         </div>
       )}
 
       {/* Tabs Section */}
       <div className="mb-4">
-        <nav className="flex space-x-8">
+        <nav className={`flex ${isMobile ? 'space-x-2 overflow-x-auto' : 'space-x-8'}`}>
           {/* ... */}
         </nav>
       </div>
 
       {/* Header with Title and Filters */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         {!isMobile && (
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Drivers Management</h1>
         )}
         
-        <div className="flex flex-row sm:flex-row gap-2 w-full lg:w-auto">
+        <div className={`flex ${isMobile ? 'flex-col' : 'flex-row'} gap-2 w-full`}>
           {/* Search Input */}
           <div className="w-full lg:w-80">
             <input
@@ -1057,9 +1076,9 @@ const ManageDrivers: React.FC = () => {
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className={`flex ${isMobile ? 'flex-col w-full' : 'flex-row gap-2'}`}>
             {/* STATUS Filter */}
-            <div className="relative flex-1 sm:flex-none sm:w-32">
+            <div className={`relative ${isMobile ? 'w-full' : 'flex-1 sm:flex-none sm:w-32'}`} ref={statusDropdownRef}>
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                 className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"

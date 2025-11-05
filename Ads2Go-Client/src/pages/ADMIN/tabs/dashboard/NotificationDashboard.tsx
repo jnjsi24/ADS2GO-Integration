@@ -514,7 +514,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
       {/* Pending Actions Section */}
       {(pendingAds.length > 0 || pendingMaterials.length > 0) && (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="overflow-hidden">
           <div className={`${isMobile ? 'p-3' : 'p-4'} border-b border-gray-200`}>
             <h4 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-800`}>Pending Actions Required</h4>
           </div>
