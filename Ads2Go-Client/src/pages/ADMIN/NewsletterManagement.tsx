@@ -697,7 +697,7 @@ const NewsletterManagement: React.FC = () => {
   return (
     <div
       className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-        isMobile ? 'px-10 pl-28' : 'ml-60'
+        isMobile ? 'px-10 pl-28' : 'ml-56'
       }`}
     >
       <div className="max-w-7xl mx-auto w-full">
@@ -1166,7 +1166,7 @@ const NewsletterManagement: React.FC = () => {
         </div>
 
         {showUnsubscribeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
             <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full max-w-[90vw]' : 'p-6 w-96'}`}>
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
               <p className="text-gray-600 mb-6">
@@ -1195,7 +1195,7 @@ const NewsletterManagement: React.FC = () => {
 
         {/* Bulk Unsubscribe Modal */}
         {showBulkUnsubscribeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
             <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-800">Unsubscribe Multiple Subscribers</h2>
@@ -1238,7 +1238,7 @@ const NewsletterManagement: React.FC = () => {
         {/* Email Compose Modal */}
         {isEmailModalOpen && (
           <div
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
             onClick={() => setIsEmailModalOpen(false)}
           >
             <div

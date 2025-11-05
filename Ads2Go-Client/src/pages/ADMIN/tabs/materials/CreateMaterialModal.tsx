@@ -132,7 +132,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
       <div className={`bg-white rounded-md ${isMobile ? 'p-4 w-full max-w-[90vw] max-h-[70vh] overflow-y-auto' : 'p-6 w-full max-w-md'} mx-4`}>
         <div className="flex justify-between items-center mb-6">
           <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>Create New Device</h2>

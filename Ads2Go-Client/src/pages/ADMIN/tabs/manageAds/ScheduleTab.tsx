@@ -314,8 +314,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
         <h2 className="text-xl font-semibold text-gray-800">Ad Schedule</h2>
       </div>
 
-
-
       {loading ? (
         <div className="p-6">
           <div className="flex items-center justify-center h-64">
@@ -426,7 +424,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
           )}
 
           {/* Pagination Controls */}
-          <div className="flex items-center justify-center px-4 py-4 mt-4 border-t">
+          <div className="flex items-center justify-center px-4 py-4 mt-4">
             <div className="flex items-center gap-2">
               <button
                 onClick={handlePreviousPage}

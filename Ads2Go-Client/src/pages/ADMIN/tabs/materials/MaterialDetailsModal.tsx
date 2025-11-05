@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { X, Check, Calendar, UserPlus, UserX, QrCode, History, Edit3 } from 'lucide-react';
+import { X, Check, Calendar, UserPlus, UserX, QrCode, History, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import MaterialUsageHistoryModal from './MaterialUsageHistoryModal';
 import { GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING, GET_MATERIAL_USAGE_HISTORY } from '../../../../graphql/admin/queries/materials';
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../../../graphql/admin/mutations/compliance';
@@ -82,6 +83,19 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
   const [isEditingCondition, setIsEditingCondition] = useState(false);
   const [selectedCondition, setSelectedCondition] = useState<string>('');
   const [isUpdatingCondition, setIsUpdatingCondition] = useState(false);
+  
+  // Collapsible sections for mobile
+  const [expandedSections, setExpandedSections] = useState<{
+    description: boolean;
+    qrCodes: boolean;
+    condition: boolean;
+    history: boolean;
+  }>({
+    description: false,
+    qrCodes: false,
+    condition: false,
+    history: false,
+  });
 
   // Mutations for photo approval
   const [approveMonthlyPhoto] = useMutation(APPROVE_MONTHLY_PHOTO);
@@ -313,7 +327,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
       <div
         className={`fixed ${
           isMobile
-            ? 'inset-x-4 top-16 bottom-6 w-auto max-h-[80vh] rounded-md'
+            ? 'inset-x-2 top-36 bottom-4 w-auto rounded-lg max-h-[70vh] overflow-y-auto'
             : 'top-2 bottom-2 right-2 w-full max-w-xl rounded-lg'
         } bg-white shadow-xl transform transition-all duration-300 ease-in-out ${
           isModalOpen
@@ -327,13 +341,13 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between ${isMobile ? 'p-4' : 'p-6'} border-b pb-4`}>
-          <div className="flex gap-3 items-center">
-            <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-800`}>
+        <div className={`flex items-center justify-between ${isMobile ? 'p-4' : 'p-6'} border-b pb-4 sticky top-0 bg-white z-10`}>
+          <div className="flex gap-2 items-center flex-1 min-w-0">
+            <h2 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold text-gray-800 truncate`}>
               {material.materialId}
             </h2>
             <span
-              className={`px-3 py-1 text-xs font-medium rounded-full ${
+              className={`px-2 py-1 text-xs font-medium rounded-full flex-shrink-0 ${
                 getStatus(material) === 'Used'
                   ? 'bg-red-200 text-red-800'
                   : 'bg-green-200 text-green-800'
@@ -342,42 +356,40 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
               {getStatus(material)}
             </span>
           </div>
-          {isMobile && (
-            <button
-              onClick={handleClose}
-              className="p-1 rounded-full hover:bg-gray-200"
-            >
-              <X size={20} />
-            </button>
-          )}
+          <button
+            onClick={handleClose}
+            className={`p-1 rounded-full hover:bg-gray-200 flex-shrink-0 ${isMobile ? 'ml-2' : ''}`}
+          >
+            <X size={20} />
+          </button>
         </div>
 
         {/* Body */}
         <div className={`flex-grow overflow-y-auto ${isMobile ? 'p-4' : 'p-6'}`}>
           {/* Driver Details Table */}
-          <div className="rounded-lg overflow-hidden mb-6">
-            <h3 className="text-md font-bold text-gray-800 py-2">
+          <div className="rounded-lg overflow-hidden mb-4">
+            <h3 className={`${isMobile ? 'text-sm' : 'text-md'} font-bold text-gray-800 py-2`}>
               Driver Details
             </h3>
             {isMobile ? (
-              <div className="bg-white text-sm grid grid-cols-[1fr,2fr] gap-4 px-4 py-2">
-                <div className="space-y-3">
-                  <span className="block text-gray-900">Driver Name</span>
-                  <span className="block text-gray-900">Plate Number</span>
-                  <span className="block text-gray-900">Car Type</span>
-                  <span className="block text-gray-900">Contact</span>
-                  <span className="block text-gray-900">Email</span>
-                  <span className="block text-gray-900">Created</span>
-                  <span className="block text-gray-900">Updated</span>
+              <div className="bg-white text-xs grid grid-cols-[1fr,1.5fr] gap-3 px-3 py-3 border rounded-lg">
+                <div className="space-y-2.5">
+                  <span className="block text-gray-600">Driver Name</span>
+                  <span className="block text-gray-600">Plate Number</span>
+                  <span className="block text-gray-600">Car Type</span>
+                  <span className="block text-gray-600">Contact</span>
+                  <span className="block text-gray-600">Email</span>
+                  <span className="block text-gray-600">Created</span>
+                  <span className="block text-gray-600">Updated</span>
                 </div>
-                <div className="space-y-3">
-                  <span className="block font-semibold">{material.driver?.fullName || 'N/A'}</span>
-                  <span className="block font-semibold">{material.driver?.vehiclePlateNumber || 'N/A'}</span>
-                  <span className="block font-semibold">{material.vehicleType || 'N/A'}</span>
-                  <span className="block font-semibold">{material.driver?.contactNumber || 'N/A'}</span>
-                  <span className="block font-semibold">{material.driver?.email || 'N/A'}</span>
-                  <span className="block font-semibold">{formatDate(material.createdAt)}</span>
-                  <span className="block font-semibold">{formatDate(material.updatedAt)}</span>
+                <div className="space-y-2.5">
+                  <span className="block font-semibold text-gray-900 truncate">{material.driver?.fullName || 'N/A'}</span>
+                  <span className="block font-semibold text-gray-900 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</span>
+                  <span className="block font-semibold text-gray-900">{material.vehicleType || 'N/A'}</span>
+                  <span className="block font-semibold text-gray-900 truncate">{material.driver?.contactNumber || 'N/A'}</span>
+                  <span className="block font-semibold text-gray-900 truncate">{material.driver?.email || 'N/A'}</span>
+                  <span className="block font-semibold text-gray-900 text-xs">{formatDate(material.createdAt)}</span>
+                  <span className="block font-semibold text-gray-900 text-xs">{formatDate(material.updatedAt)}</span>
                 </div>
               </div>
             ) : (
@@ -415,44 +427,30 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
           </div>
 
           {/* Dates */}
-          <div className={`grid ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2'} gap-4 mb-6`}>
-            {/* Assigned Date */}
-            <div>
-              <span className="text-sm font-semibold text-gray-700">Assigned Date:</span>
-              <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                {(() => {
-                  // Try material.assignedDate first, then fall back to the current usage history entry
-                  if (material.assignedDate) {
-                    return formatDate(material.assignedDate);
-                  }
-                  // Fallback: get from current active usage history (no unassignedAt date)
-                  const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
-                  const currentEntry = history.find((h: any) => h.assignedAt && !h.unassignedAt);
-                  return currentEntry?.assignedAt ? formatDate(currentEntry.assignedAt) : 'N/A';
-                })()}
-              </div>
-            </div>
+          <div className={`grid ${isMobile ? 'grid-cols-2 gap-2' : 'grid-cols-1 sm:grid-cols-2 gap-3'} mb-4`}>
+            {/* Assigned Date - Full width on mobile, half on desktop */}
+            
 
-            {/* Mounted Date - Read-only (automatically set when tablet connects) */}
+            {/* Mounted Date - Half width on mobile and desktop */}
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
+                <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold text-gray-700`}>Mounted Date:</span>
               </div>
-              <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+              <div className={`w-full ${isMobile ? 'text-xs' : 'text-sm'} px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1`}>
                 {formatDate(material.mountedAt)}
               </div>
             </div>
 
-            {/* Dismounted Date */}
+            {/* Dismounted Date - Half width on mobile and desktop */}
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
+                <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold text-gray-700`}>Dismounted Date:</span>
                 {!editingDates[material.id] && (
                   <button
                     onClick={() => onStartEditingDates(material.id, material)}
-                    className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                    className={`group flex items-center text-gray-700 rounded-md overflow-hidden ${isMobile ? 'h-5 w-5' : 'h-6 w-7'} hover:w-14 transition-[width] duration-300`}
                   >
-                    <Calendar className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <Calendar className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300`} />
                     <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
                       Edit
                     </span>
@@ -466,7 +464,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                       type="datetime-local"
                       value={editingDates[material.id].dismountedAt || ''}
                       onChange={(e) => onUpdateEditingDate(material.id, 'dismountedAt', e.target.value)}
-                      className="w-full text-sm px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
+                      className={`w-full ${isMobile ? 'text-xs' : 'text-sm'} px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0`}
                     />
                   </div>
                   <div className="flex justify-between gap-2 pt-2">
@@ -487,128 +485,314 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                   </div>
                 </>
               ) : (
-                <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                <div className={`w-full ${isMobile ? 'text-xs' : 'text-sm'} px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1`}>
                   {formatDate(material.dismountedAt)}
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Description and Requirements */}
-          <div className="mb-6">
-            <div className={`flex ${isMobile ? 'flex-col' : 'gap-6'}`}>
-              <div className={`${isMobile ? 'w-full mb-4' : 'w-1/2'}`}>
-                <span className="text-sm font-semibold">Description:</span>
-                <textarea
-                  value={material.description || 'N/A'}
-                  readOnly
-                  className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none px-3"
-                />
-              </div>
-              <div className={`${isMobile ? 'w-full' : 'w-1/2'}`}>
-                <span className="text-sm font-semibold">Requirements:</span>
-                <textarea
-                  value={material.requirements || 'N/A'}
-                  readOnly
-                  className="w-full text-sm mt-2 py-2 h-20 resize-none focus:ring-1 focus:outline-none px-3 ring-gray-200"
-                />
+            <div className={`${isMobile ? 'col-span-2' : ''}`}>
+              <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-semibold text-gray-700`}>Assigned Date:</span>
+              <div className={`w-full ${isMobile ? 'text-xs' : 'text-sm'} px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1`}>
+                {(() => {
+                  // Try material.assignedDate first, then fall back to the current usage history entry
+                  if (material.assignedDate) {
+                    return formatDate(material.assignedDate);
+                  }
+                  // Fallback: get from current active usage history (no unassignedAt date)
+                  const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
+                  const currentEntry = history.find((h: any) => h.assignedAt && !h.unassignedAt);
+                  return currentEntry?.assignedAt ? formatDate(currentEntry.assignedAt) : 'N/A';
+                })()}
               </div>
             </div>
           </div>
 
-          {/* QR Code Section for HEADDRESS materials */}
-          {material.materialType === 'HEADDRESS' && (
-            <div className="mt-10 space-y-4">
-              <h4 className="text-md font-bold text-gray-800 border-b pb-2">
-                QR Codes
-              </h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onShowConnectionDetails(material.materialId, 1)}
-                  className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-                  title="View tablet connection details for Slot 1"
-                >
-                  <QrCode size={16} />
-                  Slot 1
-                </button>
-                <button
-                  onClick={() => onShowConnectionDetails(material.materialId, 2)}
-                  className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-                  title="View tablet connection details for Slot 2"
-                >
-                  <QrCode size={16} />
-                  Slot 2
-                </button>
-              </div>
-
-              {/* Assigned Ads List */}
-              <div className="mt-6">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-md font-bold text-gray-800">Assigned Ads</h4>
-                  <div className="text-xs text-gray-600 flex items-center gap-3">
-                    {deploymentsLoading ? (
-                      <span>Loading…</span>
-                    ) : (
-                      <>
-                        <span>
-                          Total: {lcdSlots.length}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">RUNNING: {runningSlots.length}</span>
-                        <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">SCHEDULED: {scheduledSlots.length}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                {deploymentsError && (
-                  <div className="text-xs text-red-600 mt-1 break-words">
-                    Failed to load assigned ads: {detailedErrorMessage}
-                  </div>
+          {/* Description and Requirements */}
+          {isMobile ? (
+            <div className="mb-4">
+              <button
+                onClick={() => setExpandedSections(prev => ({ ...prev, description: !prev.description }))}
+                className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg border mb-2"
+              >
+                <span className="text-sm font-semibold text-gray-700">Description & Requirements</span>
+                {expandedSections.description ? (
+                  <ChevronUp size={16} className="text-gray-600" />
+                ) : (
+                  <ChevronDown size={16} className="text-gray-600" />
                 )}
-                <div className="mt-2 space-y-2">
-                  {lcdSlots.length === 0 && !deploymentsLoading && !deploymentsError && (
-                    <div className="p-3 border rounded text-sm text-gray-500 bg-gray-50">No ads assigned</div>
-                  )}
-                  {lcdSlots.map((slot: any) => (
-                    <div key={`${slot.id || slot.adId}-${slot.slotNumber}`} className="border rounded p-3 bg-white shadow-sm">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 border">Slot {slot.slotNumber}</span>
-                          <span className="text-sm font-semibold">{slot.ad?.title || `Ad ${slot.adId}`}</span>
-                        </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${slot.status === 'RUNNING' ? 'bg-green-100 text-green-700' : slot.status === 'SCHEDULED' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
-                          {slot.status}
-                        </span>
+              </button>
+              <AnimatePresence>
+                {expandedSections.description && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <span className="text-xs font-semibold">Description:</span>
+                        <textarea
+                          value={material.description || 'N/A'}
+                          readOnly
+                          className="w-full text-xs mt-1 py-2 h-16 resize-none focus:outline-none px-3 border rounded"
+                        />
                       </div>
-                      <div className="mt-2 space-y-1">
-                        {slot.ad?.createdAt && (
-                          <div className="text-xs text-gray-600">
-                            <span className="font-medium">Created:</span> {formatDate(slot.ad.createdAt)}
-                          </div>
-                        )}
-                        {slot.deployedAt && (
-                          <div className="text-xs text-gray-600">
-                            <span className="font-medium">Deployed:</span> {formatDate(slot.deployedAt)}
-                          </div>
-                        )}
-                        <div className="text-xs text-gray-600">
-                          <span>Start: {formatDate(slot.ad?.startTime)}</span>
-                          <span className="mx-2">•</span>
-                          <span>End: {formatDate(slot.ad?.endTime)}</span>
-                        </div>
+                      <div>
+                        <span className="text-xs font-semibold">Requirements:</span>
+                        <textarea
+                          value={material.requirements || 'N/A'}
+                          readOnly
+                          className="w-full text-xs mt-1 py-2 h-16 resize-none focus:outline-none px-3 border rounded"
+                        />
                       </div>
                     </div>
-                  ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <div className="flex gap-6">
+                <div className="w-1/2">
+                  <span className="text-sm font-semibold">Description:</span>
+                  <textarea
+                    value={material.description || 'N/A'}
+                    readOnly
+                    className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none px-3"
+                  />
+                </div>
+                <div className="w-1/2">
+                  <span className="text-sm font-semibold">Requirements:</span>
+                  <textarea
+                    value={material.requirements || 'N/A'}
+                    readOnly
+                    className="w-full text-sm mt-2 py-2 h-20 resize-none focus:ring-1 focus:outline-none px-3 ring-gray-200"
+                  />
                 </div>
               </div>
             </div>
           )}
 
+          {/* QR Code Section for HEADDRESS materials */}
+          {material.materialType === 'HEADDRESS' && (
+            <div className={isMobile ? 'mb-4' : 'mt-10 space-y-4'}>
+              {isMobile ? (
+                <>
+                  <button
+                    onClick={() => setExpandedSections(prev => ({ ...prev, qrCodes: !prev.qrCodes }))}
+                    className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg border mb-2"
+                  >
+                    <span className="text-sm font-semibold text-gray-700">QR Codes & Assigned Ads</span>
+                    {expandedSections.qrCodes ? (
+                      <ChevronUp size={16} className="text-gray-600" />
+                    ) : (
+                      <ChevronDown size={16} className="text-gray-600" />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {expandedSections.qrCodes && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden space-y-4"
+                      >
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => onShowConnectionDetails(material.materialId, 1)}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors flex-1"
+                            title="View tablet connection details for Slot 1"
+                          >
+                            <QrCode size={14} />
+                            Slot 1
+                          </button>
+                          <button
+                            onClick={() => onShowConnectionDetails(material.materialId, 2)}
+                            className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors flex-1"
+                            title="View tablet connection details for Slot 2"
+                          >
+                            <QrCode size={14} />
+                            Slot 2
+                          </button>
+                        </div>
+
+                        {/* Assigned Ads List */}
+                        <div className="mt-4">
+                          <div className="flex flex-col gap-2 mb-2">
+                            <h4 className="text-sm font-bold text-gray-800">Assigned Ads</h4>
+                            <div className="text-xs text-gray-600 flex flex-wrap items-center gap-2">
+                              {deploymentsLoading ? (
+                                <span>Loading…</span>
+                              ) : (
+                                <>
+                                  <span>Total: {lcdSlots.length}</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">RUNNING: {runningSlots.length}</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">SCHEDULED: {scheduledSlots.length}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {deploymentsError && (
+                            <div className="text-xs text-red-600 mt-1 break-words">
+                              Failed to load assigned ads: {detailedErrorMessage}
+                            </div>
+                          )}
+                          <div className="mt-2 space-y-2">
+                            {lcdSlots.length === 0 && !deploymentsLoading && !deploymentsError && (
+                              <div className="p-3 border rounded text-xs text-gray-500 bg-gray-50">No ads assigned</div>
+                            )}
+                            {lcdSlots.map((slot: any) => (
+                              <div key={`${slot.id || slot.adId}-${slot.slotNumber}`} className="border rounded p-2 bg-white shadow-sm">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 border">Slot {slot.slotNumber}</span>
+                                      <span className="text-xs font-semibold truncate">{slot.ad?.title || `Ad ${slot.adId}`}</span>
+                                    </div>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${slot.status === 'RUNNING' ? 'bg-green-100 text-green-700' : slot.status === 'SCHEDULED' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
+                                      {slot.status}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 space-y-0.5">
+                                    {slot.ad?.createdAt && (
+                                      <div className="text-xs text-gray-600">
+                                        <span className="font-medium">Created:</span> {formatDate(slot.ad.createdAt)}
+                                      </div>
+                                    )}
+                                    {slot.deployedAt && (
+                                      <div className="text-xs text-gray-600">
+                                        <span className="font-medium">Deployed:</span> {formatDate(slot.deployedAt)}
+                                      </div>
+                                    )}
+                                    <div className="text-xs text-gray-600">
+                                      <span>Start: {formatDate(slot.ad?.startTime)}</span>
+                                      <span className="mx-2">•</span>
+                                      <span>End: {formatDate(slot.ad?.endTime)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              ) : (
+                <>
+                  <h4 className="text-md font-bold text-gray-800 border-b pb-2">
+                    QR Codes
+                  </h4>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onShowConnectionDetails(material.materialId, 1)}
+                      className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                      title="View tablet connection details for Slot 1"
+                    >
+                      <QrCode size={16} />
+                      Slot 1
+                    </button>
+                    <button
+                      onClick={() => onShowConnectionDetails(material.materialId, 2)}
+                      className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                      title="View tablet connection details for Slot 2"
+                    >
+                      <QrCode size={16} />
+                      Slot 2
+                    </button>
+                  </div>
+                  {/* Assigned Ads List */}
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-md font-bold text-gray-800">Assigned Ads</h4>
+                      <div className="text-xs text-gray-600 flex items-center gap-3">
+                        {deploymentsLoading ? (
+                          <span>Loading…</span>
+                        ) : (
+                          <>
+                            <span>
+                              Total: {lcdSlots.length}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">RUNNING: {runningSlots.length}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">SCHEDULED: {scheduledSlots.length}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {deploymentsError && (
+                      <div className="text-xs text-red-600 mt-1 break-words">
+                        Failed to load assigned ads: {detailedErrorMessage}
+                      </div>
+                    )}
+                    <div className="mt-2 space-y-2">
+                      {lcdSlots.length === 0 && !deploymentsLoading && !deploymentsError && (
+                        <div className="p-3 border rounded text-sm text-gray-500 bg-gray-50">No ads assigned</div>
+                      )}
+                      {lcdSlots.map((slot: any) => (
+                        <div key={`${slot.id || slot.adId}-${slot.slotNumber}`} className="border rounded p-3 bg-white shadow-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 border">Slot {slot.slotNumber}</span>
+                              <span className="text-sm font-semibold">{slot.ad?.title || `Ad ${slot.adId}`}</span>
+                            </div>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${slot.status === 'RUNNING' ? 'bg-green-100 text-green-700' : slot.status === 'SCHEDULED' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
+                              {slot.status}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            {slot.ad?.createdAt && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Created:</span> {formatDate(slot.ad.createdAt)}
+                              </div>
+                            )}
+                            {slot.deployedAt && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Deployed:</span> {formatDate(slot.deployedAt)}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-600">
+                              <span>Start: {formatDate(slot.ad?.startTime)}</span>
+                              <span className="mx-2">•</span>
+                              <span>End: {formatDate(slot.ad?.endTime)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Material Condition and Inspection Photos Section */}
-          <div className="mt-10 space-y-4">
-            <h4 className="text-md font-bold text-gray-800">
-              Material Condition & Inspection
-            </h4>
-            <div className="grid grid-cols-2 gap-4">
+          {isMobile ? (
+            <div className="mb-4">
+              <button
+                onClick={() => setExpandedSections(prev => ({ ...prev, condition: !prev.condition }))}
+                className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg border mb-2"
+              >
+                <span className="text-sm font-semibold text-gray-700">Material Condition & Inspection</span>
+                {expandedSections.condition ? (
+                  <ChevronUp size={16} className="text-gray-600" />
+                ) : (
+                  <ChevronDown size={16} className="text-gray-600" />
+                )}
+              </button>
+              <AnimatePresence>
+                {expandedSections.condition && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden space-y-4"
+                  >
+                    <div className="grid grid-cols-1 gap-3 pt-2">
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-700">Condition:</span>
@@ -675,185 +859,448 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                   )}
                 </div>
               </div>
-              <div>
-                <span className="text-sm font-semibold text-gray-700">Photo Compliance:</span>
-                <div className="mt-1">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      material.photoComplianceStatus === 'COMPLIANT'
-                        ? 'bg-green-200 text-green-800'
-                        : material.photoComplianceStatus === 'NON_COMPLIANT'
-                        ? 'bg-red-200 text-red-800'
-                        : 'bg-yellow-200 text-yellow-800'
-                    }`}
-                  >
-                    {material.photoComplianceStatus || 'PENDING'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-sm font-semibold text-gray-700">Last Inspection:</span>
-                <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                  {(() => {
-                    // Prefer explicit lastInspectionDate; fallback to mountedAt
-                    const d = material.lastInspectionDate || material.mountedAt;
-                    return formatDate(d) || 'N/A';
-                  })()}
-                </div>
-              </div>
-              <div>
-                <span className="text-sm font-semibold text-gray-700">Next Inspection Due:</span>
-                <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                  {(() => {
-                    if (material.nextInspectionDue) return formatDate(material.nextInspectionDue);
-                    // Derive from lastInspectionDate or mountedAt when not provided
-                    const base = material.lastInspectionDate || material.mountedAt;
-                    if (!base) return 'N/A';
-                    try {
-                      const dt = new Date(base);
-                      if (isNaN(dt.getTime())) return 'N/A';
-                      dt.setMonth(dt.getMonth() + 1);
-                      return formatDate(dt.toISOString());
-                    } catch { return 'N/A'; }
-                  })()}
-                </div>
-              </div>
-            </div>
-            <div>
-              <span className="text-sm font-semibold text-gray-700">Monthly Inspection Photos:</span>
-              {material.inspectionPhotos && material.inspectionPhotos.length > 0 ? (
-                <div className="mt-2 space-y-3">
-                  {material.inspectionPhotos.map((photo, index) => (
-                    <div key={index} className="border rounded-lg p-3 bg-gray-50">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-700">{photo.month}</span>
+                      <div>
+                        <span className="text-xs font-semibold text-gray-700">Photo Compliance:</span>
+                        <div className="mt-1">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              photo.status === 'APPROVED'
+                              material.photoComplianceStatus === 'COMPLIANT'
                                 ? 'bg-green-200 text-green-800'
-                                : photo.status === 'REJECTED'
+                                : material.photoComplianceStatus === 'NON_COMPLIANT'
                                 ? 'bg-red-200 text-red-800'
                                 : 'bg-yellow-200 text-yellow-800'
                             }`}
                           >
-                            {photo.status}
+                            {material.photoComplianceStatus || 'PENDING'}
                           </span>
                         </div>
-                        {photo.status === 'PENDING' && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-green-500 text-white hover:bg-green-600 disabled:bg-green-300"
-                              disabled={reviewLoading === photo.month}
-                              onClick={() => handleApproveMonth(photo.month)}
-                            >
-                              {reviewLoading === photo.month ? 'Approving…' : 'Approve'}
-                            </button>
-                            <button
-                              className="px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300"
-                              disabled={reviewLoading === photo.month}
-                              onClick={() => handleRejectMonth(photo.month)}
-                            >
-                              {reviewLoading === photo.month ? 'Rejecting…' : 'Reject'}
-                            </button>
-                          </div>
-                        )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="relative group">
-                          <img
-                            src={photo.url}
-                            alt={`Inspection photo for ${photo.month}`}
-                            className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} object-cover rounded border cursor-pointer hover:opacity-90 transition-opacity`}
-                            onError={(e) => {
-                              e.currentTarget.src = '/placeholder-image.png';
-                            }}
-                            onClick={() => {
-                              setModalImageSrc(photo.url);
-                              setShowImageModal(true);
-                            }}
-                          />
-                          <button 
-                            className="absolute inset-0 group-hover:bg-opacity-20 transition-all rounded border flex items-center justify-center"
-                            onClick={() => {
-                              setModalImageSrc(photo.url);
-                              setShowImageModal(true);
-                            }}
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-gray-700">Last Inspection:</span>
+                        <div className="w-full text-xs px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                          {(() => {
+                            // Prefer explicit lastInspectionDate; fallback to mountedAt
+                            const d = material.lastInspectionDate || material.mountedAt;
+                            return formatDate(d) || 'N/A';
+                          })()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-gray-700">Next Inspection Due:</span>
+                        <div className="w-full text-xs px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                          {(() => {
+                            if (material.nextInspectionDue) return formatDate(material.nextInspectionDue);
+                            // Derive from lastInspectionDate or mountedAt when not provided
+                            const base = material.lastInspectionDate || material.mountedAt;
+                            if (!base) return 'N/A';
+                            try {
+                              const dt = new Date(base);
+                              if (isNaN(dt.getTime())) return 'N/A';
+                              dt.setMonth(dt.getMonth() + 1);
+                              return formatDate(dt.toISOString());
+                            } catch { return 'N/A'; }
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-gray-700">Monthly Inspection Photos:</span>
+                      {material.inspectionPhotos && material.inspectionPhotos.length > 0 ? (
+                        <div className="mt-2 space-y-2">
+                          {material.inspectionPhotos.map((photo, index) => (
+                            <div key={index} className="border rounded-lg p-2 bg-gray-50">
+                              <div className="flex flex-col gap-2 mb-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-gray-700">{photo.month}</span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        photo.status === 'APPROVED'
+                                          ? 'bg-green-200 text-green-800'
+                                          : photo.status === 'REJECTED'
+                                          ? 'bg-red-200 text-red-800'
+                                          : 'bg-yellow-200 text-yellow-800'
+                                      }`}
+                                    >
+                                      {photo.status}
+                                    </span>
+                                  </div>
+                                  {photo.status === 'PENDING' && (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-green-500 text-white hover:bg-green-600 disabled:bg-green-300"
+                                        disabled={reviewLoading === photo.month}
+                                        onClick={() => handleApproveMonth(photo.month)}
+                                      >
+                                        {reviewLoading === photo.month ? '...' : '✓'}
+                                      </button>
+                                      <button
+                                        className="px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300"
+                                        disabled={reviewLoading === photo.month}
+                                        onClick={() => handleRejectMonth(photo.month)}
+                                      >
+                                        {reviewLoading === photo.month ? '...' : '✕'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <div className="relative group">
+                                  <img
+                                    src={photo.url}
+                                    alt={`Inspection photo for ${photo.month}`}
+                                    className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-90 transition-opacity"
+                                    onError={(e) => {
+                                      e.currentTarget.src = '/placeholder-image.png';
+                                    }}
+                                    onClick={() => {
+                                      setModalImageSrc(photo.url);
+                                      setShowImageModal(true);
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  {photo.description && (
+                                    <p className="text-xs text-gray-600 mb-1 truncate">{photo.description}</p>
+                                  )}
+                                  <p className="text-xs text-gray-500 truncate">By: {photo.uploadedBy}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                          <p className="text-xs text-gray-500">No inspection photos available</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Monthly photos will appear here once uploaded by drivers
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div className="mt-10 space-y-4">
+              <h4 className="text-md font-bold text-gray-800">
+                Material Condition & Inspection
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700">Condition:</span>
+                    {!isEditingCondition && (
+                      <button
+                        onClick={handleStartEditingCondition}
+                        className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                      >
+                        <Edit3 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                        <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                          Edit
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-1">
+                    {isEditingCondition ? (
+                      <div className="space-y-2">
+                        <select
+                          value={selectedCondition}
+                          onChange={(e) => setSelectedCondition(e.target.value)}
+                          className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          disabled={isUpdatingCondition}
+                        >
+                          {conditionOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex justify-between gap-2">
+                          <button
+                            onClick={handleCancelEditingCondition}
+                            disabled={isUpdatingCondition}
+                            className="px-3 py-1 text-black border text-xs rounded hover:bg-gray-100 disabled:bg-gray-400 flex items-center gap-1"
                           >
-                            <span className="absolute top-1 left-1 text-black bg-gray-200 w-32 h-5 flex items-center justify-center rounded-md text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              Click to view
-                            </span>
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveCondition}
+                            disabled={isUpdatingCondition}
+                            className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
+                          >
+                            {isUpdatingCondition ? 'Saving...' : 'Save'}
                           </button>
                         </div>
-                        <div className="flex-1">
-                          {photo.description && (
-                            <p className="text-sm text-gray-600 mb-1">{photo.description}</p>
+                      </div>
+                    ) : (
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          material.materialCondition === 'GOOD'
+                            ? 'bg-blue-200 text-blue-800'
+                            : material.materialCondition === 'FADED'
+                            ? 'bg-yellow-200 text-yellow-800'
+                            : material.materialCondition === 'DAMAGED'
+                            ? 'bg-red-200 text-red-800'
+                            : material.materialCondition === 'REMOVED'
+                            ? 'bg-gray-200 text-gray-800'
+                            : 'bg-gray-200 text-gray-800'
+                        }`}
+                      >
+                        {conditionOptions.find(opt => opt.value === material.materialCondition)?.label || 'Good'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-sm font-semibold text-gray-700">Photo Compliance:</span>
+                  <div className="mt-1">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        material.photoComplianceStatus === 'COMPLIANT'
+                          ? 'bg-green-200 text-green-800'
+                          : material.photoComplianceStatus === 'NON_COMPLIANT'
+                          ? 'bg-red-200 text-red-800'
+                          : 'bg-yellow-200 text-yellow-800'
+                      }`}
+                    >
+                      {material.photoComplianceStatus || 'PENDING'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm font-semibold text-gray-700">Last Inspection:</span>
+                  <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                    {(() => {
+                      // Prefer explicit lastInspectionDate; fallback to mountedAt
+                      const d = material.lastInspectionDate || material.mountedAt;
+                      return formatDate(d) || 'N/A';
+                    })()}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-sm font-semibold text-gray-700">Next Inspection Due:</span>
+                  <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                    {(() => {
+                      if (material.nextInspectionDue) return formatDate(material.nextInspectionDue);
+                      // Derive from lastInspectionDate or mountedAt when not provided
+                      const base = material.lastInspectionDate || material.mountedAt;
+                      if (!base) return 'N/A';
+                      try {
+                        const dt = new Date(base);
+                        if (isNaN(dt.getTime())) return 'N/A';
+                        dt.setMonth(dt.getMonth() + 1);
+                        return formatDate(dt.toISOString());
+                      } catch { return 'N/A'; }
+                    })()}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-gray-700">Monthly Inspection Photos:</span>
+                {material.inspectionPhotos && material.inspectionPhotos.length > 0 ? (
+                  <div className="mt-2 space-y-3">
+                    {material.inspectionPhotos.map((photo, index) => (
+                      <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-700">{photo.month}</span>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                photo.status === 'APPROVED'
+                                  ? 'bg-green-200 text-green-800'
+                                  : photo.status === 'REJECTED'
+                                  ? 'bg-red-200 text-red-800'
+                                  : 'bg-yellow-200 text-yellow-800'
+                              }`}
+                            >
+                              {photo.status}
+                            </span>
+                          </div>
+                          {photo.status === 'PENDING' && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-green-500 text-white hover:bg-green-600 disabled:bg-green-300"
+                                disabled={reviewLoading === photo.month}
+                                onClick={() => handleApproveMonth(photo.month)}
+                              >
+                                {reviewLoading === photo.month ? 'Approving…' : 'Approve'}
+                              </button>
+                              <button
+                                className="px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300"
+                                disabled={reviewLoading === photo.month}
+                                onClick={() => handleRejectMonth(photo.month)}
+                              >
+                                {reviewLoading === photo.month ? 'Rejecting…' : 'Reject'}
+                              </button>
+                            </div>
                           )}
-                          <p className="text-xs text-gray-500">Uploaded by: {photo.uploadedBy}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="relative group">
+                            <img
+                              src={photo.url}
+                              alt={`Inspection photo for ${photo.month}`}
+                              className="w-20 h-20 object-cover rounded border cursor-pointer hover:opacity-90 transition-opacity"
+                              onError={(e) => {
+                                e.currentTarget.src = '/placeholder-image.png';
+                              }}
+                              onClick={() => {
+                                setModalImageSrc(photo.url);
+                                setShowImageModal(true);
+                              }}
+                            />
+                            <button 
+                              className="absolute inset-0 group-hover:bg-opacity-20 transition-all rounded border flex items-center justify-center"
+                              onClick={() => {
+                                setModalImageSrc(photo.url);
+                                setShowImageModal(true);
+                              }}
+                            >
+                              <span className="absolute top-1 left-1 text-black bg-gray-200 w-32 h-5 flex items-center justify-center rounded-md text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                Click to view
+                              </span>
+                            </button>
+                          </div>
+                          <div className="flex-1">
+                            {photo.description && (
+                              <p className="text-sm text-gray-600 mb-1">{photo.description}</p>
+                            )}
+                            <p className="text-xs text-gray-500">Uploaded by: {photo.uploadedBy}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                  <p className="text-sm text-gray-500">No inspection photos available</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Monthly photos will appear here once uploaded by drivers
-                  </p>
-                </div>
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                    <p className="text-sm text-gray-500">No inspection photos available</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Monthly photos will appear here once uploaded by drivers
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Driver History Section */}
-          <div className="mt-10 space-y-3">
-            <h4 className="text-md font-bold text-gray-800">Driver History</h4>
-            {usageError && (
-              <div className="text-xs text-red-600">Failed to load driver history</div>
-            )}
-            {usageLoading ? (
-              <div className="text-sm text-gray-500">Loading…</div>
-            ) : (() => {
-              const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
-              if (!history.length) {
-                return <div className="text-sm text-gray-500">No driver history found for this material.</div>;
-              }
-              return (
-                <div className="space-y-2">
-                  {history.map((h: any) => (
-                    <div key={h.id} className="border rounded p-3 bg-gray-50 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-full bg-gray-200">{h.driverInfo?.fullName || h.driverId}</span>
-                        {h.isActive ? (
-                          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-gray-200">ENDED</span>
-                        )}
-                      </div>
-                      <div className="mt-1 text-xs text-gray-700">
-                        <div>
-                          Assigned: {h.assignedAt ? formatDate(h.assignedAt) : 'N/A'}
-                          {h.unassignedAt && <span> → {formatDate(h.unassignedAt)}</span>}
+          {isMobile ? (
+            <div className="mb-4">
+              <button
+                onClick={() => setExpandedSections(prev => ({ ...prev, history: !prev.history }))}
+                className="w-full flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg border mb-2"
+              >
+                <span className="text-sm font-semibold text-gray-700">Driver History</span>
+                {expandedSections.history ? (
+                  <ChevronUp size={16} className="text-gray-600" />
+                ) : (
+                  <ChevronDown size={16} className="text-gray-600" />
+                )}
+              </button>
+              <AnimatePresence>
+                {expandedSections.history && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden space-y-2 pt-2"
+                  >
+                    {usageError && (
+                      <div className="text-xs text-red-600">Failed to load driver history</div>
+                    )}
+                    {usageLoading ? (
+                      <div className="text-xs text-gray-500">Loading…</div>
+                    ) : (() => {
+                      const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
+                      if (!history.length) {
+                        return <div className="text-xs text-gray-500">No driver history found for this material.</div>;
+                      }
+                      return (
+                        <div className="space-y-2">
+                          {history.map((h: any) => (
+                            <div key={h.id} className="border rounded p-2 bg-gray-50 text-xs">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <span className="px-2 py-0.5 rounded-full bg-gray-200 truncate">{h.driverInfo?.fullName || h.driverId}</span>
+                                {h.isActive ? (
+                                  <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full bg-gray-200">ENDED</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-700 space-y-0.5">
+                                <div>
+                                  Assigned: {h.assignedAt ? formatDate(h.assignedAt) : 'N/A'}
+                                  {h.unassignedAt && <span> → {formatDate(h.unassignedAt)}</span>}
+                                </div>
+                                <div>
+                                  Mounted: {h.mountedAt ? formatDate(h.mountedAt) : 'N/A'}
+                                  {h.dismountedAt && <span> • Dismounted: {formatDate(h.dismountedAt)}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          Mounted: {h.mountedAt ? formatDate(h.mountedAt) : 'N/A'}
-                          {h.dismountedAt && <span> • Dismounted: {formatDate(h.dismountedAt)}</span>}
+                      );
+                    })()}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div className="mt-10 space-y-3">
+              <h4 className="text-md font-bold text-gray-800">Driver History</h4>
+              {usageError && (
+                <div className="text-xs text-red-600">Failed to load driver history</div>
+              )}
+              {usageLoading ? (
+                <div className="text-sm text-gray-500">Loading…</div>
+              ) : (() => {
+                const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
+                if (!history.length) {
+                  return <div className="text-sm text-gray-500">No driver history found for this material.</div>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {history.map((h: any) => (
+                      <div key={h.id} className="border rounded p-3 bg-gray-50 text-sm">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-gray-200">{h.driverInfo?.fullName || h.driverId}</span>
+                          {h.isActive ? (
+                            <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-gray-200">ENDED</span>
+                          )}
                         </div>
-                        {/* Reason removed per request */}
+                        <div className="mt-1 text-xs text-gray-700">
+                          <div>
+                            Assigned: {h.assignedAt ? formatDate(h.assignedAt) : 'N/A'}
+                            {h.unassignedAt && <span> → {formatDate(h.unassignedAt)}</span>}
+                          </div>
+                          <div>
+                            Mounted: {h.mountedAt ? formatDate(h.mountedAt) : 'N/A'}
+                            {h.dismountedAt && <span> • Dismounted: {formatDate(h.dismountedAt)}</span>}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className={`p-${isMobile ? '4' : '6'} mt-auto`}>
+        <div className={`${isMobile ? 'p-4' : 'p-6'} mt-auto border-t bg-white sticky bottom-0`}>
           <div
             className={`flex ${
               isMobile ? 'justify-between gap-2 w-full' : 'justify-between'

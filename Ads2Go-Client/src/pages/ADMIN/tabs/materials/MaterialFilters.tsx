@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MaterialFiltersProps {
@@ -11,7 +11,6 @@ interface MaterialFiltersProps {
   onStatusChange: (value: 'All' | 'Used' | 'Available') => void;
   sortBy: string;
   onSortChange: (value: string) => void;
-  onCreateClick: () => void;
 }
 
 const MaterialFilters: React.FC<MaterialFiltersProps> = ({
@@ -23,7 +22,6 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
   onStatusChange,
   sortBy,
   onSortChange,
-  onCreateClick,
 }) => {
   const materialOptions = [
     { label: 'All Devices', value: 'All' },
@@ -329,19 +327,6 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
             </>
           )}
         </div>
-      </div>
-
-      {/* Second Row: Create Button */}
-      <div className={`flex ${isMobile ? 'justify-end' : 'justify-center md:justify-end'}`}>
-        <button
-          onClick={onCreateClick}
-          className={`py-3 bg-[#feb011] text-xs text-white rounded-lg ${
-            isMobile ? 'w-36' : 'w-full md:w-40'
-          } hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2`}
-        >
-          <Plus size={16} />
-          {isMobile ? 'Create Device' : 'Create Device'}
-        </button>
       </div>
     </div>
   );

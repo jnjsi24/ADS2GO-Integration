@@ -1071,9 +1071,9 @@ const AdminAdsControl: React.FC = () => {
     <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen transition-all duration-300`}>
       {/* Header */}
       <div className="mb-8">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center pt-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">AdsPanel - LCD Control Center</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">LCD Control</h1>
             {/* Show subtle loader during auto-refresh */}
             {isRefreshing && (
               <div className="flex items-center text-xs text-gray-400 mt-1">
@@ -1091,124 +1091,149 @@ const AdminAdsControl: React.FC = () => {
           </div>
         </div>
       </div>
- 
-      {/* Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-2">
-        {/* Total Screens */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-16">
-            <Monitor className="w-8 h-8 text-blue-500" />
-            <div className="flex flex-col items-center">
-              <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
-              <p className="text-sm text-gray-600">Total Screens</p>
-            </div>
-          </div>
-        </div>
-        {/* Online Screens */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-green-600">
-                {screens.filter(s => s.isOnline).length}
-              </p>
-              <p className="text-sm text-gray-600">Online Screens</p>
-            </div>
-            <Monitor className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-
-        {/* Playing Ads */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-blue-600">
-                {screens.filter(s => {
-                  const currentAd = s.screenMetrics?.currentAd;
-                  return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
-                }).length}
-              </p>
-              <p className="text-sm text-gray-600">Playing Ads</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-
-      </div>
-
       
-      {/* Master Controls */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-3">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <Monitor className="w-5 h-5 mr-2" />
-          Master Controls
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <button 
-            onClick={() => handleBulkAction('sync')}
-            disabled={actionLoading === 'sync'}
-            className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {actionLoading === 'sync' ? <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" /> : <Monitor className="w-6 h-6 text-blue-600 mb-2" />}
-            <span className="text-sm font-medium text-blue-600">Sync All</span>
-          </button>
-          <button 
-            onClick={handleTogglePlayPause}
-            disabled={actionLoading === 'play' || actionLoading === 'pause'}
-            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
-              isCurrentlyPlaying 
-                ? 'bg-yellow-50 hover:bg-yellow-100' 
-                : 'bg-green-50 hover:bg-green-100'
-            }`}
-          >
-            {actionLoading === 'play' || actionLoading === 'pause' ? (
-              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
-                isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-              }`} />
-            ) : isCurrentlyPlaying ? (
-              <Pause className="w-6 h-6 text-yellow-600 mb-2" />
-            ) : (
-              <Play className="w-6 h-6 text-green-600 mb-2" />
-            )}
-            <span className={`text-sm font-medium ${
-              isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-            }`}>
-              {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
-            </span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-            <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
-            <span className="text-sm font-medium text-purple-600">Restart All</span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
-            <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
-            <span className="text-sm font-medium text-orange-600">Emergency</span>
-          </button>
-          <button 
-            onClick={handleToggleLock}
-            disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
-            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
-              isLocked 
-                ? 'bg-green-50 hover:bg-green-100' 
-                : 'bg-gray-50 hover:bg-gray-100'
-            }`}
-          >
-            {actionLoading === 'lock' || actionLoading === 'unlock' ? (
-              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
-                isLocked ? 'text-green-600' : 'text-gray-600'
-              }`} />
-            ) : isLocked ? (
-              <Unlock className="w-6 h-6 text-green-600 mb-2" />
-            ) : (
-              <Lock className="w-6 h-6 text-gray-600 mb-2" />
-            )}
-            <span className={`text-sm font-medium ${
-              isLocked ? 'text-green-600' : 'text-gray-600'
-            }`}>
-              {isLocked ? 'Unlock All' : 'Lock All'}
-            </span>
-          </button>
+      <div className="flex flex-col lg:flex-row gap-4 mb-6">
+        {/* ======= Status Overview (Left Side) ======= */}
+        <div className="lg:w-1/2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {/* Total Screens */}
+            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-3xl font-semibold text-gray-900">{screens.length}</p>
+              </div>
+              <p className="text-sm text-gray-600 font-medium mt-1">Total Screens</p>
+            </div>
+
+            {/* Online Screens */}
+            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-3xl font-semibold">
+                  {screens.filter(s => s.isOnline).length}
+                </p>
+                <Monitor className="w-6 h-6 pt-1" />
+              </div>
+              <p className="text-sm text-gray-600 font-medium mt-1">Online Screens</p>
+            </div>
+
+            {/* Playing Ads */}
+            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-3xl font-semibold">
+                  {screens.filter(s => {
+                    const currentAd = s.screenMetrics?.currentAd;
+                    return (
+                      s.isOnline &&
+                      currentAd &&
+                      ['playing', 'buffering', 'loading'].includes(currentAd.state)
+                    );
+                  }).length}
+                </p>
+                <PlayCircle className="w-6 h-6 pt-1" />
+              </div>
+              <p className="text-sm text-gray-600 font-medium mt-1">Playing Ads</p>
+            </div>
+          </div>
+
+        </div>
+
+        {/* ======= Master Controls (Right Side) ======= */}
+        <div className="lg:w-2/3">
+          <div className=" h-full flex flex-col">
+            <h2 className="text-lg font-semibold mb-4 flex items-center">
+              Master Controls
+            </h2>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {/* Sync All */}
+              <button
+                onClick={() => handleBulkAction('sync')}
+                disabled={actionLoading === 'sync'}
+                className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {actionLoading === 'sync' ? (
+                  <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" />
+                ) : (
+                  <Monitor className="w-6 h-6 text-blue-600 mb-2" />
+                )}
+                <span className="text-sm font-medium text-blue-600">Sync All</span>
+              </button>
+
+              {/* Play / Pause All */}
+              <button
+                onClick={handleTogglePlayPause}
+                disabled={actionLoading === 'play' || actionLoading === 'pause'}
+                className={`flex flex-col items-center justify-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+                  isCurrentlyPlaying
+                    ? 'bg-yellow-50 hover:bg-yellow-100'
+                    : 'bg-green-50 hover:bg-green-100'
+                }`}
+              >
+                {actionLoading === 'play' || actionLoading === 'pause' ? (
+                  <Loader2
+                    className={`w-6 h-6 mb-2 animate-spin ${
+                      isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+                    }`}
+                  />
+                ) : isCurrentlyPlaying ? (
+                  <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+                ) : (
+                  <Play className="w-6 h-6 text-green-600 mb-2" />
+                )}
+                <span
+                  className={`text-sm font-medium ${
+                    isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+                  }`}
+                >
+                  {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+                </span>
+              </button>
+
+              {/* Restart All */}
+              <button className="flex flex-col items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+                <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
+                <span className="text-sm font-medium text-purple-600">Restart All</span>
+              </button>
+
+              {/* Emergency */}
+              <button className="flex flex-col items-center justify-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
+                <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
+                <span className="text-sm font-medium text-orange-600">Emergency</span>
+              </button>
+
+              {/* Lock / Unlock All */}
+              <button
+                onClick={handleToggleLock}
+                disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
+                className={`flex flex-col items-center justify-center p-4 bg-gray-200 rounded-lg disabled:opacity-50 ${
+                  isLocked
+                    ? 'bg-green-50 hover:bg-green-100'
+                    : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                {actionLoading === 'lock' || actionLoading === 'unlock' ? (
+                  <Loader2
+                    className={`w-6 h-6 mb-2 animate-spin ${
+                      isLocked ? 'text-green-600' : 'text-gray-600'
+                    }`}
+                  />
+                ) : isLocked ? (
+                  <Unlock className="w-6 h-6 text-green-600 mb-2" />
+                ) : (
+                  <Lock className="w-6 h-6 text-gray-600 mb-2" />
+                )}
+                <span
+                  className={`text-sm font-medium ${
+                    isLocked ? 'text-green-600' : 'text-gray-600'
+                  }`}
+                >
+                  {isLocked ? 'Unlock All' : 'Lock All'}
+                </span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
 
 
       {/* Tabs */}
@@ -1272,7 +1297,7 @@ const AdminAdsControl: React.FC = () => {
 
       {/* Screen Details Modal */}
       {showScreenDetails && selectedScreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">Screen Details - {selectedScreen}</h3>
@@ -1373,7 +1398,7 @@ const AdminAdsControl: React.FC = () => {
       {/* Device Details Modal */}
       {showDeviceModal && selectedDeviceForModal && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
           onClick={handleCloseDeviceModal}
         >
           <div

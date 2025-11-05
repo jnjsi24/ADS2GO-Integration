@@ -331,7 +331,7 @@ const DeviceDataHistoryV2: React.FC = () => {
   const currentItems = allDailyDataItems;
 
   // Calculate margin based on screen size
-  const contentMargin = isMobile ? 'ml-0' : 'pl-72';
+  const contentMargin = isMobile ? 'ml-0' : 'ml-60';
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -348,9 +348,10 @@ const DeviceDataHistoryV2: React.FC = () => {
   }
 
   return (
-    <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}>
-      {/* Header & Filters Combined Layout */}
-      <div className="pt-3">
+    <div className={`flex flex-col ${contentMargin} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}>
+      <div className="p-6 pb-4">
+        {/* Header & Filters Combined Layout */}
+        <div className="pt-3">
         {/* Row 1: Title + Filters */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
           {/* Left: Title */}
@@ -417,7 +418,7 @@ const DeviceDataHistoryV2: React.FC = () => {
             <div className="relative w-full sm:w-40">
               <button
                 onClick={handleButtonClick}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <div className="flex items-center">
                   <span className="text-sm text-gray-700">
@@ -465,9 +466,11 @@ const DeviceDataHistoryV2: React.FC = () => {
           </button>
         </div>
       </div>
+      </div>
 
-      {/* Data Table */}
-      <div className="overflow-hidden">
+      {/* Data Table - Scrollable Content */}
+      <div className="flex-1 overflow-y-auto px-6">
+        <div className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-y-3"> {/* adds spacing between rows */}
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -516,7 +519,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: index * 0.05 }}
-                    className="bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
+                    className="bg-white rounded-md shadow-md hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap rounded-l-lg">
                       <span className="text-sm font-medium text-gray-900">
@@ -609,56 +612,59 @@ const DeviceDataHistoryV2: React.FC = () => {
             </tbody>
           </table>
         </div>
-              </div>
+      </div>
+      </div>
 
-      {/* Pagination */}
+      {/* Pagination - Sticky at Bottom */}
       {materials.length > 0 && (
-        <div className="mt-auto flex justify-center py-4">
-          <div className="flex items-center space-x-1 sm:space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Previous</span>
-            </button>
-            <div className="flex space-x-1">
-              {(() => {
-                const pages = [];
-                const maxVisiblePages = isMobile ? 1 : 3;
-                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                if (endPage - startPage + 1 < maxVisiblePages) {
-                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                }
-                for (let i = startPage; i <= endPage; i++) {
-                  pages.push(
-                    <button
-                      key={i}
-                      onClick={() => setCurrentPage(i)}
-                      className={`px-2 sm:px-3 py-1 text-sm rounded ${
-                        currentPage === i ? 'border border-gray-300 text-black' : 'text-gray-700 hover:border border-gray-300'
-                      }`}
-                    >
-                      {i}
-                    </button>
-                  );
-                }
-                if (endPage < totalPages && !isMobile) {
-                  pages.push(<span key="ellipsis" className="px-2 text-gray-500">…</span>);
-                }
-                return pages;
-              })()}
+        <div className="sticky bottom-0 bg-[#f9f9fc] z-10 py-4 px-6 shadow-lg">
+          <div className="flex justify-center">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Previous</span>
+              </button>
+              <div className="flex space-x-1">
+                {(() => {
+                  const pages = [];
+                  const maxVisiblePages = isMobile ? 1 : 3;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                  if (endPage - startPage + 1 < maxVisiblePages) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                  }
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        className={`px-2 sm:px-3 py-1 text-sm rounded ${
+                          currentPage === i ? 'border border-gray-300 text-black' : 'text-gray-700 hover:border border-gray-300'
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  if (endPage < totalPages && !isMobile) {
+                    pages.push(<span key="ellipsis" className="px-2 text-gray-500">…</span>);
+                  }
+                  return pages;
+                })()}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
             </div>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="hidden sm:inline">Next</span>
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </button>
           </div>
         </div>
       )}
@@ -672,7 +678,7 @@ const DeviceDataHistoryV2: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
             onClick={() => setShowEditModal(false)}
           >
             <motion.div
@@ -693,7 +699,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                   const isToday = dateStr === today;
                   
                   return (
-                    <div className={` rounded-lg text-sm font-medium ${
+                    <div className={` rounded-md text-sm font-medium ${
                       isToday 
                         ? ' text-blue-800' 
                         : ' text-orange-800'
@@ -853,26 +859,20 @@ const DeviceDataHistoryV2: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
             onClick={() => setShowDeleteConfirm(null)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl max-w-md w-full"
+              className="bg-white rounded-md shadow-xl max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                    <Trash2 className="w-6 h-6 text-red-600" />
-                  </div>
+                <div className="flex items-center gap-4 mb-6">
                   <div>
                     <h2 className="text-xl font-bold text-gray-800">Delete Daily Data</h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                      This action cannot be undone
-                    </p>
                   </div>
                 </div>
 
@@ -882,16 +882,15 @@ const DeviceDataHistoryV2: React.FC = () => {
                   <span className="font-semibold">{formatDate(showDeleteConfirm.date)}</span>?
                 </p>
 
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-between gap-3">
                   <button
                     onClick={() => setShowDeleteConfirm(null)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
+                    className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"                  >
                     Cancel
                   </button>
                   <button
                     onClick={handleDelete}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                     Delete
@@ -912,7 +911,7 @@ const DeviceDataHistoryV2: React.FC = () => {
             exit={{ opacity: 0, y: 50 }}
             className="fixed bottom-8 right-8 z-50"
           >
-            <div className="bg-white border-l-4 border-green-500 rounded-lg shadow-xl px-6 py-4 flex items-center gap-3 min-w-[300px]">
+            <div className="bg-white border-l-4 border-green-500 rounded-md shadow-xl px-6 py-4 flex items-center gap-3 min-w-[300px]">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                   <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

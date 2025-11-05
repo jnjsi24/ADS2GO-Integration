@@ -57,6 +57,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Processing states for double-click prevention
   const [markingAsReadId, setMarkingAsReadId] = useState<string | null>(null);
@@ -79,6 +80,16 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError, refetch: refetchPendingMaterials } = useQuery(GET_PENDING_MATERIALS, {
     pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
+
+  // Mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Handle query errors
   useEffect(() => {
@@ -435,10 +446,10 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
+      <div className={`flex ${isMobile ? 'flex-col items-start' : 'justify-between items-center'} gap-3`}>
+        <div className={isMobile ? 'w-full' : ''}>
           {/* Show subtle loader during auto-refresh */}
           {(notificationsLoading || pendingAdsLoading || pendingMaterialsLoading) && (
             <div className="flex items-center text-xs text-gray-400 mt-1">
@@ -448,17 +459,17 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center ${isMobile ? 'w-full gap-2' : 'gap-2'}`}>
           {/* Filter Tabs */}
-          <div className="relative w-40">
+          <div className={`relative ${isMobile ? 'flex-1' : 'w-40'}`}>
             {/* Dropdown Trigger */}
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-              {selectedFilterLabel}
+              className={`flex items-center justify-between w-full text-xs text-black rounded-lg ${isMobile ? 'pl-4 pr-3' : 'pl-6 pr-4'} py-3 shadow-md focus:outline-none bg-white gap-2`}>
+              <span className="truncate">{selectedFilterLabel}</span>
               <ChevronDown
                 size={16}
-                className={`transform transition-transform duration-200 ${
+                className={`flex-shrink-0 transform transition-transform duration-200 ${
                   showFilterDropdown ? "rotate-180" : "rotate-0"
                 }`}
               />
@@ -481,7 +492,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         setSelectedFilter(filter.id as any);
                         setShowFilterDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                     >
                       {filter.label} ({filter.count})
                     </button>
@@ -493,46 +504,46 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center px-4 gap-2 py-2 text-white text-sm shadow-lg rounded-md bg-[#3674B5] hover:bg-[#3674B5]/80 transition-colors"
+            className={`flex items-center ${isMobile ? 'px-3' : 'px-4'} gap-2 py-2 text-white text-xs ${isMobile ? '' : 'text-sm'} shadow-lg rounded-md bg-[#3674B5] hover:bg-[#3674B5]/80 transition-colors ${isMobile ? 'flex-shrink-0' : ''}`}
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} ${refreshing ? 'animate-spin' : ''}`} />
+            {!isMobile && <span>Refresh</span>}
           </button>
         </div>
       </div>
 
       {/* Pending Actions Section */}
       {(pendingAds.length > 0 || pendingMaterials.length > 0) && (
-        <div className="">
-          <div className="p-4 border-b border-gray-200">
-            <h4 className="text-lg font-bold text-gray-800">Pending Actions Required</h4>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className={`${isMobile ? 'p-3' : 'p-4'} border-b border-gray-200`}>
+            <h4 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-800`}>Pending Actions Required</h4>
           </div>
-          <div className="p-4 space-y-4">
+          <div className={`${isMobile ? 'p-3' : 'p-4'} space-y-4`}>
             {/* Pending Ads */}
             {pendingAds.length > 0 && (
               <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                <h5 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700 mb-3 flex items-center gap-2`}>
                   Ads Awaiting Review ({pendingAds.length})
                 </h5>
                 <div className="space-y-2">
                   {pendingAds.slice(0, 3).map(ad => (
-                    <div key={ad.id} className="flex items-center justify-between p-3 bg-orange-50 mb-3 rounded-lg shadow-md">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                        <div>
-                          <p className="font-medium text-gray-800">{ad.title}</p>
-                          <p className="text-sm text-gray-600">
+                    <div key={ad.id} className={`flex ${isMobile ? 'flex-col' : 'items-center justify-between'} ${isMobile ? 'gap-2' : ''} ${isMobile ? 'p-2' : 'p-3'} bg-orange-50 mb-3 rounded-lg shadow-md`}>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-2 h-2 bg-orange-500 rounded-full flex-shrink-0"></div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-800 truncate`}>{ad.title}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 truncate`}>
                             by {ad.user ? `${ad.user.firstName} ${ad.user.lastName}` : 'Unknown User'} • {formatTimeAgo(ad.createdAt)}
                           </p>
                         </div>
                       </div>
-                      <button className="px-3 py-1 bg-orange-400 text-white text-sm shadow-md rounded hover:bg-orange-600">
+                      <button className={`${isMobile ? 'w-full' : ''} px-3 py-1 bg-orange-400 text-white ${isMobile ? 'text-xs' : 'text-sm'} shadow-md rounded hover:bg-orange-600 ${isMobile ? 'mt-2' : ''}`}>
                         Review
                       </button>
                     </div>
                   ))}
                   {pendingAds.length > 3 && (
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 text-center`}>
                       +{pendingAds.length - 3} more ads pending review
                     </p>
                   )}
@@ -543,29 +554,29 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
             {/* Pending Materials */}
             {pendingMaterials.length > 0 && (
               <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <Play className="w-4 h-4" />
+                <h5 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700 mb-3 flex items-center gap-2`}>
+                  <Play className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'}`} />
                   Materials Awaiting Creation ({pendingMaterials.length})
                 </h5>
                 <div className="space-y-2">
                   {pendingMaterials.slice(0, 3).map(material => (
-                    <div key={material.id} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        <div>
-                          <p className="font-medium text-gray-800">{material.materialId}</p>
-                          <p className="text-sm text-gray-600">
+                    <div key={material.id} className={`flex ${isMobile ? 'flex-col' : 'items-center justify-between'} ${isMobile ? 'gap-2' : ''} ${isMobile ? 'p-2' : 'p-3'} bg-purple-50 rounded-lg border border-purple-200`}>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full flex-shrink-0"></div>
+                        <div className="min-w-0 flex-1">
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-800 truncate`}>{material.materialId}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 truncate`}>
                             {material.materialType} • {material.vehicleType} • {formatTimeAgo(material.createdAt)}
                           </p>
                         </div>
                       </div>
-                      <button className="px-3 py-1 bg-purple-500 text-white text-sm rounded hover:bg-purple-600">
+                      <button className={`${isMobile ? 'w-full' : ''} px-3 py-1 bg-purple-500 text-white ${isMobile ? 'text-xs' : 'text-sm'} rounded hover:bg-purple-600 ${isMobile ? 'mt-2' : ''}`}>
                         Create
                       </button>
                     </div>
                   ))}
                   {pendingMaterials.length > 3 && (
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 text-center`}>
                       +{pendingMaterials.length - 3} more materials pending creation
                     </p>
                   )}
@@ -578,23 +589,23 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
       {/* Notifications List */}
       <div>
-        <div className="p-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-lg font-bold text-gray-800">Device Notification Center</h4>
+        <div className={`${isMobile ? 'p-3' : 'p-4'}`}>
+          <div className={`flex ${isMobile ? 'flex-col' : 'items-center justify-between'} ${isMobile ? 'gap-3' : ''}`}>
+            <h4 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-800`}>Device Notification Center</h4>
             {filteredNotifications.length > 0 && (
-              <div className="flex items-center space-x-2">
+              <div className={`flex items-center ${isMobile ? 'w-full flex-wrap gap-2' : 'space-x-2'}`}>
                 {!isSelectMode ? (
                   <button
                     onClick={() => setIsSelectMode(true)}
-                    className="space-x- px-3 py-1 text-black rounded-md shadow-md hover:bg-gray-200 disabled:opacity-50 flex items-center gap-3"
+                    className={`${isMobile ? 'w-full' : ''} px-3 py-1 text-black rounded-md shadow-md hover:bg-gray-200 disabled:opacity-50 flex items-center ${isMobile ? 'justify-center' : 'gap-3'} ${isMobile ? 'text-xs' : 'text-sm'}`}
                   >
                     <span>Select</span>
                   </button>
                 ) : (
-                  <div className="flex items-center space-x-2">
+                  <div className={`flex items-center ${isMobile ? 'flex-wrap w-full gap-2' : 'space-x-2'}`}>
                     <motion.button
                       onClick={toggleSelectAll}
-                      className="flex items-center space-x-2 px-3 py-1 rounded-md text-sm shadow-md disabled:opacity-50"
+                      className={`flex items-center ${isMobile ? 'flex-1 justify-center' : 'space-x-2'} px-3 py-1 rounded-md ${isMobile ? 'text-xs' : 'text-sm'} shadow-md disabled:opacity-50`}
                       initial={false}
                       animate={{
                         scale:
@@ -623,7 +634,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           )}
                         </AnimatePresence>
                       </div>
-                      <span>
+                      <span className={isMobile ? 'ml-2' : ''}>
                         {selectedNotifications.size === filteredNotifications.length
                           ? "Deselect All"
                           : "Select All"}
@@ -639,7 +650,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         }
                       }}
                       disabled={isDeletingSelected}
-                      className={`flex items-center space-x-2 px-3 py-1 shadow-lg font-semibold rounded-md text-sm transition-colors ${
+                      className={`flex items-center ${isMobile ? 'flex-1 justify-center' : 'space-x-2'} px-3 py-1 shadow-lg font-semibold rounded-md ${isMobile ? 'text-xs' : 'text-sm'} transition-colors ${
                         isDeletingSelected
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           : 'bg-red-200 text-red-600 hover:bg-red-300'
@@ -650,7 +661,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                       ) : (
                         <Trash2 className="w-4 h-4" />
                       )}
-                      <span>
+                      <span className={isMobile ? 'ml-2' : ''}>
                         {isDeletingSelected ? 'Deleting...' : (selectedNotifications.size === 0 ? "Delete All" : `Delete (${selectedNotifications.size})`)}
                       </span>
                     </button>
@@ -660,7 +671,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         setIsSelectMode(false);
                         setSelectedNotifications(new Set());
                       }}
-                      className="flex items-center space-x-2 px-3 py-1 shadow-md border text-black/80 font-semibold rounded-md hover:text-black/60 text-sm transition-colors"
+                      className={`flex items-center ${isMobile ? 'flex-1 justify-center' : 'space-x-2'} px-3 py-1 shadow-md border text-black/80 font-semibold rounded-md hover:text-black/60 ${isMobile ? 'text-xs' : 'text-sm'} transition-colors`}
                     >
                       <span>Cancel</span>
                     </button>
@@ -672,24 +683,24 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
         </div>
         <div className="divide-y divide-gray-200">
           {filteredNotifications.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>No notifications found</p>
+            <div className={`${isMobile ? 'p-6' : 'p-8'} text-center text-gray-500`}>
+              <Bell className={`${isMobile ? 'w-8 h-8' : 'w-12 h-12'} mx-auto mb-4 text-gray-300`} />
+              <p className={isMobile ? 'text-sm' : ''}>No notifications found</p>
             </div>
           ) : (
             filteredNotifications.map(notification => (
               <div
                 key={notification.id}
-                className={`p-4 border-l-4 ${getPriorityColor(notification.priority, notification.data, notification.category)} ${
+                className={`${isMobile ? 'p-3' : 'p-4'} border-l-4 ${getPriorityColor(notification.priority, notification.data, notification.category)} ${
                   !notification.read ? 'bg-blue-50' : 'bg-white'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
+                <div className={`flex ${isMobile ? 'flex-col' : 'items-start justify-between'} ${isMobile ? 'gap-3' : ''}`}>
+                  <div className={`flex items-start ${isMobile ? 'w-full' : 'gap-3'} flex-1 min-w-0`}>
                     {isSelectMode && (
                       <motion.button
                         onClick={() => toggleSelectNotification(notification.id)}
-                        className="rounded transition-colors flex items-center justify-center"
+                        className="rounded transition-colors flex items-center justify-center flex-shrink-0"
                         initial={false}
                         animate={{
                           scale: selectedNotifications.has(notification.id) ? 1.05 : 1,
@@ -719,16 +730,18 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         </div>
                       </motion.button>
                     )}
-                    {getNotificationIcon(notification.category, notification.type, notification.data)}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h5 className={`font-medium ${getTypeColor(notification.type)}`}>
+                    <div className="flex-shrink-0">
+                      {getNotificationIcon(notification.category, notification.type, notification.data)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`flex ${isMobile ? 'flex-wrap' : 'items-center'} gap-2 mb-1`}>
+                        <h5 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium ${getTypeColor(notification.type)} truncate`}>
                           {notification.title}
                         </h5>
                         {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
                         )}
-                        <span className={`text-xs px-2 py-1 rounded-full ${
+                        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
                           notification.priority === 'HIGH' ? 'bg-red-100 text-red-600' :
                           notification.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-600' :
                           'bg-green-100 text-green-600'
@@ -736,25 +749,25 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           {notification.priority}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mb-2 break-words`}>{notification.message}</p>
+                      <div className={`flex ${isMobile ? 'flex-col' : 'items-center'} ${isMobile ? 'gap-1' : 'gap-4'} ${isMobile ? 'text-xs' : 'text-xs'} text-gray-500`}>
                         <span>{formatTimeAgo(notification.data?.timestamp || notification.createdAt)}</span>
                         {notification.adTitle && (
-                          <span>Ad: {notification.adTitle}</span>
+                          <span className="truncate">Ad: {notification.adTitle}</span>
                         )}
                         {(notification.category === 'DEVICE_OFFLINE' || notification.data?.eventType === 'DEVICE_OFFLINE') && (
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                          <div className={`flex ${isMobile ? 'flex-wrap' : 'items-center'} gap-2`}>
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium flex-shrink-0">
                               🔌 Device Offline
                             </span>
                             {notification.data?.materialId && (
-                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                              <span className="text-gray-600 truncate">Device: {notification.data.materialId}</span>
                             )}
                             {notification.data?.slotNumber && (
                               <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
                             )}
                             {notification.data?.driverName && (
-                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                              <span className="text-gray-600 truncate">Driver: {notification.data.driverName}</span>
                             )}
                             {notification.data?.timeSinceLastSeen && (
                               <span className="text-gray-600">Last seen: {notification.data.timeSinceLastSeen}s ago</span>
@@ -762,34 +775,34 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           </div>
                         )}
                         {(notification.category === 'DEVICE_ONLINE' || notification.data?.eventType === 'DEVICE_ONLINE') && (
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <div className={`flex ${isMobile ? 'flex-wrap' : 'items-center'} gap-2`}>
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex-shrink-0">
                               ✅ Device Online
                             </span>
                             {notification.data?.materialId && (
-                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                              <span className="text-gray-600 truncate">Device: {notification.data.materialId}</span>
                             )}
                             {notification.data?.slotNumber && (
                               <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
                             )}
                             {notification.data?.driverName && (
-                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                              <span className="text-gray-600 truncate">Driver: {notification.data.driverName}</span>
                             )}
                           </div>
                         )}
                         {notification.category === 'DAILY_COMPLIANCE_MISSED' && (
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                          <div className={`flex ${isMobile ? 'flex-wrap' : 'items-center'} gap-2`}>
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium flex-shrink-0">
                               ⚠️ Compliance Missed
                             </span>
                             {notification.data?.materialId && (
-                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                              <span className="text-gray-600 truncate">Device: {notification.data.materialId}</span>
                             )}
                             {notification.data?.slotNumber && (
                               <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
                             )}
                             {notification.data?.driverName && (
-                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                              <span className="text-gray-600 truncate">Driver: {notification.data.driverName}</span>
                             )}
                             {notification.data?.hoursAchieved && (
                               <span className="text-gray-600">Hours: {notification.data.hoursAchieved}/8.0</span>
@@ -803,15 +816,15 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                     </div>
                   </div>
                   {!isSelectMode && (
-                    <div className="flex items-center gap-2">
+                    <div className={`flex items-center ${isMobile ? 'w-full justify-end gap-2 mt-2' : 'gap-2'}`}>
                       {/* DEVICE_MILESTONE tags on the right side */}
                       {(notification.category === 'DEVICE_MILESTONE' || notification.data?.achievementType === '8_HOUR_MILESTONE') && (
-                        <div className="flex items-center gap-2 mr-2">
+                        <div className={`flex ${isMobile ? 'flex-wrap' : 'items-center'} gap-2 ${isMobile ? 'w-full' : 'mr-2'}`}>
                           <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                             🎯 8-Hour Milestone
                           </span>
                           {notification.data?.materialId && (
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs truncate">
                               Device: {notification.data.materialId}
                             </span>
                           )}
@@ -821,7 +834,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                             </span>
                           )}
                           {notification.data?.driverName && (
-                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs truncate">
                               Driver: {notification.data.driverName}
                             </span>
                           )}
@@ -832,7 +845,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
                           disabled={markingAsReadId === notification.id}
-                          className={`group flex items-center rounded-md overflow-hidden h-6 w-7 hover:w-24 transition-[width] duration-300 ${
+                          className={`group flex items-center rounded-md overflow-hidden ${isMobile ? 'h-8 w-8' : 'h-6 w-7'} ${isMobile ? '' : 'hover:w-24'} transition-[width] duration-300 ${
                             markingAsReadId === notification.id
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-green-700'
@@ -842,10 +855,12 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                             <div className="w-4 h-4 animate-spin border-2 border-green-600 border-t-transparent rounded-full mx-auto" />
                           ) : (
                             <>
-                              <CheckCircle className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                                Mark as Read
-                              </span>
+                              <CheckCircle className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300`} />
+                              {!isMobile && (
+                                <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                                  Mark as Read
+                                </span>
+                              )}
                             </>
                           )}
                         </button>
@@ -853,12 +868,14 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
                       <button
                         onClick={() => handleDeleteNotification(notification)}
-                        className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-16 transition-[width] duration-300"
+                        className={`group flex items-center text-red-700 rounded-md overflow-hidden ${isMobile ? 'h-8 w-8' : 'h-6 w-7'} ${isMobile ? '' : 'hover:w-16'} transition-[width] duration-300`}
                       >
-                        <X className="w-4 h-4 flex-shrink-0 mx-auto transition-all duration-300" />
-                        <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                          Delete
-                        </span>
+                        <X className={`${isMobile ? 'w-4 h-4' : 'w-4 h-4'} flex-shrink-0 mx-auto transition-all duration-300`} />
+                        {!isMobile && (
+                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                            Delete
+                          </span>
+                        )}
                       </button>
                     </div>
                   )}
@@ -871,44 +888,44 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+          <div className={`bg-white rounded-lg ${isMobile ? 'p-4' : 'p-6'} max-w-md w-full`}>
             <div className="flex items-center mb-4">
               <div className="flex-shrink-0">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <AlertTriangle className={`${isMobile ? 'h-5 w-5' : 'h-6 w-6'} text-red-600`} />
               </div>
               <div className="ml-3">
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-medium text-gray-900`}>
                   Delete Notification
                 </h3>
               </div>
             </div>
             <div className="mb-4">
-              <p className="text-sm text-gray-500">
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500`}>
                 Are you sure you want to delete this notification?
               </p>
               {notificationToDelete && (
-                <div className="mt-2 p-3 bg-gray-50 rounded-md">
-                  <p className="font-medium text-gray-900">{notificationToDelete.title}</p>
-                  <p className="text-sm text-gray-600 mt-1">{notificationToDelete.message}</p>
+                <div className={`mt-2 ${isMobile ? 'p-2' : 'p-3'} bg-gray-50 rounded-md`}>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-900 break-words`}>{notificationToDelete.title}</p>
+                  <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 mt-1 break-words`}>{notificationToDelete.message}</p>
                 </div>
               )}
-              <p className="text-sm text-gray-500 mt-2">
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-2`}>
                 This action cannot be undone.
               </p>
             </div>
-            <div className="flex justify-end space-x-3">
+            <div className={`flex ${isMobile ? 'flex-col-reverse gap-2' : 'justify-end space-x-3'}`}>
               <button
                 onClick={cancelDelete}
                 disabled={isDeleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`${isMobile ? 'w-full' : ''} px-4 py-2 ${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={isDeleting}
-                className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center gap-2 ${
+                className={`${isMobile ? 'w-full' : ''} px-4 py-2 ${isMobile ? 'text-xs' : 'text-sm'} font-medium text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center ${isMobile ? 'justify-center' : 'gap-2'} ${
                   isDeleting
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-red-600 hover:bg-red-700'

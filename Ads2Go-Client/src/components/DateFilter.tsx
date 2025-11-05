@@ -176,7 +176,7 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
             </button>
             <button
               onClick={handleApplyFilter}
-              className="flex-1 px-2 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-xs"
+              className="flex-1 px-2 py-1.5 bg-[#3674B5] text-white rounded-md hover:shadow-md disabled:opacity-50 text-xs"
               disabled={!startDate}
             >
               Apply Filter

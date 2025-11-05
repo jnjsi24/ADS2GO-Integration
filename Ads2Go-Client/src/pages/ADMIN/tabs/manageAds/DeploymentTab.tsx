@@ -487,7 +487,7 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
           {/* Pagination Controls */}
           {filteredDeployments.length > 0 && (
-            <div className="flex items-center justify-center px-4 py-4 mt-4 border-t">
+            <div className="flex items-center justify-center px-4 py-4 mt-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePreviousPage}

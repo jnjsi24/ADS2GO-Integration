@@ -1018,12 +1018,13 @@ const ManageDrivers: React.FC = () => {
     }
   };
 
+  // Dynamic margin based on sidebar state and screen size
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-60" : "ml-60";
+
   return (
     <div
-    className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-      isMobile ? 'px-10 pl-28' : 'ml-60'
-    }`}
-  >
+      className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}
+    >
       {/* Mobile Header */}
       {isMobile && (
         <div className="flex items-center mb-4">
@@ -1034,34 +1035,7 @@ const ManageDrivers: React.FC = () => {
       {/* Tabs Section */}
       <div className="mb-4">
         <nav className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('active')}
-            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-              activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <User className="w-4 h-4 mr-2" />
-            Active Drivers
-            <span
-              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
-              }`}
-            />
-          </button>
-          <button
-            onClick={() => setActiveTab('archived')}
-            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-              activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Archive className="w-4 h-4 mr-2" />
-            Archived Drivers
-            <span
-              className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
-              }`}
-            />
-          </button>
+          {/* ... */}
         </nav>
       </div>
 
@@ -1070,25 +1044,33 @@ const ManageDrivers: React.FC = () => {
         {!isMobile && (
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Drivers Management</h1>
         )}
-        <div className="flex flex-col sm:flex-row gap-1 w-full lg:w-auto">
+        
+        <div className="flex flex-row sm:flex-row gap-2 w-full lg:w-auto">
+          {/* Search Input */}
           <div className="w-full lg:w-80">
             <input
               type="text"
-              placeholder="Search by name or Driver ID..."
-              className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
+              className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
+              placeholder="Search drivers by name..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="flex gap-1">
+          
+          <div className="flex gap-2">
+            {/* STATUS Filter */}
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedStatusFilter}</span>
-                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
+                />
               </button>
+
               <AnimatePresence>
                 {showStatusDropdown && (
                   <motion.div
@@ -1096,7 +1078,7 @@ const ManageDrivers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map(status => (
                       <button
@@ -1111,148 +1093,10 @@ const ManageDrivers: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
-            <div className="relative flex-1 sm:flex-none sm:w-32">
-              <button
-                onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                <span className="truncate">{selectedMonth}</span>
-                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showMonthDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {showMonthDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                  >
-                    {monthOptions.map(month => (
-                      <button
-                        key={month}
-                        onClick={() => { setSelectedMonth(month); setShowMonthDropdown(false); }}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {month}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <div className="relative flex-1 sm:flex-none sm:w-32">
-              <button
-                onClick={() => setShowYearDropdown(!showYearDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                <span className="truncate">{selectedYear}</span>
-                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {showYearDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
-                  >
-                    {yearOptions.map(year => (
-                      <button
-                        key={year}
-                        onClick={() => { setSelectedYear(year); setShowYearDropdown(false); }}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {year}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <div className="relative flex-1 sm:flex-none sm:w-36">
-              <button
-                onClick={() => setShowSortDropdown(!showSortDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                <span className="truncate">{sortBy}</span>
-                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {showSortDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {sortByOptions.map(option => (
-                      <button
-                        key={option}
-                        onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            {/* ... */}
           </div>
         </div>
       </div>
-
-      {/* Bulk Actions Bar */}
-      {selectedDrivers.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-sm font-medium text-blue-800">
-                {selectedDrivers.length} driver{selectedDrivers.length > 1 ? 's' : ''} selected
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {filteredDrivers.filter((d: any) => selectedDrivers.includes(d.driverId) && d.status === 'PENDING').length > 0 && (
-                  <>
-                    <button
-                      onClick={handleBulkApprove}
-                      className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
-                    >
-                      Approve Selected
-                    </button>
-                    <button
-                      onClick={handleBulkReject}
-                      className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
-                    >
-                      Reject Selected
-                    </button>
-                  </>
-                )}
-                  <button
-                    onClick={handleBulkDelete}
-                    className="px-3 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200"
-                  >
-                    Delete Selected
-                  </button>
-                  <button
-                    onClick={handleExportToCSV}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
-                  >
-                    Export to CSV
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedDrivers([])}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-              >
-                Clear Selection
-              </button>
-            </div>
-          </div>
-        )}
 
       {/* Driver List */}
       {loading ? (
@@ -1271,19 +1115,35 @@ const ManageDrivers: React.FC = () => {
                 activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
               }`}>
                 <div className="flex items-center gap-2 col-span-3">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    onChange={() => {}}
-                    onClick={handleSelectAll}
-                    checked={isAllSelected}
-                  />
+                  <div className="relative flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                      onChange={() => {}}
+                      onClick={handleSelectAll}
+                      checked={isAllSelected}
+                    />
+                    <AnimatePresence>
+                      {isAllSelected && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute text-black pointer-events-none"
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-2">Email</div>
+                <div className="col-span-3">Email</div>
                 <div className="col-span-2">Contact</div>
                 <div className="col-span-1">Vehicle</div>
-                <div className="col-span-1 flex items-center gap-1">
+                <div className="col-span-1 flex items-center gap-1 ml-4">
                   <span>Status</span>
                 </div>
                 {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
@@ -1298,27 +1158,51 @@ const ManageDrivers: React.FC = () => {
                 onClick={() => handleViewDetails(driver)}
               >
                 {isMobile ? (
+                  // Mobile Card Layout
                   <div className="p-4 cursor-pointer">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox"
-                          checked={selectedDrivers.includes(driver.driverId)}
-                          onChange={() => {}}
-                          onClick={(e) => handleSelect(driver.driverId, e)}
-                        />
-                        <ProfilePicture driver={driver} className="w-10 h-10" isMobile={isMobile} />
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox appearance-none w-4 h-4 border border-gray-300 rounded bg-white cursor-pointer"
+                            checked={selectedDrivers.includes(driver.driverId)}
+                            onChange={() => {}}
+                            onClick={(e) => handleSelect(driver.driverId, e)}
+                          />
+                          <AnimatePresence>
+                            {selectedDrivers.includes(driver.driverId) && (
+                              <motion.div
+                                key="check"
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                className="absolute text-black pointer-events-none"
+                              >
+                                <Check size={12} strokeWidth={3} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                        <div className="flex items-center justify-center w-10 h-10 text-sm font-semibold text-white rounded-full bg-[#FF9D3D]">
+                          {getInitials(driver.firstName, driver.lastName)}
+                        </div>
                         <div>
                           <div className="font-semibold text-gray-800">
                             {driver.firstName} {driver.lastName}
                           </div>
                           <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                            {driver.email}
+                            {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : 'N/A'}
                           </div>
                         </div>
                       </div>
                     </div>
+                    
                     <div className="grid grid-cols-2 gap-2 text-sm text-black mb-3">
                       <div>
                         <div className="font-medium">Vehicle</div>
@@ -1329,6 +1213,7 @@ const ManageDrivers: React.FC = () => {
                         <div>{driver.contactNumber}</div>
                       </div>
                     </div>
+                    
                     <div className="flex justify-end gap-2">
                       <span
                         className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -1342,10 +1227,13 @@ const ManageDrivers: React.FC = () => {
                       </span>
                       {activeTab === 'archived' ? (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleRestore(driver.driverId); }}
-                          className="flex items-center text-green-700 px-1 py-1 rounded shadow-md hover:bg-green-50"
+                          className="flex items-center text-green-700 px-1 py-1 rounded hover:bg-green-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRestore(driver.driverId);
+                          }}
                         >
-                          <RotateCcw size={14}/>
+                          <RotateCcw size={14} />
                         </button>
                       ) : (
                         <>
@@ -1368,27 +1256,47 @@ const ManageDrivers: React.FC = () => {
                           </>
                         )}
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(driver.driverId); }}
-                          className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
+                          className="flex items-center text-red-700 px-1 py-1 rounded hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(driver.driverId);
+                          }}
                         >
-                          <Trash size={14}/>
+                          <Trash size={14} />
                         </button>
                         </>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <div className={`grid items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg ${
+                  // Desktop Card Layout
+                  <div className={`grid items-center px-6 py-3 text-sm transition-colors cursor-pointer rounded-lg ${
                     activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
                   }`}>
                     <div className="col-span-3 gap-3 flex items-center">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox"
-                        checked={selectedDrivers.includes(driver.driverId)}
-                        onChange={() => {}}
-                        onClick={(e) => handleSelect(driver.driverId, e)}
-                      />
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox appearance-none w-4 h-4 border border-gray-300 rounded bg-white cursor-pointer"
+                          checked={selectedDrivers.includes(driver.driverId)}
+                          onChange={() => {}}
+                          onClick={(e) => handleSelect(driver.driverId, e)}
+                        />
+                        <AnimatePresence>
+                          {selectedDrivers.includes(driver.driverId) && (
+                            <motion.div
+                              key="check"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0, opacity: 0 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                              className="absolute text-black pointer-events-none"
+                            >
+                              <Check size={12} strokeWidth={3} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       <div className="flex items-center">
                         <ProfilePicture driver={driver} className="mr-3" isMobile={isMobile} />
                         <span className="truncate font-semibold">
@@ -1396,12 +1304,12 @@ const ManageDrivers: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="col-span-2 truncate">{driver.email}</div>
+                    <div className="col-span-3 truncate">{driver.email}</div>
                     <div className="col-span-2 truncate">{driver.contactNumber}</div>
-                    <div className="col-span-1 truncate">{driver.vehicleType}</div>
-                    <div className="col-span-1">
+                    <div className="col-span-1 truncate ml-5">{driver.vehicleType}</div>
+                    <div className="col-span-1 ml-7">
                       <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        className={`px-2 py-1  text-xs font-medium rounded-full ${
                           driver.accountStatus === 'ACTIVE' ? 'bg-green-200 text-green-800' :
                           driver.accountStatus === 'PENDING' ? 'bg-yellow-200 text-yellow-800' :
                           driver.accountStatus === 'REJECTED' ? 'bg-red-200 text-red-800' :
@@ -1416,7 +1324,7 @@ const ManageDrivers: React.FC = () => {
                         {driver.scheduledDeletionDate ? formatDate(driver.scheduledDeletionDate) : 'N/A'}
                       </div>
                     )}
-                    <div className="col-span-2 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="col-span-2 flex items-center justify-center gap-1 ml-9" onClick={(e) => e.stopPropagation()}>
                     {activeTab === 'archived' ? (
                       <button
                         onClick={() => handleRestore(driver.driverId)}
@@ -1502,14 +1410,31 @@ const ManageDrivers: React.FC = () => {
                 return types.map((mType) => (
                   <label key={mType} className="flex items-center justify-between text-sm px-3 py-2 shadow-md rounded-md">
                     <span className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedMaterials.includes(mType)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setSelectedMaterials(prev => checked ? [...prev, mType] : prev.filter(x => x !== mType));
-                        }}
-                      />
+                      <div className="relative flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          className="appearance-none w-4 h-4 border border-gray-300 rounded bg-white cursor-pointer"
+                          checked={selectedMaterials.includes(mType)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedMaterials(prev => checked ? [...prev, mType] : prev.filter(x => x !== mType));
+                          }}
+                        />
+                        <AnimatePresence>
+                          {selectedMaterials.includes(mType) && (
+                            <motion.div
+                              key="check"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0, opacity: 0 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                              className="absolute text-black pointer-events-none"
+                            >
+                              <Check size={12} strokeWidth={3} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       <span className="font-medium">{mType}</span>
                     </span>
                     <span className="text-xs text-gray-600">{counts[mType]} available</span>
@@ -1545,7 +1470,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Details Modal */}
       {showDetailsModal && selectedDriverDetails && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50 z-[9999]" onClick={handleCloseModal}>
+        <div className="fixed inset-0 overflow-hidden bg-black bg-opacity-50 z-[9999]" onClick={handleCloseModal}>
           <div
             className={`fixed ${
               isMobile ? 'inset-x-4 top-16 bottom-6 w-auto max-h-[80vh] rounded-md' : 'top-2 bottom-2 right-2 w-full max-w-xl rounded-lg'
@@ -1907,7 +1832,7 @@ const ManageDrivers: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-6 flex flex-wrap gap-3 justify-center border-t pt-4">
+              <div className="mt-6 flex flex-wrap gap-3 justify-end pt-6">
                 {selectedDriverDetails.accountStatus === 'PENDING' && (
                   <>
                     <button
@@ -1969,7 +1894,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Suspend Modal */}
       {showSuspendModal && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-center justify-center">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-gray-800">Suspend Driver</h3>
@@ -2066,7 +1991,7 @@ const ManageDrivers: React.FC = () => {
       {/* Image Pop-up Modal */}
       {showImageModal && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[9999] p-4"
           onClick={() => { setShowImageModal(false); setShowDetailsModal(true); }}
         >
           <div className="relative bg-white rounded-lg p-6 w-auto max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -2149,7 +2074,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Bulk Approve Modal */}
       {showBulkApproveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">Approve {selectedDrivers.length} Driver(s)</h2>
@@ -2171,18 +2096,34 @@ const ManageDrivers: React.FC = () => {
             <div className="space-y-2 mb-6">
               {['Helmet', 'Shirt', 'Tablet', 'Phone', 'Other'].map((material) => (
                 <label key={material} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={bulkSelectedMaterials.includes(material)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setBulkSelectedMaterials([...bulkSelectedMaterials, material]);
-                      } else {
-                        setBulkSelectedMaterials(bulkSelectedMaterials.filter(m => m !== material));
-                      }
-                    }}
-                    className="form-checkbox"
-                  />
+                  <div className="relative flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="appearance-none w-4 h-4 border border-gray-300 rounded bg-white cursor-pointer"
+                      checked={bulkSelectedMaterials.includes(material)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setBulkSelectedMaterials([...bulkSelectedMaterials, material]);
+                        } else {
+                          setBulkSelectedMaterials(bulkSelectedMaterials.filter(m => m !== material));
+                        }
+                      }}
+                    />
+                    <AnimatePresence>
+                      {bulkSelectedMaterials.includes(material) && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute text-black pointer-events-none"
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <span className="text-sm">{material}</span>
                 </label>
               ))}
@@ -2217,7 +2158,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Bulk Reject Modal */}
       {showBulkRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">Reject {selectedDrivers.length} Driver(s)</h2>
@@ -2313,7 +2254,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Restore Confirmation Modal */}
       {showRestoreModal && driverToRestore && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">Restore Driver</h2>

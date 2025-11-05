@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Trash, ChevronLeft, ChevronRight, Pencil, Archive, RotateCcw, X } from 'lucide-react';
+import { Trash, ChevronLeft, ChevronRight, Pencil, Archive, RotateCcw, X, Plus } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -1192,47 +1192,13 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'pt-10 pl-72';
+  const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'pt-10 ml-60';
 
   if (error) return <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex items-center justify-center text-red-500 transition-all duration-300`}>Error: {error.message}</div>;
 
   return (
     <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}>
       <div className="flex-1 flex flex-col">
-        {/* Tabs Section */}
-        <div className="mb-4">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('active')}
-              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <span className="w-4 h-4 mr-2 rounded-full bg-blue-500"></span>
-              Active Devices
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
-                }`}
-              />
-            </button>
-            <button
-              onClick={() => setActiveTab('archived')}
-              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Archive className="w-4 h-4 mr-2" />
-              Archived Devices
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
-                }`}
-              />
-            </button>
-          </nav>
-        </div>
-
         {/* Header with Filters */}
         <MaterialFilters
           searchTerm={searchTerm}
@@ -1243,8 +1209,48 @@ const Materials: React.FC = () => {
           onStatusChange={setStatusFilter}
           sortBy={sortBy}
           onSortChange={setSortBy}
-          onCreateClick={() => setShowCreateModal(true)}
         />
+
+        {/* Tabs Section */}
+        <div className="mb-4 flex items-center justify-between">
+          <nav className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Active Devices
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Archived Devices
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </nav>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className={`py-3 bg-[#feb011] text-xs text-white rounded-lg ${
+              isMobile ? 'w-36' : 'w-40'
+            } hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2`}
+          >
+            <Plus size={16} />
+            Create Device
+          </button>
+        </div>
 
         {/* Bulk Actions Bar */}
         {selectedMaterials.length > 0 && (
@@ -1301,8 +1307,8 @@ const Materials: React.FC = () => {
               <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
             </div>
             <div className="col-span-2">ID</div>
-            <div className="col-span-1 pl-16">Status</div>
-            {activeTab === 'archived' && <div className="col-span-1 pl-8">Deletion Date</div>}
+            <div className="col-span-1 pl-6">Status</div>
+            {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
             <div className="col-span-2 pl-12">Driver Name</div>
             <div className="col-span-2 pl-24">Vehicle Plate</div>
             <div className="col-span-1 ml-28">Action</div>
@@ -1358,7 +1364,7 @@ const Materials: React.FC = () => {
                       )}
 
                       <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                      <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                      <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
                       <div className="col-span-1 flex justify-center gap-1 ml-">
                       {activeTab === 'archived' ? (
@@ -1568,7 +1574,7 @@ const Materials: React.FC = () => {
     
     {/* Restore Confirmation Modal */}
     {showRestoreModal && materialToRestore && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
         <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Restore Material</h2>
@@ -1674,7 +1680,7 @@ const Materials: React.FC = () => {
 
     {/* Bulk Assign Modal */}
     {showBulkAssignModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
         <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-800">Assign {selectedMaterials.length} Material(s) to Driver</h2>

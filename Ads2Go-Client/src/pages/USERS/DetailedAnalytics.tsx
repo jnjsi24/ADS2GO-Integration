@@ -23,7 +23,7 @@ const DetailedAnalytics: React.FC = () => {
   
   // Device selection state
   const [selectedDevice, setSelectedDevice] = useState<string>('all');
-  const [availableDevices, setAvailableDevices] = useState<Array<{id: string, name: string, materialId: string}>>([]);
+  const [availableDevices, setAvailableDevices] = useState<Array<{id: string, name: string, materialId: string, isOnline: boolean}>>([]);
   const [deviceAnalytics, setDeviceAnalytics] = useState<any>(null);
   const [deviceLoading, setDeviceLoading] = useState(false);
 
@@ -517,34 +517,250 @@ const DetailedAnalytics: React.FC = () => {
     <div className="relative min-h-screen overflow-hidden">
       {/* Background layer */}
       <div
-      className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
-      style={{ backgroundImage: "url('/image/bg.jpg')" }}/>
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
+        style={{ backgroundImage: "url('/image/bg.jpg')" }}
+      />
       <div className="fixed inset-0 bg-white/40 backdrop-blur-xl" />
       
       {/* Content layer */}
-      <div className="relative z-10 min-h-screen pl-64 mb-10">
-        {/* Header */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-4 mt-12">
-            <Link 
-              to="/dashboard" 
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="font-medium">Back to Dashboard</span>
+      <div className="relative z-10 min-h-screen pt-14 lg:pl-64 mb-6">
+        {/* Mobile Header - Now part of scrollable content */}
+        <div className="block lg:hidden pb-4">
+          <div className="px-4 py-3 flex items-center gap-2">
+            <Link to="/dashboard" className="p-1 rounded-full hover:bg-gray-100 flex items-center justify-center">
+              <ArrowLeft className="w-5 h-5 text-gray-700" />
             </Link>
+            <h1 className="text-2xl font-bold text-gray-800">Detailed Analytics</h1>
           </div>
-          {/* Header Section */}
-          <div className="mb-8">
-            {/* Header Row */}
-            <div className="flex items-center justify-between h-20">
-              {/* Left: Title */}
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800 mt-5">Detailed Analytics</h1>
+
+
+          {/* Mobile Filters */}
+          <div className="px-4">
+            <div className="flex flex-wrap gap-1">
+              {/* Date Picker */}
+              <div className="relative flex-1 min-w-auto date-picker-container">
+                <button
+                  onClick={() => {
+                    setShowDatePicker(!showDatePicker);
+                    setShowDeviceDropdown(false);
+                    setShowAdDropdown(false);
+                  }}
+                  className="flex items-center justify-between w-full text-xs text-gray-700 rounded px-3 py-2 bg-white border border-gray-200 shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate">{getDatePlaceholder()}</span>
+                  </div>
+                  <ChevronDown size={14} className="text-gray-500" />
+                </button>
+
+                {/* Mobile Date Picker Dropdown */}
+                <AnimatePresence>
+                  {showDatePicker && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
+                    >
+                      <div className="p-2">
+                        {[
+                          { period: "1d", label: "Last 24 hours" },
+                          { period: "7d", label: "Last 7 days" },
+                          { period: "30d", label: "Last 30 days" },
+                          { period: "all", label: "All Time" },
+                        ].map(({ period, label }) => (
+                          <button
+                            key={period}
+                            onClick={() => {
+                              handlePresetPeriodSelect(period as any, label);
+                              setShowDatePicker(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded ${
+                              !isCustomDateRange && selectedPeriod === period
+                                ? "bg-blue-50 text-blue-700"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Right: Filters */}
-              <div className="flex flex-wrap items-center gap-1">
+              {/* Device Dropdown */}
+              <div className="relative flex-1 min-w-auto device-dropdown-container">
+                <button
+                  onClick={() => {
+                    setShowDeviceDropdown(!showDeviceDropdown);
+                    setShowDatePicker(false);
+                    setShowAdDropdown(false);
+                  }}
+                  className="flex items-center justify-between w-full text-xs text-gray-700 rounded px-3 py-2 bg-white border border-gray-200 shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate">{selectedDeviceLabel}</span>
+                  </div>
+                  <ChevronDown size={14} className="text-gray-500" />
+                </button>
+
+                {/* Mobile Device Dropdown */}
+                <AnimatePresence>
+                  {showDeviceDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
+                    >
+                      <div className="p-2 max-h-60 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setSelectedDevice("all");
+                            setSelectedDeviceLabel("All Devices");
+                            setShowDeviceDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm rounded ${
+                            selectedDevice === "all"
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          All Devices
+                        </button>
+                        {availableDevices.map((device) => (
+                          <button
+                            key={device.id}
+                            onClick={() => {
+                              setSelectedDevice(device.materialId);
+                              setSelectedDeviceLabel(device.name);
+                              setShowDeviceDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded flex items-center justify-between ${
+                              selectedDevice === device.materialId
+                                ? "bg-blue-50 text-blue-700"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <span className="truncate">{device.name}</span>
+                            <span className={`w-2 h-2 rounded-full ml-2 flex-shrink-0 ${
+                              device.isOnline ? "bg-green-500" : "bg-gray-300"
+                            }`} />
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Ad Dropdown */}
+              <div className="relative flex-1 min-w-auto ad-dropdown-container">
+                <button
+                  onClick={() => {
+                    setShowAdDropdown(!showAdDropdown);
+                    setShowDatePicker(false);
+                    setShowDeviceDropdown(false);
+                  }}
+                  className="flex items-center justify-between w-full text-xs text-gray-700 rounded px-3 py-2 bg-white border border-gray-200 shadow-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate">{selectedAdLabel}</span>
+                  </div>
+                  <ChevronDown size={14} className="text-gray-500" />
+                </button>
+
+                {/* Mobile Ad Dropdown */}
+                <AnimatePresence>
+                  {showAdDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
+                    >
+                      <div className="p-2 max-h-60 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setSelectedAd("all");
+                            setSelectedAdLabel("All Ads");
+                            setShowAdDropdown(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm rounded ${
+                            selectedAd === "all"
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          All Ads
+                        </button>
+                        {availableAds.map((ad) => (
+                          <button
+                            key={ad.id}
+                            onClick={() => {
+                              setSelectedAd(ad.id);
+                              setSelectedAdLabel(ad.title);
+                              setShowAdDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded ${
+                              selectedAd === ad.id
+                                ? "bg-blue-50 text-blue-700"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            {ad.title}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              {/* Mobile Refresh Button */}
+              <div className="w-full flex justify-end mt-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex items-center justify-center px-4 py-2 bg-[#3674B5] hover:bg-[#2c5d94] 
+                              font-medium text-white text-xs shadow-md rounded transition-colors duration-300"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RefreshCw className="w-4 h-4" />
+                    <span>Refresh</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Desktop Header */}
+          <div className="hidden lg:block">
+            <div className="flex items-center space-x-4 mb-8">
+              <Link 
+                to="/dashboard" 
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span className="font-medium">Back to Dashboard</span>
+              </Link>
+            </div>
+            
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800">Detailed Analytics</h1>
+                <p className="text-gray-500 mt-1">Track and analyze your ad performance</p>
+              </div>
+
+              {/* Desktop Filters */}
+              <div className="flex items-center gap-3">
                 {/* Date Picker */}
                 <div className="relative w-full sm:w-64 date-picker-container">
                   <button
@@ -847,7 +1063,7 @@ const DetailedAnalytics: React.FC = () => {
             </div>
 
             {/* Row 2: Refresh Button */}
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-end mb-4">
               <button
                 onClick={() => window.location.reload()}
                 onMouseMove={(e) => {
@@ -915,122 +1131,103 @@ const DetailedAnalytics: React.FC = () => {
           {/* Simplified Analytics Dashboard */}
           <div className="space-y-6">
             {/* Key Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 relative z-0">
-              <div className="bg-white/50 backdrop-blur-sm p-6  shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex flex-col">
-                  {/* Row 1: Icon + Label */}
-                  <div className="flex items-center">
-                    <div
-                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-yellow-300/60 via-yellow-300/40 to-white/40 
-                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
-                    >
-                      <Youtube className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
+            <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-5 gap-2 relative z-0">
+              {/* Total Ad Plays */}
+              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+                <div className="flex justify-between items-start">
+                  {/* Left side: Label and Value */}
+                  <div>
+                    <p className="text-sm text-black/70">Total Ad Plays</p>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">
+                      {analyticsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
+                      )}
                     </div>
-                    <p className="text-sm text-black/70 font-medium ml-1">Total Ad Plays</p>
                   </div>
-
-                  {/* Row 2: Value */}
-                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
-                    {analyticsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                    ) : (
-                      (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
-                    )}
+                  {/* Right side: Icon */}
+                  <div className="p-2 rounded-full bg-gradient-to-br from-yellow-300/60 via-yellow-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
+                    <Youtube className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
 
               {/* QR Scans */}
               <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex flex-col">
-                  {/* Row 1: Icon + Label */}
-                  <div className="flex items-center">
-                    <div
-                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
-                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
-                    >
-                      <QrCode className="w-5 h-5 text-blue-700 drop-shadow-sm" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm text-black/70">QR Scans</p>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">
+                      {analyticsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        (analyticsSummary.totalQRScans || 0).toLocaleString()
+                      )}
                     </div>
-                    <p className="text-sm text-black/70 font-medium ml-1">QR Scans</p>
                   </div>
-
-                  {/* Row 2: Value */}
-                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
-                    {analyticsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                    ) : (
-                      (analyticsSummary.totalQRScans || 0).toLocaleString()
-                    )}
+                  <div className="p-2 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
+                    <QrCode className="w-5 h-5 text-blue-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
 
               {/* Active Devices */}
               <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex flex-col">
-                  <div className="flex items-center">
-                    <div
-                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-orange-300/60 via-orange-300/40 to-white/40 
-                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
-                    >
-                      <MonitorSmartphone className="w-5 h-5 text-orange-700 drop-shadow-sm" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm text-black/70">Active Devices</p>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">
+                      {analyticsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        (analyticsSummary.totalMaterials || 0).toLocaleString()
+                      )}
                     </div>
-                    <p className="text-sm text-black/70 font-medium ml-1">Active Devices</p>
                   </div>
-                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
-                    {analyticsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                    ) : (
-                      (analyticsSummary.totalMaterials || 0).toLocaleString()
-                    )}
+                  <div className="p-2 rounded-full bg-gradient-to-br from-orange-300/60 via-orange-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
+                    <MonitorSmartphone className="w-5 h-5 text-orange-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
 
               {/* Online Devices */}
               <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex flex-col">
-                  <div className="flex items-center">
-                    <div
-                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
-                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
-                    >
-                      <MonitorSmartphone className="w-5 h-5 text-green-700 drop-shadow-sm" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm text-black/70">Online Devices</p>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">
+                      {analyticsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        availableDevices.filter((device) => device.isOnline).length
+                      )}
                     </div>
-                    <p className="text-sm text-black/70 font-medium ml-1">Online Devices</p>
                   </div>
-                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
-                    {analyticsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                    ) : (
-                      availableDevices.filter((device) => device.isOnline).length
-                    )}
+                  <div className="p-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
+                    <MonitorSmartphone className="w-5 h-5 text-green-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
 
               {/* Completion Rate */}
               <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex flex-col">
-                  <div className="flex items-center">
-                    <div
-                      className="p-2 mr-2 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 
-                      border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
-                    >
-                      <TrendingUp className="w-5 h-5 text-purple-700 drop-shadow-sm" />
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm text-black/70">Completion Rate</p>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">
+                      {analyticsLoading ? (
+                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                      ) : (
+                        `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
+                      )}
                     </div>
-                    <p className="text-sm text-black/70 font-medium ml-1">Completion Rate</p>
                   </div>
-                  <div className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
-                    {analyticsLoading ? (
-                      <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                    ) : (
-                      `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
-                    )}
+                  <div className="p-2 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
+                    <TrendingUp className="w-5 h-5 text-purple-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
-
             </div>
 
             {/* Performance Chart */}

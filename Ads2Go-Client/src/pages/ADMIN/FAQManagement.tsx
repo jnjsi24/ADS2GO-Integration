@@ -519,7 +519,7 @@ const FAQManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:pl-72 lg:pr-5">
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:ml-56 lg:pr-5">
       <div className="max-w-8xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -631,32 +631,37 @@ const FAQManagement: React.FC = () => {
               </div>
             </div>
           </div>
+
           {/* Archive Tabs */}
-          <div className="flex gap-2 mb-4 border-b border-gray-200">
+          <div className="flex gap-2 mb-4 pt-2">
             <button
               onClick={() => setActiveTab('active')}
-              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors ${
+              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
                 activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Active FAQs
-              {activeTab === 'active' && (
-                <span className="absolute bottom-0 left-0 h-[2px] bg-[#3674B5] w-full" />
-              )}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
             </button>
             <button
               onClick={() => setActiveTab('archived')}
-              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors ${
+              className={`relative flex items-center py-2 px-4 font-medium text-sm transition-colors group ${
                 activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Archive className="w-4 h-4 mr-2" />
               Archived
-              {activeTab === 'archived' && (
-                <span className="absolute bottom-0 left-0 h-[2px] bg-[#3674B5] w-full" />
-              )}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
             </button>
           </div>
+
           <div className="flex justify-end sm:justify-end mt-2 sm:mt-0">
             <button
               onClick={() => setIsCreateModalOpen(true)}
@@ -884,7 +889,7 @@ const FAQManagement: React.FC = () => {
 
         {/* Create FAQ Modal */}
         {isCreateModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
             <div className="bg-white rounded-lg p-4 sm:p-6 w-[95%] sm:w-full max-w-xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-4">Create New FAQ</h2>
               <form onSubmit={handleCreateFAQ} className="space-y-4">
@@ -991,7 +996,7 @@ const FAQManagement: React.FC = () => {
 
         {/* Edit FAQ Modal */}
         {isEditModalOpen && editingFAQ && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
             <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-4">Edit FAQ</h2>
               <form onSubmit={handleEditFAQ} className="space-y-4">

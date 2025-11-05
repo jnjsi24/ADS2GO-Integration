@@ -962,7 +962,7 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-60'}`}>
+    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-56'}`}>
   
       {/* Mobile Header */}
       {isMobile && (
@@ -1103,87 +1103,81 @@ const Reports: React.FC = () => {
         </div>
       </div>
       
-      <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-2 mt-5">
+      <div className="mb-6 mt-5">
         {/* Report Source Tabs */}
-        <div className="mb-6">
-          <div className="flex space-x-1 w-fit">
-            {/* USER REPORTS BUTTON */}
-            <button
-              onClick={() => {
-                setReportSource('users');
-                setCurrentPage(1);
-                setSelectedTypeFilter('All Types');
-                setSelectedStatusFilter('All Status');
-              }}
-              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
-                reportSource === 'users'
-                  ? 'text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
+        <div className="flex gap-2">
+          {/* USER REPORTS BUTTON */}
+          <button
+            onClick={() => {
+              setReportSource('users');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+              setSelectedStatusFilter('All Status');
+            }}
+            className={`relative group flex items-center px-2 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+              reportSource === 'users'
+                ? 'text-blue-600'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <span>User Reports</span>
+            
+            {/* Animated underline */}
+            <span
+              className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                reportSource === 'users' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
               }`}
-            >
-              <Users size={18} />
-              <span>User Reports</span>
+            />
+          </button>
 
-              {/* Animated underline */}
-              <span
-                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
-                  reportSource === 'users' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                }`}
-              />
-            </button>
+          {/* DRIVER REPORTS BUTTON */}
+          <button
+            onClick={() => {
+              setReportSource('drivers');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+              setSelectedStatusFilter('All Status');
+            }}
+            className={`relative group flex items-center gap-2 px-2 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+              reportSource === 'drivers'
+                ? 'text-blue-600'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <span>Driver Reports</span>
 
-            {/* DRIVER REPORTS BUTTON */}
-            <button
-              onClick={() => {
-                setReportSource('drivers');
-                setCurrentPage(1);
-                setSelectedTypeFilter('All Types');
-                setSelectedStatusFilter('All Status');
-              }}
-              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
-                reportSource === 'drivers'
-                  ? 'text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
+            {/* Animated underline */}
+            <span
+              className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                reportSource === 'drivers' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
               }`}
-            >
-              <Car size={18} />
-              <span>Driver Reports</span>
+            />
+          </button>
 
-              {/* Animated underline */}
-              <span
-                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
-                  reportSource === 'drivers' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                }`}
-              />
-            </button>
+          {/* GENERAL INQUIRIES BUTTON */}
+          <button
+            onClick={() => {
+              setReportSource('messages');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+              setSelectedStatusFilter('All Status');
+            }}
+            className={`relative group flex items-center gap-2 px-2 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+              reportSource === 'messages'
+                ? 'text-blue-600'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <span>General Inquiries</span>
 
-            {/* GENERAL INQUIRIES BUTTON */}
-            <button
-              onClick={() => {
-                setReportSource('messages');
-                setCurrentPage(1);
-                setSelectedTypeFilter('All Types');
-                setSelectedStatusFilter('All Status');
-              }}
-              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
-                reportSource === 'messages'
-                  ? 'text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
+            {/* Animated underline */}
+            <span
+              className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                reportSource === 'messages' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
               }`}
-            >
-              <MessageSquare size={18} />
-              <span>General Inquiries</span>
-
-              {/* Animated underline */}
-              <span
-                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
-                  reportSource === 'messages' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                }`}
-              />
-            </button>
-          </div>
+            />
+          </button>
         </div>
-
       </div>
 
       {/* Bulk Actions Bar */}
@@ -1518,7 +1512,7 @@ const Reports: React.FC = () => {
 
       {/* Details Modal */}
       {expandedRow && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
         onClick={handleCloseDetailsModal}>
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}>
@@ -1839,7 +1833,7 @@ const Reports: React.FC = () => {
 
       {/* Update Modal */}
       {isUpdateModalOpen && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6">
               <div>
@@ -1966,7 +1960,7 @@ const Reports: React.FC = () => {
 
       {/* Driver Edit Modal */}
       {isDriverEditModalOpen && selectedReport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-xl font-semibold text-gray-900">Update Driver Profile Details</h2>
@@ -2290,7 +2284,7 @@ const Reports: React.FC = () => {
       {/* Contact Message Reply Modal */}
       {isReplyModalOpen && selectedContactMessage && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
           onClick={() => {
             if (!isSendingReply) {
               setIsReplyModalOpen(false);
@@ -2507,7 +2501,7 @@ const Reports: React.FC = () => {
       {/* Contact Message Details Modal (for General Inquiries) */}
       {selectedContactForDetails && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
           onClick={handleCloseContactDetailsModal}
         >
           <div

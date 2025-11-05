@@ -863,23 +863,22 @@ const ScreenTracking: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 ml-60">
+    <div className="min-h-screen bg-gray-100 ml-56">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Device Tracking Dashboard</h1>
-              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
+              <h1 className="text-3xl font-bold text-gray-900">Device Tracking Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-2">
                 <div className={`w-3 h-3 rounded-full ${
                   connectionStatus === 'connected' ? 'bg-green-500' : 
                   connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
                 }`}></div>
                 <span className="text-sm text-gray-600">
-                  {connectionStatus === 'connected' ? 'Real-Time Connected' : 
+                  {connectionStatus === 'connected' ? 'Connected' : 
                    connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
@@ -903,7 +902,7 @@ const ScreenTracking: React.FC = () => {
                     return thirtyDaysAgo.toISOString().split('T')[0];
                   })()}
                   max={new Date().toISOString().split('T')[0]}
-                  className="border border-gray-300 rounded-md px-3 py-2"
+                  className="shadow-md rounded px-3 py-2"
                   title={(() => {
                     if (selectedScreen && selectedScreen.materialId && materials.length > 0) {
                       const material = materials.find(m => m.materialId === selectedScreen.materialId);
@@ -923,7 +922,7 @@ const ScreenTracking: React.FC = () => {
               <button
                 onClick={fetchData}
                 disabled={refreshing}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center space-x-2 bg-[#3674B5] text-white px-4 py-2 rounded hover:shadow-md disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
@@ -934,43 +933,51 @@ const ScreenTracking: React.FC = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('live')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'live'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+      <div className="max-w-7xl bg-gray-100 mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`relative py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'live'
+                ? 'text-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <Activity className="w-4 h-4" />
+              <span>Live Tracking</span>
+            </div>
+            <span
+              className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
+                activeTab === 'live' ? 'w-full' : 'w-0 group-hover:w-full'
               }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Activity className="w-4 h-4" />
-                <span>Live Tracking</span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('historical')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'historical'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            />
+          </button>
+          <button
+            onClick={() => setActiveTab('historical')}
+            className={`relative py-4 px-1 font-medium text-sm transition-colors group ${
+              activeTab === 'historical'
+                ? 'text-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              <Clock className="w-4 h-4" />
+              <span>Route Map</span>
+            </div>
+            <span
+              className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
+                activeTab === 'historical' ? 'w-full' : 'w-0 group-hover:w-full'
               }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4" />
-                <span>Route Map</span>
-              </div>
-            </button>
-          </div>
+            />
+          </button>
         </div>
       </div>
 
       {/* Compliance Summary */}
       {complianceReport && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -1028,8 +1035,8 @@ const ScreenTracking: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Map */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow">

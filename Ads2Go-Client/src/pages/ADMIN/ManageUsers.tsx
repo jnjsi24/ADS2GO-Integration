@@ -709,43 +709,9 @@ const ManageUsers: React.FC = () => {
         {/* Mobile Header */}
         {isMobile && (
           <div className="flex items-center mb-4">
-            <h1 className="text-xl pt-7 font-bold text-gray-800">Advertisers Management</h1>
+            <h1 className="text-xl pt-4 font-bold text-gray-800">Advertisers Management</h1>
           </div>
         )}
-
-        {/* Tabs Section */}
-        <div className="mb-4">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('active')}
-              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Active Advertisers
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
-                }`}
-              />
-            </button>
-            <button
-              onClick={() => setActiveTab('archived')}
-              className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
-                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Archive className="w-4 h-4 mr-2" />
-              Archived Advertisers
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
-                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
-                }`}
-              />
-            </button>
-          </nav>
-        </div>
 
         {/* Header with Title and Filters */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
@@ -843,6 +809,37 @@ const ManageUsers: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Tabs Section */}
+      <div className="mb-4">
+          <nav className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Active Advertisers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Archived Advertisers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </nav>
+        </div>
 
       {/* Bulk Actions Bar */}
       {selectedUsers.length > 0 && (
@@ -975,7 +972,7 @@ const ManageUsers: React.FC = () => {
                       </span>
                       {activeTab === 'archived' ? (
                         <button
-                          className="flex items-center text-green-700 px-1 py-1 rounded shadow-md hover:bg-green-50"
+                          className="flex items-center text-green-700 px-1 py-1 rounded hover:bg-green-50"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleRestore(user);
@@ -985,7 +982,7 @@ const ManageUsers: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
+                          className="flex items-center text-red-700 px-1 py-1 rounded hover:bg-red-50"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDelete(user.id);
@@ -1094,7 +1091,7 @@ const ManageUsers: React.FC = () => {
       {/* Details Modal - Responsive */}
       {showDetailsModal && selectedUser && (
         <div
-          className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50 z-[9999]"
+          className="fixed inset-0 z-[9999] overflow-hidden bg-black bg-opacity-50 z-[9999]"
           onClick={handleCloseModal}
         >
           <div
@@ -1337,7 +1334,7 @@ const ManageUsers: React.FC = () => {
 
       {/* Restore Confirmation Modal */}
       {showRestoreModal && userToRestore && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-md p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">Restore Advertiser</h2>

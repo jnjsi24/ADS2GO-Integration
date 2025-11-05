@@ -483,17 +483,17 @@ const CompanyAdsManagement: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col gap-3">
         {/* Row 1 */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-900">
             Company Ads Management
           </h3>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0 justify-start md:justify-end">
             {/* Search */}
             <input
               type="text"
               placeholder="Search company ads..."
-              className="text-xs text-black rounded-md pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-md pl-5 py-3 flex-1 min-w-0 md:w-80 shadow-md focus:outline-none bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -821,7 +821,7 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Pagination Controls */}
       {filteredAds.length > 0 && (
-        <div className="flex items-center justify-center px-4 py-4 mt-6 border-t">
+        <div className="flex items-center justify-center px-4 py-4 mt-6">
           <div className="flex items-center gap-2">
             <button
               onClick={handlePreviousPage}
@@ -912,7 +912,7 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
+        <div className="fixed inset-0 flex items-center justify-center z-[9999]">
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50"></div>
           <motion.div
             initial={{ opacity: 0, y: -50 }}

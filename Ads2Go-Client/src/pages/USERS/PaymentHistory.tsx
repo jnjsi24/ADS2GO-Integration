@@ -519,39 +519,41 @@ const PaymentHistory: React.FC = () => {
       )}
 
       {/* Pagination */}
-      <div className="sticky bottom-0 pt-4 pb-2 flex justify-center mt-auto">
-        <div className="flex items-center space-x-1">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            <span>Previous</span>
-          </button>
-          <div className="flex space-x-1">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => handlePageChange(page)}
-                className={`px-2 py-1 text-sm rounded ${
-                  currentPage === page 
-                    ? "text-black border border-black/40"
-                    : "text-gray-700 hover:border border-gray-300"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+      <div className="fixed bottom-0 left-0 right-0 pt-4 pb-2 z-50 lg:left-72">
+        <div className="flex justify-center">
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              <span>Previous</span>
+            </button>
+            <div className="flex space-x-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-2 py-1 text-sm rounded ${
+                    currentPage === page 
+                      ? "text-black border border-black/40"
+                      : "text-gray-700 hover:border border-gray-300"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
           </div>
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span>Next</span>
-            <ChevronRight className="w-4 h-4 ml-1" />
-          </button>
         </div>
       </div>
     </div>
@@ -612,7 +614,7 @@ const PaymentHistory: React.FC = () => {
 
       {/* Payment Cards (1 per row) */}
       <div className="grid grid-cols-1 mt-4 gap-4">
-        {currentPayments.map((item) => (
+        {currentPayments.length > 0 ? currentPayments.map((item) => (
           <div
             key={item.id || `${item.productName}-${item.totalPrice}`}
             className="bg-white/90 rounded-lg shadow-md p-3 relative"
@@ -700,61 +702,53 @@ const PaymentHistory: React.FC = () => {
               </div>
             </div>
           </div>
-        ))}
+        )) : (
+          <div className="col-span-full text-center text-gray-500 py-8">
+            No payments found for the selected filters.
+          </div>
+        )}
       </div>
       
       {/* Pagination */}
-      <div className="fixed bottom-0 left-0 right-0 pt-4 pb-2 flex justify-center z-50">
-        <div className="flex space-x-1">
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            <span>Previous</span>
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-            <button
-              key={page}
-              onClick={() => handlePageChange(page)}
-              className={`px-2 py-1 text-sm rounded ${
-                currentPage === page ? "text-black border border-black/40"
-                              : "text-gray-700 hover:border border-gray-300"
-              }`}
-            >
-              {page}
-            </button>
-          ))}
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span>Next</span>
-              <ChevronRight className="w-4 h-4 ml-1" />
-          </button>
+      <div className="fixed bottom-0 left-0 right-0 py-3 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-center">
+            <div className="flex space-x-1">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                <span>Previous</span>
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-2 py-1 text-sm rounded ${
+                    currentPage === page ? "text-black border border-black/40"
+                                  : "text-gray-700 hover:border border-gray-300"
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-
-
-    
-    {/* End Mobile View */}
-
-    {/* Payment modal - Shared between Desktop and Mobile */}
-    {isModalOpen && selectedPayment && (
-      <Payment
-        paymentItem={convertToPaymentItem(selectedPayment)}
-        paymentType={selectedPaymentType}
-        onClose={closeModal}
-        onSuccess={handlePaymentSuccess}
-      />
-    )}
-  </div>
-  {/* End Main Content */}
-  {/* End Main Container */}
+    </div> 
+    </div>
   </div>
   );
 };
