@@ -241,66 +241,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     };
   }, [isRegistered, slotNumber, lastSyncPosition, currentVideoPosition, lastSyncTime]);
 
-  // Periodic time check to lock during rest period (12:00 AM - 7:59 AM)
-  useEffect(() => {
-    if (!isRegistered || isLocked) {
-      return; // Don't check if not registered or already locked
-    }
-
-    const checkMidnightLock = () => {
-      const now = new Date();
-      const currentHour = now.getHours(); // 0-23
-      
-      // 🚨 MANDATORY REST PERIOD: Lock if current hour is 0-7 (12:00 AM - 7:59 AM)
-      const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
-      if (isMandatoryRestPeriod) {
-        console.log(`🔒 [Rest Period Lock] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - locking device`);
-        console.log(`⏰ [Rest Period Lock] Locking ad player during mandatory rest period (12:00 AM - 8:00 AM)`);
-        
-        // Lock the screen
-        onLockStateChange?.(true);
-        
-        // Stop GPS tracking
-        adaptiveGPSService.stopTracking();
-        
-        // Stop ad playback
-        if (videoRef.current) {
-          videoRef.current.pauseAsync().catch(err => {
-            console.log('⏸️ [Rest Period Lock] Video pause error (expected):', err.message);
-          });
-        }
-        
-        setIsPlaying(false);
-        setIsPaused(true);
-        
-        // Set device status to offline
-        tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 }).catch(err => {
-          console.error('❌ [Rest Period Lock] Error updating device status:', err);
-        });
-        
-        // Show lock alert
-        Alert.alert(
-          '🔒 Ad Player Locked',
-          'The ad player is now locked until 8:00 AM.\n\nDrivers are not allowed to work between 12:00 AM - 7:59 AM.\n\nThank you for your service!',
-          [{ text: 'OK' }],
-          { cancelable: false }
-        );
-        
-        console.log(`✅ [Rest Period Lock] Device locked - will unlock at 8:00 AM`);
-      }
-    };
-
-    // Check immediately on mount
-    checkMidnightLock();
-
-    // Check every minute for rest period lock (12:00 AM - 7:59 AM)
-    const timeCheckInterval = setInterval(checkMidnightLock, 60000); // Check every 60 seconds
-
-    return () => {
-      clearInterval(timeCheckInterval);
-    };
-  }, [isRegistered, isLocked]);
-
   // Execute perfect synchronization
   const executePerfectSync = (message: any) => {
     try {

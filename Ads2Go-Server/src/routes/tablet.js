@@ -121,41 +121,12 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
-    // ✅ Check if material has an ad deployment
-    // Time lock only applies to devices that have an existing ad deployment to that device/material
-    const existingDeployment = await AdsDeployment.findOne({ materialId });
-    
-    // ✅ TIME-BASED LOCK: Only apply if material has ad deployment
-    const now = new Date();
-    const currentHour = now.getHours(); // 0-23
-    const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
-    
-    // ✅ TIME-BASED LOCK: Only apply if material has ad deployment
-    // If material has no ad deployment, allow registration regardless of time
-    if (existingDeployment && isBeforeEightAM) {
-      console.log(`🔒 [Registration Blocked] ${materialId} cannot start before 8:00 AM`);
-      console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
-      console.log(`   Reason: Drivers are not allowed to work between 12:00 AM - 7:59 AM`);
-      console.log(`   Material has ad deployment: ${existingDeployment.adDeploymentId || existingDeployment._id}`);
-      
-      return res.status(403).json({
-        success: false,
-        blocked: true,
-        message: 'Ad player is locked until 8:00 AM. Drivers cannot work during midnight hours.',
-        reason: 'TIME_BASED_LOCK',
-        details: {
-          currentHour: currentHour,
-          currentTime: now.toISOString(),
-          unlockTime: '8:00 AM',
-          lockPeriod: '12:00 AM - 7:59 AM'
-        }
-      });
-    }
-    
-    // ✅ Clear completedAt when device registers at or after 8 AM (start of allowed work period)
+    // ✅ Clear completedAt when device registers (allows registration at any time)
     const DeviceTracking = require('../models/deviceTracking');
     const existingTracking = await DeviceTracking.findOne({ materialId });
     if (existingTracking && existingTracking.currentSession && existingTracking.currentSession.completedAt) {
+      const now = new Date();
+      const currentHour = now.getHours();
       console.log(`🔓 [Registration Unlocked] ${materialId} registering at ${currentHour}:00 - clearing completedAt from previous day`);
       existingTracking.currentSession.completedAt = undefined;
       await existingTracking.save();
