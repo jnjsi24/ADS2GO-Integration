@@ -198,9 +198,57 @@ const Dashboard: React.FC = () => {
   }, [selectedDate]);
 
   // Reset selected data point when metric changes
+  // ✅ Auto-select today's data point for distance tab (like hours tab does automatically)
+  // This ensures distance shows today's value automatically when today is selected
   useEffect(() => {
+    // Reset selected data point first
     setSelectedDataPoint(null);
-  }, [selectedMetric]);
+    
+    // Auto-select today's data point (last point in chart) when:
+    // 1. Metric is 'distance' and today is selected
+    // 2. Analytics data is available
+    if (selectedMetric === 'distance' && analytics) {
+      const isToday = isSelectedDateToday();
+      
+      if (isToday) {
+        // Get last 7 days data from analytics
+        const last7Days = analytics.last7DaysData?.dailyBreakdown || [];
+        
+        if (last7Days.length > 0) {
+          // Sort by date and get the last data point (today's data)
+          const sortedData = [...last7Days].sort((a, b) => 
+            new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+          
+          if (sortedData.length > 0) {
+            const lastDataPoint = sortedData[sortedData.length - 1];
+            // Use sanitizeChartValue logic inline to avoid dependency issues
+            const rawValue = lastDataPoint.totalDistance || 0;
+            const lastValue = (rawValue === null || rawValue === undefined || isNaN(rawValue) || !isFinite(rawValue)) 
+              ? 0 
+              : Math.max(0, Number(rawValue));
+            const lastLabel = (() => {
+              try {
+                return new Date(lastDataPoint.date).toLocaleDateString('en-US', { weekday: 'short' });
+              } catch {
+                return 'Today';
+              }
+            })();
+            const lastIndex = sortedData.length - 1;
+            
+            if (lastValue !== undefined && lastValue !== null) {
+              // Auto-select today's data point
+              setSelectedDataPoint({
+                value: lastValue,
+                label: lastLabel,
+                index: lastIndex
+              });
+            }
+          }
+        }
+      }
+    }
+  }, [selectedMetric, analytics, selectedDate]);
 
   // Helper function to check if selected date is today
   const isSelectedDateToday = () => {

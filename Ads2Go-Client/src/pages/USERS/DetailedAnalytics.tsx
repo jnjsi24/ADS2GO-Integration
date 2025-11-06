@@ -19,7 +19,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
-  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('7d');
+  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('all');
   const [userFirstName, setUserFirstName] = useState('User');
   
   // Device selection state
@@ -36,7 +36,7 @@ const DetailedAnalytics: React.FC = () => {
   const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
   const [isSelectingStart, setIsSelectingStart] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("Last 7 days");
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("All Time");
   const [isCustomDateRange, setIsCustomDateRange] = useState(false);
   const [tempStartDate, setTempStartDate] = useState<string>('');
 
@@ -238,6 +238,47 @@ const DetailedAnalytics: React.FC = () => {
     return [];
   }, [overallAnalyticsData]);
 
+  // ✅ Online devices count - respects filters
+  // When device is selected: returns 1 if online, 0 if offline
+  // Otherwise: counts online devices from filtered data
+  const onlineDevicesCount = useMemo(() => {
+    // When a specific device is selected
+    if (selectedDevice !== 'all') {
+      // Check if the selected device is online
+      // First check deviceAnalytics (most accurate for selected device)
+      if (deviceAnalytics?.deviceInfo) {
+        // Check if device is online from deviceAnalytics
+        // We need to check the device status - try to get from availableDevices or deviceAnalytics
+        const device = availableDevices.find(d => d.materialId === selectedDevice);
+        if (device) {
+          return device.isOnline ? 1 : 0;
+        }
+        // If not found in availableDevices, check if we can determine from deviceAnalytics
+        // For now, assume we need to check from filtered devices or overall data
+        // Fallback: check from allTimeDevices
+        const allTimeDevice = allTimeDevices.find(d => d.materialId === selectedDevice);
+        return allTimeDevice?.isOnline ? 1 : 0;
+      }
+      // Fallback: check from allTimeDevices
+      const allTimeDevice = allTimeDevices.find(d => d.materialId === selectedDevice);
+      return allTimeDevice?.isOnline ? 1 : 0;
+    }
+    
+    // When device is 'all', count online devices from filtered data
+    // Prefer directAnalyticsData (filtered by date/ad)
+    if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
+      return directAnalyticsData.deviceStats.filter((device: any) => device.isOnline).length;
+    }
+    
+    // Fallback to GraphQL analyticsData (filtered by date/period)
+    if (analyticsData?.getUserAnalytics?.deviceStats && analyticsData.getUserAnalytics.deviceStats.length > 0) {
+      return analyticsData.getUserAnalytics.deviceStats.filter((device: any) => device.isOnline).length;
+    }
+    
+    // Final fallback: count from all-time devices (when no filters)
+    return allTimeDevices.filter((device) => device.isOnline).length;
+  }, [selectedDevice, deviceAnalytics, availableDevices, allTimeDevices, directAnalyticsData, analyticsData]);
+
   // Memoized device extraction from analytics data (for dropdown - filtered by date/ad)
   const extractedDevices = useMemo(() => {
     // Try to get devices from directAnalyticsData first (most up-to-date, filtered data)
@@ -432,8 +473,8 @@ const DetailedAnalytics: React.FC = () => {
     setIsSelectingStart(true);
     setIsCustomDateRange(false);
     setTempStartDate('');
-    setSelectedPeriodLabel("Last 7 days");
-    setSelectedPeriod("7d");
+    setSelectedPeriodLabel("All Time");
+    setSelectedPeriod("all");
   };
 
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
@@ -594,12 +635,72 @@ const DetailedAnalytics: React.FC = () => {
     };
   }, []);
 
-  // ✅ Analytics summary calculation - ALWAYS uses cumulative totals (all ads, all time)
-  // Performance Over Time chart uses directAnalyticsData which respects filters
+  // ✅ Analytics summary calculation - Respects filters but defaults to cumulative totals
+  // Logic:
+  // - Default (no date, ad="all", device="all"): Show cumulative totals
+  // - Date selected: Show filtered by date
+  // - Ad selected: Show filtered by ad
+  // - Device selected: Show filtered by device
+  // - Any combination: Show filtered totals
   const analyticsSummary = useMemo(() => {
-    // ✅ Always use overallAnalyticsData (period='all', no adId filter) for summary metrics
-    // This ensures Total Ad Plays, QR Scans, Active Devices, etc. always show cumulative totals
-    const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
+    // Check if any filters are active
+    // Date filter is active if: custom date range is set OR period is not 'all' (default '7d' is considered a filter)
+    const hasDateFilter = (isCustomDateRange && (dateRange.start || dateRange.end)) || (selectedPeriod !== 'all');
+    const hasAdFilter = selectedAd !== 'all';
+    const hasDeviceFilter = selectedDevice !== 'all';
+    
+    // Default state: no filters applied - use cumulative totals
+    // Only show cumulative when: period='all', no custom date range, ad='all', device='all'
+    if (selectedPeriod === 'all' && !isCustomDateRange && !hasAdFilter && !hasDeviceFilter) {
+      const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
+        totalAdsPlayed: 0,
+        totalDisplayTime: 0,
+        averageCompletionRate: 0,
+        totalAds: 0,
+        activeAds: 0,
+        totalMaterials: 0,
+        totalDevices: 0,
+        totalQRScans: 0
+      };
+      return overallSummary;
+    }
+    
+    // When a specific device is selected, use deviceAnalytics
+    if (hasDeviceFilter && deviceAnalytics) {
+      return {
+        totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
+        totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
+        averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
+        totalAds: 0, // Not applicable for device-specific view
+        activeAds: 0, // Not applicable for device-specific view
+        totalMaterials: 1, // Always 1 when device is selected
+        totalDevices: 1, // Always 1 when device is selected
+        totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
+      };
+    }
+    
+    // When filters are applied but device is 'all', use filtered data
+    // Prefer directAnalyticsData (from direct API call) as it respects all filters including adId
+    if (directAnalyticsData?.summary) {
+      return {
+        totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
+        totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
+        averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
+        totalAds: directAnalyticsData.summary.totalAds || 0,
+        activeAds: directAnalyticsData.summary.activeAds || 0,
+        totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
+        totalDevices: directAnalyticsData.summary.totalDevices || 0,
+        totalQRScans: directAnalyticsData.summary.totalQRScans || 0
+      };
+    }
+    
+    // Fallback to GraphQL analyticsData (respects date/period but not adId)
+    if (analyticsData?.getUserAnalytics?.summary) {
+      return analyticsData.getUserAnalytics.summary;
+    }
+    
+    // Final fallback: cumulative totals
+    return overallAnalyticsData?.getUserAnalytics?.summary || {
       totalAdsPlayed: 0,
       totalDisplayTime: 0,
       averageCompletionRate: 0,
@@ -609,11 +710,7 @@ const DetailedAnalytics: React.FC = () => {
       totalDevices: 0,
       totalQRScans: 0
     };
-    
-    // ✅ Always return cumulative totals regardless of filters
-    // The filters only affect the Performance Over Time chart, not the summary metrics
-    return overallSummary;
-  }, [overallAnalyticsData]);
+  }, [overallAnalyticsData, directAnalyticsData, analyticsData, deviceAnalytics, selectedAd, selectedDevice, selectedPeriod, isCustomDateRange, dateRange]);
 
   // Format display time helper
   const formatDisplayTime = useCallback((seconds: number) => {
@@ -1397,8 +1494,10 @@ const DetailedAnalytics: React.FC = () => {
                       {analyticsLoading && isInitialLoad ? (
                         <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
                       ) : (
-                        // ✅ Use allTimeDevices for summary metric (not affected by filters)
-                        allTimeDevices.filter((device) => device.isOnline).length
+                        // ✅ Use onlineDevicesCount which respects filters
+                        // When device is selected: shows 1 if online, 0 if offline
+                        // Otherwise: shows count of online devices from filtered data
+                        onlineDevicesCount
                       )}
                     </div>
                   </div>

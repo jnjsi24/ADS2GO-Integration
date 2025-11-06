@@ -74,10 +74,11 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
 };
 
 // Function to smooth GPS points using an improved algorithm (no API required)
+// ✅ FIX: Keep ALL points but apply smoothing for visual quality
 const smoothRoute = (points: [number, number][]): [number, number][] => {
   if (points.length < 3) return points;
   
-  // Smoothing route silently
+  // Smoothing route silently - keeping all points for complete route visualization
   
   const smoothed: [number, number][] = [points[0]]; // Keep first point
   
@@ -98,10 +99,9 @@ const smoothRoute = (points: [number, number][]): [number, number][] => {
     const dist1Meters = dist1 * 111000;
     const dist2Meters = dist2 * 111000;
     
-    // If points are very close together (< 3 meters), skip intermediate points
-    if (dist1Meters < 3 && dist2Meters < 3) {
-      continue;
-    }
+    // ✅ FIX: REMOVED - No longer skipping points that are close together
+    // This ensures all route segments are drawn, even during slow movement or tight turns
+    // All points are kept to maintain complete route visualization
     
     // If distance is too large (> 1000 meters), it might be GPS error - use weighted average
     if (dist1Meters > 1000 || dist2Meters > 1000) {
@@ -116,14 +116,29 @@ const smoothRoute = (points: [number, number][]): [number, number][] => {
       smoothed.push([smoothedLat, smoothedLng]);
     } else {
       // Enhanced smoothing with weighted average based on distance
+      // Apply light smoothing to all points (including close ones) for visual quality
       const totalDist = dist1Meters + dist2Meters;
-      const weight1 = dist2Meters / totalDist; // More weight to closer neighbor
-      const weight2 = dist1Meters / totalDist;
       
-      const smoothedLat = (weight1 * prev[0] + current[0] + weight2 * next[0]) / (weight1 + 1 + weight2);
-      const smoothedLng = (weight1 * prev[1] + current[1] + weight2 * next[1]) / (weight1 + 1 + weight2);
-      
-      smoothed.push([smoothedLat, smoothedLng]);
+      // For very close points (< 5m), apply minimal smoothing to preserve accuracy
+      // For normal points, apply standard smoothing
+      if (dist1Meters < 5 && dist2Meters < 5) {
+        // Minimal smoothing for close points - mostly keep original position
+        const smoothingFactor = 0.1; // Only 10% smoothing for very close points
+        const smoothedLat = current[0] * (1 - smoothingFactor) + 
+                           ((prev[0] + current[0] + next[0]) / 3) * smoothingFactor;
+        const smoothedLng = current[1] * (1 - smoothingFactor) + 
+                           ((prev[1] + current[1] + next[1]) / 3) * smoothingFactor;
+        smoothed.push([smoothedLat, smoothedLng]);
+      } else {
+        // Standard smoothing for normal distance points
+        const weight1 = dist2Meters / totalDist; // More weight to closer neighbor
+        const weight2 = dist1Meters / totalDist;
+        
+        const smoothedLat = (weight1 * prev[0] + current[0] + weight2 * next[0]) / (weight1 + 1 + weight2);
+        const smoothedLng = (weight1 * prev[1] + current[1] + weight2 * next[1]) / (weight1 + 1 + weight2);
+        
+        smoothed.push([smoothedLat, smoothedLng]);
+      }
     }
   }
   
@@ -448,6 +463,9 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   const [routeData, setRouteData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [snappedSegmentCoords, setSnappedSegmentCoords] = useState<[number, number][][]>([]);
+  const [lastProcessedRoute, setLastProcessedRoute] = useState<string>('');
+  const [isSnappingInProgress, setIsSnappingInProgress] = useState(false);
   const fetchingRef = useRef(false);
   const lastFetchTime = useRef<number>(0);
   const MIN_FETCH_INTERVAL = 1000; // Minimum 1 second between fetches to avoid spam
@@ -460,20 +478,61 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   useEffect(() => {
     fetchingRef.current = false;
     isInitialLoadRef.current = true; // Reset to initial load for new material/date
+    // ✅ FIX: Reset loading to true when materialId or date changes to prevent showing "no route data" before fetch starts
+    setLoading(true);
+    setError(null);
+    setRouteData(null);
+    // ✅ FIX: Clear the route key ref immediately when props change
+    currentRouteKeyRef.current = '';
   }, [materialId, date]);
 
   // Extract route data (only if available)
   const route = routeData?.route || [];
   const bounds = routeData?.bounds || null;
+  
+  // ✅ FIX: Track current props to determine if we should be loading
+  const currentRouteKeyRef = useRef<string>('');
+  const currentRouteKey = `${materialId}-${date}`;
+  
+  // ✅ FIX: Check if routeData matches current props
+  // If routeData exists but doesn't match current props, we should be loading
+  const hasDataForCurrentProps = routeData && currentRouteKeyRef.current === currentRouteKey;
+  
+  // Debug logging
+  useEffect(() => {
+    if (routeData) {
+      console.log('🗺️ [RouteMapped] Route data received:', {
+        hasRoute: !!routeData.route,
+        routeLength: routeData.route?.length || 0,
+        hasBounds: !!routeData.bounds,
+        hasMetrics: !!routeData.metrics,
+        materialId,
+        date
+      });
+      // Update the ref when we get data for current props
+      currentRouteKeyRef.current = currentRouteKey;
+    } else {
+      console.log('🗺️ [RouteMapped] No route data yet');
+      // Clear the ref when routeData is cleared
+      currentRouteKeyRef.current = '';
+    }
+  }, [routeData, materialId, date, currentRouteKey]);
 
   // Convert route points to polyline coordinates with safety checks (memoized)
   // ✅ FIX: Split route into segments based on isSegmentBreak flag
   const routeSegments: [number, number][][] = useMemo(() => {
+    console.log('🗺️ [RouteMapped] Processing route segments, route length:', route.length);
+    
     const validPoints = route.filter((point: RoutePoint) => 
       point && typeof point.lat === 'number' && typeof point.lng === 'number'
     );
     
-    if (validPoints.length === 0) return [];
+    console.log('🗺️ [RouteMapped] Valid points after filtering:', validPoints.length);
+    
+    if (validPoints.length === 0) {
+      console.warn('⚠️ [RouteMapped] No valid route points found!');
+      return [];
+    }
     
     const segments: [number, number][][] = [];
     let currentSegment: [number, number][] = [];
@@ -502,6 +561,9 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
       segments.push(currentSegment);
     }
     
+    console.log('🗺️ [RouteMapped] Created', segments.length, 'route segment(s) with', 
+                segments.reduce((sum, seg) => sum + seg.length, 0), 'total points');
+    
     if (segments.length > 1) {
       console.log('📍 [RouteMapped] Route split into', segments.length, 'segment(s) (offline periods detected)');
     }
@@ -514,16 +576,31 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     return routeSegments.flat();
   }, [routeSegments]);
 
-  // Initialize snapped coordinates when route changes - using useMemo for stability
-  const [snappedPolylineCoords, setSnappedPolylineCoords] = useState<[number, number][]>([]);
-  const [lastProcessedRoute, setLastProcessedRoute] = useState<string>('');
+  // ✅ FIX: Compute loading state after routeSegments is defined
+  // Check if we have valid route segments ready to display
+  const hasValidSegments = routeSegments.length > 0 && routeSegments.some(seg => seg.length > 0);
+  const hasSnappedSegments = snapToRoads 
+    ? (snappedSegmentCoords.length > 0 && !isSnappingInProgress && snappedSegmentCoords.some(seg => seg.length > 0))
+    : true; // If snapToRoads is disabled, we use routeSegments (checked above)
+  
+  // Check if route data exists but is actually empty (no points) - this means "no route data", not loading
+  const routeIsEmpty = hasDataForCurrentProps && route.length === 0;
+  
+  // ✅ FIX: Compute if we should show loading
+  // Show loading if: explicit loading state OR we don't have data for current props OR segments are being processed
+  // Don't show loading if route is confirmed empty (will show "no route data" instead)
+  const shouldShowLoading = !routeIsEmpty && (
+    loading || 
+    (!hasDataForCurrentProps && !error && isValidMaterialId && materialId && date) ||
+    (hasDataForCurrentProps && !error && (!hasValidSegments || (snapToRoads && !hasSnappedSegments)))
+  );
 
-  // Apply road snapping when route data changes
+  // Apply road snapping to each segment separately to maintain segment structure
   useEffect(() => {
     let isMounted = true; // Flag to prevent state updates after unmount
     
     // Create a stable key for this route
-    const routeKey = JSON.stringify(rawPolylineCoords);
+    const routeKey = JSON.stringify(routeSegments);
     
     // Skip if we've already processed this exact route
     if (routeKey === lastProcessedRoute) {
@@ -531,39 +608,87 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     }
     
     const applyRoadSnapping = async () => {
-      if (rawPolylineCoords.length === 0) {
+      if (routeSegments.length === 0) {
         if (isMounted) {
-          setSnappedPolylineCoords([]);
+          setSnappedSegmentCoords([]);
           setLastProcessedRoute(routeKey);
+          setIsSnappingInProgress(false);
+          // ✅ FIX: If no route segments, set loading to false (completes loading state)
+          setLoading(false);
+          if (onLoadingChange) {
+            onLoadingChange(false);
+          }
         }
         return;
       }
 
-      // If snapToRoads is disabled, use raw coordinates
+      // If snapToRoads is disabled, use raw segment coordinates immediately
       if (!snapToRoads) {
         if (isMounted) {
-          setSnappedPolylineCoords(rawPolylineCoords);
+          setSnappedSegmentCoords(routeSegments);
           setLastProcessedRoute(routeKey);
+          setIsSnappingInProgress(false);
+          // Loading was already set to false after API fetch (since snapToRoads is disabled)
         }
         return;
       }
 
-      // Apply road snapping
-        // Road snapping happens silently in background
+      // ✅ FIX: Set snapping in progress to prevent showing raw coordinates
+      if (isMounted) {
+        setIsSnappingInProgress(true);
+      }
+
+      // Apply road snapping to each segment separately
+      console.log('🗺️ [RouteMapped] Applying road snapping to', routeSegments.length, 'segments, snapToRoads:', snapToRoads);
       
       try {
-        // Road snapping happens silently in background
-        const snappedCoords = await snapPointsToRoads(rawPolylineCoords);
+        const snappedSegments: [number, number][][] = [];
+        
+        // Process each segment individually
+        for (let i = 0; i < routeSegments.length; i++) {
+          const segment = routeSegments[i];
+          console.log(`🗺️ [RouteMapped] Snapping segment ${i + 1}/${routeSegments.length} with ${segment.length} points`);
+          
+          const snappedSegment = await snapPointsToRoads(segment);
+          snappedSegments.push(snappedSegment);
+          
+          console.log(`✅ [RouteMapped] Segment ${i + 1} snapped: ${segment.length} → ${snappedSegment.length} points`);
+        }
+        
+        const totalOriginalPoints = routeSegments.reduce((sum, seg) => sum + seg.length, 0);
+        const totalSnappedPoints = snappedSegments.reduce((sum, seg) => sum + seg.length, 0);
+        
+        console.log('✅ [RouteMapped] Road snapping completed:', {
+          segments: routeSegments.length,
+          originalPoints: totalOriginalPoints,
+          snappedPoints: totalSnappedPoints,
+          snapToRoads
+        });
         
         if (isMounted) {
-          setSnappedPolylineCoords(snappedCoords);
+          setSnappedSegmentCoords(snappedSegments);
           setLastProcessedRoute(routeKey);
+          setIsSnappingInProgress(false);
+          
+          // ✅ FIX: Set loading to false after snapping completes (completes the combined loading state)
+          setLoading(false);
+          if (onLoadingChange) {
+            onLoadingChange(false);
+          }
         }
       } catch (error) {
         console.error('❌ [Road Snapping] Error:', error);
+        console.warn('⚠️ [RouteMapped] Falling back to raw segment coordinates');
         if (isMounted) {
-          setSnappedPolylineCoords(rawPolylineCoords);
+          setSnappedSegmentCoords(routeSegments);
           setLastProcessedRoute(routeKey);
+          setIsSnappingInProgress(false);
+          
+          // ✅ FIX: Set loading to false even if snapping fails (fallback to raw coordinates)
+          setLoading(false);
+          if (onLoadingChange) {
+            onLoadingChange(false);
+          }
         }
       }
     };
@@ -574,11 +699,15 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [rawPolylineCoords, snapToRoads, lastProcessedRoute]);
+  }, [routeSegments, snapToRoads, lastProcessedRoute]);
 
 
-  // Use snapped coordinates for the polyline
-  const polylineCoords = snappedPolylineCoords;
+  // Use snapped segment coordinates (one array per segment)
+  // ✅ FIX: If snapToRoads is enabled, only show route after snapping is complete
+  // This prevents showing raw GPS points before snapping completes
+  const finalSegmentCoords = snapToRoads 
+    ? (snappedSegmentCoords.length > 0 && !isSnappingInProgress ? snappedSegmentCoords : [])
+    : routeSegments;
 
   // Fetch route data
   useEffect(() => {
@@ -596,6 +725,9 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     // Skip if we don't have valid parameters
     if (!materialId || !date) {
       console.log('🚫 [RouteMapped] Skipping fetch - invalid conditions:', { materialId, date });
+      // ✅ FIX: Set loading to false and show error if parameters are invalid
+      setLoading(false);
+      setError('Invalid material ID or date');
       return;
     }
 
@@ -652,12 +784,16 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
           // Mark initial load as complete after first successful fetch
           isInitialLoadRef.current = false;
           
-          // Only update loading state if it was set (initial load)
+          // ✅ FIX: Only set loading to false if snapToRoads is disabled
+          // If snapToRoads is enabled, keep loading true until snapping completes
           if (isInitialLoad) {
-            setLoading(false);
-            if (onLoadingChange) {
-              onLoadingChange(false);
+            if (!snapToRoads) {
+              setLoading(false);
+              if (onLoadingChange) {
+                onLoadingChange(false);
+              }
             }
+            // If snapToRoads is enabled, loading will be set to false after snapping completes
           }
           
           if (onRouteLoad) {
@@ -716,16 +852,21 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
 
 
 
-  // Show loading state while fetching data
-  if (loading) {
+  // ✅ FIX: Single loading state - covers both API fetch and road snapping
+  // If snapToRoads is enabled, loading stays true until snapping completes
+  // Also show loading if we don't have data for current props (prevents "no route data" flash)
+  if (shouldShowLoading) {
     return (
       <div style={style} className={className} key={`wrapper-${materialId}-${date}`}>
         <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
           <div className="text-center p-6">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Route Data</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Route</h3>
             <p className="text-sm text-gray-600">
-              Fetching route data for {date}...
+              {snapToRoads 
+                ? `Preparing route for ${date}...`
+                : `Fetching route data for ${date}...`
+              }
             </p>
           </div>
         </div>
@@ -772,16 +913,18 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
         />
         
         {/* Route polylines with segment breaks - only show if we have valid data */}
-        {routeSegments.length > 0 && (
+        {finalSegmentCoords.length > 0 ? (
           <>
-            {routeSegments.map((segment, index) => {
-              // For each segment, use snapped coordinates if available, otherwise use raw
-              const segmentCoords = snapToRoads && snappedPolylineCoords.length > 0
-                ? snappedPolylineCoords.slice(
-                    routeSegments.slice(0, index).reduce((sum, seg) => sum + seg.length, 0),
-                    routeSegments.slice(0, index + 1).reduce((sum, seg) => sum + seg.length, 0)
-                  )
-                : segment;
+            {finalSegmentCoords.map((segmentCoords, index) => {
+              // Each segment is already snapped (if snapToRoads is enabled) or raw
+              // Only log on first render or when segment count changes
+              if (index === 0 || (index === finalSegmentCoords.length - 1 && process.env.NODE_ENV === 'development')) {
+                console.log(`🗺️ [RouteMapped] Rendering ${finalSegmentCoords.length} segment(s):`, {
+                  segmentIndex: index,
+                  points: segmentCoords.length,
+                  usingSnapped: snapToRoads && snappedSegmentCoords.length > 0
+                });
+              }
               
               return (
                 <Polyline
@@ -794,6 +937,16 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
               );
             })}
           </>
+        ) : (
+          // ✅ FIX: Don't show "No route data available" if we're still loading
+          !shouldShowLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 bg-opacity-75 z-[1000]">
+              <div className="text-center p-4 bg-white rounded shadow">
+                <p className="text-gray-600">No route data available</p>
+                {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+              </div>
+            </div>
+          )
         )}
         
         {/* Fit bounds to route - only if we have bounds */}

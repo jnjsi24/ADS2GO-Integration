@@ -225,6 +225,7 @@ export default function ProfileScreen() {
       }
 
       // Fetch TOTAL analytics (distance and hours since mountedAt)
+      // Use the same approach as dashboard: fetch with period=daily including today
       try {
         // Step 1: Get real-time data to fetch materialMountedAt and today's metrics
         const realtimeResponse = await fetch(
@@ -237,92 +238,103 @@ export default function ProfileScreen() {
           }
         );
 
+        let materialMountedAt: string | null = null;
+        let todayDistance = 0;
+        let todayHours = 0;
+
         if (realtimeResponse.ok) {
           const realtimeResult = await realtimeResponse.json();
-          if (realtimeResult.success && realtimeResult.data && profileData) {
+          if (realtimeResult.success && realtimeResult.data) {
             const realtimeData = realtimeResult.data;
-            const materialMountedAt = realtimeData.materialMountedAt;
-            const todayDistance = realtimeData.totalDistanceToday || 0;
-            const todayHours = realtimeData.currentHours || 0;
+            materialMountedAt = realtimeData.materialMountedAt;
+            todayDistance = realtimeData.totalDistanceToday || 0;
+            todayHours = realtimeData.currentHours || 0;
+          }
+        }
 
-            console.log('📊 Real-time data:', {
-              mountedAt: materialMountedAt,
-              todayDistance,
-              todayHours
+        // Step 2: Fetch historical data using daily period (from mountedAt to today)
+        // Note: Today's data might not be archived yet, so we'll add it separately if needed
+        if (materialMountedAt && profileData) {
+          try {
+            const mountedDate = new Date(materialMountedAt);
+            mountedDate.setHours(0, 0, 0, 0);
+
+            // Include today in the date range
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+
+            const dailyUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${mountedDate.toISOString()}&endDate=${today.toISOString()}`;
+            
+            const dailyResponse = await fetch(dailyUrl, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
             });
 
-            // Step 2: If mountedAt exists, fetch historical data from mountedAt to yesterday
-            if (materialMountedAt) {
-              try {
-                const mountedDate = new Date(materialMountedAt);
-                mountedDate.setHours(0, 0, 0, 0);
+            if (dailyResponse.ok) {
+              const dailyResult = await dailyResponse.json();
+              if (dailyResult.success && dailyResult.data?.dailyData?.aggregatedMetrics) {
+                const aggregatedMetrics = dailyResult.data.dailyData.aggregatedMetrics;
+                
+                // Check if today's data is included in the historical data
+                const todayDateStr = new Date().toISOString().split('T')[0];
+                const dailyBreakdown = dailyResult.data.dailyData.dailyBreakdown || [];
+                const hasTodayData = dailyBreakdown.some((day: any) => {
+                  const dayDateStr = new Date(day.date).toISOString().split('T')[0];
+                  return dayDateStr === todayDateStr;
+                });
 
-                // Get yesterday (to exclude today, we'll add today's data separately)
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                yesterday.setHours(23, 59, 59, 999);
-
-                // Only fetch historical if mountedAt is before today
-                if (mountedDate < yesterday) {
-                  const historicalUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${mountedDate.toISOString()}&endDate=${yesterday.toISOString()}`;
+                if (hasTodayData) {
+                  // Today's data is already in aggregated metrics, use it directly
+                  profileData.totalDistance = aggregatedMetrics.totalDistance || 0;
+                  profileData.totalHours = aggregatedMetrics.totalHours || 0;
                   
-                  const historicalResponse = await fetch(historicalUrl, {
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                      'Content-Type': 'application/json',
-                    },
+                  console.log('✅ Total analytics from daily endpoint (includes today):', {
+                    totalDistance: profileData.totalDistance,
+                    totalHours: profileData.totalHours
                   });
-
-                  if (historicalResponse.ok) {
-                    const historicalResult = await historicalResponse.json();
-                    if (historicalResult.success && historicalResult.data?.dailyData?.aggregatedMetrics) {
-                      const historicalMetrics = historicalResult.data.dailyData.aggregatedMetrics;
-                      
-                      // TOTAL = Historical (mountedAt to yesterday) + Today
-                      profileData.totalDistance = (historicalMetrics.totalDistance || 0) + todayDistance;
-                      profileData.totalHours = (historicalMetrics.totalHours || 0) + todayHours;
-
-                      console.log('✅ Total analytics calculated:', {
-                        historicalDistance: historicalMetrics.totalDistance,
-                        todayDistance,
-                        totalDistance: profileData.totalDistance,
-                        historicalHours: historicalMetrics.totalHours,
-                        todayHours,
-                        totalHours: profileData.totalHours
-                      });
-                    } else {
-                      // No historical data, use only today's data
-                      profileData.totalDistance = todayDistance;
-                      profileData.totalHours = todayHours;
-                      console.log('ℹ️ No historical data, using today only');
-                    }
-                  } else {
-                    // Failed to fetch historical, use only today's data
-                    profileData.totalDistance = todayDistance;
-                    profileData.totalHours = todayHours;
-                    console.log('⚠️ Historical fetch failed, using today only');
-                  }
                 } else {
-                  // Mounted today, use only today's data
-                  profileData.totalDistance = todayDistance;
-                  profileData.totalHours = todayHours;
-                  console.log('ℹ️ Material mounted today, using today only');
+                  // Today's data not archived yet, add it to historical total
+                  profileData.totalDistance = (aggregatedMetrics.totalDistance || 0) + todayDistance;
+                  profileData.totalHours = (aggregatedMetrics.totalHours || 0) + todayHours;
+                  
+                  console.log('✅ Total analytics (historical + today):', {
+                    historicalDistance: aggregatedMetrics.totalDistance,
+                    todayDistance,
+                    totalDistance: profileData.totalDistance,
+                    historicalHours: aggregatedMetrics.totalHours,
+                    todayHours,
+                    totalHours: profileData.totalHours
+                  });
                 }
-              } catch (historicalError) {
-                console.log('Error fetching historical data:', historicalError);
-                // Fallback to today's data
+              } else {
+                // No aggregated metrics, use real-time data only
                 profileData.totalDistance = todayDistance;
                 profileData.totalHours = todayHours;
+                console.log('ℹ️ No aggregated metrics, using real-time data only');
               }
             } else {
-              // No mountedAt, use only today's data
+              // Daily fetch failed, use real-time data only
               profileData.totalDistance = todayDistance;
               profileData.totalHours = todayHours;
-              console.log('⚠️ No mountedAt date, using today only');
+              console.log('⚠️ Daily fetch failed, using real-time data only');
+            }
+          } catch (dailyError) {
+            console.log('Error fetching daily data:', dailyError);
+            // Fallback to real-time data
+            if (profileData) {
+              profileData.totalDistance = todayDistance;
+              profileData.totalHours = todayHours;
             }
           }
         } else {
-          console.log('⚠️ Analytics endpoint returned:', realtimeResponse.status);
+          // No mountedAt, use real-time data only
+          if (profileData) {
+            profileData.totalDistance = todayDistance;
+            profileData.totalHours = todayHours;
+            console.log('⚠️ No mountedAt date, using real-time data only');
+          }
         }
       } catch (error) {
         console.log('Analytics not available:', error);

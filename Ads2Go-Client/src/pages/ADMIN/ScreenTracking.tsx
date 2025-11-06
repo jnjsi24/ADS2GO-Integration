@@ -193,7 +193,6 @@ const ScreenTracking: React.FC = () => {
   const [openPopupForSelected, setOpenPopupForSelected] = useState(false); // Flag to open popup for selected screen
   const [currentTime, setCurrentTime] = useState(new Date()); // Current time for display
   const [routeRefreshTrigger, setRouteRefreshTrigger] = useState(0); // Trigger to force RouteMapped refresh
-  const isInitialHistoricalLoadRef = useRef(true); // Track if this is the first historical load
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Handle resize
@@ -260,49 +259,8 @@ const ScreenTracking: React.FC = () => {
 
   const mapRef = useRef<Map | null>(null);
 
-  // Fetch historical route data
-  const fetchHistoricalRoute = async (materialId: string, date: string) => {
-    try {
-      // Only show loading state on initial load, do silent refresh for subsequent loads
-      const isInitialLoad = isInitialHistoricalLoadRef.current;
-      if (isInitialLoad) {
-        setLoadingHistorical(true);
-        console.log('📡 [Historical] Initial load - showing loading state');
-      } else {
-        console.log('📡 [Historical] Silent refresh - no loading state');
-      }
-      
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
-      const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${date}`;
-      
-      const response = await fetch(url);
-      const result = await response.json();
-      
-      if (result.success) {
-        setHistoricalRouteData(result.data);
-        
-        // Mark initial load as complete after first successful fetch
-        isInitialHistoricalLoadRef.current = false;
-        
-        return result.data;
-      } else {
-        console.error('❌ Failed to fetch historical route:', result.message);
-        setHistoricalRouteData(null);
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ Error fetching historical route:', error);
-      setHistoricalRouteData(null);
-      return null;
-    } finally {
-      // Only set loading to false if it was set (initial load)
-      if (isInitialHistoricalLoadRef.current === false || loadingHistorical) {
-        setLoadingHistorical(false);
-      }
-    }
-  };
-
-  // Auto-load historical route when screen is selected and historical tab is active
+  // Clear historical route data when switching tabs or screens
+  // RouteMapped component will handle all fetching via its own useEffect
   useEffect(() => {
     // Only log tab changes in verbose mode
     if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
@@ -316,35 +274,58 @@ const ScreenTracking: React.FC = () => {
         console.log('🧹 Clearing historical route data');
       }
       setHistoricalRouteData(null);
+      setClearMap(true); // Flag to clear map
       return;
     }
     
-    // For historical tab with selected screen, fetch device-specific route
+    // For historical tab with selected screen, clear previous data
+    // RouteMapped will fetch the data when it mounts/updates
     if (activeTab === 'historical' && selectedScreen && selectedDate) {
-      console.log('📡 Fetching historical route for:', selectedScreen.materialId, 'on', selectedDate);
-      // Reset to initial load when changing screen or date
-      isInitialHistoricalLoadRef.current = true;
-      // Clear previous data before fetching new data
+      console.log('🔄 [ScreenTracking] Historical tab active - RouteMapped will handle fetching');
+      // Clear previous data before RouteMapped fetches new data
       setHistoricalRouteData(null);
       setClearMap(true); // Flag to clear map
-      fetchHistoricalRoute(selectedScreen.materialId, selectedDate);
     }
-    
-    // Note: For material-only selection (no screens), the RouteMapped component
-    // will fetch its own data directly from the API
   }, [activeTab, selectedScreen, selectedDate]);
 
   // 🔄 AUTO-REFRESH: Update route map every 2 seconds when viewing Route Map tab
+  // ✅ FIX: Only refresh if trip is still active (today's date and not completed)
   useEffect(() => {
     // Only auto-refresh when on historical tab with a selected screen
     if (activeTab !== 'historical' || !selectedScreen || !selectedDate) {
       return;
     }
 
-    console.log('🔄 [Auto-Refresh] Starting route map auto-refresh every 2 seconds');
+    // Check if the requested date is today (Philippines timezone)
+    const now = new Date();
+    const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+    const todayDate = philippinesTime.toISOString().split('T')[0];
+    const isToday = selectedDate === todayDate;
+
+    // If not today, trip is completed - don't auto-refresh
+    if (!isToday) {
+      console.log('🛑 [Auto-Refresh] Trip is from past date - auto-refresh disabled');
+      return;
+    }
+
+    console.log('🔄 [Auto-Refresh] Starting route map auto-refresh every 2 seconds (trip is active)');
     
     // Set up interval to refresh route data every 2 seconds
     const refreshInterval = setInterval(() => {
+      // Check if trip has ended by checking the last route data's endTime
+      // If historicalRouteData exists and has an endTime, check if it's more than 5 minutes ago
+      if (historicalRouteData?.metrics?.endTime) {
+        const endTime = new Date(historicalRouteData.metrics.endTime);
+        const timeSinceEnd = now.getTime() - endTime.getTime();
+        const fiveMinutesInMs = 5 * 60 * 1000;
+        
+        if (timeSinceEnd > fiveMinutesInMs) {
+          console.log('🛑 [Auto-Refresh] Trip ended more than 5 minutes ago - stopping auto-refresh');
+          clearInterval(refreshInterval);
+          return;
+        }
+      }
+      
       console.log('🔄 [Auto-Refresh] Triggering route refresh for:', selectedScreen.materialId);
       // Increment trigger to force RouteMapped component to re-fetch
       setRouteRefreshTrigger(prev => prev + 1);
@@ -355,7 +336,7 @@ const ScreenTracking: React.FC = () => {
       console.log('🔄 [Auto-Refresh] Stopping route map auto-refresh');
       clearInterval(refreshInterval);
     };
-  }, [activeTab, selectedScreen, selectedDate]);
+  }, [activeTab, selectedScreen, selectedDate, historicalRouteData]);
 
 
   // Fetch materials list
@@ -1134,8 +1115,9 @@ const ScreenTracking: React.FC = () => {
                       <button
                         onClick={() => {
                           if (selectedScreen) {
-                            console.log('🔄 Manual load route clicked');
-                            fetchHistoricalRoute(selectedScreen.materialId, selectedDate);
+                            console.log('🔄 Manual load route clicked - triggering RouteMapped refresh');
+                            // RouteMapped component handles fetching - just trigger a refresh
+                            setRouteRefreshTrigger(prev => prev + 1);
                           } else {
                             console.log('⚠️ No screen selected for historical route');
                           }
