@@ -106,6 +106,7 @@ const DetailedAnalytics: React.FC = () => {
   // Fetch analytics data with optimized cache policy
   // ✅ Add polling when current date is included (for real-time updates)
   // ✅ Pass date range parameters when custom date range is selected
+  // ✅ Skip GraphQL query when using custom date range (use direct API instead)
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: isCustomDateRange ? undefined : selectedPeriod,
@@ -116,17 +117,30 @@ const DetailedAnalytics: React.FC = () => {
     nextFetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
     // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
-    pollInterval: isCurrentDateIncluded ? 30000 : 0,
+    // ✅ Skip polling when using custom date range to avoid interfering with direct API data
+    pollInterval: (isCurrentDateIncluded && !isCustomDateRange) ? 30000 : 0,
     // ✅ Don't trigger loading state during polling (silent background refresh)
-    notifyOnNetworkStatusChange: false
+    notifyOnNetworkStatusChange: false,
+    // ✅ Skip query when using custom date range to avoid conflicts with direct API
+    skip: isCustomDateRange && dateRange.start && dateRange.end
   });
 
   // Handle analytics errors using useEffect (replaces deprecated onError callback)
+  // ✅ Suppress network errors when using custom date range (GraphQL query is skipped but may still error)
   useEffect(() => {
-    if (analyticsError && analyticsError.message !== 'Failed to fetch analytics data') {
-      console.error('Unexpected analytics error:', analyticsError);
+    if (analyticsError) {
+      // Only log errors that aren't network errors when using custom date range
+      // Network errors are expected when GraphQL query is skipped during polling
+      if (isCustomDateRange && dateRange.start && dateRange.end) {
+        // Silently ignore network errors when using custom date range
+        // These are expected because we skip the GraphQL query
+        return;
+      }
+      if (analyticsError.message !== 'Failed to fetch analytics data') {
+        console.error('Unexpected analytics error:', analyticsError);
+      }
     }
-  }, [analyticsError]);
+  }, [analyticsError, isCustomDateRange, dateRange]);
 
   // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
   // This ensures summary metrics (Total Ad Plays, QR Scans, etc.) always show cumulative totals
@@ -140,9 +154,12 @@ const DetailedAnalytics: React.FC = () => {
     nextFetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
     // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
-    pollInterval: isCurrentDateIncluded ? 30000 : 0,
+    // ✅ Skip polling when using custom date range to avoid connection errors
+    pollInterval: (isCurrentDateIncluded && !isCustomDateRange) ? 30000 : 0,
     // ✅ Don't trigger loading state during polling (silent background refresh)
-    notifyOnNetworkStatusChange: false
+    notifyOnNetworkStatusChange: false,
+    // ✅ Skip query entirely when using custom date range to avoid unnecessary requests
+    skip: isCustomDateRange && dateRange.start && dateRange.end
   });
 
   // ✅ Fetch user's ads with materialId to filter devices
@@ -545,23 +562,45 @@ const DetailedAnalytics: React.FC = () => {
               } : null,
               hasAdPerformance: !!data.data?.adPerformance,
               adPerformanceCount: data.data?.adPerformance?.length || 0,
-              selectedAd: selectedAd
+              hasDailyStats: !!data.data?.dailyStats,
+              dailyStatsCount: data.data?.dailyStats?.length || 0,
+              dailyStatsDateRange: data.data?.dailyStats?.length > 0 ? {
+                first: data.data.dailyStats[0]?.date,
+                last: data.data.dailyStats[data.data.dailyStats.length - 1]?.date
+              } : null,
+              selectedAd: selectedAd,
+              dateRange: isCustomDateRange ? { start: dateRange.start, end: dateRange.end } : { period: selectedPeriod },
+              url: url
             });
-            setDirectAnalyticsData(data.data);
-            setDeviceAnalytics(null);
+            
+            // ✅ Only update state if we have data (prevent clearing existing data)
+            if (data.data) {
+              setDirectAnalyticsData(data.data);
+              setDeviceAnalytics(null);
+              console.log('✅ [DetailedAnalytics] Successfully set directAnalyticsData');
+            } else {
+              console.warn('⚠️ [DetailedAnalytics] API returned success but no data');
+            }
           } else {
             setDeviceAnalytics(data.data.deviceAnalytics);
             setDirectAnalyticsData(null);
           }
         } else {
           console.log('⚠️ [DetailedAnalytics] API returned success: false', data);
-          setDirectAnalyticsData(null);
-          setDeviceAnalytics(null);
+          // ✅ Don't clear existing data on error - keep previous data visible
+          // Only clear if this is an initial load (not a background refresh)
+          if (!silent) {
+            // Only clear on explicit user action, not on background errors
+            console.warn('⚠️ [DetailedAnalytics] API error, keeping existing data');
+          }
         }
       } catch (error) {
         console.error('Error fetching direct analytics:', error);
-        setDirectAnalyticsData(null);
-        setDeviceAnalytics(null);
+        // ✅ Don't clear existing data on error - keep previous data visible
+        // This prevents the graph from disappearing when there's a network error
+        if (!silent) {
+          console.warn('⚠️ [DetailedAnalytics] Network error, keeping existing data');
+        }
       } finally {
         // Only hide loading state if it was shown (not silent)
         if (!silent) {
@@ -592,8 +631,11 @@ const DetailedAnalytics: React.FC = () => {
   }, [directAnalyticsData, analyticsData, isInitialLoad]);
 
   // ✅ Poll direct analytics when current date is included (silent background refresh)
+  // ✅ Skip polling when using custom date range to avoid interfering with the data
   useEffect(() => {
     if (!isCurrentDateIncluded) return;
+    // ✅ Don't poll when using custom date range (only poll for preset periods)
+    if (isCustomDateRange) return;
     
     // Poll every 30 seconds when viewing current day data (silent refresh)
     const pollInterval = setInterval(() => {
@@ -601,7 +643,7 @@ const DetailedAnalytics: React.FC = () => {
     }, 30000); // 30 seconds
     
     return () => clearInterval(pollInterval);
-  }, [isCurrentDateIncluded, fetchDirectAnalytics]);
+  }, [isCurrentDateIncluded, isCustomDateRange, fetchDirectAnalytics]);
 
   // Cleanup all pending timeouts on unmount
   useEffect(() => {
@@ -722,16 +764,73 @@ const DetailedAnalytics: React.FC = () => {
   // Daily stats for charts
   const dailyStats = useMemo(() => {
     if (selectedDevice === 'all') {
-      // ✅ Use directAnalyticsData first (filtered data from API), fallback to GraphQL analyticsData
-      const dailyStats = directAnalyticsData?.dailyStats || analyticsData?.getUserAnalytics?.dailyStats || [];
-      return dailyStats.map((day: any) => ({
+      // ✅ When using custom date range, ONLY use directAnalyticsData (don't fall back to GraphQL)
+      // ✅ When NOT using custom date range, use directAnalyticsData first, then fallback to GraphQL
+      let dailyStats: any[] = [];
+      
+      if (isCustomDateRange && dateRange.start && dateRange.end) {
+        // Custom date range: ONLY use directAnalyticsData
+        dailyStats = directAnalyticsData?.dailyStats || [];
+        console.log('📊 [DetailedAnalytics] Using ONLY directAnalyticsData for custom date range:', {
+          hasDirectData: !!directAnalyticsData,
+          dailyStatsCount: dailyStats.length,
+          dateRange: { start: dateRange.start, end: dateRange.end }
+        });
+      } else {
+        // Preset period: Use directAnalyticsData first, fallback to GraphQL
+        dailyStats = directAnalyticsData?.dailyStats || analyticsData?.getUserAnalytics?.dailyStats || [];
+      }
+      
+      // ✅ Filter dailyStats by date range if custom date range is selected (extra safeguard)
+      let filteredDailyStats = dailyStats;
+      if (isCustomDateRange && dateRange.start && dateRange.end && dailyStats.length > 0) {
+        const startDate = new Date(dateRange.start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(dateRange.end);
+        endDate.setHours(23, 59, 59, 999);
+        
+        filteredDailyStats = dailyStats.filter((day: any) => {
+          const dayDate = new Date(day.date);
+          return dayDate >= startDate && dayDate <= endDate;
+        });
+        
+        console.log('📊 [DetailedAnalytics] Filtered dailyStats by custom date range:', {
+          originalCount: dailyStats.length,
+          filteredCount: filteredDailyStats.length,
+          dateRange: { start: dateRange.start, end: dateRange.end },
+          firstDate: filteredDailyStats[0]?.date,
+          lastDate: filteredDailyStats[filteredDailyStats.length - 1]?.date
+        });
+      }
+      
+      return filteredDailyStats.map((day: any) => ({
         date: day.date,
         adPlays: day.adsPlayed || 0,
         qrScans: day.qrScans || 0,
         completionRate: day.completionRate || 0
       }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
-      return deviceAnalytics.dailyBreakdown.map((day: any) => ({
+      // ✅ Filter device-specific daily stats by date range if custom date range is selected
+      let filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown;
+      if (isCustomDateRange && dateRange.start && dateRange.end) {
+        const startDate = new Date(dateRange.start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(dateRange.end);
+        endDate.setHours(23, 59, 59, 999);
+        
+        filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown.filter((day: any) => {
+          const dayDate = new Date(day.date);
+          return dayDate >= startDate && dayDate <= endDate;
+        });
+        
+        console.log('📊 [DetailedAnalytics] Filtered device dailyStats by custom date range:', {
+          originalCount: deviceAnalytics.dailyBreakdown.length,
+          filteredCount: filteredDeviceDailyStats.length,
+          dateRange: { start: dateRange.start, end: dateRange.end }
+        });
+      }
+      
+      return filteredDeviceDailyStats.map((day: any) => ({
         date: day.date,
         adPlays: day.totalAdPlays,
         qrScans: day.totalQRScans,
@@ -740,7 +839,7 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return [];
     }
-  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData]);
+  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, isCustomDateRange, dateRange.start, dateRange.end]);
 
   // Top performing ads with proper QR scan calculation - ALWAYS use overall data regardless of device/date selection
   const topPerformingAds = useMemo(() => {

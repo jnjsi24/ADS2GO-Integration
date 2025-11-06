@@ -137,6 +137,20 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
       console.log(`[GraphQL]: ${operation.operationName} query timed out - this can happen with large datasets`);
       return;
     }
+    
+    // ✅ Suppress connection reset errors for getUserAnalytics queries
+    // These can happen when queries are skipped but Apollo Client is still trying to poll
+    // This is expected behavior and not a real error
+    if ((networkError.message?.includes('ERR_CONNECTION_RESET') || 
+         networkError.message?.includes('Failed to fetch') ||
+         (networkError as any)?.code === 'ECONNRESET') &&
+        (operation.operationName === 'getUserAnalytics' || 
+         operation.operationName === 'GetUserAnalytics')) {
+      // Silently ignore connection reset errors for analytics queries
+      // These are expected when queries are skipped during polling
+      return;
+    }
+    
     console.error(`[Network error]: ${networkError}`);
   }
 });

@@ -167,6 +167,8 @@ class NotificationService {
       this.handleMaterialStatusChangeNotification(data);
     } else if (data?.category === 'HOURS_MILESTONE') {
       this.handleHoursMilestoneNotification(data);
+    } else if (data?.category === 'DAILY_COMPLIANCE_MISSED') {
+      this.handleDailyComplianceMissedNotification(data);
     }
   }
 
@@ -286,6 +288,23 @@ class NotificationService {
       '🎯 Milestone Achieved!',
       `Congratulations! You've reached ${hours} hours online today!`,
       'success'
+    );
+  }
+
+  /**
+   * Handle daily compliance missed notification
+   */
+  private handleDailyComplianceMissedNotification(data: NotificationData): void {
+    console.log('⚠️ Daily compliance missed notification:', data);
+    
+    const hoursAchieved = data.hoursAchieved || 0;
+    const hoursShort = data.hoursShort || 0;
+    const materialId = data.materialId || 'Your material';
+    
+    this.showInAppNotification(
+      '⚠️ Daily Compliance Missed',
+      `Your material ${materialId} only reached ${hoursAchieved} hours today (${hoursShort}h short of 8h requirement). Please ensure you meet the daily requirement tomorrow.`,
+      'warning'
     );
   }
 

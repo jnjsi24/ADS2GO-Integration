@@ -92,6 +92,10 @@ class NotificationService {
     return await DriverNotificationService.send8HourMilestoneNotification(driverId, materialId, hours, materialName);
   }
 
+  static async sendDailyComplianceMissedNotificationToDriver(driverId, materialId, hours, materialName) {
+    return await DriverNotificationService.sendDailyComplianceMissedNotification(driverId, materialId, hours, materialName);
+  }
+
   // ==================== ADMIN NOTIFICATIONS ====================
 
   static async sendNewAdSubmissionNotification(adId) {

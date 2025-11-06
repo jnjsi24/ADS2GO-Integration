@@ -369,12 +369,23 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
   if (!this.isOnline) {
     return Math.round((this.currentSession.totalHoursOnline || 0) * 100) / 100;
   }
-  
-  // Device is online - calculate hours since last update
+
+  // ✅ FIX: Check if ads are actually displaying before calculating real-time hours
+  // Hours should only count when ad player is actively displaying ads, not just when WebSocket is connected
+  // Check both screenMetrics.isDisplaying and isDisplaying - if either is explicitly false, don't count hours
+  const screenMetricsDisplaying = this.screenMetrics?.isDisplaying !== false;
+  const deviceDisplaying = this.isDisplaying !== false;
+  const isDisplaying = screenMetricsDisplaying && deviceDisplaying;
+  if (!isDisplaying) {
+    // Device is online but not displaying ads - return only accumulated hours
+    return Math.round((this.currentSession.totalHoursOnline || 0) * 100) / 100;
+  }
+
+  // Device is online AND displaying ads - calculate hours since last update
   let totalHours = this.currentSession.totalHoursOnline || 0;
   const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
   const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
-  
+
   // Only add reasonable increments (less than 1 hour to prevent bugs)
   if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
     totalHours += hoursSinceLastUpdate;
@@ -1361,6 +1372,17 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   
   // Only calculate if device is online and has a current session
   if (!this.isOnline || !this.currentSession || !this.currentSession.isActive) {
+    return this;
+  }
+
+  // ✅ FIX: Only count hours when ads are actually displaying
+  // Hours should only accumulate when ad player is actively displaying ads, not just when WebSocket is connected
+  // Check both screenMetrics.isDisplaying and isDisplaying - if either is explicitly false, don't count hours
+  const screenMetricsDisplaying = this.screenMetrics?.isDisplaying !== false;
+  const deviceDisplaying = this.isDisplaying !== false;
+  const isDisplaying = screenMetricsDisplaying && deviceDisplaying;
+  if (!isDisplaying) {
+    // Device is online but not displaying ads - don't update hours
     return this;
   }
   

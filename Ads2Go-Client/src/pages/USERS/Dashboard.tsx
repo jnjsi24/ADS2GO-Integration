@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
+import React, { useState, useEffect, useRef, ChangeEvent, useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -682,15 +682,16 @@ const Dashboard = () => {
     return Math.round(averageMileage * 10) / 10;
   };
 
-  // Get user's ads for route selector (only RUNNING or APPROVED ads with materials)
+  // Get user's ads for route selector (only RUNNING ads with materials)
+  // Only RUNNING ads have route history, APPROVED ads haven't started yet
   const userAdsForRoute = (myAdsData?.getMyAds || []).filter((ad: any) => 
-    (ad.status === 'RUNNING' || ad.status === 'APPROVED') && 
+    ad.status === 'RUNNING' && 
     ad.materialId && 
     ad.materialId.length > 0
   );
 
-  // Get ALL material IDs from selected ad
-  const getSelectedMaterialIds = () => {
+  // Get ALL material IDs from selected ad (memoized to prevent unnecessary re-renders)
+  const selectedMaterialIds = useMemo(() => {
     if (!selectedAdForRoute || !myAdsData?.getMyAds) return [];
     
     const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
@@ -700,7 +701,7 @@ const Dashboard = () => {
     return selectedAd.materialId
       .map((material: any) => material?.materialId)
       .filter((id: string) => id); // Remove any null/undefined
-  };
+  }, [selectedAdForRoute, myAdsData?.getMyAds]);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -756,10 +757,9 @@ const Dashboard = () => {
           {/* Column 1: Ad Performance Overview */}
           <div className="lg:col-span-2">
             <div
-              className="relative p-4 sm:p-6 shadow-xl md:col-span-2 text-white cursor-pointer
+              className="relative p-4 sm:p-6 shadow-xl md:col-span-2 text-white
                         bg-[#1b5087]/60 backdrop-blur-md border border-white/20
-                        hover:bg-[#1b5087]/70 transition-all duration-300"
-              onClick={() => window.location.href = '/detailed-analytics'}
+                        transition-all duration-300"
             >
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
                 <span className="text-base sm:text-lg font-semibold">Ad Performance Overview</span>
@@ -1137,7 +1137,7 @@ const Dashboard = () => {
                         </p>
                       </div>
                     </div>
-                  ) : getSelectedMaterialIds().length === 0 ? (
+                  ) : selectedMaterialIds.length === 0 ? (
                     <div className="flex items-center justify-center h-full bg-gray-50">
                       <div className="text-center p-8">
                         <svg className="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1154,10 +1154,12 @@ const Dashboard = () => {
                   ) : (
                     <MultiMaterialRouteMap
                       key={`route-${selectedAdForRoute}-${selectedRouteDate}`}
-                      materialIds={getSelectedMaterialIds()}
+                      materialIds={selectedMaterialIds}
                       date={selectedRouteDate}
                       className="h-full w-full"
                       style={{ height: '100%' }}
+                      snapToRoads={true}
+                      disableAutoRefresh={true}
                     />
                   )}
                 </div>

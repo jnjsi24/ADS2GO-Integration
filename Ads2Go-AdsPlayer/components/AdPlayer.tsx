@@ -1828,14 +1828,24 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       const result = await tabletRegistrationService.fetchAds(materialId, slotNumber);
       
       if (result.success && result.ads.length > 0) {
+        // ✅ DEBUG: Log received ads before filtering
+        const userAdsCount = result.ads.filter((ad: any) => !ad.isCompanyAd).length;
+        const companyAdsCount = result.ads.filter((ad: any) => ad.isCompanyAd).length;
+        console.log(`📦 [Ad Fetch] Received ${result.ads.length} ads from server: ${userAdsCount} user ads, ${companyAdsCount} company ads`);
+        
         // Filter out invalid ads before setting state
         const validAds = await filterValidAds(result.ads);
+        
+        // ✅ DEBUG: Log valid ads after filtering
+        const validUserAdsCount = validAds.filter((ad: any) => !ad.isCompanyAd).length;
+        const validCompanyAdsCount = validAds.filter((ad: any) => ad.isCompanyAd).length;
+        console.log(`✅ [Ad Fetch] Valid ads after filtering: ${validAds.length} total (${validUserAdsCount} user, ${validCompanyAdsCount} company)`);
         
         if (validAds.length > 0) {
           setAds(validAds);
           setCurrentAdIndex(0);
           // New ads loaded
-          console.log('Loaded valid ads from server:', validAds.length);
+          console.log(`🎬 [Ad Fetch] Loaded ${validAds.length} valid ads (${validUserAdsCount} user, ${validCompanyAdsCount} company)`);
           
           // Cache the valid ads for offline use
           await saveAdsToCache(validAds);
@@ -2201,11 +2211,16 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     const TARGET_SLOTS = 5;
     const totalAdsNeeded = Math.max(TARGET_SLOTS, ads.length);
     
+    // ✅ DEBUG: Log current ad state
+    const userAdsInRotation = ads.filter((ad: any) => !ad.isCompanyAd).length;
+    const companyAdsInRotation = ads.filter((ad: any) => ad.isCompanyAd).length;
+    console.log(`🔄 [Video End] Current rotation: ${ads.length} total ads (${userAdsInRotation} user, ${companyAdsInRotation} company), TARGET: ${TARGET_SLOTS} slots`);
+    
     // If slots are not full (less than 5 ads), fill with company ads
     if (ads.length < TARGET_SLOTS && companyAds.length > 0) {
       const companyAdsNeeded = TARGET_SLOTS - ads.length;
       
-      console.log(`🏢 Company Ad Filling: ${ads.length} user ads + ${companyAdsNeeded} company ad repeats = ${TARGET_SLOTS} total slots`);
+      console.log(`🏢 [Company Ad Filling] ${ads.length} ads in rotation (${userAdsInRotation} user, ${companyAdsInRotation} company) + ${companyAdsNeeded} company ad repeats = ${TARGET_SLOTS} total slots`);
       
       // Create rotation pattern: user ads first, then company ad repeated to fill to 5 slots
       // Example: 3 user ads → Ad1, Ad2, Ad3, CompanyAd, CompanyAd (company ad plays twice)
@@ -2644,21 +2659,39 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 playbackWebSocketService.stopPlaybackUpdates();
               }
               
+              // ✅ FIX: Use currentAd.duration as fallback when status.durationMillis is not available or incorrect
+              // This fixes the issue where Device 002's video player reports incorrect durationMillis (e.g., 3000ms)
+              const videoDurationMillis = status.durationMillis || (currentAd?.duration ? currentAd.duration * 1000 : null);
+              
+              // Validate duration is reasonable (not too small - minimum 5 seconds)
+              const MIN_DURATION_MS = 5000; // 5 seconds minimum
+              const isValidDuration = videoDurationMillis && videoDurationMillis >= MIN_DURATION_MS;
+              
+              // Use database duration if video player duration is invalid or missing
+              const effectiveDurationMillis = isValidDuration ? videoDurationMillis : (currentAd?.duration ? currentAd.duration * 1000 : null);
+              
               // 🔍 DEBUG: Log video position near end
-              if (status.positionMillis && status.durationMillis) {
-                const progress = (status.positionMillis / status.durationMillis) * 100;
+              if (status.positionMillis && effectiveDurationMillis) {
+                const progress = (status.positionMillis / effectiveDurationMillis) * 100;
                 if (progress > 95) {
-                  console.log(`🔍 Video near end: ${progress.toFixed(1)}% (${status.positionMillis}ms / ${status.durationMillis}ms)`);
+                  console.log(`🔍 Video near end: ${progress.toFixed(1)}% (${status.positionMillis}ms / ${effectiveDurationMillis}ms)`);
                 }
               }
               
-              // Check for video end - use multiple signals
+              // Log warning if using fallback duration
+              if (status.durationMillis && !isValidDuration && currentAd?.duration) {
+                console.warn(`⚠️ [Video Duration] Video player reported invalid duration (${status.durationMillis}ms), using database duration (${currentAd.duration * 1000}ms) for ad: ${currentAd.adTitle}`);
+              } else if (!status.durationMillis && currentAd?.duration) {
+                console.log(`ℹ️ [Video Duration] Video player duration not available, using database duration (${currentAd.duration * 1000}ms) for ad: ${currentAd.adTitle}`);
+              }
+              
+              // Check for video end - use multiple signals with fallback duration
               const isVideoEnded = status.didJustFinish || 
-                                   (status.positionMillis && status.durationMillis && 
-                                    status.positionMillis >= status.durationMillis - 100); // Within 100ms of end
+                                   (status.positionMillis && effectiveDurationMillis && 
+                                    status.positionMillis >= effectiveDurationMillis - 100); // Within 100ms of end
               
               if (isVideoEnded) {
-                console.log(`🎬 Video ended detected! didJustFinish=${status.didJustFinish}, position=${status.positionMillis}, duration=${status.durationMillis}`);
+                console.log(`🎬 Video ended detected! didJustFinish=${status.didJustFinish}, position=${status.positionMillis}ms, playerDuration=${status.durationMillis || 'N/A'}ms, effectiveDuration=${effectiveDurationMillis || 'N/A'}ms, adDuration=${currentAd?.duration || 'N/A'}s`);
                 // Stop WebSocket updates when ad ends
                 playbackWebSocketService.stopPlaybackUpdates();
                 handleVideoEnd();
@@ -3216,3 +3249,4 @@ const styles = StyleSheet.create({
 });
 
 export default AdPlayer;
+

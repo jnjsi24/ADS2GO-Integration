@@ -51,7 +51,7 @@ const adTypeDefs = gql`
   input FlexibleAdInput {
     title: String!
     description: String!
-    website: String
+    website: String!
     materialType: String!
     vehicleType: String!
     category: String!
@@ -75,7 +75,7 @@ const adTypeDefs = gql`
     targetDevices: [Material!]  # Array of devices where this ad should be deployed
     title: String!
     description: String
-    website: String        # Optional advertiser website
+    website: String!       # Required advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!          # total price for the ad
@@ -114,7 +114,7 @@ const adTypeDefs = gql`
     materialId: [ID!]!
     title: String!
     description: String
-    website: String         # Optional advertiser website
+    website: String!        # Required advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!

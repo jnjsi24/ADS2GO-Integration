@@ -527,17 +527,50 @@ class DailyArchiveJobV2 {
   }
 
   prepareHoursTracking(device, deviceTimezone) {
+    // ✅ Calculate final hours for compliance determination
+    const finalHours = this.getFinalHoursOnline(device, deviceTimezone);
+    const targetHours = device.hoursTracking?.targetHours || device.currentSession?.targetHours || 8;
+    
+    // ✅ Determine compliance status based on final hours
+    // If session is not active (ended), determine final status
+    // If session is still active, keep as PENDING (for today's data)
+    let complianceStatus = 'PENDING';
+    const isSessionActive = device.currentSession?.isActive !== false;
+    const isToday = this.isToday(device.date || new Date(), deviceTimezone);
+    
+    if (!isToday || !isSessionActive) {
+      // For past days or ended sessions, determine final compliance status
+      complianceStatus = finalHours >= targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
+    } else if (finalHours >= targetHours) {
+      // For today's active session, if already reached 8 hours, mark as COMPLIANT
+      complianceStatus = 'COMPLIANT';
+    } else {
+      // For today's active session, if not yet 8 hours, keep as PENDING
+      complianceStatus = 'PENDING';
+    }
+    
     return {
       deviceTimezone: deviceTimezone,
-      sessionStartTime: device.hoursTracking?.sessionStartTime,
-      sessionEndTime: device.hoursTracking?.sessionEndTime,
-      lastOnlineUpdate: device.hoursTracking?.lastOnlineUpdate,
+      sessionStartTime: device.hoursTracking?.sessionStartTime || device.currentSession?.startTime,
+      sessionEndTime: device.hoursTracking?.sessionEndTime || device.currentSession?.endTime,
+      lastOnlineUpdate: device.hoursTracking?.lastOnlineUpdate || device.currentSession?.lastOnlineUpdate,
       offlinePeriods: device.hoursTracking?.offlinePeriods || [],
-      complianceStatus: device.hoursTracking?.complianceStatus || 'PENDING',
-      targetHours: device.hoursTracking?.targetHours || 8,
+      complianceStatus: complianceStatus,
+      targetHours: targetHours,
       precision: device.hoursTracking?.precision || '30s',
-      totalOnlineHours: this.getFinalHoursOnline(device, deviceTimezone)
+      totalOnlineHours: finalHours
     };
+  }
+  
+  // ✅ Helper method to check if a date is today
+  isToday(date, deviceTimezone) {
+    const now = new Date();
+    const todayInTz = new Date(now.toLocaleString("en-US", {timeZone: deviceTimezone}));
+    const dateInTz = new Date(date.toLocaleString("en-US", {timeZone: deviceTimezone}));
+    
+    return todayInTz.getFullYear() === dateInTz.getFullYear() &&
+           todayInTz.getMonth() === dateInTz.getMonth() &&
+           todayInTz.getDate() === dateInTz.getDate();
   }
 
   prepareDailySummary(device) {

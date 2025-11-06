@@ -550,6 +550,46 @@ class DriverNotificationService extends BaseNotificationService {
       throw error;
     }
   }
+
+  /**
+   * Send daily compliance missed notification to driver (didn't reach 8 hours)
+   */
+  static async sendDailyComplianceMissedNotification(driverId, materialId, hours, materialName = null) {
+    try {
+      const Driver = require('../../models/Driver');
+      const driver = await Driver.findById(driverId);
+      if (!driver) throw new Error('Driver not found');
+
+      const formattedHours = Math.round(hours * 100) / 100;
+      const hoursShort = Math.round((8 - hours) * 100) / 100;
+
+      const notification = await this.createNotification(
+        driver._id,
+        '⚠️ Daily Compliance Missed',
+        `Your material ${materialName || materialId} only reached ${formattedHours} hours today (${hoursShort}h short of the 8-hour requirement). Please ensure you meet the daily requirement tomorrow.`,
+        'WARNING',
+        {
+          userRole: 'DRIVER',
+          category: 'DAILY_COMPLIANCE_MISSED',
+          priority: 'HIGH',
+          data: { 
+            materialId, 
+            materialName, 
+            hoursAchieved: formattedHours,
+            hoursRequired: 8.0,
+            hoursShort: hoursShort,
+            achievementType: 'DAILY_COMPLIANCE_MISSED',
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
+
+      return notification;
+    } catch (error) {
+      console.error('Error sending daily compliance missed notification:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = DriverNotificationService;

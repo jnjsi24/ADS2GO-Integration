@@ -1392,6 +1392,13 @@ class DeviceStatusService {
         // Clean up old notification history
         deviceOfflineNotificationService.cleanupOldHistory();
         
+        // ✅ NEW: Monitor DeviceTracking for real-time status changes
+        // This ensures notifications are sent even if status changes occur outside of WebSocket events
+        deviceOfflineNotificationService.monitorDeviceTrackingStatus()
+          .catch(error => {
+            console.error('❌ Error monitoring DeviceTracking status:', error);
+          });
+        
         // Log statistics
         const stats = deviceOfflineNotificationService.getNotificationStats();
         console.log(`📊 [DeviceOfflineNotification] Stats: ${JSON.stringify(stats)}`);

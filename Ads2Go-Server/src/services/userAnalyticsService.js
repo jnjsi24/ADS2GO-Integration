@@ -132,13 +132,18 @@ class UserAnalyticsService {
       
       // Check if we should return cumulative totals (for "All Devices" view)
       // For 'all' period, we want to use the same logic as other periods but with wide date range
-      const shouldReturnCumulative = !period || period === 'cumulative';
+      // ✅ If startDate and endDate are provided (custom date range), don't treat as cumulative
+      const hasCustomDateRange = startDate && endDate && !isNaN(new Date(startDate).getTime()) && !isNaN(new Date(endDate).getTime());
+      const shouldReturnCumulative = (!period || period === 'cumulative') && !hasCustomDateRange;
       const isAllPeriod = period === 'all';
       console.log('🔍 Period analysis:', {
         period: period,
         shouldReturnCumulative: shouldReturnCumulative,
+        hasCustomDateRange: hasCustomDateRange,
         periodType: typeof period,
-        periodValue: JSON.stringify(period)
+        periodValue: JSON.stringify(period),
+        startDate: startDate,
+        endDate: endDate
       });
       
       // Calculate date ranges based on period if startDate/endDate are not provided
@@ -762,19 +767,26 @@ class UserAnalyticsService {
         });
         data.dailyStats = [];
         // deviceStats already populated above
-      } else if (isAllPeriod) {
-        // For "all" period, use the same logic as other periods (30d, 7d, etc.) but with wide date range
+      } else if (isAllPeriod || hasCustomDateRange) {
+        // For "all" period or custom date range, use the same logic as other periods (30d, 7d, etc.) but with wide date range
         // This ensures we get the same data structure and QR scan calculations
+        // ✅ Custom date ranges should always fetch dailyStats from history
         if (defaultStartDate && defaultEndDate) {
+          console.log('📊 Fetching dailyStats for custom date range or all period:', {
+            startDate: defaultStartDate,
+            endDate: defaultEndDate,
+            adId: adId || 'all'
+          });
           const dailyStats = await this.getDailyStatsFromHistory(userId, defaultStartDate, defaultEndDate, adId);
-          data.dailyStats = dailyStats;
+          data.dailyStats = dailyStats || [];
+          console.log('📊 Retrieved dailyStats count:', dailyStats?.length || 0);
         }
         // deviceStats already populated above
       } else {
         // Get daily stats from DeviceDataHistoryV2 for filtered periods
         if (defaultStartDate && defaultEndDate) {
           const dailyStats = await this.getDailyStatsFromHistory(userId, defaultStartDate, defaultEndDate, adId);
-          data.dailyStats = dailyStats;
+          data.dailyStats = dailyStats || [];
         }
         // deviceStats already populated above
       }

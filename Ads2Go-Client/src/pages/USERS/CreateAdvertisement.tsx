@@ -359,6 +359,15 @@ const CreateAdvertisement: React.FC = () => {
     if (step === 1) {
       if (!formData.title.trim()) newErrors.title = 'Title is required';
       if (!formData.description.trim()) newErrors.description = 'Description is required';
+      if (!formData.website.trim()) {
+        newErrors.website = 'Website URL is required';
+      } else {
+        // Validate URL format
+        const urlPattern = /^https?:\/\/.+/;
+        if (!urlPattern.test(formData.website.trim())) {
+          newErrors.website = 'Website must be a valid URL starting with http:// or https://';
+        }
+      }
       if (!formData.materialType) newErrors.materialType = 'Material type is required';
       if (!formData.vehicleType) newErrors.vehicleType = 'Vehicle type is required';
       if (!formData.category) newErrors.category = 'Category is required';
@@ -684,7 +693,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-semibold peer-placeholder-shown:text-black/80'}
               peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
           >
-            Website URL (Optional)
+            Website URL <span className="text-red-500">*</span>
           </label>
           {errors.website && (
             <p className="text-sm text-red-600 mt-1">{errors.website}</p>

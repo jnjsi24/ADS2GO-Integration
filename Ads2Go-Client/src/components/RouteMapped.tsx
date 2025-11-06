@@ -936,6 +936,147 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
                 />
               );
             })}
+            
+            {/* Start marker - show at the first point of the first segment */}
+            {route.length > 0 && finalSegmentCoords.length > 0 && finalSegmentCoords[0].length > 0 && (() => {
+              const firstPoint = route[0];
+              const firstSegmentFirstCoord = finalSegmentCoords[0][0];
+              
+              // Use route point coordinates (more accurate) if available, otherwise use segment coord
+              const startPosition: [number, number] = firstPoint && typeof firstPoint.lat === 'number' && typeof firstPoint.lng === 'number'
+                ? [firstPoint.lat, firstPoint.lng]
+                : [firstSegmentFirstCoord[0], firstSegmentFirstCoord[1]];
+              
+              return (
+                <Marker
+                  position={startPosition}
+                  icon={L.divIcon({
+                    html: `
+                      <div style="
+                        width: 30px;
+                        height: 30px;
+                        background-color: #22c55e;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 16px;
+                        font-weight: bold;
+                        color: white;
+                      ">
+                        🚀
+                      </div>
+                    `,
+                    className: 'custom-marker',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15],
+                    popupAnchor: [0, -15]
+                  })}
+                >
+                  <Popup>
+                    <div className="p-2">
+                      <h3 className="font-bold text-sm mb-1 text-green-600">
+                        🚀 Route Start
+                      </h3>
+                      {firstPoint.timestamp && (
+                        <p className="text-xs text-gray-600">
+                          Time: {new Date(firstPoint.timestamp).toLocaleString()}
+                        </p>
+                      )}
+                      {firstPoint.speed !== undefined && (
+                        <p className="text-xs text-gray-600">
+                          Speed: {firstPoint.speed.toFixed(1)} km/h
+                        </p>
+                      )}
+                      {firstPoint.address && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {firstPoint.address}
+                        </p>
+                      )}
+                      {!firstPoint.address && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Location: {startPosition[0].toFixed(6)}, {startPosition[1].toFixed(6)}
+                        </p>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })()}
+            
+            {/* End marker - show at the last point of the last segment */}
+            {route.length > 1 && finalSegmentCoords.length > 0 && (() => {
+              const lastSegment = finalSegmentCoords[finalSegmentCoords.length - 1];
+              if (lastSegment.length === 0) return null;
+              
+              const lastPoint = route[route.length - 1];
+              const lastSegmentLastCoord = lastSegment[lastSegment.length - 1];
+              
+              // Use route point coordinates (more accurate) if available, otherwise use segment coord
+              const endPosition: [number, number] = lastPoint && typeof lastPoint.lat === 'number' && typeof lastPoint.lng === 'number'
+                ? [lastPoint.lat, lastPoint.lng]
+                : [lastSegmentLastCoord[0], lastSegmentLastCoord[1]];
+              
+              return (
+                <Marker
+                  position={endPosition}
+                  icon={L.divIcon({
+                    html: `
+                      <div style="
+                        width: 30px;
+                        height: 30px;
+                        background-color: #ef4444;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 16px;
+                        font-weight: bold;
+                        color: white;
+                      ">
+                        🏁
+                      </div>
+                    `,
+                    className: 'custom-marker',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15],
+                    popupAnchor: [0, -15]
+                  })}
+                >
+                  <Popup>
+                    <div className="p-2">
+                      <h3 className="font-bold text-sm mb-1 text-red-600">
+                        🏁 Route End
+                      </h3>
+                      {lastPoint.timestamp && (
+                        <p className="text-xs text-gray-600">
+                          Time: {new Date(lastPoint.timestamp).toLocaleString()}
+                        </p>
+                      )}
+                      {lastPoint.speed !== undefined && (
+                        <p className="text-xs text-gray-600">
+                          Speed: {lastPoint.speed.toFixed(1)} km/h
+                        </p>
+                      )}
+                      {lastPoint.address && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {lastPoint.address}
+                        </p>
+                      )}
+                      {!lastPoint.address && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Location: {endPosition[0].toFixed(6)}, {endPosition[1].toFixed(6)}
+                        </p>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })()}
           </>
         ) : (
           // ✅ FIX: Don't show "No route data available" if we're still loading

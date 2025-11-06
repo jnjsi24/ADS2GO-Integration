@@ -597,31 +597,282 @@ router.get('/route/:deviceId', async (req, res) => {
     }
 
     // ✅ Get overall compliance rate from DeviceDataHistoryV2
+    // Calculate compliance based on days since materialMountedAt (first trip)
     let overallCompliance = null;
     try {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Material = require('../models/Material');
+      
+      // Get material to find mountedAt date (first trip date)
+      const material = await Material.findOne({ materialId: deviceTracking.materialId });
+      const materialMountedAt = material?.mountedAt ? new Date(material.mountedAt) : null;
+      
       const deviceHistory = await DeviceDataHistoryV2.findOne({
         materialId: deviceTracking.materialId
       });
       
-      if (deviceHistory && deviceHistory.lifetimeTotals) {
-        const complianceRate = deviceHistory.lifetimeTotals.complianceRate || 0;
-        let rating = 'AVERAGE';
+      if (deviceHistory) {
+        // Filter dailyData to only include days since materialMountedAt (first trip)
+        let relevantDailyData = deviceHistory.dailyData || [];
+        if (materialMountedAt) {
+          const mountedDateStart = new Date(materialMountedAt);
+          mountedDateStart.setHours(0, 0, 0, 0);
+          
+          relevantDailyData = relevantDailyData.filter(day => {
+            const dayDate = new Date(day.date);
+            dayDate.setHours(0, 0, 0, 0);
+            return dayDate >= mountedDateStart;
+          });
+          
+          console.log(`📅 [ROUTE API] Filtering dailyData since first trip (${materialMountedAt.toISOString().split('T')[0]}):`, {
+            totalDaysInHistory: deviceHistory.dailyData?.length || 0,
+            daysSinceFirstTrip: relevantDailyData.length
+          });
+        } else {
+          console.log(`⚠️ [ROUTE API] No materialMountedAt found, using all dailyData`);
+        }
+        // Check if lifetimeTotals exists and has valid data
+        let lifetimeTotals = deviceHistory.lifetimeTotals;
+        let needsRecalculation = false;
         
-        if (complianceRate >= 90) {
-          rating = 'VERY GOOD';
-        } else if (complianceRate >= 75) {
-          rating = 'GOOD';
+        // Log current state for debugging
+        console.log(`📊 [ROUTE API] Checking compliance data for ${deviceId}:`, {
+          hasLifetimeTotals: !!lifetimeTotals,
+          lifetimeTotalDays: lifetimeTotals?.totalDays,
+          lifetimeComplianceRate: lifetimeTotals?.complianceRate,
+          totalDailyDataLength: deviceHistory.dailyData?.length || 0,
+          relevantDailyDataLength: relevantDailyData.length,
+          materialMountedAt: materialMountedAt ? materialMountedAt.toISOString().split('T')[0] : 'N/A'
+        });
+        
+        // If lifetimeTotals is missing or totalDays is 0 but dailyData exists, recalculate from dailyData
+        // Also recalculate if totalDays doesn't match dailyData length (data mismatch)
+        // Also recalculate if complianceRate is 0 but dailyData has hours data (incorrect calculation)
+        const dailyDataLength = relevantDailyData.length;
+        const lifetimeTotalDays = lifetimeTotals?.totalDays || 0;
+        const lifetimeComplianceRate = lifetimeTotals?.complianceRate || 0;
+        
+        // Check if dailyData has any hours data (check both totalHoursOnline and hoursTracking.totalOnlineHours)
+        const hasHoursData = relevantDailyData.some(day => {
+          const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+          return hours > 0;
+        });
+        
+        if (!lifetimeTotals || 
+            !lifetimeTotalDays || 
+            (lifetimeTotalDays === 0 && dailyDataLength > 0) ||
+            (lifetimeTotalDays > 0 && dailyDataLength > 0 && lifetimeTotalDays !== dailyDataLength) ||
+            (lifetimeComplianceRate === 0 && hasHoursData && dailyDataLength > 0)) {
+          needsRecalculation = true;
+          console.log(`🔄 [ROUTE API] Recalculating lifetimeTotals for ${deviceId}:`, {
+            reason: !lifetimeTotals ? 'missing lifetimeTotals' :
+                   !lifetimeTotalDays ? 'missing totalDays' :
+                   lifetimeTotalDays === 0 && dailyDataLength > 0 ? 'totalDays is 0 but dailyData exists' :
+                   lifetimeTotalDays > 0 && dailyDataLength > 0 && lifetimeTotalDays !== dailyDataLength ? 'totalDays mismatch with dailyData length' :
+                   lifetimeComplianceRate === 0 && hasHoursData ? 'complianceRate is 0 but dailyData has hours' :
+                   'unknown',
+            lifetimeTotalDays,
+            dailyDataLength,
+            lifetimeComplianceRate,
+            hasHoursData
+          });
         }
         
-        overallCompliance = {
-          complianceRate: Math.round(complianceRate * 100) / 100,
-          rating: rating,
-          totalDays: deviceHistory.lifetimeTotals.totalDays || 0,
-          compliantDays: Math.round((deviceHistory.lifetimeTotals.totalDays || 0) * (complianceRate / 100))
-        };
+        if (needsRecalculation && relevantDailyData.length > 0) {
+          // Recalculate from relevantDailyData (only days since first trip)
+          // Log each day's data for debugging
+          console.log(`🔍 [ROUTE API] Analyzing ${relevantDailyData.length} days of data (since first trip) for compliance calculation:`);
+          relevantDailyData.forEach((day, index) => {
+            const dateStr = day.date ? new Date(day.date).toISOString().split('T')[0] : 'unknown';
+            // Check both totalHoursOnline and hoursTracking.totalOnlineHours
+            const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+            const complianceStatus = day.hoursTracking?.complianceStatus || 'N/A';
+            const isCompliant = (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') || hours >= 8;
+            console.log(`  Day ${index + 1} (${dateStr}): ${hours.toFixed(2)}h, status: ${complianceStatus}, compliant: ${isCompliant}`);
+          });
+          
+          const compliantDays = relevantDailyData.filter(day => {
+            // Check if day has hoursTracking with COMPLIANT status
+            if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+              return true;
+            }
+            // Check both totalHoursOnline and hoursTracking.totalOnlineHours
+            const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+            return hours >= 8;
+          }).length;
+          
+          const totalDays = relevantDailyData.length;
+          const compliancePercentage = totalDays > 0 ? (compliantDays / totalDays) * 100 : 0;
+          
+          console.log(`📊 [ROUTE API] Compliance calculation result: ${compliantDays} compliant out of ${totalDays} days = ${compliancePercentage.toFixed(2)}%`);
+          
+          // Calculate totals from relevantDailyData (only days since first trip)
+          const totalHours = relevantDailyData.reduce((sum, day) => {
+            const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+            return sum + hours;
+          }, 0);
+          
+          lifetimeTotals = {
+            totalAdPlays: relevantDailyData.reduce((sum, day) => sum + (day.totalAdPlays || 0), 0),
+            totalQRScans: relevantDailyData.reduce((sum, day) => sum + (day.totalQRScans || 0), 0),
+            totalDistanceTraveled: relevantDailyData.reduce((sum, day) => sum + (day.totalDistanceTraveled || 0), 0),
+            totalHoursOnline: totalHours,
+            totalAdImpressions: relevantDailyData.reduce((sum, day) => sum + (day.totalAdImpressions || 0), 0),
+            totalAdPlayTime: relevantDailyData.reduce((sum, day) => sum + (day.totalAdPlayTime || 0), 0),
+            totalDays: totalDays,
+            averageDailyHours: totalDays > 0 ? totalHours / totalDays : 0,
+            complianceRate: Math.round(compliancePercentage * 100) / 100
+          };
+          
+          // Update the document with recalculated lifetimeTotals
+          deviceHistory.lifetimeTotals = lifetimeTotals;
+          await deviceHistory.save().catch(err => {
+            console.error(`⚠️ [ROUTE API] Failed to save recalculated lifetimeTotals:`, err.message);
+          });
+          
+          console.log(`✅ [ROUTE API] Recalculated lifetimeTotals: ${totalDays} days, ${compliantDays} compliant, ${compliancePercentage.toFixed(2)}%`);
+        }
         
-        console.log(`📊 [ROUTE API] Overall compliance for ${deviceId}: ${complianceRate.toFixed(2)}% (${rating})`);
+        // Use lifetimeTotals (either existing or recalculated)
+        // ALWAYS recalculate compliantDays from dailyData for accuracy, even if lifetimeTotals exists
+        if (lifetimeTotals && lifetimeTotals.totalDays > 0) {
+          // Always recalculate compliantDays from dailyData to ensure accuracy
+          let actualCompliantDays = 0;
+          let actualComplianceRate = lifetimeTotals.complianceRate || 0;
+          
+          if (relevantDailyData.length > 0) {
+            // Recalculate from relevantDailyData (only days since first trip)
+            actualCompliantDays = relevantDailyData.filter(day => {
+              if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+                return true;
+              }
+              // Check both totalHoursOnline and hoursTracking.totalOnlineHours
+              const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+              return hours >= 8;
+            }).length;
+            
+            // Recalculate compliance rate from actual count
+            const totalDays = relevantDailyData.length;
+            actualComplianceRate = totalDays > 0 ? (actualCompliantDays / totalDays) * 100 : 0;
+            
+            // If recalculated rate differs significantly from stored rate, update it
+            if (Math.abs(actualComplianceRate - (lifetimeTotals.complianceRate || 0)) > 0.01) {
+              console.log(`🔄 [ROUTE API] Compliance rate mismatch detected, updating:`, {
+                stored: `${(lifetimeTotals.complianceRate || 0).toFixed(2)}%`,
+                calculated: `${actualComplianceRate.toFixed(2)}%`,
+                compliantDays: actualCompliantDays,
+                totalDays: totalDays
+              });
+              
+              // Update lifetimeTotals with correct values
+              lifetimeTotals.complianceRate = Math.round(actualComplianceRate * 100) / 100;
+              deviceHistory.lifetimeTotals = lifetimeTotals;
+              await deviceHistory.save().catch(err => {
+                console.error(`⚠️ [ROUTE API] Failed to save updated compliance rate:`, err.message);
+              });
+            }
+          } else {
+            // Fallback to percentage calculation if dailyData not available
+            actualCompliantDays = Math.round((lifetimeTotals.totalDays || 0) * (actualComplianceRate / 100));
+            console.log(`⚠️ [ROUTE API] No dailyData available, using percentage calculation for compliantDays`);
+          }
+          
+          let rating = 'AVERAGE';
+          if (actualComplianceRate >= 90) {
+            rating = 'VERY GOOD';
+          } else if (actualComplianceRate >= 75) {
+            rating = 'GOOD';
+          }
+          
+          // Use relevantDailyData.length for totalDays (days since first trip)
+          const finalTotalDays = relevantDailyData.length > 0 ? relevantDailyData.length : (lifetimeTotals.totalDays || 0);
+          
+          overallCompliance = {
+            complianceRate: Math.round(actualComplianceRate * 100) / 100,
+            rating: rating,
+            totalDays: finalTotalDays,
+            compliantDays: actualCompliantDays
+          };
+          
+          console.log(`📊 [ROUTE API] Overall compliance for ${deviceId}:`, {
+            complianceRate: `${actualComplianceRate.toFixed(2)}%`,
+            rating,
+            compliantDays: actualCompliantDays,
+            totalDays: finalTotalDays,
+            daysSinceFirstTrip: relevantDailyData.length,
+            materialMountedAt: materialMountedAt ? materialMountedAt.toISOString().split('T')[0] : 'N/A',
+            calculatedFrom: relevantDailyData.length > 0 ? 'relevantDailyData (since first trip)' : 'lifetimeTotals (fallback)'
+          });
+        } else {
+          // ✅ ENHANCED LOGGING: Detailed diagnostics for 0% compliance
+          console.log(`⚠️ [ROUTE API] No compliance data available for ${deviceId}:`, {
+            hasLifetimeTotals: !!lifetimeTotals,
+            lifetimeTotalDays: lifetimeTotals?.totalDays || 0,
+            lifetimeComplianceRate: lifetimeTotals?.complianceRate || 0,
+            totalDailyDataLength: deviceHistory.dailyData?.length || 0,
+            relevantDailyDataLength: relevantDailyData.length,
+            materialMountedAt: materialMountedAt ? materialMountedAt.toISOString().split('T')[0] : 'N/A',
+            hasMaterialMountedAt: !!materialMountedAt,
+            reason: !lifetimeTotals ? 'No lifetimeTotals' :
+                   (lifetimeTotals?.totalDays || 0) === 0 ? 'totalDays is 0' :
+                   relevantDailyData.length === 0 ? 'No relevantDailyData (filtered by materialMountedAt or empty)' :
+                   'Unknown'
+          });
+          
+          // ✅ ADDITIONAL: Log sample dailyData to see what's there
+          if (deviceHistory.dailyData && deviceHistory.dailyData.length > 0) {
+            console.log(`📊 [ROUTE API] Sample dailyData (first 3 entries):`, deviceHistory.dailyData.slice(0, 3).map(day => ({
+              date: day.date ? new Date(day.date).toISOString().split('T')[0] : 'no date',
+              totalHoursOnline: day.totalHoursOnline || 0,
+              hoursTracking: day.hoursTracking ? {
+                totalOnlineHours: day.hoursTracking.totalOnlineHours || 0,
+                complianceStatus: day.hoursTracking.complianceStatus || 'N/A'
+              } : 'no hoursTracking'
+            })));
+          }
+          
+          // ✅ If we have dailyData but no compliance, try to calculate it anyway
+          if (relevantDailyData.length > 0) {
+            const compliantDays = relevantDailyData.filter(day => {
+              if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+                return true;
+              }
+              const hours = day.totalHoursOnline || day.hoursTracking?.totalOnlineHours || 0;
+              return hours >= 8;
+            }).length;
+            
+            const totalDays = relevantDailyData.length;
+            const calculatedRate = totalDays > 0 ? (compliantDays / totalDays) * 100 : 0;
+            
+            console.log(`🔍 [ROUTE API] Manual calculation from dailyData:`, {
+              totalDays,
+              compliantDays,
+              calculatedRate: `${calculatedRate.toFixed(2)}%`,
+              willCreateOverallCompliance: calculatedRate > 0 || totalDays > 0
+            });
+            
+            // ✅ Create overallCompliance even if rate is 0% (so user can see "0 of X days")
+            if (totalDays > 0) {
+              let rating = 'AVERAGE';
+              if (calculatedRate >= 90) {
+                rating = 'VERY GOOD';
+              } else if (calculatedRate >= 75) {
+                rating = 'GOOD';
+              }
+              
+              overallCompliance = {
+                complianceRate: Math.round(calculatedRate * 100) / 100,
+                rating: rating,
+                totalDays: totalDays,
+                compliantDays: compliantDays
+              };
+              
+              console.log(`✅ [ROUTE API] Created overallCompliance from dailyData:`, overallCompliance);
+            }
+          }
+        }
+      } else {
+        console.log(`ℹ️ [ROUTE API] No DeviceDataHistoryV2 found for material ${deviceTracking.materialId}`);
       }
     } catch (error) {
       console.error(`⚠️ [ROUTE API] Error fetching overall compliance:`, error.message);

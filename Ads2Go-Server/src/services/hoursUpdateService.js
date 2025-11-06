@@ -50,7 +50,9 @@ class HoursUpdateService {
       const now = new Date();
       const today = now.toISOString().split('T')[0];
 
-      // Get all devices for today that are online
+      // Get all devices for today that are online AND displaying ads
+      // ✅ FIX: Only update hours for devices that are actually displaying ads
+      // Note: We'll do the isDisplaying check in updateDeviceHours method for more reliable checking
       const devices = await DeviceTracking.find({
         date: today,
         isOnline: true,
@@ -77,6 +79,17 @@ class HoursUpdateService {
   async updateDeviceHours(device) {
     try {
       if (!device.currentSession || !device.currentSession.isActive) {
+        return;
+      }
+
+      // ✅ FIX: Only count hours when ads are actually displaying
+      // Hours should only accumulate when ad player is actively displaying ads, not just when WebSocket is connected
+      // Check both screenMetrics.isDisplaying and isDisplaying - if either is explicitly false, don't count hours
+      const screenMetricsDisplaying = device.screenMetrics?.isDisplaying !== false;
+      const deviceDisplaying = device.isDisplaying !== false;
+      const isDisplaying = screenMetricsDisplaying && deviceDisplaying;
+      if (!isDisplaying) {
+        // Device is online but not displaying ads - don't update hours
         return;
       }
 

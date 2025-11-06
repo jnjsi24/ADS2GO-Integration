@@ -102,6 +102,11 @@ const RouteTab: React.FC = () => {
   const [showOnlyLastLocation, setShowOnlyLastLocation] = useState(false);
   const [lastLocationPoint, setLastLocationPoint] = useState<RoutePoint | null>(null);
   
+  // ✅ Store geocoded addresses to avoid re-geocoding
+  const [geocodedAddresses, setGeocodedAddresses] = useState<Map<string, string>>(new Map());
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [addressesReady, setAddressesReady] = useState(false); // Track if addresses are ready for display
+  
   // 🔄 NEW: Batch GPS updates to prevent constant WebView reloads (smooth route line display)
   const pendingGPSPointsRef = useRef<RoutePoint[]>([]);
   useEffect(() => {
@@ -244,7 +249,7 @@ const RouteTab: React.FC = () => {
           if (!prev) {
             // Initialize route data with first point
             const firstPoint = pointsToAdd[0];
-            return {
+            const newRouteData = {
               deviceId: driverInfo.deviceId,
               materialId: driverInfo.materialId,
               route: pointsToAdd,
@@ -257,6 +262,17 @@ const RouteTab: React.FC = () => {
                 endTime: pointsToAdd[pointsToAdd.length - 1].timestamp
               }
             };
+            
+            // ✅ Geocode addresses for new route data
+            // Use setTimeout to ensure state is updated before geocoding
+            setTimeout(() => {
+              if (pointsToAdd.length > 0) {
+                const segments = segmentRoute(pointsToAdd);
+                geocodeSegmentLocations(segments);
+              }
+            }, 0);
+            
+            return newRouteData;
           }
 
           // Add all pending points to existing route
@@ -283,7 +299,7 @@ const RouteTab: React.FC = () => {
 
           const averageSpeed = duration > 0 ? (totalDistance / duration) * 3600 : 0;
 
-          return {
+          const updatedRouteData = {
             ...prev,
             route: updatedRoute,
             metrics: {
@@ -295,6 +311,17 @@ const RouteTab: React.FC = () => {
               endTime
             }
           };
+          
+          // ✅ Geocode addresses for newly added segments
+          // Use setTimeout to ensure state is updated before geocoding
+          setTimeout(() => {
+            if (pointsToAdd.length > 0) {
+              const segments = segmentRoute(updatedRoute);
+              geocodeSegmentLocations(segments);
+            }
+          }, 0);
+          
+          return updatedRouteData;
         });
 
         setLastUpdate(new Date());
@@ -633,22 +660,52 @@ const RouteTab: React.FC = () => {
         isToday
       });
       
-      // ✅ CRITICAL FIX: During midnight reset mode, DON'T fetch today's data
-      // Just show the last seen marker from yesterday
-      if (inResetMode) {
-        console.log('🌙 [Route Tab] In midnight reset mode - skipping API call, showing only last location marker');
-        setRouteData(null); // Clear any existing route data
-        setSessionStatus(null);
-        setOverallCompliance(null);
-        return; // Exit early, don't fetch today's data
-      }
-      
       // Get auth token
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         console.warn('No auth token found for route data fetch');
         setRouteData(null);
         return;
+      }
+
+      // ✅ CRITICAL FIX: During midnight reset mode, DON'T fetch today's route/session data
+      // BUT still fetch overallCompliance (avg rating) - it should always be visible
+      if (inResetMode && isToday) {
+        console.log('🌙 [Route Tab] In midnight reset mode - fetching only overallCompliance, skipping route/session data');
+        setRouteData(null); // Clear any existing route data
+        setSessionStatus(null);
+        
+        // ✅ Fetch ONLY overallCompliance during lock period
+        const sessionUrl = `${API_CONFIG.BASE_URL}/screenTracking/route/${driverInfo?.deviceId || materialId}?date=${dateStr}`;
+        
+        try {
+          const sessionResponse = await fetch(sessionUrl, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (sessionResponse.ok) {
+            const sessionResult = await sessionResponse.json();
+            
+            if (sessionResult.success && sessionResult.data?.overallCompliance) {
+              console.log('✅ [Midnight Reset] Fetched overallCompliance:', sessionResult.data.overallCompliance);
+              setOverallCompliance({
+                complianceRate: sessionResult.data.overallCompliance.complianceRate,
+                rating: sessionResult.data.overallCompliance.rating,
+                totalDays: sessionResult.data.overallCompliance.totalDays,
+                compliantDays: sessionResult.data.overallCompliance.compliantDays
+              });
+            } else {
+              console.log('⚠️ [Midnight Reset] No overallCompliance data available');
+            }
+          }
+        } catch (error) {
+          console.error('❌ [Midnight Reset] Error fetching overallCompliance:', error);
+        }
+        
+        return; // Exit early after fetching only overallCompliance
       }
 
       console.log(`🌐 [Route Tab] Fetching route data for ${dateStr} (isToday: ${isToday})`);
@@ -680,6 +737,29 @@ const RouteTab: React.FC = () => {
               });
               
               setRouteData(sessionResult.data);
+              
+              // ✅ Clear geocoded addresses when route data changes (new date/route)
+              setGeocodedAddresses(new Map());
+              
+              // ✅ Check if all addresses already exist in route data
+              if (sessionResult.data.route && sessionResult.data.route.length > 0) {
+                const allAddressesExist = sessionResult.data.route.every((point: RoutePoint) => 
+                  point.address && point.address.trim() !== ''
+                );
+                
+                if (allAddressesExist) {
+                  // All addresses already exist, no geocoding needed
+                  setAddressesReady(true);
+                  console.log('✅ All addresses already exist in route data');
+                } else {
+                  // Some addresses missing, start geocoding
+                  setAddressesReady(false);
+                  const segments = segmentRoute(sessionResult.data.route);
+                  geocodeSegmentLocations(segments);
+                }
+              } else {
+                setAddressesReady(false);
+              }
               
               if (sessionResult.data.sessionStatus) {
                 setSessionStatus({
@@ -751,6 +831,29 @@ const RouteTab: React.FC = () => {
               console.log('🔄 [Enhanced API] Setting route data with', enhancedResult.data.route?.length, 'points');
               setRouteData(enhancedResult.data);
               
+              // ✅ Clear geocoded addresses when route data changes (new date/route)
+              setGeocodedAddresses(new Map());
+              
+              // ✅ Check if all addresses already exist in route data
+              if (enhancedResult.data.route && enhancedResult.data.route.length > 0) {
+                const allAddressesExist = enhancedResult.data.route.every((point: RoutePoint) => 
+                  point.address && point.address.trim() !== ''
+                );
+                
+                if (allAddressesExist) {
+                  // All addresses already exist, no geocoding needed
+                  setAddressesReady(true);
+                  console.log('✅ All addresses already exist in route data');
+                } else {
+                  // Some addresses missing, start geocoding
+                  setAddressesReady(false);
+                  const segments = segmentRoute(enhancedResult.data.route);
+                  geocodeSegmentLocations(segments);
+                }
+              } else {
+                setAddressesReady(false);
+              }
+              
               // For historical dates, session status won't be in enhanced API
               // Clear session status for historical views
               console.log('🔄 [Enhanced API] Clearing session status for historical view');
@@ -818,6 +921,138 @@ const RouteTab: React.FC = () => {
 
   const getStatusText = (isOnline: boolean): string => {
     return isOnline ? 'ONLINE' : 'OFFLINE';
+  };
+
+  // ✅ Reverse geocoding function to get address from coordinates
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    try {
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Ads2Go-DriverApp/1.0' // Required by Nominatim
+        }
+      });
+      
+      if (!response.ok) {
+        return '';
+      }
+      
+      const data = await response.json();
+      
+      if (data && data.address) {
+        const addr = data.address;
+        // Build readable address from components
+        const parts: string[] = [];
+        
+        if (addr.road) parts.push(addr.road);
+        if (addr.house_number) parts.unshift(addr.house_number);
+        if (addr.suburb || addr.neighbourhood) parts.push(addr.suburb || addr.neighbourhood);
+        if (addr.city || addr.town || addr.village) parts.push(addr.city || addr.town || addr.village);
+        if (addr.state) parts.push(addr.state);
+        if (addr.postcode) parts.push(addr.postcode);
+        
+        return parts.length > 0 ? parts.join(', ') : data.display_name || '';
+      }
+      
+      return data.display_name || '';
+    } catch (error) {
+      console.warn('Reverse geocoding error:', error);
+      return '';
+    }
+  };
+
+  // ✅ Geocode addresses for route points that don't have addresses (only for timeline segments)
+  const geocodeSegmentLocations = async (segments: Array<{
+    type: 'TRAVELED' | 'IDLE';
+    startLocation: { lat: number; lng: number; address: string };
+    endLocation: { lat: number; lng: number; address: string };
+  }>) => {
+    if (isGeocoding) return; // Don't start multiple geocoding processes
+    
+    setIsGeocoding(true);
+    setAddressesReady(false); // Mark addresses as not ready
+    const newGeocodedAddresses = new Map(geocodedAddresses);
+    let geocodedCount = 0;
+    
+    // Collect unique locations that need geocoding
+    const locationsToGeocode: Array<{ lat: number; lng: number; key: string }> = [];
+    
+    for (const segment of segments) {
+      // Check start location
+      if (!segment.startLocation.address || segment.startLocation.address.trim() === '') {
+        const key = `${segment.startLocation.lat.toFixed(6)},${segment.startLocation.lng.toFixed(6)}`;
+        if (!newGeocodedAddresses.has(key) && !locationsToGeocode.find(l => l.key === key)) {
+          locationsToGeocode.push({ lat: segment.startLocation.lat, lng: segment.startLocation.lng, key });
+        }
+      }
+      
+      // Check end location
+      if (!segment.endLocation.address || segment.endLocation.address.trim() === '') {
+        const key = `${segment.endLocation.lat.toFixed(6)},${segment.endLocation.lng.toFixed(6)}`;
+        if (!newGeocodedAddresses.has(key) && !locationsToGeocode.find(l => l.key === key)) {
+          locationsToGeocode.push({ lat: segment.endLocation.lat, lng: segment.endLocation.lng, key });
+        }
+      }
+    }
+    
+    if (locationsToGeocode.length === 0) {
+      setIsGeocoding(false);
+      setAddressesReady(true); // All addresses already available
+      console.log('✅ All addresses already available, no geocoding needed');
+      return; // All addresses already geocoded
+    }
+    
+    console.log(`📍 Geocoding ${locationsToGeocode.length} unique locations for timeline...`);
+    
+    // Geocode with delay to respect rate limits (max 1 request per second for Nominatim)
+    for (let i = 0; i < locationsToGeocode.length; i++) {
+      const location = locationsToGeocode[i];
+      
+      // Geocode with delay
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+      }
+      
+      const address = await reverseGeocode(location.lat, location.lng);
+      if (address) {
+        newGeocodedAddresses.set(location.key, address);
+        geocodedCount++;
+      }
+    }
+    
+    if (geocodedCount > 0) {
+      setGeocodedAddresses(newGeocodedAddresses);
+      console.log(`✅ Geocoded ${geocodedCount} locations`);
+    }
+    
+    setIsGeocoding(false);
+    setAddressesReady(true); // Mark addresses as ready for display
+  };
+  
+  // ✅ Get address for a location (from point address or geocoded cache)
+  const getLocationAddress = (lat: number, lng: number, existingAddress?: string): string => {
+    // If address already exists, use it
+    if (existingAddress && existingAddress.trim() !== '') {
+      return existingAddress;
+    }
+    
+    // Check geocoded cache
+    const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    const geocodedAddress = geocodedAddresses.get(key);
+    if (geocodedAddress) {
+      return geocodedAddress;
+    }
+    
+    // ✅ Only return address if addresses are ready
+    // If addresses are ready but this location wasn't geocoded, return coordinates as fallback
+    // If addresses are not ready yet, return empty string (will show "Loading address...")
+    if (addressesReady) {
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+    
+    return '';
   };
 
   // Segment route into movement and idle periods
@@ -1464,75 +1699,22 @@ const RouteTab: React.FC = () => {
         </View>
         
         {routeData && routeData.route.length > 0 ? (
-          <ScrollView style={styles.timelineContainer} nestedScrollEnabled>
-            {segmentRoute(routeData.route).map((segment, index) => (
-              <View key={index} style={styles.timelineItem}>
-                <View style={styles.timelineIconContainer}>
-                  {segment.type === 'TRAVELED' ? (
-                    <View style={[styles.timelineIcon, { backgroundColor: '#22c55e' }]}>
-                      <Ionicons name="car" size={16} color="#ffffff" />
-                    </View>
-                  ) : (
-                    <View style={[styles.timelineIcon, { backgroundColor: '#f59e0b' }]}>
-                      <Ionicons name="pause" size={16} color="#ffffff" />
-                    </View>
-                  )}
-                  {index < segmentRoute(routeData.route).length - 1 && (
-                    <View style={styles.timelineLine} />
-                  )}
-                </View>
-                
-                <View style={styles.timelineContent}>
-                  <View style={styles.timelineHeader}>
-                    <Text style={styles.timelineTime}>
-                      {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
-                    </Text>
-                    <Text style={[
-                      styles.timelineType,
-                      { color: segment.type === 'TRAVELED' ? '#22c55e' : '#f59e0b' }
-                    ]}>
-                      {segment.type === 'TRAVELED' ? 'TRAVELED' : 'IDLE/STOPPED'}
-                    </Text>
-                  </View>
-                  
-                  {segment.type === 'TRAVELED' ? (
-                    <View style={styles.timelineDetails}>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="navigate" size={14} color="#3b82f6" />
-                        <Text style={styles.locationText} numberOfLines={2}>
-                          From: {segment.startLocation.address || 
-                            `${segment.startLocation.lat.toFixed(6)}, ${segment.startLocation.lng.toFixed(6)}`}
-                        </Text>
-                      </View>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location" size={14} color="#ef4444" />
-                        <Text style={styles.locationText} numberOfLines={2}>
-                          To: {segment.endLocation.address || 
-                            `${segment.endLocation.lat.toFixed(6)}, ${segment.endLocation.lng.toFixed(6)}`}
-                        </Text>
-                      </View>
-                      <Text style={styles.distanceText}>
-                        Distance: {segment.distance.toFixed(2)} km • Duration: {formatDuration(segment.duration)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.timelineDetails}>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location" size={14} color="#f59e0b" />
-                        <Text style={styles.locationText} numberOfLines={2}>
-                          Stopped at: {segment.startLocation.address || 
-                            `${segment.startLocation.lat.toFixed(6)}, ${segment.startLocation.lng.toFixed(6)}`}
-                        </Text>
-                      </View>
-                      <Text style={styles.distanceText}>
-                        Duration: {formatDuration(segment.duration)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+          addressesReady ? (
+            <RouteTimelineView
+              route={routeData.route}
+              segmentRoute={segmentRoute}
+              formatTime={formatTime}
+              formatDuration={formatDuration}
+              geocodeSegmentLocations={geocodeSegmentLocations}
+              getLocationAddress={getLocationAddress}
+              isGeocoding={isGeocoding}
+            />
+          ) : (
+            <View style={styles.timelineLoadingContainer}>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.timelineLoadingText}>Loading addresses...</Text>
+            </View>
+          )
         ) : (
           <View style={styles.noDataContainer}>
             <Ionicons name="location-outline" size={32} color="#9ca3af" />
@@ -1552,6 +1734,135 @@ const RouteTab: React.FC = () => {
 
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
+    </ScrollView>
+  );
+};
+
+// ✅ Route Timeline View Component with Geocoding
+interface RouteTimelineViewProps {
+  route: RoutePoint[];
+  segmentRoute: (points: RoutePoint[]) => Array<{
+    type: 'TRAVELED' | 'IDLE';
+    startTime: string;
+    endTime: string;
+    startLocation: { lat: number; lng: number; address: string };
+    endLocation: { lat: number; lng: number; address: string };
+    distance: number;
+    duration: number;
+  }>;
+  formatTime: (timestamp: string) => string;
+  formatDuration: (seconds: number) => string;
+  geocodeSegmentLocations: (segments: Array<{
+    type: 'TRAVELED' | 'IDLE';
+    startLocation: { lat: number; lng: number; address: string };
+    endLocation: { lat: number; lng: number; address: string };
+  }>) => Promise<void>;
+  getLocationAddress: (lat: number, lng: number, existingAddress?: string) => string;
+  isGeocoding: boolean;
+}
+
+const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
+  route,
+  segmentRoute,
+  formatTime,
+  formatDuration,
+  geocodeSegmentLocations,
+  getLocationAddress,
+  isGeocoding
+}) => {
+  const segments = segmentRoute(route);
+  
+  return (
+    <ScrollView style={styles.timelineContainer} nestedScrollEnabled>
+      {isGeocoding && (
+        <View style={styles.geocodingIndicator}>
+          <ActivityIndicator size="small" color="#3b82f6" />
+          <Text style={styles.geocodingText}>Loading addresses...</Text>
+        </View>
+      )}
+      {segments.map((segment, index) => {
+        const startAddress = getLocationAddress(
+          segment.startLocation.lat,
+          segment.startLocation.lng,
+          segment.startLocation.address
+        );
+        const endAddress = getLocationAddress(
+          segment.endLocation.lat,
+          segment.endLocation.lng,
+          segment.endLocation.address
+        );
+        
+        // ✅ Show address or placeholder
+        // If address is empty and addresses are ready, it means geocoding failed - show coordinates
+        // If address is empty and addresses not ready, show loading placeholder
+        const displayStartAddress = startAddress || (addressesReady ? `${segment.startLocation.lat.toFixed(6)}, ${segment.startLocation.lng.toFixed(6)}` : 'Loading address...');
+        const displayEndAddress = endAddress || (addressesReady ? `${segment.endLocation.lat.toFixed(6)}, ${segment.endLocation.lng.toFixed(6)}` : 'Loading address...');
+        
+        return (
+          <View key={index} style={styles.timelineItem}>
+            <View style={styles.timelineIconContainer}>
+              {segment.type === 'TRAVELED' ? (
+                <View style={[styles.timelineIcon, { backgroundColor: '#22c55e' }]}>
+                  <Ionicons name="car" size={16} color="#ffffff" />
+                </View>
+              ) : (
+                <View style={[styles.timelineIcon, { backgroundColor: '#f59e0b' }]}>
+                  <Ionicons name="pause" size={16} color="#ffffff" />
+                </View>
+              )}
+              {index < segments.length - 1 && (
+                <View style={styles.timelineLine} />
+              )}
+            </View>
+            
+            <View style={styles.timelineContent}>
+              <View style={styles.timelineHeader}>
+                <Text style={styles.timelineTime}>
+                  {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                </Text>
+                <Text style={[
+                  styles.timelineType,
+                  { color: segment.type === 'TRAVELED' ? '#22c55e' : '#f59e0b' }
+                ]}>
+                  {segment.type === 'TRAVELED' ? 'TRAVELED' : 'IDLE/STOPPED'}
+                </Text>
+              </View>
+              
+              {segment.type === 'TRAVELED' ? (
+                <View style={styles.timelineDetails}>
+                  <View style={styles.locationRow}>
+                    <Ionicons name="navigate" size={14} color="#3b82f6" />
+                    <Text style={styles.locationText} numberOfLines={2}>
+                      From: {displayStartAddress}
+                    </Text>
+                  </View>
+                  <View style={styles.locationRow}>
+                    <Ionicons name="location" size={14} color="#ef4444" />
+                    <Text style={styles.locationText} numberOfLines={2}>
+                      To: {displayEndAddress}
+                    </Text>
+                  </View>
+                  <Text style={styles.distanceText}>
+                    Distance: {segment.distance.toFixed(2)} km • Duration: {formatDuration(segment.duration)}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.timelineDetails}>
+                  <View style={styles.locationRow}>
+                    <Ionicons name="location" size={14} color="#f59e0b" />
+                    <Text style={styles.locationText} numberOfLines={2}>
+                      Stopped at: {displayStartAddress}
+                    </Text>
+                  </View>
+                  <Text style={styles.distanceText}>
+                    Duration: {formatDuration(segment.duration)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 };
@@ -2118,6 +2429,32 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 4,
     fontWeight: '600',
+  },
+  geocodingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  geocodingText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+  timelineLoadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
   },
   
   // Session Status Styles (8-Hour Requirement)

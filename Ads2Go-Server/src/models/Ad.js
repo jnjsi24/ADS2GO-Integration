@@ -29,11 +29,12 @@ const AdSchema = new mongoose.Schema({
   },
   website: {
     type: String,
+    required: true,
     trim: true,
     validate: {
       validator: function(v) {
-        if (!v) return true; // Allow empty website
-        return /^https?:\/\/.+/.test(v); // Must be a valid URL if provided
+        if (!v) return false; // Website is required
+        return /^https?:\/\/.+/.test(v); // Must be a valid URL
       },
       message: 'Website must be a valid URL starting with http:// or https://'
     }

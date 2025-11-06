@@ -432,6 +432,23 @@ class DeviceHoursNotificationService {
       }
 
       console.log(`📧 [DailyComplianceMissed] Sent compliance missed notifications to ${admins.length} admins for device ${deviceId}`);
+      
+      // ✅ NEW: Also notify the driver
+      if (driverInfo) {
+        try {
+          const NotificationService = require('./notifications/NotificationService');
+          await NotificationService.sendDailyComplianceMissedNotificationToDriver(
+            driverInfo.id,
+            materialId,
+            formattedHours,
+            materialId
+          );
+          console.log(`📧 [DailyComplianceMissed] Sent compliance missed notification to driver ${driverInfo.driverId}`);
+        } catch (driverNotifError) {
+          console.error('❌ [DailyComplianceMissed] Error sending compliance missed notification to driver:', driverNotifError);
+        }
+      }
+      
       return notifications;
     } catch (error) {
       console.error('❌ [DailyComplianceMissed] Error sending compliance missed notification:', error);
