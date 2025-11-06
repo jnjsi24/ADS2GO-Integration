@@ -152,9 +152,22 @@ const SalaryScreen: React.FC = () => {
 
       const calculationsData = await calculationsResponse.json();
       
-        if (calculationsData.data?.getMySalaryCalculations?.success) {
-          setCalculations(calculationsData.data.getMySalaryCalculations.calculations);
-        }
+      // Check for GraphQL errors
+      if (calculationsData.errors) {
+        console.error('GraphQL errors in getMySalaryCalculations:', calculationsData.errors);
+        throw new Error(calculationsData.errors[0]?.message || 'Failed to fetch salary calculations');
+      }
+      
+      // Check response structure and success flag
+      if (calculationsData.data?.getMySalaryCalculations?.success) {
+        const fetchedCalculations = calculationsData.data.getMySalaryCalculations.calculations || [];
+        console.log(`✅ Fetched ${fetchedCalculations.length} salary calculations`);
+        setCalculations(fetchedCalculations);
+      } else {
+        console.warn('⚠️ getMySalaryCalculations returned success: false', calculationsData.data?.getMySalaryCalculations?.message);
+        // Still set empty array to show empty state
+        setCalculations([]);
+      }
 
       // Fetch salary summary
       const summaryResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
@@ -195,8 +208,18 @@ const SalaryScreen: React.FC = () => {
 
       const summaryData = await summaryResponse.json();
       
+      // Check for GraphQL errors
+      if (summaryData.errors) {
+        console.error('GraphQL errors in getMySalarySummary:', summaryData.errors);
+        // Don't throw here, just log - summary is not critical
+      }
+      
+      // Check response structure and success flag
       if (summaryData.data?.getMySalarySummary?.success) {
         setSummary(summaryData.data.getMySalarySummary.summary);
+        console.log('✅ Fetched salary summary successfully');
+      } else {
+        console.warn('⚠️ getMySalarySummary returned success: false', summaryData.data?.getMySalarySummary?.message);
       }
 
     } catch (error) {
@@ -260,6 +283,16 @@ const SalaryScreen: React.FC = () => {
       default:
         return 'time-outline';
     }
+  };
+
+  const formatVehicleType = (vehicleType: string): string => {
+    if (vehicleType === 'E_TRIKE') return 'E TRIKE';
+    return vehicleType;
+  };
+
+  const formatCategory = (category: string): string => {
+    if (category === 'NON_DIGITAL') return 'NON DIGITAL';
+    return category;
   };
 
   const handleViewDetails = (calculation: SalaryCalculation) => {
@@ -351,6 +384,36 @@ const SalaryScreen: React.FC = () => {
                     <Text style={[styles.statusText, { color: getStatusColor(calculation.status) }]}>
                       {calculation.status}
                     </Text>
+                  </View>
+                </View>
+
+                {/* Pricing Configuration */}
+                <View style={styles.pricingConfigSection}>
+                  <View style={styles.pricingConfigHeader}>
+                    <Text style={styles.pricingConfigTitle}>
+                      {calculation.pricingConfig.materialType} {formatVehicleType(calculation.pricingConfig.vehicleType)}
+                    </Text>
+                    <View style={styles.pricingConfigBadge}>
+                      <Text style={styles.pricingConfigBadgeText}>
+                        {formatCategory(calculation.pricingConfig.category)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.pricingConfigRates}>
+                    <View style={styles.pricingConfigRateRow}>
+                      <Ionicons name="map-outline" size={14} color="#6B7280" />
+                      <Text style={styles.pricingConfigRateLabel}>Distance Rate:</Text>
+                      <Text style={styles.pricingConfigRateValue}>
+                        {formatCurrency(calculation.pricingConfig.distanceRate)}/km
+                      </Text>
+                    </View>
+                    <View style={styles.pricingConfigRateRow}>
+                      <Ionicons name="time-outline" size={14} color="#6B7280" />
+                      <Text style={styles.pricingConfigRateLabel}>Hours Rate:</Text>
+                      <Text style={styles.pricingConfigRateValue}>
+                        {formatCurrency(calculation.pricingConfig.hoursRate)}/hour
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 
@@ -687,6 +750,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginLeft: 4,
+  },
+  pricingConfigSection: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  pricingConfigHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pricingConfigTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  pricingConfigBadge: {
+    backgroundColor: '#E0F2FE',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  pricingConfigBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0369A1',
+  },
+  pricingConfigRates: {
+    gap: 8,
+  },
+  pricingConfigRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pricingConfigRateLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    flex: 1,
+  },
+  pricingConfigRateValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#059669',
   },
   calculationDetails: {
     marginBottom: 12,
