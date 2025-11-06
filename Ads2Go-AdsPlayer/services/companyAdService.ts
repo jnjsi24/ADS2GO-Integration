@@ -2,6 +2,7 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
 import { log } from '../utils/logger';
 import requestManager from './requestManager';
+import { AppState } from 'react-native';
 
 export interface CompanyAd {
   id: string;
@@ -104,7 +105,26 @@ class CompanyAdService {
         ads: ads,
       };
     } catch (error) {
-      console.error('❌ Error fetching company ads:', error);
+      // If request was cancelled (AbortError), silently handle it - this is expected behavior
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background or request times out
+          return {
+            success: false,
+            ads: [],
+            message: 'Request cancelled',
+          };
+        }
+      }
+      // Only log non-cancellation errors if app is active
+      if (AppState.currentState === 'active') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background')) {
+          console.error('❌ Error fetching company ads:', error);
+        }
+      }
       return {
         success: false,
         ads: [],

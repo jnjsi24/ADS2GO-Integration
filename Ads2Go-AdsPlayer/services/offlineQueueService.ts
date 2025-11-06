@@ -380,9 +380,18 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent ad playback: ${item.adTitle}`);
              }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.warn(`⏱️ [OfflineQueue] Request timed out for ad playback ${item.id} - will retry later`);
-        throw error;
+      if (error instanceof Error) {
+        // If app is in background and request was cancelled, silently handle it
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background
+          // The item will be retried when app comes back to foreground
+          return;
+        }
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ [OfflineQueue] Request timed out for ad playback ${item.id} - will retry later`);
+          // Don't throw for timeout - let it be retried by the queue system
+          return;
+        }
       }
       console.error(`❌ [OfflineQueue] Failed to send ad playback ${item.id}:`, error);
       throw error;
@@ -419,7 +428,8 @@ class OfflineQueueService {
         }),
         timeout: 10000, // 10 second timeout
         priority: 1, // Lower priority (can be queued)
-        allowDuplicate: false, // Prevent duplicate location updates
+        allowDuplicate: true, // Allow duplicate location updates since location changes frequently
+        allowInBackground: true, // Allow location updates even when app is in background
       });
 
       if (!response.ok) {
@@ -443,10 +453,18 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent location data: ${item.lat}, ${item.lng}`);
              }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.warn(`⏱️ [OfflineQueue] Request timed out for location data ${item.id} - will retry later`);
-        // Don't throw for timeout - let it be retried by the queue system
-        throw error;
+      if (error instanceof Error) {
+        // If app is in background and request was cancelled, silently handle it
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background
+          // The item will be retried when app comes back to foreground
+          return;
+        }
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ [OfflineQueue] Request timed out for location data ${item.id} - will retry later`);
+          // Don't throw for timeout - let it be retried by the queue system
+          return;
+        }
       }
       console.error(`❌ [OfflineQueue] Failed to send location data ${item.id}:`, error);
       throw error;
@@ -515,9 +533,18 @@ class OfflineQueueService {
                console.log(`✅ [OfflineQueue] Successfully sent device status: ${item.isOnline ? 'ONLINE' : 'OFFLINE'}`);
              }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.warn(`⏱️ [OfflineQueue] Request timed out for device status ${item.id} - will retry later`);
-        throw error;
+      if (error instanceof Error) {
+        // If app is in background and request was cancelled, silently handle it
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background
+          // The item will be retried when app comes back to foreground
+          return;
+        }
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ [OfflineQueue] Request timed out for device status ${item.id} - will retry later`);
+          // Don't throw for timeout - let it be retried by the queue system
+          return;
+        }
       }
       console.error(`❌ [OfflineQueue] Failed to send device status ${item.id}:`, error);
       throw error;
@@ -555,9 +582,18 @@ class OfflineQueueService {
 
       console.log(`✅ [OfflineQueue] Successfully sent QR scan: ${item.adTitle}`);
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.warn(`⏱️ [OfflineQueue] Request timed out for QR scan ${item.id} - will retry later`);
-        throw error;
+      if (error instanceof Error) {
+        // If app is in background and request was cancelled, silently handle it
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background
+          // The item will be retried when app comes back to foreground
+          return;
+        }
+        if (error.name === 'AbortError') {
+          console.warn(`⏱️ [OfflineQueue] Request timed out for QR scan ${item.id} - will retry later`);
+          // Don't throw for timeout - let it be retried by the queue system
+          return;
+        }
       }
       console.error(`❌ [OfflineQueue] Failed to send QR scan ${item.id}:`, error);
       throw error;

@@ -392,13 +392,29 @@ export class TabletRegistrationService {
         if ((error as Error).name === 'AbortError') {
           console.log('⏱️ Server verification timed out (5s), using cached local registration');
         } else {
-          console.error('❌ Error verifying registration with server:', error);
+          // Only log error if app is active and it's not a network failure
+          if (AppState.currentState === 'active') {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (!errorMessage.includes('Network request failed') && 
+                !errorMessage.includes('Request cancelled') &&
+                !errorMessage.includes('app in background')) {
+              console.error('❌ Error verifying registration with server:', error);
+            }
+          }
         }
         // If server check fails, trust local data for now
         return this.registration?.isRegistered || false;
       }
     } catch (error) {
-      console.error('Error checking registration status:', error);
+      // Only log error if app is active
+      if (AppState.currentState === 'active') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background')) {
+          console.error('Error checking registration status:', error);
+        }
+      }
       return false;
     }
   }
@@ -591,7 +607,16 @@ export class TabletRegistrationService {
         return false;
       }
     } catch (error) {
-      console.error('Error updating tablet status:', error);
+      // Only log error if app is active and it's not a network failure
+      if (AppState.currentState === 'active') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background') &&
+            error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error updating tablet status:', error);
+        }
+      }
       return false;
     }
   }
@@ -691,7 +716,8 @@ export class TabletRegistrationService {
           }),
           timeout: 10000, // 10 second timeout
           priority: 1, // Lower priority (can be queued)
-          allowDuplicate: false, // Prevent duplicate location updates
+          allowDuplicate: true, // Allow duplicate location updates since location changes frequently
+          allowInBackground: true, // Allow location updates even when app is in background
         });
 
         if (!deviceTrackingResponse.ok) {
@@ -712,10 +738,18 @@ export class TabletRegistrationService {
           return false;
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.warn('⏱️ Location tracking request timed out - will retry via offline queue');
-          // The location update is already queued above, so we can safely return false
-          return false;
+        if (error instanceof Error) {
+          // If app is in background and request was cancelled, silently handle it
+          if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+            // Silently handle - this is expected when app goes to background
+            // The location update is already queued above, so we can safely return false
+            return false;
+          }
+          if (error.name === 'AbortError') {
+            console.warn('⏱️ Location tracking request timed out - will retry via offline queue');
+            // The location update is already queued above, so we can safely return false
+            return false;
+          }
         }
         console.error('❌ Error sending to device tracking:', error);
         return false;
@@ -805,6 +839,10 @@ export class TabletRegistrationService {
 
       // Check if backend server is accessible
       const serverAccessible = await this.checkServerAccessibility();
+      if (serverAccessible === 'skipped') {
+        // Server check was skipped because app is in background - this is fine, just return
+        return;
+      }
       if (!serverAccessible) {
         console.error('Backend server is not accessible. Please check server status.');
         return;
@@ -853,7 +891,16 @@ export class TabletRegistrationService {
             log.deviceTracking('Location updated', { latitude, longitude, speed, heading, accuracy });
           }
         } catch (error) {
-          console.error('Error updating location:', error);
+          // Only log error if app is active and it's not a network failure
+          if (AppState.currentState === 'active') {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (!errorMessage.includes('Network request failed') && 
+                !errorMessage.includes('Request cancelled') &&
+                !errorMessage.includes('app in background') &&
+                error instanceof Error && error.name !== 'AbortError') {
+              console.error('Error updating location:', error);
+            }
+          }
         }
       }, 2000); // Update every 2 seconds
 
@@ -878,7 +925,16 @@ export class TabletRegistrationService {
       try {
         await this.updateTabletStatus(false);
       } catch (error) {
-        console.error('Error updating tablet status to offline:', error);
+        // Only log error if app is active and it's not a network failure
+        if (AppState.currentState === 'active') {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (!errorMessage.includes('Network request failed') && 
+              !errorMessage.includes('Request cancelled') &&
+              !errorMessage.includes('app in background') &&
+              error instanceof Error && error.name !== 'AbortError') {
+            console.error('Error updating tablet status to offline:', error);
+          }
+        }
       }
     }
   }
@@ -1082,10 +1138,13 @@ export class TabletRegistrationService {
     }
   }
 
-  async checkServerAccessibility(): Promise<boolean> {
+  async checkServerAccessibility(): Promise<boolean | 'skipped'> {
+    // Check if app is in background first - skip silently if so
+    if (AppState.currentState !== 'active') {
+      return 'skipped'; // Return special value to indicate it was skipped
+    }
+
     try {
-      console.log('Checking server accessibility at:', API_BASE_URL);
-      
       // Use requestManager for better handling
       const response = await requestManager.fetch(`${API_BASE_URL}/tablet/health`, {
         method: 'GET',
@@ -1095,29 +1154,43 @@ export class TabletRegistrationService {
         timeout: 5000, // 5 second timeout
         priority: 2, // Medium priority
         allowDuplicate: false, // Prevent duplicate health checks
+        allowInBackground: false, // Don't allow in background
       });
 
       if (response.ok) {
-        console.log('Server is accessible');
         return true;
       } else {
-        console.error('Server responded with status:', response.status);
+        // Only log error if app is still active
+        if (AppState.currentState === 'active') {
+          console.error('Server responded with status:', response.status);
+        }
         return false;
       }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.warn('⏱️ Server accessibility check timed out - server may be slow or unreachable');
-        return false;
+      // If app went to background during the request, skip silently
+      if (AppState.currentState !== 'active') {
+        return 'skipped';
       }
-      if (error instanceof Error && error.message.includes('background')) {
-        console.warn('⚠️ Server accessibility check skipped - app in background');
-        return false;
+
+      // Handle AbortError and background-related errors silently
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || 
+            error.message.includes('background') || 
+            error.message.includes('Request cancelled') ||
+            error.message.includes('Network request failed')) {
+          // Silently handle - these are expected when app is in background or network is unavailable
+          return 'skipped';
+        }
       }
-      console.error('Server accessibility check failed:', error);
-      console.error('Please ensure:');
-      console.error('1. Backend server is running (npm start in Ads2Go-Server)');
-      console.error('2. Server URL is correct:', API_BASE_URL);
-      console.error('3. Network connectivity is available');
+
+      // Only log other errors if app is active
+      if (AppState.currentState === 'active') {
+        console.error('Server accessibility check failed:', error);
+        console.error('Please ensure:');
+        console.error('1. Backend server is running (npm start in Ads2Go-Server)');
+        console.error('2. Server URL is correct:', API_BASE_URL);
+        console.error('3. Network connectivity is available');
+      }
       return false;
     }
   }
@@ -1290,7 +1363,16 @@ export class TabletRegistrationService {
       }
 
     } catch (error) {
-      console.error('Error syncing device ID from database:', error);
+      // Only log error if app is active and it's not a network failure
+      if (AppState.currentState === 'active') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background') &&
+            error instanceof Error && error.name !== 'AbortError') {
+          console.error('Error syncing device ID from database:', error);
+        }
+      }
       return false;
     }
   }
@@ -1435,7 +1517,26 @@ export class TabletRegistrationService {
 
       return result;
     } catch (error) {
-      console.error('Error fetching ads:', error);
+      // If app is in background and request was cancelled, silently handle it
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || 
+            error.message.includes('app in background') || 
+            error.message.includes('Request cancelled') ||
+            error.message.includes('Network request failed')) {
+          // Silently handle - this is expected when app goes to background or network is unavailable
+          return {
+            success: false,
+            ads: [],
+            message: 'Request cancelled - app in background'
+          };
+        }
+      }
+      
+      // Only log errors if app is active
+      if (AppState.currentState === 'active') {
+        console.error('Error fetching ads:', error);
+      }
+      
       return {
         success: false,
         ads: [],

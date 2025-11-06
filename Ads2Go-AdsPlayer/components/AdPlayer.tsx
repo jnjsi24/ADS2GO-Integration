@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform, Alert, AppState } from 'react-native';
 // Using expo-av for compatibility with Expo SDK 49
 // TODO: Migrate to expo-video when upgrading to Expo SDK 54+
 import { Video, ResizeMode } from 'expo-av';
@@ -1661,6 +1661,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
       const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
       
+      if (serverAccessible === 'skipped') {
+        // Server check was skipped because app is in background - assume online
+        setNetworkStatus(true);
+        return true;
+      }
+      
       if (serverAccessible) {
         console.log('🎬 [AD_PLAYBACK] Server is accessible, network is online');
         setNetworkStatus(true);
@@ -1773,7 +1779,23 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         setCompanyAds([]);
       }
     } catch (error) {
-      console.error('❌ Error fetching company ads:', error);
+      // If request was cancelled (AbortError), silently handle it - this is expected behavior
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
+          // Silently handle - this is expected when app goes to background or request times out
+          setCompanyAds([]);
+          return;
+        }
+      }
+      // Only log non-cancellation errors if app is active
+      if (AppState.currentState === 'active') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background')) {
+          console.error('❌ Error fetching company ads:', error);
+        }
+      }
       setCompanyAds([]);
     }
   };
@@ -1865,7 +1887,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
       const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
       
-      const isConnected = serverAccessible || (state.isConnected && state.isInternetReachable);
+      // If server check was skipped (app in background), use NetInfo result
+      const isConnected = serverAccessible === 'skipped' 
+        ? (state.isConnected && state.isInternetReachable)
+        : (serverAccessible || (state.isConnected && state.isInternetReachable));
       setNetworkStatus(isConnected || false);
       
       // If we regain connection and we're in offline mode, try to refresh

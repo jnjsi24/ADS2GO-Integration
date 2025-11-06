@@ -152,7 +152,15 @@ class RequestManager {
       // Execute the request
       this.executeRequest(queuedRequest.url, queuedRequest.options, queuedRequest.id)
         .then(queuedRequest.resolve)
-        .catch(queuedRequest.reject)
+        .catch((error) => {
+          // If app is in background and request was aborted, silently reject (don't log as error)
+          if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
+            // Silently reject - this is expected when app goes to background
+            queuedRequest.reject(new Error('Request cancelled - app in background'));
+          } else {
+            queuedRequest.reject(error);
+          }
+        })
         .finally(() => {
           this.activeRequestCount--;
           // Continue processing queue
@@ -217,6 +225,14 @@ class RequestManager {
     } catch (error) {
       clearTimeout(timeoutId);
       this.pendingRequests.delete(requestId);
+      
+      // If app is in background and request was aborted, don't throw error (it's expected)
+      if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
+        // Return a rejected promise that won't be logged as an error
+        // This is expected behavior when app goes to background
+        return Promise.reject(new Error('Request cancelled - app in background'));
+      }
+      
       throw error;
     }
   }
@@ -245,7 +261,11 @@ class RequestManager {
     const allowDuplicate = options.allowDuplicate || false;
 
     // Check for duplicates (only for non-allowed duplicates)
-    if (!allowDuplicate && this.isDuplicateRequest(requestId)) {
+    // For location updates, allow duplicates since location changes frequently and we want the latest data
+    const isLocationUpdate = url.includes('/location-update');
+    const shouldCheckDuplicates = !allowDuplicate && !isLocationUpdate;
+    
+    if (shouldCheckDuplicates && this.isDuplicateRequest(requestId)) {
       // Return cached response if available and fresh
       const cached = this.requestCache.get(requestId);
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
@@ -272,11 +292,11 @@ class RequestManager {
             }
           }, 50);
           
-          // Timeout after 5 seconds
+          // Timeout after 15 seconds (longer than request timeout of 10 seconds)
           setTimeout(() => {
             clearInterval(checkPending);
             reject(new Error('Duplicate request wait timeout'));
-          }, 5000);
+          }, 15000);
         });
       }
     }
@@ -297,6 +317,12 @@ class RequestManager {
       } catch (error) {
         this.activeRequestCount--;
         this.processQueue();
+        
+        // If app is in background and request was aborted, return a silent rejection
+        if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
+          throw new Error('Request cancelled - app in background');
+        }
+        
         throw error;
       }
     }
