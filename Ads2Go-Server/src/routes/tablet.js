@@ -124,14 +124,18 @@ router.post('/registerTablet', async (req, res) => {
     // ✅ Clear completedAt when device registers (allows registration at any time)
     const DeviceTracking = require('../models/deviceTracking');
     const existingTracking = await DeviceTracking.findOne({ materialId });
+    const now = new Date();
+    const currentHour = now.getHours();
+    
     if (existingTracking && existingTracking.currentSession && existingTracking.currentSession.completedAt) {
-      const now = new Date();
-      const currentHour = now.getHours();
       console.log(`🔓 [Registration Unlocked] ${materialId} registering at ${currentHour}:00 - clearing completedAt from previous day`);
       existingTracking.currentSession.completedAt = undefined;
       await existingTracking.save();
     }
 
+    // ✅ Check if material has ad deployment
+    const existingDeployment = await AdsDeployment.findOne({ materialId });
+    
     // ✅ If material has no ad deployment, log that we're allowing first-time registration
     if (!existingDeployment) {
       console.log(`✅ [First Time Registration - No Ad Deployment] ${materialId} has no ad deployment - allowing registration regardless of time`);

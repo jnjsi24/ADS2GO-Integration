@@ -537,10 +537,39 @@ export class TabletRegistrationService {
         return false;
       }
 
+      // Check if registration was explicitly cleared (prevents infinite loops after unregistration)
+      try {
+        const registrationCleared = await AsyncStorage.getItem('registration_cleared');
+        if (registrationCleared === 'true') {
+          // Registration was cleared - don't try to update status
+          console.log('⏸️ [UpdateStatus] Registration was cleared - skipping status update');
+          return false;
+        }
+      } catch (error) {
+        // If we can't check, continue anyway
+      }
+
       // First, try to sync device ID from database
       const synced = await this.syncDeviceIdFromDatabase();
       if (synced) {
         console.log('Device ID synced, retrying status update...');
+      }
+
+      // Check registration again after sync (syncDeviceIdFromDatabase might have cleared it)
+      if (!this.registration) {
+        console.log('⏸️ [UpdateStatus] Registration was cleared during sync - skipping status update');
+        return false;
+      }
+
+      // Double-check the flag after sync
+      try {
+        const registrationCleared = await AsyncStorage.getItem('registration_cleared');
+        if (registrationCleared === 'true') {
+          console.log('⏸️ [UpdateStatus] Registration was cleared - skipping status update');
+          return false;
+        }
+      } catch (error) {
+        // If we can't check, continue anyway
       }
 
       // Skip GPS data if coordinates are [0,0] (GPS still initializing)
@@ -548,6 +577,12 @@ export class TabletRegistrationService {
       // Only log GPS skip occasionally (not every update) to reduce log noise
       if (gps && !validGps && Math.random() < 0.05) {
         console.log('⏳ Skipping GPS data in status update - coordinates are [0,0]');
+      }
+
+      // Final check before accessing deviceId
+      if (!this.registration || !this.registration.deviceId) {
+        console.log('⏸️ [UpdateStatus] No registration or deviceId available - skipping status update');
+        return false;
       }
 
       const requestBody = {
@@ -573,7 +608,8 @@ export class TabletRegistrationService {
         console.log('Tablet status updated successfully');
         
         // If valid GPS data is provided, also update location tracking
-        if (validGps) {
+        // Check registration again before calling updateLocationTracking
+        if (validGps && this.registration) {
           await this.updateLocationTracking(validGps.lat, validGps.lng);
         }
         
@@ -583,6 +619,13 @@ export class TabletRegistrationService {
         if (result.message === 'Tablet not found') {
           console.log('❌ [UpdateStatus] Device not found - tablet was unregistered by admin');
           console.log('🧹 [UpdateStatus] Clearing registration data and navigating to registration page...');
+          
+          // Set flag immediately to prevent any other updateTabletStatus calls
+          try {
+            await AsyncStorage.setItem('registration_cleared', 'true');
+          } catch (error) {
+            // Ignore error, continue with clearing
+          }
           
           // Clear registration data (don't try to auto re-register with old data)
           await this.clearRegistration();
@@ -805,6 +848,18 @@ export class TabletRegistrationService {
     if (!this.appStateListener) {
       this.appStateListener = AppState.addEventListener('change', async (nextAppState) => {
         console.log('App state changed to:', nextAppState);
+        
+        // Check if registration was cleared before doing anything
+        try {
+          const registrationCleared = await AsyncStorage.getItem('registration_cleared');
+          if (registrationCleared === 'true') {
+            // Registration was cleared - don't do anything
+            return;
+          }
+        } catch (error) {
+          // If we can't check, continue anyway
+        }
+        
         if (nextAppState === 'background' || nextAppState === 'inactive') {
           console.log('App is going to background, stopping location tracking');
           await this.stopLocationTracking();
@@ -853,9 +908,26 @@ export class TabletRegistrationService {
       // Start periodic location updates (every 2 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
+          // Skip location updates if registration was cleared
+          try {
+            const registrationCleared = await AsyncStorage.getItem('registration_cleared');
+            if (registrationCleared === 'true') {
+              // Registration was cleared - stop tracking
+              await this.stopLocationTracking();
+              return;
+            }
+          } catch (error) {
+            // If we can't check, continue anyway
+          }
+
           // Skip location updates if simulating offline
           if (this.isSimulatingOffline) {
             console.log('Skipping location update - simulating offline');
+            return;
+          }
+
+          // Skip if no registration
+          if (!this.registration) {
             return;
           }
 
@@ -921,8 +993,21 @@ export class TabletRegistrationService {
     log.deviceTracking('Location tracking stopped');
     
     // Update server that we're no longer tracking
+    // Check both registration and the cleared flag before attempting update
     if (this.registration) {
       try {
+        // Check if registration was cleared before trying to update
+        const registrationCleared = await AsyncStorage.getItem('registration_cleared');
+        if (registrationCleared === 'true') {
+          // Registration was cleared - don't try to update status
+          return;
+        }
+        
+        // Double-check registration still exists (might have been cleared)
+        if (!this.registration) {
+          return;
+        }
+        
         await this.updateTabletStatus(false);
       } catch (error) {
         // Only log error if app is active and it's not a network failure
@@ -1198,7 +1283,19 @@ export class TabletRegistrationService {
   async clearRegistration(): Promise<void> {
     console.log('🧹 Clearing registration data...');
     
-    // Stop any active tracking
+    // Set flag FIRST to prevent any new updateTabletStatus calls
+    try {
+      await AsyncStorage.setItem('registration_cleared', 'true');
+      console.log('✅ Set registration_cleared flag to true');
+    } catch (error) {
+      console.error('❌ Error setting registration_cleared flag:', error);
+    }
+    
+    // Clear registration data IMMEDIATELY to prevent stopLocationTracking from calling updateTabletStatus
+    this.registration = null;
+    this.lastServerVerification = 0; // Force server verification on next check
+    
+    // NOW stop tracking (it won't call updateTabletStatus because this.registration is null)
     await this.stopLocationTracking();
     
     // Remove app state listener
@@ -1207,23 +1304,15 @@ export class TabletRegistrationService {
       this.appStateListener = null;
     }
     
-    // Clear registration data and reset server verification cache
-    this.registration = null;
-    this.lastServerVerification = 0; // Force server verification on next check
-    
     try {
-      // Set a flag to indicate registration was explicitly cleared FIRST
-      // This prevents any race conditions with other operations
-      await AsyncStorage.setItem('registration_cleared', 'true');
-      console.log('✅ Set registration_cleared flag to true');
-
-      // Clear all registration-related data from AsyncStorage
+      // Clear all registration-related data from AsyncStorage (including the cleared flag)
       await AsyncStorage.multiRemove([
         'tabletRegistration', 
         'device_material_id',
         'cachedAds',
         'lastAdUpdate',
-        'deviceStatus'
+        'deviceStatus',
+        'registration_cleared' // Clear the flag too
       ]);
       
       console.log('✅ All registration-related data cleared from AsyncStorage');
