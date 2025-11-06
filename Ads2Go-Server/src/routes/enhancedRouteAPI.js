@@ -243,16 +243,42 @@ router.get('/route/:materialId', async (req, res) => {
         return;
       }
       
-      // Calculate distance from previous point
+      // Calculate distance from previous point (only if time gap is reasonable)
       let segmentDistance = 0;
+      let isSegmentBreak = false; // Flag to indicate this point starts a new segment (after offline)
+      
       if (index > 0 && routePoints.length > 0) {
         const prevPoint = allLocationPoints[index - 1];
         if (prevPoint && prevPoint.coordinates && prevPoint.coordinates.length >= 2) {
-          segmentDistance = GPSValidation.calculateDistance(
-            prevPoint.coordinates[1], prevPoint.coordinates[0],
-            lat, lng
-          );
-          cumulativeDistance += segmentDistance;
+          // ✅ FIX: Check time gap to detect offline periods
+          const prevTimestamp = new Date(prevPoint.timestamp);
+          const currentTimestamp = new Date(point.timestamp);
+          const timeGapSeconds = (currentTimestamp - prevTimestamp) / 1000;
+          const MAX_TIME_GAP = 60; // 60 seconds = 1 minute
+          
+          // ✅ FIX: If time gap is too large, don't calculate distance (device was offline)
+          if (timeGapSeconds > MAX_TIME_GAP) {
+            isSegmentBreak = true;
+            console.log(`⏸️ [Enhanced Route API] Time gap detected at point ${index}: ${timeGapSeconds.toFixed(1)}s - marking as segment break`);
+          } else {
+            segmentDistance = GPSValidation.calculateDistance(
+              prevPoint.coordinates[1], prevPoint.coordinates[0],
+              lat, lng
+            );
+            
+            // ✅ FIX: Validate speed is realistic before adding distance
+            const calculatedSpeed = timeGapSeconds > 0 ? (segmentDistance / timeGapSeconds) * 3600 : 0; // km/h
+            const MAX_REALISTIC_SPEED = 150; // km/h
+            
+            if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
+              cumulativeDistance += segmentDistance;
+            } else {
+              // Speed is unrealistic - likely GPS jump or offline period
+              isSegmentBreak = true;
+              segmentDistance = 0; // Don't count this distance
+              console.log(`⏸️ [Enhanced Route API] Unrealistic speed detected at point ${index}: ${calculatedSpeed.toFixed(1)} km/h - marking as segment break`);
+            }
+          }
         }
       }
 
@@ -267,6 +293,7 @@ router.get('/route/:materialId', async (req, res) => {
         altitude: point.altitude || 0,
         segmentDistance,
         cumulativeDistance,
+        isSegmentBreak, // Flag to break route line in visualization
         index: routePoints.length // Use routePoints.length instead of index to account for skipped points
       });
     });

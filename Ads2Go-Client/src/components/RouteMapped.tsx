@@ -26,6 +26,8 @@ interface RoutePoint {
   segmentDistance: number;
   cumulativeDistance: number;
   index: number;
+  isSegmentBreak?: boolean; // ✅ Flag to indicate this point starts a new segment (after offline period)
+  isSegmentStart?: boolean; // ✅ Alternative flag name for segment breaks
 }
 
 interface RouteBounds {
@@ -465,11 +467,52 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   const bounds = routeData?.bounds || null;
 
   // Convert route points to polyline coordinates with safety checks (memoized)
-  const rawPolylineCoords: [number, number][] = useMemo(() => {
-    return route
-      .filter((point: RoutePoint) => point && typeof point.lat === 'number' && typeof point.lng === 'number')
-      .map((point: RoutePoint) => [point.lat, point.lng] as [number, number]);
+  // ✅ FIX: Split route into segments based on isSegmentBreak flag
+  const routeSegments: [number, number][][] = useMemo(() => {
+    const validPoints = route.filter((point: RoutePoint) => 
+      point && typeof point.lat === 'number' && typeof point.lng === 'number'
+    );
+    
+    if (validPoints.length === 0) return [];
+    
+    const segments: [number, number][][] = [];
+    let currentSegment: [number, number][] = [];
+    
+    for (let i = 0; i < validPoints.length; i++) {
+      const point = validPoints[i];
+      
+      // If this point starts a new segment (after offline period), save current segment
+      if (i > 0 && (point.isSegmentBreak || point.isSegmentStart)) {
+        if (currentSegment.length > 1) {
+          segments.push([...currentSegment]);
+        }
+        currentSegment = [[point.lat, point.lng]];
+      } else {
+        currentSegment.push([point.lat, point.lng]);
+      }
+    }
+    
+    // Add final segment
+    if (currentSegment.length > 1) {
+      segments.push(currentSegment);
+    }
+    
+    // If no segments were created (no breaks), return single segment
+    if (segments.length === 0 && currentSegment.length > 1) {
+      segments.push(currentSegment);
+    }
+    
+    if (segments.length > 1) {
+      console.log('📍 [RouteMapped] Route split into', segments.length, 'segment(s) (offline periods detected)');
+    }
+    
+    return segments;
   }, [route]);
+
+  const rawPolylineCoords: [number, number][] = useMemo(() => {
+    // Flatten segments for backward compatibility (used by road snapping)
+    return routeSegments.flat();
+  }, [routeSegments]);
 
   // Initialize snapped coordinates when route changes - using useMemo for stability
   const [snappedPolylineCoords, setSnappedPolylineCoords] = useState<[number, number][]>([]);
@@ -728,14 +771,29 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         
-        {/* Route polyline with road snapping - only show if we have valid data */}
-        {polylineCoords.length > 0 && (
-          <Polyline
-            positions={polylineCoords}
-            color="#3674B5"
-            weight={4}
-            opacity={0.8}
-          />
+        {/* Route polylines with segment breaks - only show if we have valid data */}
+        {routeSegments.length > 0 && (
+          <>
+            {routeSegments.map((segment, index) => {
+              // For each segment, use snapped coordinates if available, otherwise use raw
+              const segmentCoords = snapToRoads && snappedPolylineCoords.length > 0
+                ? snappedPolylineCoords.slice(
+                    routeSegments.slice(0, index).reduce((sum, seg) => sum + seg.length, 0),
+                    routeSegments.slice(0, index + 1).reduce((sum, seg) => sum + seg.length, 0)
+                  )
+                : segment;
+              
+              return (
+                <Polyline
+                  key={`segment-${index}`}
+                  positions={segmentCoords}
+                  color="#3674B5"
+                  weight={4}
+                  opacity={0.8}
+                />
+              );
+            })}
+          </>
         )}
         
         {/* Fit bounds to route - only if we have bounds */}

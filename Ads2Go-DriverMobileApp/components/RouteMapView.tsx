@@ -385,69 +385,95 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({
           if (routePoints.length > 0) {
             console.log('🗺️ Creating route with', routePoints.length, 'points');
             
+            // ✅ FIX: Split route into segments based on isSegmentBreak flag
+            const segments = [];
+            let currentSegment = [];
+            
+            for (let i = 0; i < routePoints.length; i++) {
+              const point = routePoints[i];
+              
+              // If this point starts a new segment (after offline period), save current segment
+              if (i > 0 && (point.isSegmentBreak || point.isSegmentStart)) {
+                if (currentSegment.length > 1) {
+                  segments.push([...currentSegment]);
+                }
+                currentSegment = [point];
+              } else {
+                currentSegment.push(point);
+              }
+            }
+            
+            // Add final segment
+            if (currentSegment.length > 1) {
+              segments.push(currentSegment);
+            }
+            
+            console.log('📍 Route split into', segments.length, 'segment(s) (offline periods detected)');
+            
             if (showSpeedColors && routePoints.length > 1) {
               // Create speed-colored segments (Strava-style) with road snapping
               console.log('🎨 Creating speed-colored segments with road snapping');
-              const routePath = routePoints.map(point => [point.lat, point.lng]);
-              const snappedPath = await snapPointsToRoads(routePath, googleApiKey);
               
-              console.log('🎨 Road snapping applied to speed-colored route:', {
-                originalPoints: routePath.length,
-                snappedPoints: snappedPath.length
-              });
+              // Process each segment separately
+              for (let segIndex = 0; segIndex < segments.length; segIndex++) {
+                const segment = segments[segIndex];
+                const routePath = segment.map(point => [point.lat, point.lng]);
+                const snappedPath = await snapPointsToRoads(routePath, googleApiKey);
+                
+                // Create segments from snapped path
+                for (let i = 0; i < snappedPath.length - 1; i++) {
+                  // Find closest original points to get speed data
+                  const origIndex = Math.min(Math.floor(i * segment.length / snappedPath.length), segment.length - 1);
+                  const nextOrigIndex = Math.min(origIndex + 1, segment.length - 1);
+                  
+                  const avgSpeed = (segment[origIndex].speed + segment[nextOrigIndex].speed) / 2;
+                  const color = getSpeedColor(avgSpeed);
+                  
+                  L.polyline(
+                    [snappedPath[i], snappedPath[i + 1]], 
+                    {
+                      color: color,
+                      weight: 4,
+                      opacity: 0.8,
+                      smoothFactor: 1
+                    }
+                  ).addTo(map);
+                }
+              }
+            } else {
+              // Single blue polyline with road snapping - draw each segment separately
+              console.log('🗺️ Creating segmented polylines with road snapping to follow actual roads');
               
-              // Create segments from snapped path
-              for (let i = 0; i < snappedPath.length - 1; i++) {
-                // Find closest original points to get speed data
-                const origIndex = Math.min(Math.floor(i * routePoints.length / snappedPath.length), routePoints.length - 1);
-                const nextOrigIndex = Math.min(origIndex + 1, routePoints.length - 1);
+              for (let segIndex = 0; segIndex < segments.length; segIndex++) {
+                const segment = segments[segIndex];
                 
-                const avgSpeed = (routePoints[origIndex].speed + routePoints[nextOrigIndex].speed) / 2;
-                const color = getSpeedColor(avgSpeed);
-                
-                L.polyline(
-                  [snappedPath[i], snappedPath[i + 1]], 
-                  {
-                    color: color,
+                try {
+                  const routePath = segment.map(point => [point.lat, point.lng]);
+                  
+                  // Apply road snapping (which includes smoothing + intermediate points)
+                  const snappedPath = await snapPointsToRoads(routePath, googleApiKey);
+                  
+                  L.polyline(snappedPath, {
+                    color: '#3674B5',  // ✅ Exact same color as Admin Client
                     weight: 4,
                     opacity: 0.8,
                     smoothFactor: 1
+                  }).addTo(map);
+                  
+                  if (segIndex === 0) {
+                    console.log('✅ Road-snapped polyline added to map successfully (following actual roads)');
                   }
-                ).addTo(map);
-              }
-            } else {
-              // Single blue polyline with road snapping (100% identical to Admin Client)
-              console.log('🗺️ Creating single blue polyline with road snapping to follow actual roads');
-              try {
-                const routePath = routePoints.map(point => [point.lat, point.lng]);
-                console.log('🗺️ Route path created:', routePath.length, 'points');
-                
-                // Apply road snapping (which includes smoothing + intermediate points)
-                const snappedPath = await snapPointsToRoads(routePath, googleApiKey);
-                console.log('🗺️ Road snapping applied:', {
-                  originalPoints: routePath.length,
-                  snappedPoints: snappedPath.length,
-                  difference: snappedPath.length - routePath.length
-                });
-                
-                L.polyline(snappedPath, {
-                  color: '#3674B5',  // ✅ Exact same color as Admin Client
-                  weight: 4,
-                  opacity: 0.8,
-                  smoothFactor: 1
-                }).addTo(map);
-                console.log('✅ Road-snapped polyline added to map successfully (following actual roads)');
-              } catch (error) {
-                console.error('❌ Error creating polyline:', error);
-                // Fallback: draw without smoothing
-                const routePath = routePoints.map(point => [point.lat, point.lng]);
-                L.polyline(routePath, {
-                  color: '#3b82f6',
-                  weight: 4,
-                  opacity: 0.8,
-                  smoothFactor: 1
-                }).addTo(map);
-                console.log('✅ Fallback polyline added (no smoothing)');
+                } catch (error) {
+                  console.error('❌ Error creating polyline segment:', error);
+                  // Fallback: draw without smoothing
+                  const routePath = segment.map(point => [point.lat, point.lng]);
+                  L.polyline(routePath, {
+                    color: '#3b82f6',
+                    weight: 4,
+                    opacity: 0.8,
+                    smoothFactor: 1
+                  }).addTo(map);
+                }
               }
             }
           } else {

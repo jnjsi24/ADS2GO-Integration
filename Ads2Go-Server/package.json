@@ -15,7 +15,8 @@
     "indexes:device": "node scripts/indexManager.js build-device",
     "script:create-admin": "node scripts/createSuperAdmin.js",
     "script:verify-ads": "node scripts/verifyAdPlays.js",
-    "script:migrate-newsletter": "node scripts/migrateNewsletterSources.js"
+    "script:migrate-newsletter": "node scripts/migrateNewsletterSources.js",
+    "script:recalculate-distances": "node scripts/recalculateDistances.js"
   },
   "author": "",
   "license": "ISC",

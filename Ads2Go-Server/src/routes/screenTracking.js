@@ -457,11 +457,34 @@ router.get('/route/:deviceId', async (req, res) => {
       console.log(`📊 [ROUTE] Calculating distance from ${routeData.length} route points`);
       
       // Calculate total distance using Haversine formula
+      // ✅ FIX: Check time gaps and speed to prevent false distance from offline periods
       for (let i = 1; i < routeData.length; i++) {
         const prev = routeData[i - 1];
         const curr = routeData[i];
+        
+        // ✅ FIX: Check time gap between points
+        const prevTimestamp = new Date(prev.timestamp);
+        const currTimestamp = new Date(curr.timestamp);
+        const timeGapSeconds = (currTimestamp - prevTimestamp) / 1000;
+        const MAX_TIME_GAP = 60; // 60 seconds = 1 minute
+        
+        // ✅ FIX: Skip distance calculation if time gap is too large (device was offline)
+        if (timeGapSeconds > MAX_TIME_GAP) {
+          console.log(`⏸️ [ROUTE] Skipping distance calculation - time gap too large (${timeGapSeconds.toFixed(1)}s > ${MAX_TIME_GAP}s) at point ${i}`);
+          continue;
+        }
+        
         const distance = GPSValidation.calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
-        totalDistance += distance;
+        
+        // ✅ FIX: Validate speed is realistic
+        const calculatedSpeed = timeGapSeconds > 0 ? (distance / timeGapSeconds) * 3600 : 0; // km/h
+        const MAX_REALISTIC_SPEED = 150; // km/h
+        
+        if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
+          totalDistance += distance;
+        } else {
+          console.log(`⏸️ [ROUTE] Skipping distance - unrealistic speed (${calculatedSpeed.toFixed(1)} km/h > ${MAX_REALISTIC_SPEED} km/h) at point ${i}`);
+        }
       }
       
       console.log(`📊 [ROUTE] Calculated distance from route points: ${totalDistance} km`);

@@ -923,42 +923,65 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   if (this.currentLocation && this.locationHistory.length > 0) {
     const prevLocation = this.currentLocation;
     
-    // Validate previous location coordinates using enhanced validation
-    const prevCoordValidation = GPSValidation.validateCoordinates(
-      prevLocation.coordinates[1], 
-      prevLocation.coordinates[0]
-    );
+    // ✅ FIX: Check time gap between locations to detect offline periods
+    const prevTimestamp = new Date(prevLocation.timestamp);
+    const currentTimestamp = new Date(newLocation.timestamp);
+    const timeGapSeconds = (currentTimestamp - prevTimestamp) / 1000;
+    const MAX_TIME_GAP = 60; // 60 seconds = 1 minute - if gap is larger, device was likely offline
     
-    if (prevCoordValidation.isValid) {
-      const distance = GPSValidation.calculateDistance(
-        prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
-        lat, lng
+    // ✅ FIX: Skip distance calculation if there's a significant time gap (offline period)
+    if (timeGapSeconds > MAX_TIME_GAP) {
+      console.log(`⏸️ [updateLocation] ${this.materialId}: Large time gap detected (${timeGapSeconds.toFixed(1)}s > ${MAX_TIME_GAP}s) - device was offline, skipping distance calculation to prevent false line`);
+      // Mark this location as starting a new segment (after offline period)
+      newLocation.isSegmentStart = true;
+    } else {
+      // Validate previous location coordinates using enhanced validation
+      const prevCoordValidation = GPSValidation.validateCoordinates(
+        prevLocation.coordinates[1], 
+        prevLocation.coordinates[0]
       );
       
-      // ✅ IMPROVED FILTERING: Check GPS accuracy to prevent false distance from GPS drift
-      const currentAccuracy = accuracy || 0;
-      const previousAccuracy = prevLocation.accuracy || 0;
-      const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
-      const MIN_MOVEMENT_THRESHOLD = 0.008; // 0.008 km = 8 meters - filters stationary GPS drift
-      
-      // Only add distance if:
-      // 1. Movement is significant (more than 8 meters) - filters stationary GPS noise while capturing actual movement
-      // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
-      // NOTE: Set to 8m based on real-world testing - balances accuracy vs capturing valid movements
-      if (distance > MIN_MOVEMENT_THRESHOLD) {
-        // Check if both current and previous GPS readings are accurate enough
-        if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
-          distanceAdded = distance;
-          this.totalDistanceTraveled += distance;
-          console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (accuracy: curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m, total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+      if (prevCoordValidation.isValid) {
+        const distance = GPSValidation.calculateDistance(
+          prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
+          lat, lng
+        );
+        
+        // ✅ IMPROVED FILTERING: Check GPS accuracy to prevent false distance from GPS drift
+        const currentAccuracy = accuracy || 0;
+        const previousAccuracy = prevLocation.accuracy || 0;
+        const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
+        const MIN_MOVEMENT_THRESHOLD = 0.008; // 0.008 km = 8 meters - filters stationary GPS drift
+        
+        // ✅ FIX: Calculate speed to validate movement is realistic
+        const calculatedSpeed = timeGapSeconds > 0 ? (distance / timeGapSeconds) * 3600 : 0; // km/h
+        const MAX_REALISTIC_SPEED = 150; // km/h - maximum realistic speed for a vehicle
+        
+        // Only add distance if:
+        // 1. Movement is significant (more than 8 meters) - filters stationary GPS noise while capturing actual movement
+        // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
+        // 3. Calculated speed is realistic (<150 km/h) - prevents impossible movements from GPS jumps
+        // 4. Time gap is reasonable (<60s) - already checked above
+        if (distance > MIN_MOVEMENT_THRESHOLD) {
+          // Check if both current and previous GPS readings are accurate enough
+          if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
+            // Check if calculated speed is realistic
+            if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
+              distanceAdded = distance;
+              this.totalDistanceTraveled += distance;
+              console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m in ${timeGapSeconds.toFixed(1)}s (${calculatedSpeed.toFixed(1)} km/h, accuracy: curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m, total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+            } else {
+              console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - impossible speed (${calculatedSpeed.toFixed(1)} km/h > ${MAX_REALISTIC_SPEED} km/h) - likely GPS jump or offline period`);
+            }
+          } else {
+            console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
+          }
         } else {
-          console.log(`📍 [updateLocation] ${this.materialId}: Movement rejected - poor GPS accuracy (${(distance * 1000).toFixed(1)}m movement, curr=${currentAccuracy.toFixed(1)}m, prev=${previousAccuracy.toFixed(1)}m) - likely GPS drift`);
+          console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m < 8m threshold) - ignoring GPS noise/drift`);
         }
       } else {
-        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m < 8m threshold) - ignoring GPS noise/drift`);
+        console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
       }
-    } else {
-      console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
     }
   }
   
