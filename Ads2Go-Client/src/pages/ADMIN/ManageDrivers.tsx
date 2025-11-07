@@ -300,6 +300,7 @@ const ManageDrivers: React.FC = () => {
   };
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
+    variables: { includeArchived: true },
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
@@ -1247,7 +1248,7 @@ const ManageDrivers: React.FC = () => {
                   <span>Status</span>
                 </div>
                 {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
-                <div className="col-span-2 text-center">Action</div>
+                <div className={`${activeTab === 'archived' ? 'col-span-1' : 'col-span-2'} text-center`}>Action</div>
               </div>
             )}
 
@@ -1424,11 +1425,12 @@ const ManageDrivers: React.FC = () => {
                         {driver.scheduledDeletionDate ? formatDate(driver.scheduledDeletionDate) : 'N/A'}
                       </div>
                     )}
-                    <div className="col-span-2 flex items-center justify-center gap-1 ml-9" onClick={(e) => e.stopPropagation()}>
+                    <div className={`${activeTab === 'archived' ? 'col-span-1' : 'col-span-2'} flex items-center justify-center`} onClick={(e) => e.stopPropagation()}>
                     {activeTab === 'archived' ? (
                       <button
-                        onClick={() => handleRestore(driver.driverId)}
                         className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        onClick={() => handleRestore(driver.driverId)}
+                        title="Restore"
                       >
                         <RotateCcw 
                           className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"

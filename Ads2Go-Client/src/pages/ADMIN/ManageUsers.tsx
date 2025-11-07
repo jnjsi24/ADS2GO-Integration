@@ -197,8 +197,9 @@ const ManageUsers: React.FC = () => {
   // Dynamic margin based on sidebar state and screen size
   const contentMargin = isMobile ? "ml-0 pt-16" : "ml-0 md:ml-16 lg:ml-60";
  
-  // Fetch users using useQuery hook
-  const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
+  // Fetch users using useQuery hook - include archived users so we can show them in the archived tab
+  const { data: usersData, loading: usersLoading, error: usersError, refetch } = useQuery(GET_ALL_USERS, {
+    variables: { includeArchived: true },
     fetchPolicy: 'network-only',
   });
 
@@ -339,20 +340,21 @@ const ManageUsers: React.FC = () => {
       });
       
       if (result.data?.deleteUser?.success) {
-        setUsers(prev => prev.filter((user) => user.id !== userToDelete));
+        // Refetch the users data to reflect the archive change
+        await refetch();
         if (selectedUser?.id === userToDelete) setSelectedUser(null);
         setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
         addToast({
           type: 'success',
           title: 'Success!',
-          message: 'Advertiser deleted successfully',
+          message: 'Advertiser archived successfully',
           duration: 5000
         });
       } else {
         addToast({
           type: 'error',
           title: 'Error!',
-          message: 'Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'),
+          message: 'Failed to archive advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'),
           duration: 5000
         });
       }
@@ -362,10 +364,10 @@ const ManageUsers: React.FC = () => {
       addToast({
         type: 'error',
         title: 'Error!',
-        message: 'Error deleting advertiser: ' + (err.message || 'Unknown error'),
+        message: 'Error archiving advertiser: ' + (err.message || 'Unknown error'),
         duration: 5000
       });
-      console.error('Error deleting advertiser:', err);
+      console.error('Error archiving advertiser:', err);
       setShowDeleteModal(false);
       setUserToDelete(null);
     } finally {
@@ -392,6 +394,8 @@ const ManageUsers: React.FC = () => {
       });
       
       if (result.data?.restoreUser?.success) {
+        // Refetch the users data to reflect the restore change
+        await refetch();
         addToast({
           type: 'success',
           title: 'Success!',
@@ -449,14 +453,15 @@ const ManageUsers: React.FC = () => {
       const successCount = results.filter(r => r.status === 'fulfilled').length;
       const failCount = results.filter(r => r.status === 'rejected').length;
       
-      setUsers(prev => prev.filter((user) => !selectedUsers.includes(user.id)));
+      // Refetch the users data to reflect the archive changes
+      await refetch();
       setSelectedUsers([]);
       
       if (successCount > 0) {
         addToast({
           type: 'success',
           title: 'Success!',
-          message: `${successCount} advertiser(s) deleted successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+          message: `${successCount} advertiser(s) archived successfully${failCount > 0 ? ` (${failCount} failed)` : ''}`,
           duration: 5000
         });
       }
@@ -465,7 +470,7 @@ const ManageUsers: React.FC = () => {
         addToast({
           type: 'error',
           title: 'Error!',
-          message: `Failed to delete ${failCount} advertiser(s)`,
+          message: `Failed to archive ${failCount} advertiser(s)`,
           duration: 5000
         });
       }
@@ -475,7 +480,7 @@ const ManageUsers: React.FC = () => {
       addToast({
         type: 'error',
         title: 'Error!',
-        message: 'Error deleting advertisers: ' + (err.message || 'Unknown error'),
+        message: 'Error archiving advertisers: ' + (err.message || 'Unknown error'),
         duration: 5000
       });
       setShowBulkDeleteModal(false);
@@ -854,7 +859,7 @@ const ManageUsers: React.FC = () => {
                   onClick={handleBulkDelete}
                   className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
                 >
-                  Delete Selected
+                  Archive Selected
                 </button>
                 <button
                   onClick={handleExportToCSV}
@@ -1069,13 +1074,13 @@ const ManageUsers: React.FC = () => {
                       <button
                         className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                         onClick={() => handleDelete(user.id)}
-                        title="Delete"
+                        title="Archive"
                       >
                         <Trash 
                           className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
                           size={16} />
                         <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                          Delete
+                          Archive
                         </span>
                       </button>
                     )}
@@ -1091,7 +1096,7 @@ const ManageUsers: React.FC = () => {
       {/* Details Modal - Responsive */}
       {showDetailsModal && selectedUser && (
         <div
-          className="fixed inset-0 z-[9999] overflow-hidden bg-black bg-opacity-50 z-[9999]"
+          className="fixed inset-0 z-[9999] overflow-hidden bg-black bg-opacity-50"
           onClick={handleCloseModal}
         >
           <div
@@ -1311,9 +1316,9 @@ const ManageUsers: React.FC = () => {
         isOpen={showDeleteModal}
         onClose={cancelDelete}
         onConfirm={confirmDelete}
-        title="Delete User"
-        message="Are you sure you want to delete this user? This action cannot be undone."
-        confirmText="Delete"
+        title="Archive Advertiser"
+        message="Are you sure you want to archive this advertiser? The account will be scheduled for permanent deletion in 30 days."
+        confirmText="Archive"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isDeletingUser}
@@ -1324,9 +1329,9 @@ const ManageUsers: React.FC = () => {
         isOpen={showBulkDeleteModal}
         onClose={cancelBulkDelete}
         onConfirm={confirmBulkDelete}
-        title="Delete Multiple Advertisers"
-        message={`Are you sure you want to delete ${selectedUsers.length} advertiser(s)? This action cannot be undone.`}
-        confirmText={`Delete ${selectedUsers.length} Advertiser${selectedUsers.length > 1 ? 's' : ''}`}
+        title="Archive Multiple Advertisers"
+        message={`Are you sure you want to archive ${selectedUsers.length} advertiser(s)? The accounts will be scheduled for permanent deletion in 30 days.`}
+        confirmText={`Archive ${selectedUsers.length} Advertiser${selectedUsers.length > 1 ? 's' : ''}`}
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isBulkDeleting}
