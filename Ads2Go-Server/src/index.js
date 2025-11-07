@@ -93,26 +93,35 @@ const diagnosticDeviceHoursRoutes = require('./routes/diagnosticDeviceHours');
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
 const EmailService = require('./utils/emailService');
 
-// ✅ MongoDB connection
+// ✅ MongoDB connection - Don't block server startup
+// Connect to MongoDB but don't exit if connection fails immediately
+// This allows the server to start and health checks to pass
+// Railway health checks require the server to be accessible quickly
 if (!process.env.MONGODB_URI) {
   console.error('\n❌ MONGODB_URI is not defined in the .env file');
-  process.exit(1);
+  console.error('⚠️  Server will start but database operations will fail');
+  // Don't exit - let the server start so health checks can pass
+  // The health check will show MongoDB as disconnected
+} else {
+  // Connect to MongoDB without blocking server startup
+  mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000, // Increased from 10000 to 30000
+    socketTimeoutMS: 75000, // Increased from 45000 to 75000
+    maxPoolSize: 10, // Maximum number of connections in the pool
+    minPoolSize: 2, // Minimum number of connections to maintain
+    maxIdleTimeMS: 30000, // Close idle connections after 30 seconds
+    retryWrites: true,
+    retryReads: true,
+  })
+    .then(() => logger.info('\n💾 MongoDB: Connected to Atlas'))
+    .catch(err => {
+      console.error('\n❌ MongoDB connection error:', err);
+      console.error('⚠️  Server will continue to run, but database operations will fail');
+      console.error('⚠️  MongoDB will retry connection automatically');
+      // Don't exit - let the server start so Railway health checks can pass
+      // Mongoose will retry the connection automatically
+    });
 }
-
-mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 30000, // Increased from 10000 to 30000
-  socketTimeoutMS: 75000, // Increased from 45000 to 75000
-  maxPoolSize: 10, // Maximum number of connections in the pool
-  minPoolSize: 2, // Minimum number of connections to maintain
-  maxIdleTimeMS: 30000, // Close idle connections after 30 seconds
-  retryWrites: true,
-  retryReads: true,
-})
-  .then(() => logger.info('\n💾 MongoDB: Connected to Atlas'))
-  .catch(err => {
-    console.error('\n❌ MongoDB connection error:', err);
-    process.exit(1);
-  });
 
 // ✅ Initialize Email Service
 logger.info('\n📧 Initializing Email Service...');
@@ -226,6 +235,34 @@ const server = new ApolloServer({
 const app = express();
 
 async function startServer() {
+  // Register health check endpoint IMMEDIATELY before any async operations
+  // This ensures Railway can check health even during startup
+  app.get('/health', (req, res) => {
+    const mongoStatus = mongoose.connection.readyState;
+    const mongoStates = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+    
+    // Return 200 even if MongoDB is still connecting (state 2) or server is starting
+    // Only return error if MongoDB is explicitly disconnected (state 0) after initial connection attempt
+    const isHealthy = mongoStatus === 1 || mongoStatus === 2;
+    
+    res.status(isHealthy ? 200 : 503).json({
+      success: isHealthy,
+      message: isHealthy ? 'Server is healthy' : 'Server is starting up',
+      timestamp: new Date().toISOString(),
+      status: isHealthy ? 'OK' : 'STARTING',
+      uptime: process.uptime(),
+      mongodb: {
+        status: mongoStates[mongoStatus] || 'unknown',
+        readyState: mongoStatus
+      }
+    });
+  });
+
   await server.start();
 
   // ✅ Global CORS
@@ -307,17 +344,6 @@ async function startServer() {
   
   // Serve public files statically
   app.use(express.static(path.join(__dirname, '..', 'public')));
-  
-  // Health check endpoint (for Railway and monitoring)
-  app.get('/health', (req, res) => {
-    res.status(200).json({
-      success: true,
-      message: 'Server is healthy',
-      timestamp: new Date().toISOString(),
-      status: 'OK',
-      uptime: process.uptime()
-    });
-  });
 
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
@@ -426,23 +452,50 @@ app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for o
   // Initialize WebSocket server
   deviceStatusService.initializeWebSocketServer(httpServer);
 
-  // Start the server
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
+  // Start the server IMMEDIATELY - don't wait for other services
+  // This allows Railway health checks to pass quickly
+  return new Promise((resolve, reject) => {
+    httpServer.listen(PORT, '0.0.0.0', () => {
+      console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
+      console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
+      console.log(`\n✅ Health check available at http://0.0.0.0:${PORT}/health`);
+      
+      // Start background services (non-blocking)
+      try {
+        // Start the device status monitoring job
+        // startDeviceStatusJob(); // deprecated
+        startPaymentDeadlineJob();
+        
+        // Start cron jobs for daily data archiving
+        cronJobs.start();
+        console.log('📅 Cron jobs started for daily data archiving');
+      } catch (error) {
+        console.error('⚠️ Error starting background services:', error);
+        // Don't fail server startup if background services fail
+      }
+      
+      // Start scheduled ad service
+      try {
+        const scheduledAdService = require('./services/scheduledAdService');
+        scheduledAdService.start();
+      } catch (error) {
+        console.error('⚠️ Error starting scheduled ad service:', error);
+        // Don't fail server startup if this fails
+      }
+      
+      resolve();
+    });
     
-    // Start the device status monitoring job
-    // startDeviceStatusJob(); // deprecated
-    startPaymentDeadlineJob();
-    
-    // Start cron jobs for daily data archiving
-    cronJobs.start();
-    console.log('📅 Cron jobs started for daily data archiving');
+    httpServer.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`\n❌ Port ${PORT} is already in use. Please kill the process using this port.`);
+        reject(error);
+      } else {
+        console.error('\n❌ Server startup error:', error);
+        reject(error);
+      }
+    });
   });
-  
-  // Start scheduled ad service
-  const scheduledAdService = require('./services/scheduledAdService');
-  scheduledAdService.start();
   
   // Handle server shutdown gracefully
   process.on('SIGTERM', () => {
@@ -468,4 +521,13 @@ app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for o
   });
 }
 
-startServer().catch(console.error);
+// Start server with proper error handling
+startServer().catch((error) => {
+  console.error('❌ Fatal error starting server:', error);
+  // Don't exit immediately - give Railway time to see the error in logs
+  // But also ensure the process doesn't hang indefinitely
+  setTimeout(() => {
+    console.error('❌ Server startup failed, exiting...');
+    process.exit(1);
+  }, 5000);
+});
