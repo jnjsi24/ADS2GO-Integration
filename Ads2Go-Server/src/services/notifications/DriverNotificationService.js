@@ -311,7 +311,7 @@ class DriverNotificationService extends BaseNotificationService {
   static async sendMaterialAssignmentEmail(email, firstName, materialName) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: '🚚 Material Assignment - Ads2Go',
         html: `
@@ -369,7 +369,7 @@ class DriverNotificationService extends BaseNotificationService {
       };
 
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: `Driver Status Update - ${status}`,
         html: `

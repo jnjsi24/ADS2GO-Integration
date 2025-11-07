@@ -98,7 +98,7 @@ class EnhancedEmailNotificationService {
   static async sendEmailImmediately(email, emailData) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: emailData.subject,
         html: emailData.html

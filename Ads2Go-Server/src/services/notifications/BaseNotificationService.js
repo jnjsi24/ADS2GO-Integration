@@ -1,67 +1,153 @@
 const UserNotifications = require('../../models/Notification');
 const EmailService = require('../../utils/emailService');
+const mongoose = require('mongoose');
 
 class BaseNotificationService {
   /**
    * Create a notification for a user
+   * Uses atomic MongoDB operations to prevent version conflicts during concurrent updates
    */
   static async createNotification(userId, title, message, type = 'INFO', options = {}) {
-    try {
-      // Find or create user notifications document
-      let userNotifications = await UserNotifications.findOne({ userId });
-      
-      if (!userNotifications) {
-        // Create new user notifications document
-        userNotifications = new UserNotifications({
-          userId,
-          userRole: options.userRole || 'USER', // Default to USER if not specified
-          notifications: [],
-          unreadCount: 0,
-          notificationPreferences: {
-            email: true,
-            inApp: true,
-            categories: []
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        // Create new notification item
+        // Convert adId to ObjectId if it's a string (Mongoose will handle the conversion)
+        let adIdValue = null;
+        if (options.adId) {
+          if (typeof options.adId === 'string' && mongoose.Types.ObjectId.isValid(options.adId)) {
+            adIdValue = new mongoose.Types.ObjectId(options.adId);
+          } else if (options.adId instanceof mongoose.Types.ObjectId) {
+            adIdValue = options.adId;
+          } else if (typeof options.adId.toString === 'function') {
+            // Fallback for other ObjectId-like objects
+            adIdValue = new mongoose.Types.ObjectId(options.adId.toString());
           }
-        });
+        }
+
+        const notificationItem = {
+          title,
+          message,
+          type,
+          category: options.category || 'SYSTEM_ALERT', // Default category
+          priority: options.priority || 'MEDIUM', // Default priority
+          read: false,
+          readAt: null,
+          adId: adIdValue,
+          adTitle: options.adTitle || null,
+          data: options.data || {}
+        };
+
+        // Use atomic update operations to avoid version conflicts
+        // IMPORTANT: Use native MongoDB collection methods to bypass Mongoose version checking
+        // This prevents VersionError when multiple notifications are created simultaneously
+        // Mongoose's findOneAndUpdate checks __v (version), but native findOneAndUpdate does not
+        const collection = UserNotifications.collection;
+        
+        // Ensure userId is an ObjectId
+        const userIdObj = mongoose.Types.ObjectId.isValid(userId) 
+          ? new mongoose.Types.ObjectId(userId) 
+          : userId;
+        
+        // Ensure notification item has an _id (MongoDB will add it automatically, but we can pre-generate for consistency)
+        if (!notificationItem._id) {
+          notificationItem._id = new mongoose.Types.ObjectId();
+        }
+        
+        const updateResult = await collection.findOneAndUpdate(
+          { userId: userIdObj },
+          {
+            $push: {
+              notifications: {
+                $each: [notificationItem],
+                $position: 0  // Add to beginning (most recent first)
+              }
+            },
+            $inc: { unreadCount: 1 },
+            $setOnInsert: {
+              userId: userIdObj,
+              userRole: options.userRole || 'USER',
+              notificationPreferences: {
+                email: true,
+                inApp: true,
+                categories: []
+              },
+              createdAt: new Date(),
+              updatedAt: new Date()
+            },
+            $set: {
+              updatedAt: new Date()
+            }
+          },
+          {
+            upsert: true,  // Create document if it doesn't exist
+            returnDocument: 'after'  // Return updated document (equivalent to new: true)
+          }
+        );
+
+        // Native MongoDB findOneAndUpdate returns { value: <document>, ... }
+        const updatedDocument = updateResult.value;
+        
+        if (!updatedDocument) {
+          throw new Error('Failed to create notification: updateResult.value is null');
+        }
+        
+        // Trim to last 50 notifications if needed (best-effort, non-blocking)
+        // Use atomic $slice operation to keep only first 50 items
+        if (updatedDocument && updatedDocument.notifications && updatedDocument.notifications.length > 50) {
+          try {
+            await collection.findOneAndUpdate(
+              { userId: userIdObj },
+              {
+                $push: {
+                  notifications: {
+                    $each: [],
+                    $slice: 50  // Keep only first 50 items (atomic operation)
+                  }
+                }
+              }
+            );
+          } catch (trimError) {
+            // Non-critical: if trimming fails, we just have more than 50 notifications
+            // This won't cause issues and will be trimmed on next update or by cleanup job
+            console.warn(`⚠️ Could not trim notifications for user ${userId} (non-critical):`, trimError.message);
+          }
+        }
+
+        // Get the newly created notification from the update result
+        // The first notification in the array is the newest one (added at position 0)
+        const savedNotification = updatedDocument && updatedDocument.notifications && updatedDocument.notifications[0]
+          ? updatedDocument.notifications[0]
+          : notificationItem;
+
+        // Generate an ID for the notification if it doesn't have one (newly created notifications from MongoDB should have _id)
+        const notificationId = savedNotification._id || savedNotification.id || new mongoose.Types.ObjectId();
+
+        console.log(`✅ Notification created for user ${userId} (${updatedDocument?.userRole || options.userRole || 'USER'}): ${title}`);
+        console.log('🔔 BaseNotificationService: Created notification:', notificationItem);
+
+        return {
+          ...notificationItem,
+          _id: notificationId,
+          id: notificationId.toString()
+        };
+      } catch (error) {
+        // Check if it's a version conflict error
+        if (error.name === 'VersionError' && retryCount < maxRetries - 1) {
+          retryCount++;
+          // Exponential backoff: wait 50ms, 100ms, 200ms
+          const delay = Math.pow(2, retryCount - 1) * 50;
+          console.warn(`⚠️ Version conflict on notification creation, retrying (${retryCount}/${maxRetries}) after ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If not a version error or max retries reached, throw the error
+        console.error('Error creating notification:', error);
+        throw error;
       }
-
-      // Create new notification item
-      const notificationItem = {
-        title,
-        message,
-        type,
-        category: options.category || 'SYSTEM_ALERT', // Default category
-        priority: options.priority || 'MEDIUM', // Default priority
-        read: false,
-        readAt: null,
-        adId: options.adId ? options.adId.toString() : null, // Convert ObjectId to string
-        adTitle: options.adTitle || null,
-        data: options.data || {}
-      };
-
-      // Add notification to the array
-      userNotifications.notifications.unshift(notificationItem); // Add to beginning
-      userNotifications.unreadCount += 1;
-
-      // Keep only last 50 notifications to prevent document from growing too large
-      if (userNotifications.notifications.length > 50) {
-        userNotifications.notifications = userNotifications.notifications.slice(0, 50);
-      }
-
-      await userNotifications.save();
-      console.log(`✅ Notification created for user ${userId} (${userNotifications.userRole}): ${title}`);
-      console.log('🔔 BaseNotificationService: Created notification:', notificationItem);
-      
-      // Return the notification with its ID
-      const savedNotification = userNotifications.notifications[0]; // First notification (newest)
-      return {
-        ...notificationItem,
-        _id: savedNotification._id,
-        id: savedNotification._id.toString()
-      };
-    } catch (error) {
-      console.error('Error creating notification:', error);
-      throw error;
     }
   }
 

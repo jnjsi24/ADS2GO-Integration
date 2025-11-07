@@ -633,7 +633,7 @@ class UserNotificationService extends BaseNotificationService {
   static async sendAdApprovalEmail(email, firstName, adTitle, adId) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: 'Your Ad Has Been Approved!',
         html: `
@@ -688,7 +688,7 @@ class UserNotificationService extends BaseNotificationService {
   static async sendAdRejectionEmail(email, firstName, adTitle, reason, adId) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: 'Ad Rejection - Action Required',
         html: `
@@ -748,7 +748,7 @@ class UserNotificationService extends BaseNotificationService {
   static async sendPaymentConfirmationEmail(email, firstName, amount, adTitle) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: 'Payment Confirmed - Thank You!',
         html: `
@@ -989,7 +989,7 @@ class UserNotificationService extends BaseNotificationService {
       const changesList = changeMessages.map(msg => `<li style="margin: 8px 0; color: #333;">${msg}</li>`).join('');
 
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: '👤 Profile Updated Successfully',
         html: `
@@ -1056,7 +1056,7 @@ class UserNotificationService extends BaseNotificationService {
       const statusIcon = newStatus === 'RESOLVED' ? '✅' : newStatus === 'IN_PROGRESS' ? '🔧' : '📋';
 
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: `${statusIcon} Report Status Update - ${statusText}`,
         html: `
@@ -1120,7 +1120,7 @@ class UserNotificationService extends BaseNotificationService {
   static async sendReportAdminResponseEmail(email, firstName, reportTitle, adminNotes) {
     try {
       const mailOptions = {
-        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        from: EmailService.getFromEmail(),
         to: email,
         subject: '💬 Admin Response to Your Report',
         html: `
