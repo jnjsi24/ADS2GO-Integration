@@ -367,34 +367,60 @@ router.get('/route/:materialId', async (req, res) => {
       if (index > 0 && routePoints.length > 0) {
         const prevPoint = filteredLocationPoints[index - 1];
         if (prevPoint && prevPoint.coordinates && prevPoint.coordinates.length >= 2) {
-          // ✅ FIX: Check time gap to detect offline periods
+          // ✅ FIX: Check time gap to detect offline periods (improved logic)
           const prevTimestamp = new Date(prevPoint.timestamp);
           const currentTimestamp = new Date(point.timestamp);
           const timeGapSeconds = (currentTimestamp - prevTimestamp) / 1000;
-          const MAX_TIME_GAP = 60; // 60 seconds = 1 minute
+          const MAX_TIME_GAP = 300; // 300 seconds = 5 minutes (increased from 60s to reduce false breaks)
           
-          // ✅ FIX: If time gap is too large, don't calculate distance (device was offline)
-          if (timeGapSeconds > MAX_TIME_GAP) {
+          // Calculate distance first to check both time and distance gaps
+          segmentDistance = GPSValidation.calculateDistance(
+            prevPoint.coordinates[1], prevPoint.coordinates[0],
+            lat, lng
+          );
+          
+          // ✅ IMPROVED: Only create segment break if BOTH conditions are met:
+          // 1. Time gap is large (likely offline period) AND
+          // 2. Distance jump is also large (device actually moved far, not just GPS drift)
+          // This prevents breaking route lines for normal GPS updates with small delays
+          const MAX_DISTANCE_JUMP = 0.5; // 0.5 km = 500 meters - large distance jump indicates real offline/teleport
+          
+          if (timeGapSeconds > MAX_TIME_GAP && segmentDistance > MAX_DISTANCE_JUMP) {
+            // Large time gap AND large distance = device was offline and moved (real segment break)
             isSegmentBreak = true;
-            console.log(`⏸️ [Enhanced Route API] Time gap detected at point ${index}: ${timeGapSeconds.toFixed(1)}s - marking as segment break`);
-          } else {
-            segmentDistance = GPSValidation.calculateDistance(
-              prevPoint.coordinates[1], prevPoint.coordinates[0],
-              lat, lng
-            );
-            
-            // ✅ FIX: Validate speed is realistic before adding distance
+            console.log(`⏸️ [Enhanced Route API] Segment break detected at point ${index}: time gap ${timeGapSeconds.toFixed(1)}s, distance jump ${(segmentDistance * 1000).toFixed(1)}m - marking as segment break`);
+          } else if (timeGapSeconds > MAX_TIME_GAP) {
+            // Large time gap but small distance = GPS signal loss but device stationary (don't break)
+            console.log(`📍 [Enhanced Route API] Large time gap (${timeGapSeconds.toFixed(1)}s) but small movement (${(segmentDistance * 1000).toFixed(1)}m) - likely GPS signal loss while stationary, not breaking route`);
+            // Continue normally - don't break route for stationary GPS signal loss
+          }
+          
+          // ✅ FIX: Validate speed is realistic before adding distance
+          // Only check speed if we haven't already marked this as a segment break
+          if (!isSegmentBreak) {
             const calculatedSpeed = timeGapSeconds > 0 ? (segmentDistance / timeGapSeconds) * 3600 : 0; // km/h
-            const MAX_REALISTIC_SPEED = 150; // km/h
+            const MAX_REALISTIC_SPEED = 200; // km/h (increased from 150 to allow highway speeds)
             
             if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
+              // Speed is realistic - count the distance
               cumulativeDistance += segmentDistance;
             } else {
-              // Speed is unrealistic - likely GPS jump or offline period
-              isSegmentBreak = true;
-              segmentDistance = 0; // Don't count this distance
-              console.log(`⏸️ [Enhanced Route API] Unrealistic speed detected at point ${index}: ${calculatedSpeed.toFixed(1)} km/h - marking as segment break`);
+              // Speed is unrealistic - likely GPS jump, but don't break route if distance is small
+              const distanceInMeters = segmentDistance * 1000;
+              if (distanceInMeters > (MAX_DISTANCE_JUMP * 1000)) {
+                // Large distance jump with unrealistic speed = real GPS jump, break route
+                isSegmentBreak = true;
+                segmentDistance = 0; // Don't count this distance
+                console.log(`⏸️ [Enhanced Route API] Unrealistic speed (${calculatedSpeed.toFixed(1)} km/h) with large distance jump (${distanceInMeters.toFixed(1)}m) - marking as segment break`);
+              } else {
+                // Unrealistic speed but small distance = GPS drift, ignore it but don't break route
+                segmentDistance = 0;
+                console.log(`⚠️ [Enhanced Route API] Unrealistic speed (${calculatedSpeed.toFixed(1)} km/h) but small distance (${distanceInMeters.toFixed(1)}m) - likely GPS drift, ignoring but not breaking route`);
+              }
             }
+          } else {
+            // Segment break already detected - don't count distance
+            segmentDistance = 0;
           }
         }
       }

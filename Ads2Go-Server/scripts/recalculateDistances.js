@@ -18,11 +18,12 @@ const GPSValidation = require('../src/utils/gpsValidation');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ads2go';
 
-// Validation constants (same as in deviceTracking.js)
-const MAX_TIME_GAP = 60; // seconds - if gap is larger, device was offline
+// Validation constants (same as in deviceTracking.js and enhancedRouteAPI.js)
+const MAX_TIME_GAP = 300; // 300 seconds = 5 minutes (increased from 60s to reduce false breaks)
+const MAX_DISTANCE_JUMP = 0.5; // 0.5 km = 500 meters - large distance jump indicates real offline/teleport
 const MAX_ACCURACY_THRESHOLD = 30; // meters - only count movements with good GPS accuracy
 const MIN_MOVEMENT_THRESHOLD = 0.008; // 0.008 km = 8 meters - filters stationary GPS drift
-const MAX_REALISTIC_SPEED = 150; // km/h - maximum realistic speed for a vehicle
+const MAX_REALISTIC_SPEED = 200; // km/h - maximum realistic speed for a vehicle (increased from 150 to allow highway speeds)
 
 /**
  * Recalculate distance from locationHistory with new validation
@@ -57,14 +58,19 @@ function recalculateDistance(locationHistory) {
     const currTimestamp = new Date(currPoint.timestamp);
     const timeGapSeconds = (currTimestamp - prevTimestamp) / 1000;
 
-    // Skip if time gap is too large (device was offline)
-    if (timeGapSeconds > MAX_TIME_GAP) {
+    // Calculate distance first to check both time and distance gaps
+    const distance = GPSValidation.calculateDistance(prevLat, prevLng, currLat, currLng);
+
+    // ✅ IMPROVED: Only skip if BOTH time gap is large AND distance jump is large
+    // This prevents skipping distance calculation for normal GPS delays
+    if (timeGapSeconds > MAX_TIME_GAP && distance > MAX_DISTANCE_JUMP) {
+      // Large time gap AND large distance = device was offline and moved (skip)
       skippedCount++;
       continue;
+    } else if (timeGapSeconds > MAX_TIME_GAP) {
+      // Large time gap but small distance = GPS signal loss while stationary (still calculate)
+      // Continue to distance calculation below
     }
-
-    // Calculate distance
-    const distance = GPSValidation.calculateDistance(prevLat, prevLng, currLat, currLng);
 
     // Check minimum movement threshold
     if (distance <= MIN_MOVEMENT_THRESHOLD) {

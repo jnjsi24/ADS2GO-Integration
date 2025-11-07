@@ -462,23 +462,30 @@ router.get('/route/:deviceId', async (req, res) => {
         const prev = routeData[i - 1];
         const curr = routeData[i];
         
-        // ✅ FIX: Check time gap between points
+        // ✅ FIX: Check time gap between points (improved logic)
         const prevTimestamp = new Date(prev.timestamp);
         const currTimestamp = new Date(curr.timestamp);
         const timeGapSeconds = (currTimestamp - prevTimestamp) / 1000;
-        const MAX_TIME_GAP = 60; // 60 seconds = 1 minute
-        
-        // ✅ FIX: Skip distance calculation if time gap is too large (device was offline)
-        if (timeGapSeconds > MAX_TIME_GAP) {
-          console.log(`⏸️ [ROUTE] Skipping distance calculation - time gap too large (${timeGapSeconds.toFixed(1)}s > ${MAX_TIME_GAP}s) at point ${i}`);
-          continue;
-        }
+        const MAX_TIME_GAP = 300; // 300 seconds = 5 minutes (increased from 60s to reduce false breaks)
         
         const distance = GPSValidation.calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
         
+        // ✅ IMPROVED: Only skip if BOTH time gap is large AND distance jump is large
+        // This prevents skipping distance calculation for normal GPS delays
+        const MAX_DISTANCE_JUMP = 0.5; // 0.5 km = 500 meters
+        
+        if (timeGapSeconds > MAX_TIME_GAP && distance > MAX_DISTANCE_JUMP) {
+          // Large time gap AND large distance = device was offline and moved (skip)
+          console.log(`⏸️ [ROUTE] Skipping distance calculation - time gap ${timeGapSeconds.toFixed(1)}s and large distance jump ${(distance * 1000).toFixed(1)}m at point ${i}`);
+          continue;
+        } else if (timeGapSeconds > MAX_TIME_GAP) {
+          // Large time gap but small distance = GPS signal loss while stationary (still calculate)
+          console.log(`📍 [ROUTE] Large time gap (${timeGapSeconds.toFixed(1)}s) but small movement (${(distance * 1000).toFixed(1)}m) - likely GPS signal loss while stationary, calculating distance`);
+        }
+        
         // ✅ FIX: Validate speed is realistic
         const calculatedSpeed = timeGapSeconds > 0 ? (distance / timeGapSeconds) * 3600 : 0; // km/h
-        const MAX_REALISTIC_SPEED = 150; // km/h
+        const MAX_REALISTIC_SPEED = 200; // km/h (increased from 150 to allow highway speeds)
         
         if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
           totalDistance += distance;

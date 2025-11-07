@@ -944,18 +944,37 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   if (this.currentLocation && this.locationHistory.length > 0) {
     const prevLocation = this.currentLocation;
     
-    // ✅ FIX: Check time gap between locations to detect offline periods
+    // ✅ FIX: Check time gap between locations to detect offline periods (improved logic)
     const prevTimestamp = new Date(prevLocation.timestamp);
     const currentTimestamp = new Date(newLocation.timestamp);
     const timeGapSeconds = (currentTimestamp - prevTimestamp) / 1000;
-    const MAX_TIME_GAP = 60; // 60 seconds = 1 minute - if gap is larger, device was likely offline
+    const MAX_TIME_GAP = 300; // 300 seconds = 5 minutes (increased from 60s to reduce false breaks)
     
-    // ✅ FIX: Skip distance calculation if there's a significant time gap (offline period)
-    if (timeGapSeconds > MAX_TIME_GAP) {
-      console.log(`⏸️ [updateLocation] ${this.materialId}: Large time gap detected (${timeGapSeconds.toFixed(1)}s > ${MAX_TIME_GAP}s) - device was offline, skipping distance calculation to prevent false line`);
-      // Mark this location as starting a new segment (after offline period)
+    // Calculate distance first to check both time and distance
+    let calculatedDistance = 0;
+    if (prevLocation.coordinates && prevLocation.coordinates.length >= 2) {
+      calculatedDistance = GPSValidation.calculateDistance(
+        prevLocation.coordinates[1], prevLocation.coordinates[0],
+        lat, lng
+      );
+    }
+    
+    // ✅ IMPROVED: Only mark segment break if BOTH time gap is large AND distance jump is large
+    // This prevents false segment breaks from normal GPS delays
+    const MAX_DISTANCE_JUMP = 0.5; // 0.5 km = 500 meters
+    
+    if (timeGapSeconds > MAX_TIME_GAP && calculatedDistance > MAX_DISTANCE_JUMP) {
+      // Large time gap AND large distance = device was offline and moved (real segment break)
+      console.log(`⏸️ [updateLocation] ${this.materialId}: Segment break detected - time gap ${timeGapSeconds.toFixed(1)}s, distance jump ${(calculatedDistance * 1000).toFixed(1)}m - marking as segment start`);
       newLocation.isSegmentStart = true;
-    } else {
+    } else if (timeGapSeconds > MAX_TIME_GAP) {
+      // Large time gap but small distance = GPS signal loss while stationary (don't break)
+      console.log(`📍 [updateLocation] ${this.materialId}: Large time gap (${timeGapSeconds.toFixed(1)}s) but small movement (${(calculatedDistance * 1000).toFixed(1)}m) - likely GPS signal loss while stationary, not breaking route`);
+      // Continue normally - don't mark segment break for stationary GPS signal loss
+    }
+    
+    // Continue with distance calculation if not a segment break
+    if (!newLocation.isSegmentStart) {
       // Validate previous location coordinates using enhanced validation
       const prevCoordValidation = GPSValidation.validateCoordinates(
         prevLocation.coordinates[1], 
@@ -976,13 +995,13 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         
         // ✅ FIX: Calculate speed to validate movement is realistic
         const calculatedSpeed = timeGapSeconds > 0 ? (distance / timeGapSeconds) * 3600 : 0; // km/h
-        const MAX_REALISTIC_SPEED = 150; // km/h - maximum realistic speed for a vehicle
+        const MAX_REALISTIC_SPEED = 200; // km/h - maximum realistic speed for a vehicle (increased from 150 to allow highway speeds)
         
         // Only add distance if:
         // 1. Movement is significant (more than 8 meters) - filters stationary GPS noise while capturing actual movement
         // 2. Both GPS readings have good accuracy (<30m) - filters GPS drift and jumps
-        // 3. Calculated speed is realistic (<150 km/h) - prevents impossible movements from GPS jumps
-        // 4. Time gap is reasonable (<60s) - already checked above
+        // 3. Calculated speed is realistic (<200 km/h) - prevents impossible movements from GPS jumps
+        // 4. Time gap is reasonable (<300s/5min) - already checked above
         if (distance > MIN_MOVEMENT_THRESHOLD) {
           // Check if both current and previous GPS readings are accurate enough
           if (currentAccuracy < MAX_ACCURACY_THRESHOLD && previousAccuracy < MAX_ACCURACY_THRESHOLD) {
