@@ -772,6 +772,16 @@ DeviceTrackingSchema.statics.findByMaterialAndSlot = function(materialId, slotNu
 };
 
 // Post-save hook to trigger archiving when DeviceTracking data changes
+// ✅ FIX: Pre-save hook to ensure totalQRScans is always in sync with qrScans array
+DeviceTrackingSchema.pre('save', function(next) {
+  // Always recalculate totalQRScans from actual qrScans array length
+  // This ensures accuracy even if scans were added manually or from slave slots
+  if (this.qrScans && Array.isArray(this.qrScans)) {
+    this.totalQRScans = this.qrScans.length;
+  }
+  next();
+});
+
 DeviceTrackingSchema.post('save', async function(doc) {
   try {
     // Only trigger archiving for significant data changes (not just status updates)

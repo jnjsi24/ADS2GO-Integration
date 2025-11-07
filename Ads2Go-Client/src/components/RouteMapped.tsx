@@ -589,7 +589,8 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   // ✅ FIX: Compute if we should show loading
   // Show loading if: explicit loading state OR we don't have data for current props OR segments are being processed
   // Don't show loading if route is confirmed empty (will show "no route data" instead)
-  const shouldShowLoading = !routeIsEmpty && (
+  // ✅ FIX: Only show loading during initial load, not during silent refreshes
+  const shouldShowLoading = !routeIsEmpty && isInitialLoadRef.current && (
     loading || 
     (!hasDataForCurrentProps && !error && isValidMaterialId && materialId && date) ||
     (hasDataForCurrentProps && !error && (!hasValidSegments || (snapToRoads && !hasSnappedSegments)))
@@ -633,9 +634,14 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
         return;
       }
 
-      // ✅ FIX: Set snapping in progress to prevent showing raw coordinates
-      if (isMounted) {
+      // ✅ FIX: Only set snapping in progress (and show loading) on initial load
+      // During silent refreshes, snap in background without showing loading state
+      const isInitialLoad = isInitialLoadRef.current;
+      if (isMounted && isInitialLoad) {
         setIsSnappingInProgress(true);
+      } else {
+        // Silent refresh - snap in background without showing loading
+        console.log('🗺️ [RouteMapped] Silent road snapping - no loading state');
       }
 
       // Apply road snapping to each segment separately
@@ -670,10 +676,13 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
           setLastProcessedRoute(routeKey);
           setIsSnappingInProgress(false);
           
-          // ✅ FIX: Set loading to false after snapping completes (completes the combined loading state)
-          setLoading(false);
-          if (onLoadingChange) {
-            onLoadingChange(false);
+          // ✅ FIX: Only update loading state if this was an initial load
+          // During silent refreshes, don't change loading state (keep it false)
+          if (isInitialLoad) {
+            setLoading(false);
+            if (onLoadingChange) {
+              onLoadingChange(false);
+            }
           }
         }
       } catch (error) {
@@ -684,10 +693,13 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
           setLastProcessedRoute(routeKey);
           setIsSnappingInProgress(false);
           
-          // ✅ FIX: Set loading to false even if snapping fails (fallback to raw coordinates)
-          setLoading(false);
-          if (onLoadingChange) {
-            onLoadingChange(false);
+          // ✅ FIX: Only update loading state if this was an initial load
+          // During silent refreshes, don't change loading state (keep it false)
+          if (isInitialLoad) {
+            setLoading(false);
+            if (onLoadingChange) {
+              onLoadingChange(false);
+            }
           }
         }
       }
@@ -699,7 +711,7 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [routeSegments, snapToRoads, lastProcessedRoute]);
+  }, [routeSegments, snapToRoads, lastProcessedRoute, onLoadingChange]);
 
 
   // Use snapped segment coordinates (one array per segment)

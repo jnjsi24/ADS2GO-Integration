@@ -3,8 +3,8 @@ import { gql } from '@apollo/client';
 // ===== QUERIES =====
 
 export const GET_ALL_ADS = gql`
-  query GetAllAds {
-    getAllAds {
+  query GetAllAds($includeArchived: Boolean) {
+    getAllAds(includeArchived: $includeArchived) {
       id
       title
       description
@@ -41,6 +41,24 @@ export const GET_ALL_ADS = gql`
       isArchived
       archivedAt
       scheduledDeletionDate
+      approvedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejectedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      deletedBy {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;
@@ -80,6 +98,33 @@ export const GET_AD_BY_ID = gql`
         id
         materialId
       }
+      approvedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejectedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      deletedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      restoredBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;
@@ -119,6 +164,33 @@ export const GET_ADS_BY_USER = gql`
         id
         materialId
       }
+      approvedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejectedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      deletedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      restoredBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      isArchived
+      archivedAt
+      scheduledDeletionDate
     }
   }
 `;
@@ -480,6 +552,30 @@ export interface Ad {
   isArchived?: boolean;
   archivedAt?: string | null;
   scheduledDeletionDate?: string | null;
+  approvedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  rejectedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  deletedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  restoredBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
 }
 
 export interface LCDSlot {

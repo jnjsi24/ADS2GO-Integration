@@ -33,8 +33,33 @@ export const GET_MY_ADS = gql`
         mountedAt
         dismountedAt
       }
-
-      
+      isArchived
+      archivedAt
+      scheduledDeletionDate
+      approvedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejectedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      deletedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      restoredBy {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;

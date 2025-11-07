@@ -185,33 +185,45 @@ const MapController: React.FC<{ center: [number, number]; zoom: number }> = ({ c
 
   // Wait for map to be ready before allowing updates
   useEffect(() => {
-    if (map) {
-      map.whenReady(() => {
-        // Additional check to ensure map panes are fully initialized
-        try {
-          const mapPane = map.getPane('mapPane');
-          if (mapPane && (mapPane as any)._leaflet_pos !== undefined) {
+    if (!map) return;
+
+    const checkMapReady = () => {
+      try {
+        // Check if map container has valid dimensions (safer than checking _leaflet_pos)
+        const container = map.getContainer();
+        if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+          // Try to get center to verify map is initialized
+          try {
+            map.getCenter();
             setIsMapReady(true);
-          } else {
-            // Retry after a short delay if panes aren't ready
-            setTimeout(() => {
-              try {
-                const retryPane = map.getPane('mapPane');
-                if (retryPane) {
-                  setIsMapReady(true);
-                }
-              } catch {
-                // If still not ready, set ready anyway to prevent blocking
-                setIsMapReady(true);
-              }
-            }, 100);
+            return true;
+          } catch {
+            // Map not fully ready yet
+            return false;
           }
-        } catch {
-          // If check fails, assume ready after a delay
-          setTimeout(() => setIsMapReady(true), 100);
         }
-      });
-    }
+        return false;
+      } catch (error) {
+        // Silently handle errors - map might not be ready yet
+        return false;
+      }
+    };
+
+    // Use whenReady callback
+    map.whenReady(() => {
+      if (checkMapReady()) {
+        return;
+      }
+      
+      // If not ready, retry after a short delay
+      setTimeout(() => {
+        if (checkMapReady()) {
+          return;
+        }
+        // If still not ready after retry, set ready anyway to prevent blocking
+        setIsMapReady(true);
+      }, 100);
+    });
   }, [map]);
 
   // Safely update map view when center or zoom changes
@@ -226,70 +238,52 @@ const MapController: React.FC<{ center: [number, number]; zoom: number }> = ({ c
       return;
     }
 
-    try {
-      // Check if map panes are initialized and have _leaflet_pos
-      const mapPane = map.getPane('mapPane');
-      if (!mapPane) {
-        // If pane doesn't exist, wait a bit and retry
-        setTimeout(() => {
-          if (map && map.getPane('mapPane')) {
-            try {
-              map.setView(center, zoom, { animate: true, duration: 0.5 });
-              lastUpdateRef.current = { center, zoom };
-            } catch (err) {
-              console.warn('Error updating map view (retry):', err);
-            }
-          }
-        }, 100);
-        return;
-      }
-
-      // Check if _leaflet_pos exists (indicates pane is fully initialized)
-      if ((mapPane as any)._leaflet_pos === undefined) {
-        // Wait for pane to be initialized
-        setTimeout(() => {
-          try {
-            const retryPane = map.getPane('mapPane');
-            if (retryPane && (retryPane as any)._leaflet_pos !== undefined) {
-              map.setView(center, zoom, { animate: true, duration: 0.5 });
-              lastUpdateRef.current = { center, zoom };
-            }
-          } catch (err) {
-            console.warn('Error updating map view (pane check retry):', err);
-          }
-        }, 50);
-        return;
-      }
-
-      // Check if the map has valid dimensions
-      const container = map.getContainer();
-      if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
-        return;
-      }
-
-      // Use whenReady to ensure map is fully initialized before updating
-      map.whenReady(() => {
-        try {
-          const currentCenter = map.getCenter();
-          const currentZoom = map.getZoom();
-          
-          // Only update if values have actually changed
-          const centerChanged = 
-            Math.abs(currentCenter.lat - center[0]) > 0.0001 || 
-            Math.abs(currentCenter.lng - center[1]) > 0.0001;
-          const zoomChanged = currentZoom !== zoom;
-
-          if (centerChanged || zoomChanged) {
-            map.setView(center, zoom, { animate: true, duration: 0.5 });
-            lastUpdateRef.current = { center, zoom };
-          }
-        } catch (error) {
-          console.warn('Error updating map view:', error);
+    const updateMapView = () => {
+      try {
+        // Check if the map has valid dimensions
+        const container = map.getContainer();
+        if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
+          return false;
         }
-      });
-    } catch (error) {
-      console.warn('Error checking map readiness:', error);
-    }
+
+        // Verify map is accessible
+        try {
+          map.getCenter();
+        } catch {
+          // Map not accessible yet
+          return false;
+        }
+
+        // Get current view state
+        const currentCenter = map.getCenter();
+        const currentZoom = map.getZoom();
+        
+        // Only update if values have actually changed
+        const centerChanged = 
+          Math.abs(currentCenter.lat - center[0]) > 0.0001 || 
+          Math.abs(currentCenter.lng - center[1]) > 0.0001;
+        const zoomChanged = currentZoom !== zoom;
+
+        if (centerChanged || zoomChanged) {
+          map.setView(center, zoom, { animate: true, duration: 0.5 });
+          lastUpdateRef.current = { center, zoom };
+        }
+        return true;
+      } catch (error) {
+        // Silently handle errors - don't spam console
+        return false;
+      }
+    };
+
+    // Use whenReady to ensure map is fully initialized before updating
+    map.whenReady(() => {
+      if (!updateMapView()) {
+        // If update failed, retry after a short delay
+        setTimeout(() => {
+          updateMapView();
+        }, 50);
+      }
+    });
   }, [map, center, zoom, isMapReady]);
 
   return null;
