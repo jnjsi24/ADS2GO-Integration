@@ -25,20 +25,22 @@ class WebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    // WebSocket configuration logging (only in verbose mode)
-    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-      console.log('🔧 WebSocket Service Configuration:', {
-        envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
-        finalUrl: actualServerUrl,
-        usingFallback: !serverUrl,
-        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
-      });
-    }
+    // Always log WebSocket configuration to help debug connection issues
+    console.log('🔧 [WebSocket Service] Configuration:', {
+      REACT_APP_WS_URL: process.env.REACT_APP_WS_URL || 'not set',
+      REACT_APP_API_URL: process.env.REACT_APP_API_URL || 'not set',
+      serverUrl: serverUrl || 'not set',
+      actualServerUrl: actualServerUrl,
+      usingFallback: !serverUrl,
+      NODE_ENV: process.env.NODE_ENV
+    });
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-    // Removed cache busting to prevent constant reconnections
-    // Use playback endpoint with admin=true for general admin connections
-    return `${protocol}//${host}/ws/playback?admin=true`;
+    const wsUrl = `${protocol}//${host}/ws/playback?admin=true`;
+    
+    // Always log the final WebSocket URL
+    console.log('🔌 [WebSocket Service] Final WebSocket URL:', wsUrl);
+    return wsUrl;
   }
 
   private connect(): void {

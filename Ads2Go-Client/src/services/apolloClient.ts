@@ -10,14 +10,13 @@ import { onError } from '@apollo/client/link/error';
 // Get server configuration from environment variables
 const serverUrl = process.env.REACT_APP_API_URL;
 
-// Environment debug logging (only in verbose mode)
-if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_APOLLO === 'true') {
-  console.log('🔍 Environment Debug:', {
-    REACT_APP_API_URL: process.env.REACT_APP_API_URL,
-    NODE_ENV: process.env.NODE_ENV,
-    allEnvVars: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
-  });
-}
+// Always log environment configuration to help debug issues
+console.log('🔧 [Apollo Client] Environment Configuration:', {
+  REACT_APP_API_URL: process.env.REACT_APP_API_URL || 'NOT SET - This is the problem!',
+  REACT_APP_SERVER_URL: process.env.REACT_APP_SERVER_URL || 'not set',
+  NODE_ENV: process.env.NODE_ENV,
+  allReactAppVars: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
+});
 
 // Use environment variable or fallback to localhost for development
 let actualServerUrl = serverUrl || 'http://localhost:5000';
@@ -25,15 +24,13 @@ let actualServerUrl = serverUrl || 'http://localhost:5000';
 // Remove trailing slash to prevent double slashes in the URL
 actualServerUrl = actualServerUrl.replace(/\/$/, '');
 
-// Apollo Client configuration logging (only in verbose mode)
-if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_APOLLO === 'true') {
-  console.log('🔧 Apollo Client Configuration:', {
-    envUrl: serverUrl,
-    finalUrl: actualServerUrl,
-    usingFallback: !serverUrl,
-    reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
-  });
-}
+// Always log the final configuration
+console.log('🔧 [Apollo Client] Final Configuration:', {
+  serverUrl: serverUrl || 'not set',
+  actualServerUrl: actualServerUrl,
+  usingFallback: !serverUrl,
+  reason: serverUrl ? 'Using environment variable' : '⚠️ Using localhost fallback - REACT_APP_API_URL not set!'
+});
 
 // Remove trailing slash from actualServerUrl to prevent double slashes
 const cleanServerUrl = actualServerUrl.replace(/\/$/, '');

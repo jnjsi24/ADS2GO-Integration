@@ -57,24 +57,21 @@ class PlaybackWebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    // Playback WebSocket configuration logging (only in verbose mode)
-    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-      console.log('🔧 Playback WebSocket Service Configuration:', {
-        envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
-        finalUrl: actualServerUrl,
-        usingFallback: !serverUrl,
-        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback',
-        currentNetwork: process.env.CURRENT_NETWORK || 'not set'
-      });
-    }
+    // Always log WebSocket configuration in production to debug connection issues
+    console.log('🔧 [Playback WebSocket] Configuration:', {
+      REACT_APP_WS_URL: process.env.REACT_APP_WS_URL || 'not set',
+      REACT_APP_API_URL: process.env.REACT_APP_API_URL || 'not set',
+      serverUrl: serverUrl || 'not set',
+      actualServerUrl: actualServerUrl,
+      usingFallback: !serverUrl,
+      NODE_ENV: process.env.NODE_ENV
+    });
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     const wsUrl = `${protocol}//${host}/ws/playback?admin=true`;
     
-    // Only log WebSocket URL in verbose mode
-    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-      console.log('🔌 [WebSocket] Final WebSocket URL:', wsUrl);
-    }
+    // Always log the final WebSocket URL to help debug connection issues
+    console.log('🔌 [Playback WebSocket] Final WebSocket URL:', wsUrl);
     return wsUrl;
   }
 
@@ -360,4 +357,6 @@ class PlaybackWebSocketService {
   }
 }
 
-export default new PlaybackWebSocketService();
+// Assign instance to a variable before exporting to satisfy ESLint rule
+const playbackWebSocketService = new PlaybackWebSocketService();
+export default playbackWebSocketService;
