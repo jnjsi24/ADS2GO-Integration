@@ -323,12 +323,12 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
   if (loading) {
     return (
       <div 
-        className={`bg-gray-100 flex items-center justify-center ${className}`}
+        className={`flex items-center justify-center ${className}`}
         style={{ height }}
       >
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1b5087] mx-auto mb-2"></div>
-          <p className="text-gray-600 text-sm">Loading map...</p>
+          <p className="text-gray-600 text-sm">Loading map</p>
         </div>
       </div>
     );
@@ -377,13 +377,13 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
         className={`flex items-center justify-center ${className}`}
         style={{ height }}
       >
-        <div className="text-center p-4">
+        <div className="text-center text-black/70 p-4">
           <svg className="w-14 h-14 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <p className="font-medium mb-1">No Active Materials</p>
-          <p className="text-sm">
+          <p className="font-medium text-black/90 mb-1">No Active Materials</p>
+          <p className="text-sm text-black/70">
             Your materials will appear here when they're online and sending location data.
           </p>
         </div>

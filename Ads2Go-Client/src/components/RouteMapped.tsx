@@ -878,7 +878,7 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
   if (error) {
     return (
       <div style={style} className={className} key={`wrapper-${materialId}-${date}`}>
-        <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-center h-full">
           <div className="text-center p-6">
             <div className="text-gray-400 mb-3">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">

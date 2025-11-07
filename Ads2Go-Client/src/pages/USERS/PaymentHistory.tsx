@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ChevronDown, Clock, MonitorSmartphone, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
@@ -76,6 +76,7 @@ const PaymentHistory: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useUserAuth();
 
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
@@ -107,10 +108,26 @@ const PaymentHistory: React.FC = () => {
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
+  // Effect to open payment modal when adId is in URL
+  useEffect(() => {
+    const adId = searchParams.get('adId');
+    if (adId && payments.length > 0 && !isModalOpen) {
+      const paymentItem = payments.find(p => p.id === adId);
+      if (paymentItem) {
+        setSelectedPayment(paymentItem);
+        setSelectedPaymentType(paymentItem.paymentType || "");
+        setIsModalOpen(true);
+        // Remove the adId from URL after opening modal
+        setSearchParams({});
+      }
+    }
+  }, [payments, searchParams, isModalOpen, setSearchParams]);
+
   useEffect(() => {
     if (data) {
-      
+      console.log('PaymentHistory: Raw data received:', data);
       const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
+        console.log('PaymentHistory: Mapping ad:', ad.id, 'payment:', payment);
         const durationDays = ad.durationDays || 0;
         let plan: string;
         switch (durationDays) {
@@ -131,19 +148,37 @@ const PaymentHistory: React.FC = () => {
         }
         // Determine the display status based on ad approval and payment status
         let displayStatus: Status;
-        if (ad.status === 'RUNNING' && (payment?.paymentStatus === 'PAID' || ad.paymentStatus === 'PAID')) {
+        
+        // Priority 1: Check if payment exists and is PAID
+        if (payment?.paymentStatus === 'PAID' || ad.paymentStatus === 'PAID') {
           displayStatus = 'PAID';
-        } else if (ad.status === 'APPROVED' && (payment?.paymentStatus === 'PAID' || ad.paymentStatus === 'PAID')) {
-          displayStatus = 'PAID';
-        } else if (ad.status === 'APPROVED' && (payment?.paymentStatus === 'PENDING' || ad.paymentStatus === 'PENDING')) {
-          displayStatus = 'PENDING'; // Ad approved, payment pending
-        } else if (ad.status === 'PENDING') {
-          displayStatus = null; // Ad not yet approved, no payment status
-        } else if (payment?.paymentStatus === 'FAILED' || ad.paymentStatus === 'FAILED') {
-          displayStatus = 'FAILED';
-        } else {
-          displayStatus = null; // Default fallback for unapproved ads
         }
+        // Priority 2: Check if payment exists and is PENDING (ad must be APPROVED)
+        else if (payment && (payment.paymentStatus === 'PENDING' || ad.paymentStatus === 'PENDING') && ad.status === 'APPROVED') {
+          displayStatus = 'PENDING'; // Ad approved, payment pending
+        }
+        // Priority 3: Check if ad is RUNNING (implies payment was made)
+        else if (ad.status === 'RUNNING') {
+          displayStatus = 'PAID';
+        }
+        // Priority 4: Check if ad is APPROVED but no payment yet
+        else if (ad.status === 'APPROVED' && !payment) {
+          displayStatus = 'PENDING'; // Ad approved, awaiting payment
+        }
+        // Priority 5: Check for FAILED payments
+        else if (payment?.paymentStatus === 'FAILED' || ad.paymentStatus === 'FAILED') {
+          displayStatus = 'FAILED';
+        }
+        // Priority 6: Ad is PENDING approval
+        else if (ad.status === 'PENDING') {
+          displayStatus = null; // Ad not yet approved, no payment status
+        }
+        // Default: No status
+        else {
+          displayStatus = null;
+        }
+
+        console.log(`PaymentHistory: Ad ${ad.id} - ad.status: ${ad.status}, payment?.paymentStatus: ${payment?.paymentStatus}, ad.paymentStatus: ${ad.paymentStatus}, displayStatus: ${displayStatus}`);
 
         const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
         const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
@@ -174,10 +209,8 @@ const PaymentHistory: React.FC = () => {
     }
   }, [data]);
 
-  // Refresh data when component mounts or after payment
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
+  // Note: Removed automatic refetch on mount to avoid unnecessary requests
+  // Data will be refetched when payment is completed via handlePaymentSuccess
 
   const mapStatus = (status?: string): Status => {
     if (!status) return "PENDING";
@@ -261,15 +294,54 @@ const PaymentHistory: React.FC = () => {
     setShowStatusDropdown(false);
   };
 
-  const closeModal = () => {
+  const closeModal = async () => {
     setIsModalOpen(false);
     setSelectedPaymentType("");
-    refetch();
+    setSelectedPayment(null);
+    // Clear any adId from URL
+    if (searchParams.get('adId')) {
+      setSearchParams({});
+    }
+    // Refetch with network-only to ensure fresh data
+    try {
+      await refetch({
+        fetchPolicy: 'network-only',
+      });
+    } catch (error) {
+      console.error('Error refetching payments:', error);
+    }
   };
 
-  const handlePaymentSuccess = () => {
-    refetch(); // Refresh payments after successful payment
-    setIsModalOpen(false); // Close modal
+  const handlePaymentSuccess = async () => {
+    // Close modal first
+    setIsModalOpen(false);
+    setSelectedPayment(null);
+    setSelectedPaymentType("");
+    
+    console.log('Payment successful, refetching payment history...');
+    
+    // Wait a moment for the backend to process, then refetch
+    setTimeout(async () => {
+      try {
+        const result = await refetch({
+          fetchPolicy: 'network-only', // Force network fetch, bypass cache
+        });
+        console.log('Payment history refetched:', result.data);
+        // Reset to first page to see the updated payment
+        setCurrentPage(1);
+      } catch (error) {
+        console.error('Error refetching payments:', error);
+        // Try again after another delay
+        setTimeout(async () => {
+          try {
+            await refetch({ fetchPolicy: 'network-only' });
+            setCurrentPage(1);
+          } catch (retryError) {
+            console.error('Retry refetch also failed:', retryError);
+          }
+        }, 1000);
+      }
+    }, 1000); // Increased delay to 1 second for backend processing
   };
 
   // Helper function to convert PaymentItem to Payment component format
@@ -405,7 +477,7 @@ const PaymentHistory: React.FC = () => {
       {loading && (
         <div className="col-span-full text-center text-gray-500 py-8">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#3674B5]"></div>
-          <p className="mt-2">Loading payment history...</p>
+          <p className="mt-2">Loading payment history</p>
         </div>
       )}
 
@@ -519,7 +591,7 @@ const PaymentHistory: React.FC = () => {
       )}
 
       {/* Pagination */}
-      <div className="fixed bottom-0 left-0 right-0 pt-4 pb-2 z-50 lg:left-72">
+      <div className="sticky bottom-0 left-0 right-0 pt-16 pb-2 z-50 lg:left-72 backdrop-blur-sm">
         <div className="flex justify-center">
           <div className="flex items-center space-x-1">
             <button
@@ -710,7 +782,7 @@ const PaymentHistory: React.FC = () => {
       </div>
       
       {/* Pagination */}
-      <div className="fixed bottom-0 left-0 right-0 py-3 z-10">
+      <div className="sticky bottom-0 left-0 right-0 py-3 z-10 bg-white/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-center">
             <div className="flex space-x-1">
@@ -749,6 +821,16 @@ const PaymentHistory: React.FC = () => {
     </div>
     </div> 
     </div>
+
+    {/* Payment Modal */}
+    {isModalOpen && selectedPayment && (
+      <Payment
+        paymentItem={convertToPaymentItem(selectedPayment!)}
+        paymentType={selectedPaymentType || selectedPayment!.paymentType || ""}
+        onClose={closeModal}
+        onSuccess={handlePaymentSuccess}
+      />
+    )}
   </div>
   );
 };

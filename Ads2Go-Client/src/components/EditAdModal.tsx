@@ -416,15 +416,22 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-md max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+        <div className="bg-white rounded-md max-w-2xl w-full max-h-[80vh] sm:max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-white px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Edit Advertisement</h2>
+        <div className="bg-white px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-10 border-b border-gray-200">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Edit Advertisement</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 sm:w-6 sm:h-6" />
+          </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Title */}
           <div className="relative">
             <input
@@ -477,7 +484,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Media File */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
               Media File (Optional - leave unchanged to keep current media)
             </label>
             <div className="space-y-3">
@@ -493,9 +500,9 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
               )}
 
               {/* Upload Button */}
-              <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-500 transition-colors">
-                <Upload className="w-5 h-5 text-gray-400 mr-2" />
-                <span className="text-sm text-gray-600">
+              <label className="flex items-center justify-center w-full px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-blue-500 transition-colors">
+                <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 mr-2 flex-shrink-0" />
+                <span className="text-xs sm:text-sm text-gray-600 truncate">
                   {newMediaFile ? newMediaFile.name : 'Click to upload new media'}
                 </span>
                 <input
@@ -514,7 +521,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Start Date Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Campaign Start Date
               </label>
               <div className="relative calendar-container">
@@ -536,7 +543,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                 </button>
 
                 {showCalendar && (
-                  <div className="absolute z-50 mt-2 bg-white rounded-md shadow-lg border border-gray-200">
+                  <div className="absolute z-50 mt-2 bg-white rounded-md shadow-lg border border-gray-200 left-0 right-0 sm:left-auto sm:right-auto">
                     <CalendarWidget
                       selectedDate={selectedDate}
                       onDateSelect={handleCalendarDateSelect}
@@ -549,7 +556,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                 <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>
               )}
               {formData.startTime && (
-                <p className="mt-2 text-sm text-red-500">
+                <p className="mt-2 text-xs sm:text-sm text-red-500">
                   Campaign will end on: <span className="font-medium">{calculateEndDate()}</span>
                 </p>
               )}
@@ -557,7 +564,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
             {/* Campaign Duration Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Campaign Duration
               </label>
               <div className="relative">
@@ -571,7 +578,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showDurationDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showDurationDropdown && (
-                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 left-0 right-0">
                     {[
                       { value: 30, label: '1 month (30 days)' },
                       { value: 60, label: '2 months (60 days)' },
@@ -605,7 +612,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Vehicle Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Vehicle Type
               </label>
               <div className="relative">
@@ -619,7 +626,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showVehicleTypeDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showVehicleTypeDropdown && (
-                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto left-0 right-0">
                     {getAvailableVehicleTypes().map((type) => (
                       <button
                         key={type}
@@ -643,7 +650,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
             {/* Material Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Material Type
               </label>
               <div className="relative">
@@ -661,7 +668,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showMaterialTypeDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showMaterialTypeDropdown && formData.vehicleType && (
-                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto left-0 right-0">
                     {getAvailableMaterialTypes().map((type) => (
                       <button
                         key={type}
@@ -689,11 +696,11 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Type Change Warning */}
           {(formData.materialType !== ad.materialType || formData.vehicleType !== ad.vehicleType) && (
-            <div className="p-4 bg-orange-50 border border-orange-200 rounded-md flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-orange-900">Ad Type Changed</p>
-                <p className="text-sm text-orange-700 mt-1">
+            <div className="p-3 sm:p-4 bg-orange-50 border border-orange-200 rounded-md flex items-start gap-2 sm:gap-3">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-orange-900">Ad Type Changed</p>
+                <p className="text-xs sm:text-sm text-orange-700 mt-1">
                   Changing vehicle or material type will release current device slots and find new compatible devices. The ad will require admin re-approval.
                 </p>
               </div>
@@ -704,7 +711,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Ad Length Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Advertisement Length
               </label>
               <div className="relative">
@@ -718,7 +725,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <ChevronDown className={`w-5 h-5 text-gray-400 transform transition-transform ${showAdLengthDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showAdLengthDropdown && (
-                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 left-0 right-0">
                     {[20, 40, 60].map((seconds) => (
                       <button
                         key={seconds}
@@ -742,7 +749,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
             {/* Number of Devices */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Number of Devices
               </label>
               <input
@@ -766,16 +773,16 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Price Calculation Display */}
           {isCalculating ? (
-            <div className="p-6 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center">
+            <div className="p-4 sm:p-6 bg-gray-50 border border-gray-200 rounded-md flex items-center justify-center">
               <Loader2 className="w-5 h-5 animate-spin text-blue-500 mr-2" />
-              <span className="text-gray-600">Calculating price...</span>
+              <span className="text-sm sm:text-base text-gray-600">Calculating price...</span>
             </div>
           ) : pricingCalculation ? (
-            <div className="p-6 rounded-md">
+            <div className="p-4 sm:p-6 rounded-md bg-gray-50 border border-gray-200">
               <div className="flex items-center gap-2 mb-4">
-                <h4 className="font-bold text-lg text-gray-900">New Campaign Price</h4>
+                <h4 className="font-bold text-base sm:text-lg text-gray-900">New Campaign Price</h4>
               </div>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-2 text-xs sm:text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Plays Per Day:</span>
                   <span className="font-medium text-gray-900">{pricingCalculation.totalPlaysPerDay} plays</span>
@@ -792,7 +799,7 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
                   <span className="text-gray-600">Devices:</span>
                   <span className="font-medium text-gray-900">{formData.numberOfDevices}</span>
                 </div>
-                <div className="flex justify-end text-2xl font-bold mb-4">
+                <div className="flex justify-end text-xl sm:text-2xl font-bold mt-4">
                   {formatCurrency(pricingCalculation.totalPrice)}
                 </div>
               </div>
@@ -801,11 +808,11 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Price Change Warning */}
           {pricingCalculation && Math.abs(pricingCalculation.totalPrice - ad.price) > 0.01 && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-yellow-900">Price Update Notice</p>
-                <p className="text-sm text-yellow-700 mt-1">
+            <div className="p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-md flex items-start gap-2 sm:gap-3">
+              <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-yellow-900">Price Update Notice</p>
+                <p className="text-xs sm:text-sm text-yellow-700 mt-1">
                   Changing campaign settings will update the price from {formatCurrency(ad.price)} to {formatCurrency(pricingCalculation.totalPrice)}. This change requires re-approval from admin.
                 </p>
               </div>
@@ -814,25 +821,25 @@ const EditAdModal: React.FC<EditAdModalProps> = ({ ad, onClose, onSuccess }) => 
 
           {/* Submit Error */}
           {errors.submit && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-800">{errors.submit}</p>
+            <div className="p-3 sm:p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-xs sm:text-sm text-red-800">{errors.submit}</p>
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-between gap-3 pt-4 ">
+          <div className="flex flex-row sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="sm:w-auto px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               disabled={uploading || updating}
-            >
+            > 
               Cancel
             </button>
             <button
               type="submit"
               disabled={uploading || updating}
-              className="px-10 py-2 bg-[#3674B5] text-white rounded-md hover:shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="w-full sm:w-auto px-6 sm:px-10 py-2.5 bg-[#3674B5] text-white rounded-md hover:shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
             >
               {(uploading || updating) && <Loader2 className="w-4 h-4 animate-spin" />}
               {uploading ? 'Uploading...' : updating ? 'Updating...' : 'Update Advertisement'}

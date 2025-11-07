@@ -440,6 +440,15 @@ export default function NotificationsScreen() {
             <Text style={styles.selectButtonText}>Select</Text>
           </TouchableOpacity>
         )}
+        {notifications.length > 0 && selectionMode && unreadCount > 0 && (
+          <TouchableOpacity 
+            style={styles.markReadButtonHeader} 
+            onPress={markAllAsRead}
+          >
+            <Ionicons name="checkmark-done-outline" size={18} color="#3674B5" />
+            <Text style={styles.markReadTextHeader}>Mark all read</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Action Buttons (shown in selection mode) */}
@@ -478,16 +487,6 @@ export default function NotificationsScreen() {
               >
                 <Ionicons name="trash-outline" size={18} color="#ffffff" />
                 <Text style={styles.deleteSelectedText}>Delete ({selectedIds.size})</Text>
-              </TouchableOpacity>
-            )}
-
-            {unreadCount > 0 && (
-              <TouchableOpacity 
-                style={styles.markReadButton} 
-                onPress={markAllAsRead}
-              >
-                <Ionicons name="checkmark-done-outline" size={18} color="#ffffff" />
-                <Text style={styles.markReadText}>Mark all read</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -538,6 +537,9 @@ export default function NotificationsScreen() {
                 
                 <View style={styles.textContainer}>
                   <View style={styles.headerRow}>
+                  {!notification.read && !selectionMode && (
+                    <View style={styles.unreadDot} />
+                  )}
                     <Text style={[
                       styles.notificationTitle,
                       !notification.read && styles.unreadTitle
@@ -552,10 +554,6 @@ export default function NotificationsScreen() {
                     {notification.message}
                   </Text>
                 </View>
-
-                {!notification.read && !selectionMode && (
-                  <View style={styles.unreadDot} />
-                )}
               </View>
             </TouchableOpacity>
           ))
@@ -634,6 +632,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  markReadButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  markReadTextHeader: {
+    color: '#3674B5',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   actionButtonsContainer: {
     flexDirection: 'row',
@@ -786,8 +794,9 @@ const styles = StyleSheet.create({
   unreadDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 4,
     backgroundColor: '#3674B5',
-    marginLeft: 8,
+    marginRight: 5,
+    marginTop: 6,
   },
 });

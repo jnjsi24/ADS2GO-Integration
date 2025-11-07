@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 import { motion, Transition, AnimatePresence } from 'framer-motion';
-import { RotateCcw, ArrowUpRight, ChevronDown, Monitor, Play, Activity } from 'lucide-react';
+import { RotateCcw, ArrowUpRight, ChevronDown, Monitor, Play, Activity, Calendar as CalendarIcon } from 'lucide-react';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import RealtimeMetrics from '../../components/RealtimeMetrics';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -22,6 +22,7 @@ import UserMaterialsMap from '../../components/UserMaterialsMap';
 import MultiMaterialRouteMap from '../../components/MultiMaterialRouteMap';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import AdProgressBar from '../../components/AdProgressBar';
+import CalendarWidget from '../../components/CalendarWidget';
 
 // NotificationList Component
 const transition: Transition = {
@@ -160,7 +161,9 @@ const Dashboard = () => {
   const [mapActiveTab, setMapActiveTab] = useState<'today' | 'history'>('today');
   const [selectedAdForRoute, setSelectedAdForRoute] = useState<string | null>(null);
   const [selectedRouteDate, setSelectedRouteDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedRouteDateObj, setSelectedRouteDateObj] = useState<Date | null>(new Date());
   const [showAdDropdown, setShowAdDropdown] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Currently playing ads state
   interface CurrentlyPlayingAd {
@@ -703,6 +706,23 @@ const Dashboard = () => {
       .filter((id: string) => id); // Remove any null/undefined
   }, [selectedAdForRoute, myAdsData?.getMyAds]);
 
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: Event) => {
+      if (showCalendar) {
+        const target = event.target as Element;
+        if (!target.closest('.calendar-container')) {
+          setShowCalendar(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Background Image */}
@@ -1019,54 +1039,66 @@ const Dashboard = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="bg-white/70 backdrop-blur-md border border-white/20 border-b-0">
+          <div className="relative z-[9999] backdrop-blur-md flex justify-between items-center mb-1">
             <div className="flex space-x-1 p-1">
               <button
                 onClick={() => setMapActiveTab('today')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                className={`relative flex-1 py-2 px-4 text-sm font-medium transition-all duration-300 group overflow-hidden ${
                   mapActiveTab === 'today'
-                    ? 'bg-[#1b5087] text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-white/50'
+                    ? 'text-[#3674B5]'
+                    : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <Activity className="w-4 h-4" />
-                  <span>Today</span>
+                  <span className="text-md font-medium">Today</span>
                 </div>
+                
+                {/* Animated underline - Left to Right */}
+                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-[#3674B5] transition-all duration-300 ${
+                  mapActiveTab === 'today' 
+                    ? 'translate-x-0' 
+                    : 'translate-x-[-100%] group-hover:translate-x-0'
+                }`} />
               </button>
+              
               <button
                 onClick={() => setMapActiveTab('history')}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                className={`relative flex-1 py-2 px-4 text-sm font-medium transition-all duration-300 group overflow-hidden ${
                   mapActiveTab === 'history'
-                    ? 'bg-[#1b5087] text-white shadow-sm'
-                    : 'text-gray-600 hover:bg-white/50'
+                    ? 'text-[#3674B5]'
+                    : 'text-gray-600 hover:text-gray-800'
                 }`}
               >
                 <div className="flex items-center justify-center gap-2">
                   <Monitor className="w-4 h-4" />
-                  <span>History</span>
+                  <span className="text-md font-medium">History</span>
                 </div>
+                
+                {/* Animated underline - Left to Right */}
+                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-[#3674B5] transition-all duration-300 ${
+                  mapActiveTab === 'history' 
+                    ? 'translate-x-0' 
+                    : 'translate-x-[-100%] group-hover:translate-x-0'
+                }`} />
               </button>
             </div>
-          </div>
 
-          {/* Map Container */}
-          <div className="relative bg-white shadow-sm overflow-hidden">
-            {/* History Tab Controls */}
+            {/* History Tab Controls - On the right side of navigation */}
             {mapActiveTab === 'history' && (
-              <div className="p-4 bg-gray-50 flex flex justify-end gap-2 items-center">
+              <div className="relative flex flex-col sm:flex-row gap-2 items-end pr-2 sm:pr-4 z-[10000]">
                 {/* Ad Selector */}
                 <div className="relative w-40">
                   <button
                     onClick={() => setShowAdDropdown(!showAdDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                    className="relative z-[10001] flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-2.5 shadow-md focus:outline-none bg-white gap-2"
                   >
                     <span className="truncate">
                       {selectedAdForRoute 
                         ? userAdsForRoute.find((ad: any) => ad.id === selectedAdForRoute)?.title || 'Select Ad'
                         : 'Select Ad'}
                     </span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${showAdDropdown ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${showAdDropdown ? 'rotate-180' : ''}`} />
                   </button>
                   <AnimatePresence>
                     {showAdDropdown && (
@@ -1075,7 +1107,7 @@ const Dashboard = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute z-20 top-full mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        className="absolute z-[10002] top-full mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-y-auto border border-gray-200"
                       >
                         {userAdsForRoute.length === 0 ? (
                           <div className="px-4 py-3 text-sm text-gray-500 text-center">
@@ -1107,18 +1139,49 @@ const Dashboard = () => {
                 </div>
 
                 {/* Date Picker */}
-                <div className="min-w-[150px]">
-                  <input
-                    type="date"
-                    value={selectedRouteDate}
-                    onChange={(e) => setSelectedRouteDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 text-sm bg-white shadow-md rounded-md"
-                  />
+                <div className="relative min-w-[150px] calendar-container">
+                  <button
+                    type="button"
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className="relative z-[10001] flex items-center justify-between w-full px-3 py-2.5 text-xs bg-white shadow-md rounded-md focus:outline-none gap-2"
+                  >
+                    <span className={selectedRouteDateObj ? 'text-gray-900' : 'text-gray-400'}>
+                      {selectedRouteDateObj 
+                        ? selectedRouteDateObj.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })
+                        : 'Select date'}
+                    </span>
+                    <CalendarIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </button>
+                  {showCalendar && (
+                    <div className="absolute z-[10002] mt-2 right-0">
+                      <div className="w-[calc(100vw-2rem)] sm:w-72 max-w-xs">
+                        <CalendarWidget
+                          selectedDate={selectedRouteDateObj}
+                          onDateSelect={(date) => {
+                            if (date) {
+                              setSelectedRouteDateObj(date);
+                              setSelectedRouteDate(date.toISOString().split('T')[0]);
+                            }
+                            setShowCalendar(false);
+                          }}
+                          minDate={new Date(0)} // Allow all past dates
+                          showActionButtons={false}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
+          </div>
 
+          {/* Map Container */}
+          <div className="relative overflow-hidden">
             {/* Map Content */}
             <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }}>
               {mapActiveTab === 'today' ? (
@@ -1126,19 +1189,19 @@ const Dashboard = () => {
               ) : (
                 <div className="h-full w-full">
                   {!selectedAdForRoute ? (
-                    <div className="flex items-center justify-center h-full bg-gray-50">
-                      <div className="text-center p-8">
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-black/70 p-8">
                         <Monitor className="w-14 h-14 mx-auto mb-4" />
-                        <h3 className="font-medium mb-2">
+                        <h3 className="font-medium text-black/90 mb-2">
                           Select an Advertisement
                         </h3>
-                        <p className="text-sm">
+                        <p className="text-sm text-black/70">
                           Choose an ad from the dropdown above to view its historical routes
                         </p>
                       </div>
                     </div>
                   ) : selectedMaterialIds.length === 0 ? (
-                    <div className="flex items-center justify-center h-full bg-gray-50">
+                    <div className="flex items-center justify-center h-full">
                       <div className="text-center p-8">
                         <svg className="w-16 h-16 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />

@@ -19,7 +19,8 @@ import {
   Calendar,
   Edit,
   MoreVertical,
-  Trash2
+  Trash2,
+  CreditCard
 } from 'lucide-react';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1516,92 +1517,67 @@ const AdDetailsPage: React.FC = () => {
         </div>
 
         {/* Right: Status, Title, Description, Price, Properties */}
-        <div className="flex flex-col space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 relative">
-              <span
-                className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
-                  ad.status === 'PENDING'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : ad.status === 'APPROVED'
-                    ? 'bg-green-100 text-green-800'
-                    : ad.status === 'REJECTED'
-                    ? 'bg-red-100 text-red-800'
-                    : 'bg-gray-100 text-black/90'
-                }`}
-              >
-                {ad.status}
-              </span>
-              
-              {/* Info button for PENDING, APPROVED, and RUNNING status */}
-              {(ad.status === 'PENDING' || ad.status === 'APPROVED' || ad.status === 'RUNNING') && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowStatusInfo(true)}
-                    className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
-                    title={ad.status === 'PENDING' ? "What does PENDING mean?" : ad.status === 'APPROVED' ? "What does APPROVED mean?" : "What does RUNNING mean?"}
-                  >
-                    <Info className="w-4 h-4" />
-                  </button>
-                  
-                  {/* Status Info Tooltip */}
-                  {showStatusInfo && (
-                    <div className="absolute bottom-8 left-0 z-50 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">
-                          {ad.status === 'PENDING' ? '⏳' : ad.status === 'APPROVED' ? '✅' : '▶️'}
-                        </span>
-                        <span className="font-normal">
-                          {ad.status === 'PENDING' 
-                            ? 'Waiting for admin approval. You\'ll be able to proceed with payment once it\'s approved.'
-                            : ad.status === 'APPROVED'
-                            ? 'Your ad has been approved by the admin. You can now proceed with payment to start running your advertisement.'
-                            : 'Your advertisement is currently displaying right now.'
-                          }
-                        </span>
+        <div className="grid grid-cols-[1fr_auto] gap-4">
+          {/* Main Content Column */}
+          <div className="flex flex-col space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 relative">
+                <span
+                  className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
+                    ad.status === 'PENDING'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : ad.status === 'APPROVED'
+                      ? 'bg-green-100 text-green-800'
+                      : ad.status === 'REJECTED'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-gray-100 text-black/90'
+                  }`}
+                >
+                  {ad.status}
+                </span>
+                
+                {/* Info button for PENDING, APPROVED, and RUNNING status */}
+                {(ad.status === 'PENDING' || ad.status === 'APPROVED' || ad.status === 'RUNNING') && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowStatusInfo(true)}
+                      className="p-1 text-gray-500 hover:text-gray-700 transition-colors"
+                      title={ad.status === 'PENDING' ? "What does PENDING mean?" : ad.status === 'APPROVED' ? "What does APPROVED mean?" : "What does RUNNING mean?"}
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Status Info Tooltip */}
+                    {showStatusInfo && (
+                      <div className="absolute bottom-8 left-0 z-50 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {ad.status === 'PENDING' ? '⏳' : ad.status === 'APPROVED' ? '✅' : '▶️'}
+                          </span>
+                          <span className="font-normal">
+                            {ad.status === 'PENDING' 
+                              ? 'Waiting for admin approval. You\'ll be able to proceed with payment once it\'s approved.'
+                              : ad.status === 'APPROVED'
+                              ? 'Your ad has been approved by the admin. You can now proceed with payment to start running your advertisement.'
+                              : 'Your advertisement is currently displaying right now.'
+                            }
+                          </span>
+                        </div>
+                        {/* Arrow pointing to the info button */}
+                        <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
                       </div>
-                      {/* Arrow pointing to the info button */}
-                      <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            
-            {/* Edit Button - Only show when ad is PENDING */}
-            {ad.status === 'PENDING' && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                <Edit className="w-4 h-4" />
-                Edit Ad
-              </button>
-            )}
-            
-            {/* Payment Button - Only show when ad is APPROVED and payment is PENDING */}
-            {shouldShowPaymentButton && (
-              <button
-                onClick={() => {
-                  setSelectedPaymentType("");
-                  setShowPaymentModal(true);
-                }}
-                className="bg-[#3674B5] hover:bg-[#3674B5]/90 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-                Make Payment
-              </button>
-            )}
-          </div>
 
-          <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
-          <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
-          <p className="text-black/70">{ad.description}</p>
-          
-          {/* Timestamp Display */}
-          <div className="mt-4 space-y-1 text-sm text-gray-500">
+            <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
+            <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
+            <p className="text-black/70">{ad.description}</p>
+            
+            {/* Timestamp Display */}
+            <div className="mt-4 space-y-1 text-sm text-gray-500">
             <p className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               Created: {new Date(ad.createdAt).toLocaleDateString('en-US', {
@@ -1624,6 +1600,47 @@ const AdDetailsPage: React.FC = () => {
                   minute: '2-digit'
                 })}
               </p>
+            )}
+          </div>
+          </div>
+
+          {/* Buttons Column - Super small, designated for buttons only */}
+          <div className="w-12 flex flex-col gap-2 items-start">
+            {/* Edit Button - Only show when ad is PENDING */}
+            {ad.status === 'PENDING' && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="w-10 h-10 rounded-full bg-white border border-gray-300 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 flex items-center justify-center"
+                title="Edit"
+              >
+                <Edit className="w-4 h-4 text-gray-700" />
+              </button>
+            )}
+            
+            {/* Delete Button - Only show when ad is PENDING */}
+            {ad.status === 'PENDING' && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                disabled={deleteLoading}
+                className="w-10 h-10 rounded-full bg-white border border-gray-300 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Delete"
+              >
+                <Trash2 className="w-4 h-4 text-gray-700" />
+              </button>
+            )}
+            
+            {/* Make Payment Button - Only show when ad is APPROVED and payment is PENDING */}
+            {shouldShowPaymentButton && (
+              <button
+                onClick={() => {
+                  setSelectedPaymentType("");
+                  setShowPaymentModal(true);
+                }}
+                className="w-10 h-10 rounded-full bg-white border border-gray-300 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 flex items-center justify-center"
+                title="Make Payment"
+              >
+                <CreditCard className="w-4 h-4 text-gray-700" />
+              </button>
             )}
           </div>
         </div>
@@ -1700,17 +1717,6 @@ const AdDetailsPage: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Delete Button - Only show if pending */}
-            {ad?.status === 'PENDING' && (
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                disabled={deleteLoading}
-                className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
-              >
-                {deleteLoading ? 'Deleting...' : 'Delete Ad'}
-              </button>
-            )}
           </div>
 
           {/* Tab Content */}
