@@ -3,6 +3,7 @@ import { Platform, Alert } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import Constants from 'expo-constants';
 
 // Get auth token from AsyncStorage
 const getAuthToken = async (): Promise<string | null> => {
@@ -16,7 +17,8 @@ const getAuthToken = async (): Promise<string | null> => {
 
 type UploadProgressCallback = (progress: number) => void;
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://your-api-url.com';
+// Get API URL from Expo constants (set via app.config.js from .env)
+const API_BASE_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 'https://ads2go-server-production.up.railway.app';
 
 interface UploadOptions {
   onProgress?: (progress: number) => void;

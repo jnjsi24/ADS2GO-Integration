@@ -101,7 +101,8 @@ class PlaybackWebSocketService {
     this.isManuallyDisconnected = false;
 
     try {
-      const wsUrl = API_CONFIG.BASE_URL.replace(/^http/, 'ws') + '/ws';
+      // Convert HTTP/HTTPS to WS/WSS for WebSocket connection
+      const wsUrl = API_CONFIG.BASE_URL.replace(/^https?/, (match) => match === 'https' ? 'wss' : 'ws') + '/ws';
       // Only log in dev mode to reduce console noise
       if (__DEV__ && this.reconnectAttempts === 0) {
         console.log('🔌 [PlaybackWebSocketService] Connecting to:', wsUrl);

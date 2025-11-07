@@ -1,42 +1,27 @@
 import Constants from 'expo-constants';
 
-// API configuration - Updated to use environment variables for IP address
+// API configuration - Updated to use Railway hosted server
 const EXPO_PUBLIC_API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
-const serverIp = process.env.EXPO_PUBLIC_SERVER_IP;
-const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT;
 
-if (!EXPO_PUBLIC_API_URL && (!serverIp || !serverPort)) {
-  console.error('❌ Missing required environment variables:');
+if (!EXPO_PUBLIC_API_URL) {
+  console.error('❌ Missing required environment variable:');
   console.error('   EXPO_PUBLIC_API_URL:', EXPO_PUBLIC_API_URL);
-  console.error('   EXPO_PUBLIC_SERVER_IP:', serverIp);
-  console.error('   EXPO_PUBLIC_SERVER_PORT:', serverPort);
   console.error('   Please check your .env file');
-  throw new Error('Missing required environment variables for API configuration');
+  throw new Error('Missing required environment variable EXPO_PUBLIC_API_URL for API configuration');
 }
 
-const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
-
+// Ensure the URL doesn't have a trailing slash
+const baseUrl = EXPO_PUBLIC_API_URL.replace(/\/$/, '');
 
 const API_CONFIG = {
-  // Use environment variable with fallback to constructed URL
-  API_URL: `${EXPO_PUBLIC_API_URL || serverUrl}/graphql`,
+  // GraphQL endpoint URL
+  API_URL: `${baseUrl}/graphql`,
   
   // Base URL for REST API calls (without /graphql)
-  BASE_URL: EXPO_PUBLIC_API_URL || serverUrl,
+  BASE_URL: baseUrl,
   
-  // Server configuration
-  SERVER_IP: serverIp,
-  SERVER_PORT: serverPort,
-  SERVER_URL: serverUrl,
-
-  // For iOS simulator or Android emulator on the same machine
-  // API_URL: "http://localhost:5000/graphql",
-  // BASE_URL: "http://localhost:5000",
-  
-  // For Android emulator alternative
-  // API_URL: "http://10.0.2.2:5000/graphql",
-  // BASE_URL: "http://10.0.2.2:5000"
+  // Server configuration (for reference)
+  SERVER_URL: baseUrl,
 };
-
 
 export default API_CONFIG;
