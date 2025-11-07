@@ -138,6 +138,7 @@ export const GET_ADS_BY_USER = gql`
       adType
       adFormat
       status
+      paymentStatus
       startTime
       endTime
       mediaFile
