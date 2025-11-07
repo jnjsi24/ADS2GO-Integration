@@ -112,26 +112,45 @@ class BaseNotificationService {
           throw updateError;
         }
 
-        // Check if operation was successful
-        if (updateResult && updateResult.ok !== 1) {
-          console.error('❌ MongoDB operation was not successful:', updateResult);
-          throw new Error(`MongoDB update operation failed: ${JSON.stringify(updateResult)}`);
-        }
-
+        // Extract the document from updateResult
         // Native MongoDB findOneAndUpdate returns { value: <document>, ok: 1, ... }
-        // However, sometimes value can be null if the operation didn't match/return properly
-        let updatedDocument = updateResult?.value;
+        // However, the structure may vary, so we need to handle different cases
+        let updatedDocument = null;
         
-        // Fallback: If value is null, fetch the document directly
-        // This can happen in edge cases with upsert operations or if returnDocument doesn't work as expected
+        if (updateResult) {
+          // Check if this is a result object with a 'value' property
+          if ('value' in updateResult) {
+            updatedDocument = updateResult.value;
+            
+            // Check for actual errors (only if ok field exists and indicates failure)
+            if (updateResult.ok !== undefined && updateResult.ok !== 1) {
+              console.error('❌ MongoDB operation failed:', {
+                ok: updateResult.ok,
+                hasValue: !!updateResult.value,
+                error: updateResult.lastErrorObject
+              });
+              throw new Error(`MongoDB update operation failed: ok=${updateResult.ok}`);
+            }
+            
+            // Check for error in lastErrorObject
+            if (updateResult.lastErrorObject && updateResult.lastErrorObject.err) {
+              console.error('❌ MongoDB operation error:', updateResult.lastErrorObject.err);
+              throw new Error(`MongoDB update operation failed: ${updateResult.lastErrorObject.err}`);
+            }
+          }
+          // Check if updateResult itself is the document (has _id and notifications)
+          else if ('_id' in updateResult && 'notifications' in updateResult) {
+            updatedDocument = updateResult;
+          }
+          // If updateResult exists but doesn't match expected structure, log warning
+          else {
+            console.warn('⚠️ Unexpected updateResult structure:', Object.keys(updateResult).slice(0, 10));
+          }
+        }
+        
+        // Fallback: If we still don't have the document, fetch it directly
         if (!updatedDocument) {
-          console.warn(`⚠️ updateResult.value is null for userId ${userId}, attempting to fetch document directly...`);
-          console.log('Update result structure:', {
-            ok: updateResult?.ok,
-            hasValue: !!updateResult?.value,
-            lastErrorObject: updateResult?.lastErrorObject,
-            result: updateResult?.result
-          });
+          console.warn(`⚠️ Could not extract document from updateResult for userId ${userId}, fetching directly...`);
           
           // Wait a tiny bit to ensure the operation has fully completed
           await new Promise(resolve => setTimeout(resolve, 10));
@@ -141,11 +160,13 @@ class BaseNotificationService {
           
           if (!updatedDocument) {
             console.error('❌ Document not found after upsert operation');
-            console.error('Full update result:', JSON.stringify(updateResult, null, 2));
+            // Don't stringify the entire updateResult as it might be huge
+            console.error('Update result type:', typeof updateResult);
+            console.error('Update result has keys:', updateResult ? Object.keys(updateResult).slice(0, 5) : 'none');
             throw new Error(`Failed to create notification: Document not found after upsert for user ${userId}`);
           }
           
-          console.log('✅ Successfully fetched document after null return');
+          console.log('✅ Successfully fetched document using fallback method');
         }
         
         // Trim to last 50 notifications if needed (best-effort, non-blocking)
