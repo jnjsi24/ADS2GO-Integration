@@ -626,7 +626,7 @@ const ManageAds: React.FC = () => {
   // Tab management functions
   const tabs = [
     { id: 'ads', label: 'All Ads'},
-    { id: 'archived', label: 'Archived Ads'},
+    { id: 'archived', label: 'Deleted Ads'},
     { id: 'schedule', label: 'Schedule'},
     { id: 'deployment', label: 'Deployment'},
     { id: 'company-ads', label: 'Company Ads'}
@@ -1138,10 +1138,12 @@ const ManageAds: React.FC = () => {
                                     ? 'bg-red-200 text-red-800'
                                     : ad.status === 'RUNNING'
                                     ? 'bg-blue-200 text-blue-800'
+                                    : ad.status === 'ARCHIVED'
+                                    ? 'bg-red-200 text-red-800'
                                     : 'bg-gray-200 text-gray-800'
                                 }`}
                               >
-                                {ad.status}
+                                {ad.status === 'ARCHIVED' ? 'Deleted' : ad.status}
                               </span>
                             </div>
                             <div className="col-span-2 text-sm text-red-600 font-medium">
@@ -1175,10 +1177,12 @@ const ManageAds: React.FC = () => {
                                     ? 'bg-red-200 text-red-800'
                                     : ad.status === 'RUNNING'
                                     ? 'bg-blue-200 text-blue-800'
+                                    : ad.status === 'ARCHIVED'
+                                    ? 'bg-red-200 text-red-800'
                                     : 'bg-gray-200 text-gray-800'
                                 }`}
                               >
-                                {ad.status}
+                                {ad.status === 'ARCHIVED' ? 'Deleted' : ad.status}
                               </span>
                             </div>
                             <div className="col-span-2 flex items-center justify-center gap-1">
@@ -1291,10 +1295,12 @@ const ManageAds: React.FC = () => {
                                   ? 'bg-red-200 text-red-800'
                                   : ad.status === 'RUNNING'
                                   ? 'bg-blue-200 text-blue-800'
+                                  : ad.status === 'ARCHIVED'
+                                  ? 'bg-red-200 text-red-800'
                                   : 'bg-gray-200 text-gray-800'
                               }`}
                             >
-                              {ad.status}
+                              {ad.status === 'ARCHIVED' ? 'Deleted' : ad.status}
                             </span>
                           </div>
                           {activeTab === 'archived' && ad.scheduledDeletionDate && (
@@ -1504,10 +1510,12 @@ const ManageAds: React.FC = () => {
                             ? 'bg-red-200 text-red-800'
                             : selectedAd.status === 'RUNNING'
                             ? 'bg-blue-200 text-blue-800'
+                            : selectedAd.status === 'ARCHIVED'
+                            ? 'bg-red-200 text-red-800'
                             : 'bg-gray-200 text-gray-800'
                         }`}
                       >  
-                        {selectedAd.status}
+                        {selectedAd.status === 'ARCHIVED' ? 'Deleted' : selectedAd.status}
                       </span>
 
                       <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-200 text-blue-800">{selectedAd.adType}</span>
@@ -1639,6 +1647,43 @@ const ManageAds: React.FC = () => {
                       <span>{selectedAd.adFormat}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Payment Status */}
+              <div className="mt-6 md:mt-8 border-t pt-4 md:pt-6">
+                <h4 className="text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4">Payment Status</h4>
+                <div className="flex flex-col space-y-2 text-sm text-black font-semibold">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-400"></div>
+                    <span>Created: {selectedAd.createdAt ? formatDate(selectedAd.createdAt) : 'N/A'}</span>
+                  </div>
+                  {selectedAd.status === 'REJECTED' ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <span>Ad Rejected - No Payment Required</span>
+                    </div>
+                  ) : selectedAd.status === 'ARCHIVED' ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <span>Ad Deleted - No Payment Required</span>
+                    </div>
+                  ) : selectedAd.paymentStatus === 'PAID' ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                      <span>Payment Paid</span>
+                    </div>
+                  ) : selectedAd.paymentStatus === 'FAILED' ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                      <span>Payment Failed</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                      <span>Pending Payment</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

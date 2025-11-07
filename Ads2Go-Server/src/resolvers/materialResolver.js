@@ -185,19 +185,13 @@ const materialResolvers = {
         }).sort({ createdAt: -1 });
         
         // Get material tracking information for each material
+        // ✅ IMPORTANT: Only return nextPhotoDue if material has a device in slot 1 or slot 2
+        const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+        
         const materialsWithTracking = await Promise.all(
           materials.map(async (material) => {
             const tracking = await DeviceCompliance.findOne({ materialId: material.id });
             const materialObj = material.toObject();
-            
-            // Debug logging for tracking data
-            if (tracking) {
-              console.log(`🔍 Material ${material.materialId} tracking data:`, {
-                nextPhotoDue: tracking.nextPhotoDue,
-                lastPhotoUpload: tracking.lastPhotoUpload,
-                photoComplianceStatus: tracking.photoComplianceStatus
-              });
-            }
             
             // Helper to format date to ISO string
             const formatDateField = (dateValue) => {
@@ -206,6 +200,36 @@ const materialResolvers = {
               if (typeof dateValue === 'string') return dateValue;
               return null;
             };
+
+            // ✅ CHECK: Only show monthly compliance (nextPhotoDue) if material has device in slot 1 or slot 2
+            // Monthly compliance only applies when there's an actual device registered
+            let nextPhotoDue = null;
+            let photoComplianceStatus = tracking?.photoComplianceStatus || null;
+            
+            if (tracking && tracking.nextPhotoDue) {
+              // Verify material has device before returning nextPhotoDue
+              const deviceValidation = await validateMaterialHasDevice(material.materialId);
+              
+              if (deviceValidation.hasDevice) {
+                // Material has device - return nextPhotoDue
+                nextPhotoDue = formatDateField(tracking.nextPhotoDue);
+                console.log(`✅ Material ${material.materialId}: Returning nextPhotoDue (has device)`);
+              } else {
+                // Material has NO device - don't return nextPhotoDue
+                nextPhotoDue = null;
+                console.log(`⚠️ Material ${material.materialId}: Not returning nextPhotoDue (no device: ${deviceValidation.reason})`);
+              }
+            }
+            
+            // Debug logging for tracking data
+            if (tracking) {
+              console.log(`🔍 Material ${material.materialId} tracking data:`, {
+                nextPhotoDue: nextPhotoDue,
+                lastPhotoUpload: tracking.lastPhotoUpload,
+                photoComplianceStatus: photoComplianceStatus,
+                hasDevice: tracking.nextPhotoDue ? 'checked above' : 'no tracking'
+              });
+            }
 
             return {
               id: materialObj._id.toString(),
@@ -221,8 +245,8 @@ const materialResolvers = {
                 coordinates: []
               } : null,
               materialTracking: tracking ? {
-                photoComplianceStatus: tracking.photoComplianceStatus,
-                nextPhotoDue: formatDateField(tracking.nextPhotoDue),
+                photoComplianceStatus: photoComplianceStatus,
+                nextPhotoDue: nextPhotoDue, // Only returned if material has device
                 lastPhotoUpload: formatDateField(tracking.lastPhotoUpload),
                 monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
                   month: photo.month,
@@ -603,6 +627,7 @@ const materialResolvers = {
         }
 
         // Create DeviceCompliance on first mount and initialize inspection schedule
+        // IMPORTANT: Only set nextPhotoDue if material is mounted AND has a device in slot 1 or slot 2
         try {
           let tracking = await DeviceCompliance.findOne({ materialId: material._id });
           if (input.mountedAt) {
@@ -618,9 +643,25 @@ const materialResolvers = {
             if (!tracking.lastInspectionDate) {
               tracking.lastInspectionDate = mountedDate;
             }
-            const next = new Date(mountedDate);
-            next.setMonth(next.getMonth() + 1);
-            tracking.nextPhotoDue = next;
+            
+            // ✅ CHECK: Only set nextPhotoDue if material has a device registered in slot 1 or slot 2
+            // Monthly compliance only applies when there's an actual device to track
+            const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
+            const deviceValidation = await validateMaterialHasDevice(material.materialId);
+            
+            if (deviceValidation.hasDevice) {
+              // Material has device in slot 1 or slot 2 - set nextPhotoDue
+              const next = new Date(mountedDate);
+              next.setMonth(next.getMonth() + 1);
+              next.setHours(0, 0, 0, 0); // Normalize to midnight
+              tracking.nextPhotoDue = next;
+              console.log(`✅ Material ${material.materialId}: Set nextPhotoDue to ${next.toISOString()} (has device in slot 1 or 2)`);
+            } else {
+              // Material has NO device - clear nextPhotoDue (monthly compliance doesn't apply)
+              tracking.nextPhotoDue = null;
+              console.log(`⚠️ Material ${material.materialId}: Cleared nextPhotoDue (no device registered: ${deviceValidation.reason})`);
+            }
+            
             await tracking.save();
           } else if (tracking) {
             // If mountedAt is cleared, also clear inspection schedule to avoid stale dates
@@ -1112,8 +1153,12 @@ const materialResolvers = {
       // Update compliance status and dates
       tracking.photoComplianceStatus = 'COMPLIANT';
       tracking.lastPhotoUpload = entry.uploadedAt || new Date();
+      
+      // Calculate nextPhotoDue based on last photo upload (not approval date)
+      // This ensures consistency: next due date is always 1 month after the last upload
       const next = new Date(tracking.lastPhotoUpload);
       next.setMonth(next.getMonth() + 1);
+      next.setHours(0, 0, 0, 0); // Normalize to midnight to avoid time component issues
       tracking.nextPhotoDue = next;
 
       // Also treat approved monthly photo as the inspection for this period
@@ -1122,7 +1167,9 @@ const materialResolvers = {
       tracking.lastInspectionDate = inspectionDate;
       const nextInspection = new Date(inspectionDate);
       nextInspection.setMonth(nextInspection.getMonth() + 1);
-      tracking.nextPhotoDue = nextInspection;
+      nextInspection.setHours(0, 0, 0, 0); // Normalize to midnight
+      // Note: nextPhotoDue is already set above based on lastPhotoUpload, so we don't overwrite it here
+      // Only update nextInspectionDue on Material model
       
       // Also update Material model to keep both in sync
       material.lastInspectionDate = inspectionDate;

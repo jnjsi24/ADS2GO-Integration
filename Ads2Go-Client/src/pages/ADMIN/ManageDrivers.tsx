@@ -54,6 +54,25 @@ interface Driver {
   isArchived?: boolean;
   archivedAt?: string | null;
   scheduledDeletionDate?: string | null;
+  // Admin tracking fields
+  approvedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  rejectedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+  deletedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
 }
 
 // === Helper ===
@@ -1464,7 +1483,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Material Selection Modal */}
       {showMaterialModal && selectedDriverDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full m-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Select Material Type(s)</h2>
@@ -1711,6 +1730,76 @@ const ManageDrivers: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Admin Actions History */}
+              {(selectedDriverDetails.approvedBy || selectedDriverDetails.rejectedBy || selectedDriverDetails.deletedBy) && (
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3">Admin Actions</h3>
+                  <div className="space-y-3">
+                    {selectedDriverDetails.approvedBy && (
+                      <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <CheckCircle size={20} className="text-green-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-green-900">Approved by</p>
+                          <p className="text-sm text-green-700">
+                            {selectedDriverDetails.approvedBy.firstName} {selectedDriverDetails.approvedBy.lastName}
+                          </p>
+                          <p className="text-xs text-green-600">{selectedDriverDetails.approvedBy.email}</p>
+                          {selectedDriverDetails.approvalDate && (
+                            <p className="text-xs text-green-600 mt-1">
+                              {new Date(selectedDriverDetails.approvalDate).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDriverDetails.rejectedBy && (
+                      <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <XCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-red-900">Rejected by</p>
+                          <p className="text-sm text-red-700">
+                            {selectedDriverDetails.rejectedBy.firstName} {selectedDriverDetails.rejectedBy.lastName}
+                          </p>
+                          <p className="text-xs text-red-600">{selectedDriverDetails.rejectedBy.email}</p>
+                          {selectedDriverDetails.rejectedReason && (
+                            <p className="text-xs text-red-700 mt-2 italic">Reason: {selectedDriverDetails.rejectedReason}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {selectedDriverDetails.deletedBy && (
+                      <div className="flex items-start gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <AlertCircle size={20} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-orange-900">Archived by</p>
+                          <p className="text-sm text-orange-700">
+                            {selectedDriverDetails.deletedBy.firstName} {selectedDriverDetails.deletedBy.lastName}
+                          </p>
+                          <p className="text-xs text-orange-600">{selectedDriverDetails.deletedBy.email}</p>
+                          {selectedDriverDetails.archivedAt && (
+                            <p className="text-xs text-orange-600 mt-1">
+                              {new Date(selectedDriverDetails.archivedAt).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Material History */}
               <div className="mb-6">

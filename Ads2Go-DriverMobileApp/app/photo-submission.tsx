@@ -126,11 +126,9 @@ export default function PhotoSubmission() {
   }, []);
 
   const checkPhotoDay = () => {
-    // This function now sets a fallback banner only; actual enablement is per-material using nextPhotoDue
-    const today = new Date();
-    const formatted = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    // Initialize - will be set based on actual materials with devices
     setIsPhotoDay(false); // default false; materials will drive availability
-    setNextPhotoDay(formatted);
+    setNextPhotoDay(""); // Clear initially - will be set only if materials have devices
   };
 
   const loadDriverData = async () => {
@@ -165,9 +163,20 @@ export default function PhotoSubmission() {
       if (response.getDriverMaterials.success) {
         setMaterials(response.getDriverMaterials.materials);
         
+        // Helper function to normalize date to midnight local time, handling UTC ISO strings
+        const normalizeToLocalMidnight = (date: Date): Date => {
+          // Extract date components in local timezone (handles UTC dates correctly)
+          const year = date.getFullYear();
+          const month = date.getMonth();
+          const day = date.getDate();
+          // Create new date at midnight in local timezone
+          return new Date(year, month, day, 0, 0, 0, 0);
+        };
+        
         // Determine next upcoming due date and whether any material is due now
           const today = new Date();
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        // Normalize today to midnight in local timezone for accurate date comparison
+        const todayStart = normalizeToLocalMidnight(today);
         const currentMonth = today.toISOString().slice(0,7); // YYYY-MM
         let anyDue = false;
         let earliestDue: Date | null = null;
@@ -182,20 +191,32 @@ export default function PhotoSubmission() {
             mountedAt: material.mountedAt,
             materialTracking: material.materialTracking
           });
+          
+          // ✅ IMPORTANT: Only process materials that have nextPhotoDue (which means they have a device)
+          // Monthly compliance only applies to materials with devices registered in slot 1 or slot 2
+          // If nextPhotoDue is null/undefined, material has no device - skip it
+          if (!dueStr) {
+            console.log(`⏭️ Material ${material.materialId}: Skipping (no nextPhotoDue - no device registered)`);
+            return; // Skip this material
+          }
+          
           let due: Date | null = null;
           if (dueStr) {
             const d = new Date(dueStr);
             if (!isNaN(d.getTime())) due = d;
-          } else if (material.mountedAt) {
-            // Derive first due as 1 month after mount if server hasn't computed yet
-            const m = new Date(material.mountedAt);
-            if (!isNaN(m.getTime())) { m.setMonth(m.getMonth() + 1); due = m; }
           }
+          
+          // Don't derive from mountedAt anymore - if nextPhotoDue is not set by server,
+          // it means material has no device, so monthly compliance doesn't apply
           if (due) {
             if (!earliestDue || due < earliestDue) earliestDue = due;
-            const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+            // Normalize due date to midnight in local timezone for accurate comparison
+            // This correctly handles UTC dates from server by extracting local date components
+            const dueStart = normalizeToLocalMidnight(due);
             const hasCurrent = hasCurrentMonthPhoto(material);
-            const isDue = todayStart >= dueStart;
+            // Use timestamp comparison for accuracy: allow upload if today is due date or later
+            // At 12:00 AM on Nov 8, this comparison will work correctly
+            const isDue = todayStart.getTime() >= dueStart.getTime();
             const needsPhoto = isDue && !hasCurrent;
             
             console.log('📸 Material analysis:', {
@@ -212,7 +233,8 @@ export default function PhotoSubmission() {
         });
 
         setIsPhotoDay(anyDue);
-        // Set next photo day if available - show actual date
+        // Set next photo day ONLY if materials have devices registered (nextPhotoDue exists)
+        // If no materials have devices, don't show a date - monthly compliance doesn't apply
         if (earliestDue) {
           const formattedDate = earliestDue.toLocaleDateString('en-US', { 
             year: 'numeric', 
@@ -220,6 +242,11 @@ export default function PhotoSubmission() {
             day: 'numeric' 
           });
           setNextPhotoDay(formattedDate);
+          console.log(`✅ Next photo day set to: ${formattedDate} (material has device)`);
+        } else {
+          // No materials have devices - clear the date
+          setNextPhotoDay("");
+          console.log(`⚠️ No next photo day (no materials with devices registered)`);
         }
       }
     } catch (error) {
@@ -241,22 +268,46 @@ export default function PhotoSubmission() {
     return mountedDate.toDateString() === today.toDateString();
   };
 
+  // Helper function to normalize date to midnight local time, handling UTC ISO strings
+  const normalizeToLocalMidnight = (date: Date): Date => {
+    // Extract date components in local timezone (handles UTC dates correctly)
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    // Create new date at midnight in local timezone
+    return new Date(year, month, day, 0, 0, 0, 0);
+  };
+
   const needsPhoto = (material: Material) => {
-    const today = new Date();
-    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    // Allow upload if due date reached or same-day new mount
+    // ✅ IMPORTANT: Only check materials that have nextPhotoDue (which means they have a device)
+    // Monthly compliance only applies to materials with devices registered in slot 1 or slot 2
     const dueStr = material.materialTracking?.nextPhotoDue;
-    let dueOk = false;
-    if (dueStr) {
-      const d = new Date(dueStr);
-      if (!isNaN(d.getTime())) {
-        const dueStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        if (todayStart >= dueStart) dueOk = true;
-      }
-    } else if (material.mountedAt) {
-      const m = new Date(material.mountedAt);
-      if (!isNaN(m.getTime())) { m.setMonth(m.getMonth() + 1); const dueStart = new Date(m.getFullYear(), m.getMonth(), m.getDate()); if (todayStart >= dueStart) dueOk = true; }
+    
+    // If nextPhotoDue is null/undefined, material has no device - monthly compliance doesn't apply
+    if (!dueStr) {
+      return false; // No device = no monthly compliance requirement
     }
+    
+    const today = new Date();
+    // Normalize today to midnight in local timezone for accurate date comparison
+    const todayStart = normalizeToLocalMidnight(today);
+    
+    // Allow upload if due date reached or same-day new mount
+    let dueOk = false;
+    const d = new Date(dueStr);
+    if (!isNaN(d.getTime())) {
+      // Normalize due date to midnight in local timezone for accurate comparison
+      // This correctly handles UTC dates from server by extracting local date components
+      const dueStart = normalizeToLocalMidnight(d);
+      // Allow upload if today is the due date or later (>= comparison)
+      // At 12:00 AM on Nov 8, this comparison will work correctly
+      if (todayStart.getTime() >= dueStart.getTime()) {
+        dueOk = true;
+      }
+    }
+    
+    // Don't check mountedAt for deriving due date - if nextPhotoDue is not set by server,
+    // it means material has no device, so monthly compliance doesn't apply
     return isNewlyMounted(material) || (dueOk && !hasCurrentMonthPhoto(material));
   };
 
@@ -435,9 +486,15 @@ export default function PhotoSubmission() {
           <Text style={styles.notPhotoDayText}>
             Photo submissions are available when your next inspection due date arrives.
           </Text>
-          <Text style={styles.nextPhotoDayText}>
-            Next photo day: {nextPhotoDay}
-          </Text>
+          {nextPhotoDay ? (
+            <Text style={styles.nextPhotoDayText}>
+              Next photo day: {nextPhotoDay}
+            </Text>
+          ) : (
+            <Text style={styles.nextPhotoDayText}>
+              No devices registered - monthly compliance not applicable
+            </Text>
+          )}
         </View>
       </View>
     );

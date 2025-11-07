@@ -1073,7 +1073,7 @@ const AdDetailsPage: React.FC = () => {
                       Advertisement Rejected
                     </h4>
                     <p className="text-sm text-black">
-                      {ad.reasonForReject}
+                      {ad.reasonForReject || 'Your advertisement has been rejected. Please contact support for more information.'}
                     </p>
                   </div>
                 </div>

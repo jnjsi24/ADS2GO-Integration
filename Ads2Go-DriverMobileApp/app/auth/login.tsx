@@ -40,6 +40,7 @@ const LOGIN_MUTATION = `
         email
         accountStatus
         isEmailVerified
+        profilePicture
       }
     }
   }
@@ -58,6 +59,7 @@ type LoginResponse = {
       email: string;
       accountStatus: string;
       isEmailVerified: boolean;
+      profilePicture?: string | null;
     } | null;
   };
 };

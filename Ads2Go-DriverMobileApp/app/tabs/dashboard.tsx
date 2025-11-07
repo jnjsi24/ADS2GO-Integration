@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform, Modal, Image } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -892,7 +892,23 @@ const Dashboard: React.FC = () => {
           <View style={styles.headerContent}>
             {/* Profile Image */}
             <View style={styles.profileContainer}>
-              <Ionicons name="person-circle" size={50} color="#3674B5" />
+              {(() => {
+                const getImageUrl = (src?: string | null) => {
+                  if (!src) return null;
+                  if (/^https?:\/\//i.test(src)) return src;
+                  return `${API_CONFIG.BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`;
+                };
+                const imgUrl = getImageUrl(user?.profilePicture);
+                if (imgUrl) {
+                  return (
+                    <Image
+                      source={{ uri: imgUrl }}
+                      style={{ width: 50, height: 50, borderRadius: 25 }}
+                    />
+                  );
+                }
+                return <Ionicons name="person-circle" size={50} color="#3674B5" />;
+              })()}
             </View>
 
             {/* Text */}

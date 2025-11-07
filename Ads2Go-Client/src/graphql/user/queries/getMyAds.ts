@@ -11,6 +11,7 @@ export const GET_MY_ADS = gql`
       adType
       status
       paymentStatus
+      reasonForReject
       vehicleType
       createdAt
       updatedAt

@@ -666,12 +666,6 @@ const Advertisements: React.FC = () => {
                   >
                     {formatStatus(ad.status)}
                   </span>
-
-                  {ad.status === "REJECTED" && ad.reasonForReject && (
-                    <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
-                      {ad.reasonForReject}
-                    </div>
-                  )}
                 </div>
               </div>
             ))
@@ -860,12 +854,6 @@ const Advertisements: React.FC = () => {
                     >
                       {formatStatus(ad.status)}
                     </span>
-                    
-                    {ad.status === "REJECTED" && ad.reasonForReject && (
-                      <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
-                        {ad.reasonForReject}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))

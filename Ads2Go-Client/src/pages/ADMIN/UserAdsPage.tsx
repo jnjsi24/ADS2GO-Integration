@@ -141,6 +141,7 @@ const cancelDelete = () => {
     "REJECTED",
     "RUNNING",
     "ENDED",
+    "ARCHIVED",
   ];
 
   const { data, loading, error } = useQuery<QueryResult>(GET_ADS_BY_USER, {
@@ -355,6 +356,8 @@ const cancelDelete = () => {
               <span className="truncate">
                 {selectedStatusFilter === "All"
                   ? "All Status"
+                  : selectedStatusFilter === "ARCHIVED"
+                  ? "Deleted"
                   : capitalize(selectedStatusFilter)}
               </span>
               <ChevronDown
@@ -382,7 +385,7 @@ const cancelDelete = () => {
                       onClick={() => handleStatusFilterChange(status)}
                       className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
                     >
-                      {status === "All" ? "All Status" : capitalize(status)}
+                      {status === "All" ? "All Status" : status === "ARCHIVED" ? "Deleted" : capitalize(status)}
                     </button>
                   ))}
                 </motion.div>
@@ -491,7 +494,7 @@ const cancelDelete = () => {
                             : "bg-red-200 text-red-800"
                         }`}
                       >
-                        {capitalize(ad.status)}
+                        {ad.status === "ARCHIVED" ? "Deleted" : capitalize(ad.status)}
                       </span>
                     </div>
                     <div className="hidden md:block">
@@ -600,14 +603,32 @@ const cancelDelete = () => {
                                 <div className="w-3 h-3 rounded-full bg-blue-400"></div>
                                 <span>Created: {new Date(ad.createdAt).toLocaleDateString()}</span>
                               </div>
-                              <div className="flex items-center space-x-2">
-                                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                                <span>Pending Payment</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                                <span>Payment Paid</span>
-                              </div>
+                              {ad.status === 'REJECTED' ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                                  <span>Ad Rejected - No Payment Required</span>
+                                </div>
+                              ) : ad.status === 'ARCHIVED' ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                                  <span>Ad Deleted - No Payment Required</span>
+                                </div>
+                              ) : ad.paymentStatus === 'PAID' ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-3 h-3 rounded-full bg-green-400"></div>
+                                  <span>Payment Paid</span>
+                                </div>
+                              ) : ad.paymentStatus === 'FAILED' ? (
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                                  <span>Payment Failed</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                                  <span>Pending Payment</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
