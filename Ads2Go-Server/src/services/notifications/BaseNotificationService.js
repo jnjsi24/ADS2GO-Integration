@@ -93,20 +93,59 @@ class BaseNotificationService {
           }
         };
 
-        const updateResult = await collection.findOneAndUpdate(
-          { userId: userIdObj },
-          updateOperation,
-          {
-            upsert: true,  // Create document if it doesn't exist
-            returnDocument: 'after'  // Return updated document (equivalent to new: true)
+        let updateResult;
+        try {
+          updateResult = await collection.findOneAndUpdate(
+            { userId: userIdObj },
+            updateOperation,
+            {
+              upsert: true,  // Create document if it doesn't exist
+              returnDocument: 'after'  // Return updated document (equivalent to new: true)
+            }
+          );
+        } catch (updateError) {
+          console.error('MongoDB findOneAndUpdate error:', updateError);
+          // Check if it's still a conflicting operators error
+          if (updateError.codeName === 'ConflictingUpdateOperators' || updateError.code === 40) {
+            console.error('❌ Still getting ConflictingUpdateOperators error - may need to remove updatedAt completely');
           }
-        );
+          throw updateError;
+        }
 
-        // Native MongoDB findOneAndUpdate returns { value: <document>, ... }
-        const updatedDocument = updateResult.value;
+        // Check if operation was successful
+        if (updateResult && updateResult.ok !== 1) {
+          console.error('❌ MongoDB operation was not successful:', updateResult);
+          throw new Error(`MongoDB update operation failed: ${JSON.stringify(updateResult)}`);
+        }
+
+        // Native MongoDB findOneAndUpdate returns { value: <document>, ok: 1, ... }
+        // However, sometimes value can be null if the operation didn't match/return properly
+        let updatedDocument = updateResult?.value;
         
+        // Fallback: If value is null, fetch the document directly
+        // This can happen in edge cases with upsert operations or if returnDocument doesn't work as expected
         if (!updatedDocument) {
-          throw new Error('Failed to create notification: updateResult.value is null');
+          console.warn(`⚠️ updateResult.value is null for userId ${userId}, attempting to fetch document directly...`);
+          console.log('Update result structure:', {
+            ok: updateResult?.ok,
+            hasValue: !!updateResult?.value,
+            lastErrorObject: updateResult?.lastErrorObject,
+            result: updateResult?.result
+          });
+          
+          // Wait a tiny bit to ensure the operation has fully completed
+          await new Promise(resolve => setTimeout(resolve, 10));
+          
+          // Fetch the document directly
+          updatedDocument = await collection.findOne({ userId: userIdObj });
+          
+          if (!updatedDocument) {
+            console.error('❌ Document not found after upsert operation');
+            console.error('Full update result:', JSON.stringify(updateResult, null, 2));
+            throw new Error(`Failed to create notification: Document not found after upsert for user ${userId}`);
+          }
+          
+          console.log('✅ Successfully fetched document after null return');
         }
         
         // Trim to last 50 notifications if needed (best-effort, non-blocking)
