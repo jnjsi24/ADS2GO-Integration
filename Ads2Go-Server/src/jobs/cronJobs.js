@@ -709,10 +709,9 @@ class CronJobs {
   async updateOnlineHours() {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const deviceStatusService = require('../services/deviceStatusService');
       const today = new Date().toISOString().split('T')[0];
 
-      // Get all devices for today that are marked as online in database
+      // Get all devices for today that are online
       const devices = await DeviceTracking.find({ 
         date: today,
         isOnline: true 
@@ -723,46 +722,13 @@ class CronJobs {
         // Only log every 2 minutes to reduce console spam
         const now = new Date();
         if (now.getSeconds() < 10) { // Only log when seconds < 10 (roughly every 2 minutes)
-          console.log(`🕐 [CRON] Checking ${devices.length} devices marked as online`);
+          console.log(`🕐 [CRON] Updating online hours for ${devices.length} online devices`);
         }
       }
 
       for (const device of devices) {
         try {
-          // ✅ FIX: Verify device is actually online before updating hours
-          // Check actual device status from DeviceStatusManager (WebSocket + database)
-          let isActuallyOnline = false;
-          
-          // Check all slots for this device
-          if (device.slots && device.slots.length > 0) {
-            for (const slot of device.slots) {
-              if (slot.deviceId) {
-                // Check actual device status from DeviceStatusService (source of truth - checks WebSocket + database)
-                const deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
-                if (deviceStatus && deviceStatus.isOnline) {
-                  isActuallyOnline = true;
-                  break;
-                }
-              }
-            }
-          }
-          
-          // If device is not actually online, update database and skip hours update
-          if (!isActuallyOnline) {
-            // Sync database with actual status
-            if (device.isOnline) {
-              device.isOnline = false;
-              if (device.currentSession && device.currentSession.isActive) {
-                device.currentSession.isActive = false;
-                device.currentSession.endTime = new Date();
-              }
-              await device.save();
-              console.log(`🔄 [CRON] Synced ${device.materialId} to offline (was marked online but actually offline)`);
-            }
-            continue; // Skip hours update for offline devices
-          }
-          
-          // Device is actually online - calculate and update online hours
+          // Calculate and update online hours
           await device.calculateAndUpdateOnlineHours();
           await device.save();
           

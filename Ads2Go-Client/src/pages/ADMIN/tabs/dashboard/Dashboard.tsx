@@ -114,6 +114,8 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   // ✨ State to store screens with geocoded addresses
   const [screens, setScreens] = React.useState(initialScreens);
+  // Ref to track if material button was clicked to prevent card click
+  const materialButtonClickedRef = React.useRef<string | null>(null);
   
   // ✨ Geocode addresses when screens change or coordinates are present but address is missing
   React.useEffect(() => {
@@ -248,7 +250,14 @@ const Dashboard: React.FC<DashboardProps> = ({
               {screens.map((screen) => (
                 <div
                   key={screen.deviceId}
-                  onClick={() => onScreenClick(screen)}
+                  onClick={() => {
+                    // Don't trigger if material button was clicked
+                    if (materialButtonClickedRef.current === screen.deviceId) {
+                      materialButtonClickedRef.current = null;
+                      return;
+                    }
+                    onScreenClick(screen);
+                  }}
                   className="bg-white mb-3 rounded-lg shadow-md hover:bg-gray-50 transition-colors border border-gray-100 p-4">
                   {/* Top Row: Checkbox, Screen ID, and Actions */}
                   <div className="flex flex-wrap justify-between items-center pb-3 mb-3">
@@ -281,7 +290,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                       </motion.div>
 
                       <button 
-                        onClick={() => onMaterialClick(screen)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          // Set ref to prevent card click
+                          materialButtonClickedRef.current = screen.deviceId;
+                          onMaterialClick(screen);
+                          // Clear ref after a short delay
+                          setTimeout(() => {
+                            materialButtonClickedRef.current = null;
+                          }, 100);
+                        }}
                         className="text-black font-medium text-sm hover:text-blue-600 hover:underline cursor-pointer"
                         title="Click to view device details"
                       >

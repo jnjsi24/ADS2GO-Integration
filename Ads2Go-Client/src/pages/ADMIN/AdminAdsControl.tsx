@@ -122,7 +122,6 @@ const AdminAdsControl: React.FC = () => {
   const [isUserControlling, setIsUserControlling] = useState(false); // Track if user is actively controlling devices
   const [showScreenDetails, setShowScreenDetails] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
-  const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [selectedDeviceForModal, setSelectedDeviceForModal] = useState<ScreenData | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
@@ -1104,22 +1103,38 @@ const AdminAdsControl: React.FC = () => {
   };
 
   const handleScreenClick = (screen: any) => {
+    // Close Device Details modal if open
+    if (showDeviceModal) {
+      setIsDeviceModalOpen(false);
+      setShowDeviceModal(false);
+      setSelectedDeviceForModal(null);
+    }
     setSelectedScreen(screen.deviceId);
     setShowScreenDetails(true);
   };
 
   const handleMaterialClick = (screen: ScreenData) => {
+    // Immediately close Screen Details modal to prevent overlap
+    setShowScreenDetails(false);
+    setSelectedScreen(null);
+    // Open Device Details modal
     setSelectedDeviceForModal(screen);
     setShowDeviceModal(true);
-    setIsDeviceModalOpen(true);
   };
 
   const handleCloseDeviceModal = () => {
-    setIsDeviceModalOpen(false);
-    setTimeout(() => {
+    setShowDeviceModal(false);
+    setSelectedDeviceForModal(null);
+  };
+
+  const handleCloseScreenDetails = () => {
+    // Ensure Device Details modal is also closed
+    if (showDeviceModal) {
       setShowDeviceModal(false);
       setSelectedDeviceForModal(null);
-    }, 300);
+    }
+    setShowScreenDetails(false);
+    setSelectedScreen(null);
   };
 
   if (loading) {
@@ -1371,13 +1386,19 @@ const AdminAdsControl: React.FC = () => {
       </div>
 
       {/* Screen Details Modal */}
-      {showScreenDetails && selectedScreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      {showScreenDetails && selectedScreen && !showDeviceModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
+          onClick={handleCloseScreenDetails}
+        >
+          <div 
+            className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">Screen Details - {selectedScreen}</h3>
               <button
-                onClick={() => setShowScreenDetails(false)}
+                onClick={handleCloseScreenDetails}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <XCircle className="w-6 h-6" />
@@ -1457,7 +1478,7 @@ const AdminAdsControl: React.FC = () => {
                   {/* Actions */}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => setShowScreenDetails(false)}
+                      onClick={handleCloseScreenDetails}
                       className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                     >
                       Close
@@ -1471,90 +1492,81 @@ const AdminAdsControl: React.FC = () => {
       )}
 
       {/* Device Details Modal */}
-      {showDeviceModal && selectedDeviceForModal && (
+      {showDeviceModal && selectedDeviceForModal && !showScreenDetails && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
           onClick={handleCloseDeviceModal}
         >
           <div
-            className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-transform duration-300 ease-in-out ${
-              isDeviceModalOpen ? 'scale-100' : 'scale-95'
-            }`}
+            className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Device Details</h3>
-                <button
-                  onClick={handleCloseDeviceModal}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <XCircle className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            
-            <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Device ID</label>
-                <div className="p-3 bg-gray-50 rounded-lg font-mono text-sm text-gray-900 break-all">
-                  {selectedDeviceForModal.deviceId}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Material ID</label>
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.materialId}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Screen Type</label>
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.screenType}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Slot Number</label>
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.slotNumber}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
-                  <span className="text-sm font-medium">
-                    {getStatusText(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
-                  </span>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last Seen</label>
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {new Date(selectedDeviceForModal.lastSeen).toLocaleString()}
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.currentLocation?.address || 'Location not available'}
-                </div>
-              </div>
-            </div>
-            
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Device Details - {selectedDeviceForModal.deviceId}</h3>
               <button
                 onClick={handleCloseDeviceModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="text-gray-400 hover:text-gray-600"
               >
-                Close
+                <XCircle className="w-6 h-6" />
               </button>
+            </div>
+            
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Device ID</label>
+                  <p className="text-lg font-medium">{selectedDeviceForModal.deviceId}</p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Material ID</label>
+                  <p className="text-lg font-medium">{selectedDeviceForModal.materialId}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Screen Type</label>
+                    <p className="text-lg font-medium">{selectedDeviceForModal.screenType || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Slot Number</label>
+                    <p className="text-lg font-medium">{selectedDeviceForModal.slotNumber || 'N/A'}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">Status</label>
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
+                    <span className="text-sm font-medium">
+                      {getStatusText(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
+                    </span>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Last Seen</label>
+                  <p className="text-lg font-medium">{new Date(selectedDeviceForModal.lastSeen).toLocaleString()}</p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Location</label>
+                  <p className="text-lg font-medium">
+                    {selectedDeviceForModal.currentLocation?.address || 'Location not available'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCloseDeviceModal}
+                  className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

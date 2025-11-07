@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../config/api';
 
@@ -67,13 +68,25 @@ interface SalarySummary {
   currentStatus?: string;
 }
 
+interface DailyBreakdown {
+  date: string;
+  totalDistance: number;
+  totalHours: number;
+  distanceSalary: number;
+  hoursSalary: number;
+  dailySalary: number;
+}
+
 const SalaryScreen: React.FC = () => {
+  const router = useRouter();
   const [calculations, setCalculations] = useState<SalaryCalculation[]>([]);
   const [summary, setSummary] = useState<SalarySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCalculation, setSelectedCalculation] = useState<SalaryCalculation | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [dailyBreakdown, setDailyBreakdown] = useState<DailyBreakdown[]>([]);
+  const [loadingBreakdown, setLoadingBreakdown] = useState(false);
 
   useEffect(() => {
     fetchSalaryData();
@@ -162,7 +175,101 @@ const SalaryScreen: React.FC = () => {
       if (calculationsData.data?.getMySalaryCalculations?.success) {
         const fetchedCalculations = calculationsData.data.getMySalaryCalculations.calculations || [];
         console.log(`✅ Fetched ${fetchedCalculations.length} salary calculations`);
-        setCalculations(fetchedCalculations);
+        
+        // Deduplicate calculations on frontend as a safety measure
+        // Keep only the most recent calculation for each unique period
+        const seenPeriods = new Map<string, SalaryCalculation>();
+        const deduplicatedCalculations: SalaryCalculation[] = [];
+        
+        // Helper function to normalize dates for comparison
+        const normalizeDate = (date: string | Date | undefined): string => {
+          if (!date) return '';
+          try {
+            const d = typeof date === 'string' ? new Date(date) : date;
+            // Check if date is valid
+            if (isNaN(d.getTime())) {
+              console.warn(`⚠️ Invalid date encountered: ${date}`);
+              return '';
+            }
+            return d.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+          } catch (error) {
+            console.warn(`⚠️ Error normalizing date ${date}:`, error);
+            return '';
+          }
+        };
+        
+        console.log(`🔍 Starting deduplication for ${fetchedCalculations.length} calculations`);
+        
+        for (const calc of fetchedCalculations) {
+          // Normalize dates to ensure consistent comparison
+          const startDate = normalizeDate(calc.calculationPeriod?.startDate);
+          const endDate = normalizeDate(calc.calculationPeriod?.endDate);
+          
+          // Create period key - use ID as fallback if dates are invalid
+          let periodKey: string;
+          if (startDate && endDate) {
+            periodKey = `${calc.driverId}-${startDate}-${endDate}`;
+          } else {
+            // Fallback: use materialId and period type if dates are invalid
+            periodKey = `${calc.driverId}-${calc.materialId}-${calc.calculationPeriod?.periodType || 'UNKNOWN'}`;
+            console.warn(`⚠️ Using fallback periodKey for calculation ${calc.id} due to invalid dates`);
+          }
+          
+          console.log(`📋 Processing calculation ${calc.id}: periodKey=${periodKey}, startDate=${startDate || 'INVALID'}, endDate=${endDate || 'INVALID'}`);
+          
+          if (!seenPeriods.has(periodKey)) {
+            seenPeriods.set(periodKey, calc);
+            deduplicatedCalculations.push(calc);
+            console.log(`✅ Added new calculation for period: ${periodKey}`);
+          } else {
+            // Duplicate period found - keep the one with the most recent createdAt
+            const existing = seenPeriods.get(periodKey)!;
+            const existingDate = existing.createdAt ? new Date(existing.createdAt) : new Date(0);
+            const currentDate = calc.createdAt ? new Date(calc.createdAt) : new Date(0);
+            
+            // Validate dates before comparison
+            const existingValid = !isNaN(existingDate.getTime());
+            const currentValid = !isNaN(currentDate.getTime());
+            
+            console.log(`⚠️ Duplicate found! Existing: ${existing.id} (${existing.createdAt || 'INVALID'}), Current: ${calc.id} (${calc.createdAt || 'INVALID'})`);
+            
+            // If both dates are valid, compare them. Otherwise, prefer the one with a valid date, or keep existing
+            if (currentValid && existingValid && currentDate > existingDate) {
+              // Replace with newer calculation
+              const index = deduplicatedCalculations.indexOf(existing);
+              if (index !== -1) {
+                deduplicatedCalculations[index] = calc;
+                seenPeriods.set(periodKey, calc);
+                console.log(`🔄 Replaced with newer calculation: ${calc.id}`);
+              }
+            } else if (currentValid && !existingValid) {
+              // Current has valid date, existing doesn't - replace
+              const index = deduplicatedCalculations.indexOf(existing);
+              if (index !== -1) {
+                deduplicatedCalculations[index] = calc;
+                seenPeriods.set(periodKey, calc);
+                console.log(`🔄 Replaced (current has valid date): ${calc.id}`);
+              }
+            } else {
+              console.log(`⏭️ Keeping existing calculation: ${existing.id}`);
+            }
+          }
+        }
+        
+        // Sort by start date descending (most recent first)
+        deduplicatedCalculations.sort((a, b) => {
+          const dateA = new Date(a.calculationPeriod?.startDate || 0);
+          const dateB = new Date(b.calculationPeriod?.startDate || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        if (fetchedCalculations.length !== deduplicatedCalculations.length) {
+          console.log(`⚠️ Frontend deduplication: ${fetchedCalculations.length} → ${deduplicatedCalculations.length} calculations`);
+        } else {
+          console.log(`✅ No duplicates found (all ${deduplicatedCalculations.length} are unique)`);
+        }
+        
+        setCalculations(deduplicatedCalculations);
       } else {
         console.warn('⚠️ getMySalaryCalculations returned success: false', calculationsData.data?.getMySalaryCalculations?.message);
         // Still set empty array to show empty state
@@ -295,9 +402,191 @@ const SalaryScreen: React.FC = () => {
     return category;
   };
 
-  const handleViewDetails = (calculation: SalaryCalculation) => {
+  const fetchDailyBreakdown = async (calculation: SalaryCalculation) => {
+    console.log('🚀 fetchDailyBreakdown called with calculation:', calculation.id);
+    try {
+      setLoadingBreakdown(true);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      // Validate and parse dates safely
+      let startDate: Date;
+      let endDate: Date;
+
+      try {
+        const startDateValue = calculation.calculationPeriod?.startDate;
+        const endDateValue = calculation.calculationPeriod?.endDate;
+
+        console.log('🔍 Parsing dates for daily breakdown:', { 
+          startDateValue, 
+          endDateValue,
+          startDateType: typeof startDateValue,
+          endDateType: typeof endDateValue
+        });
+
+        if (!startDateValue || !endDateValue) {
+          throw new Error('Missing date values in calculation period');
+        }
+
+        // Try to parse the date - handle both string and number timestamps
+        let startDateParsed: Date;
+        let endDateParsed: Date;
+
+        // Handle string timestamps (like '1761955200000')
+        if (typeof startDateValue === 'string') {
+          // Check if it's a numeric string (timestamp)
+          if (/^\d+$/.test(startDateValue)) {
+            const timestamp = parseInt(startDateValue, 10);
+            startDateParsed = new Date(timestamp);
+            console.log(`📅 Parsed start date from timestamp: ${timestamp} → ${startDateParsed.toISOString()}`);
+          } else {
+            // It's an ISO string or other date format
+            startDateParsed = new Date(startDateValue);
+            console.log(`📅 Parsed start date from string: ${startDateValue} → ${startDateParsed.toISOString()}`);
+          }
+        } else if (typeof startDateValue === 'number') {
+          startDateParsed = new Date(startDateValue);
+          console.log(`📅 Parsed start date from number: ${startDateValue} → ${startDateParsed.toISOString()}`);
+        } else {
+          startDateParsed = new Date(startDateValue);
+          console.log(`📅 Parsed start date from other: ${startDateValue} → ${startDateParsed.toISOString()}`);
+        }
+
+        if (typeof endDateValue === 'string') {
+          // Check if it's a numeric string (timestamp)
+          if (/^\d+$/.test(endDateValue)) {
+            const timestamp = parseInt(endDateValue, 10);
+            endDateParsed = new Date(timestamp);
+            console.log(`📅 Parsed end date from timestamp: ${timestamp} → ${endDateParsed.toISOString()}`);
+          } else {
+            // It's an ISO string or other date format
+            endDateParsed = new Date(endDateValue);
+            console.log(`📅 Parsed end date from string: ${endDateValue} → ${endDateParsed.toISOString()}`);
+          }
+        } else if (typeof endDateValue === 'number') {
+          endDateParsed = new Date(endDateValue);
+          console.log(`📅 Parsed end date from number: ${endDateValue} → ${endDateParsed.toISOString()}`);
+        } else {
+          endDateParsed = new Date(endDateValue);
+          console.log(`📅 Parsed end date from other: ${endDateValue} → ${endDateParsed.toISOString()}`);
+        }
+
+        // Validate dates
+        if (isNaN(startDateParsed.getTime())) {
+          throw new Error(`Invalid start date: ${startDateValue} (parsed as: ${startDateParsed})`);
+        }
+        if (isNaN(endDateParsed.getTime())) {
+          throw new Error(`Invalid end date: ${endDateValue} (parsed as: ${endDateParsed})`);
+        }
+
+        startDate = new Date(startDateParsed);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(endDateParsed);
+        endDate.setHours(23, 59, 59, 999);
+
+        console.log(`✅ Final dates: start=${startDate.toISOString()}, end=${endDate.toISOString()}`);
+
+        // Double-check dates are still valid after manipulation
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          throw new Error('Date manipulation resulted in invalid dates');
+        }
+      } catch (dateError) {
+        console.error('❌ Error parsing dates for daily breakdown:', dateError);
+        console.error('Calculation period:', calculation.calculationPeriod);
+        setDailyBreakdown([]);
+        setLoadingBreakdown(false);
+        return;
+      }
+
+      const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${calculation.driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+      console.log(`🌐 Fetching daily breakdown from: ${apiUrl}`);
+      
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API error (${response.status}):`, errorText);
+        throw new Error(`Failed to fetch daily breakdown: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('📊 Daily breakdown API response:', JSON.stringify(data, null, 2));
+      
+      // The API returns { success: true, data: { dailyData: { dailyBreakdown: [...] } } }
+      // So we need to access data.data.dailyData.dailyBreakdown
+      const dailyData = data.data?.dailyData?.dailyBreakdown || data.dailyData?.dailyBreakdown || [];
+      console.log(`📋 Found ${dailyData.length} days of data`);
+      console.log('📋 Daily data sample:', dailyData.slice(0, 2));
+      
+      if (dailyData.length === 0) {
+        console.warn('⚠️ No daily breakdown data in API response');
+        console.warn('Response keys:', Object.keys(data));
+        if (data.data) {
+          console.warn('data.data keys:', Object.keys(data.data));
+          if (data.data.dailyData) {
+            console.warn('data.data.dailyData keys:', Object.keys(data.data.dailyData));
+          }
+        }
+        if (data.dailyData) {
+          console.warn('data.dailyData keys:', Object.keys(data.dailyData));
+        }
+      }
+      
+      // Calculate daily salary for each day
+      const breakdown: DailyBreakdown[] = dailyData.map((day: any) => {
+        const distance = day.totalDistance || 0;
+        const hours = day.totalHours || 0;
+        const distanceRate = calculation.pricingConfig?.distanceRate || 0;
+        const hoursRate = calculation.pricingConfig?.hoursRate || 0;
+        
+        const distanceSalary = distance * distanceRate;
+        const hoursSalary = hours * hoursRate;
+        const dailySalary = distanceSalary + hoursSalary;
+        
+        return {
+          date: day.date,
+          totalDistance: distance,
+          totalHours: hours,
+          distanceSalary: Math.round(distanceSalary * 100) / 100,
+          hoursSalary: Math.round(hoursSalary * 100) / 100,
+          dailySalary: Math.round(dailySalary * 100) / 100,
+        };
+      });
+
+      // Sort by date (oldest first) - with validation
+      breakdown.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        
+        // Skip invalid dates in sorting
+        if (isNaN(dateA.getTime())) return 1;
+        if (isNaN(dateB.getTime())) return -1;
+        
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      console.log(`✅ Processed ${breakdown.length} days for daily breakdown`);
+      setDailyBreakdown(breakdown);
+    } catch (error) {
+      console.error('❌ Error fetching daily breakdown:', error);
+      setDailyBreakdown([]);
+    } finally {
+      setLoadingBreakdown(false);
+    }
+  };
+
+  const handleViewDetails = async (calculation: SalaryCalculation) => {
     setSelectedCalculation(calculation);
     setModalVisible(true);
+    // Fetch daily breakdown when modal opens
+    await fetchDailyBreakdown(calculation);
   };
 
   if (loading) {
@@ -312,16 +601,24 @@ const SalaryScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header with Back Button */}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1f2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>My Salary</Text>
+        <View style={styles.headerRight} />
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>My Salary</Text>
-        </View>
 
         {/* Summary Card */}
         {summary && (
@@ -371,17 +668,17 @@ const SalaryScreen: React.FC = () => {
               >
                 <View style={styles.calculationHeader}>
                   <View style={styles.calculationInfo}>
-                    <Text style={styles.calculationPeriod}>{calculation.periodDisplay}</Text>
-                    <Text style={styles.calculationType}>{calculation.calculationPeriod.periodType}</Text>
+                    <Text style={styles.calculationPeriod}>{calculation.periodDisplay || 'N/A'}</Text>
+                    <Text style={styles.calculationType}>{calculation.calculationPeriod?.periodType || 'N/A'}</Text>
                   </View>
                   <View style={styles.calculationStatus}>
                     <Ionicons
-                      name={getStatusIcon(calculation.status)}
+                      name={getStatusIcon(calculation.status || 'PENDING')}
                       size={20}
-                      color={getStatusColor(calculation.status)}
+                      color={getStatusColor(calculation.status || 'PENDING')}
                     />
-                    <Text style={[styles.statusText, { color: getStatusColor(calculation.status) }]}>
-                      {calculation.status}
+                    <Text style={[styles.statusText, { color: getStatusColor(calculation.status || 'PENDING') }]}>
+                      {calculation.status || 'PENDING'}
                     </Text>
                   </View>
                 </View>
@@ -419,21 +716,21 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.calculationDetails}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Distance:</Text>
-                    <Text style={styles.detailValue}>{calculation.rawData.totalDistance} km</Text>
+                    <Text style={styles.detailValue}>{calculation.rawData?.totalDistance || 0} km</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Hours:</Text>
-                    <Text style={styles.detailValue}>{calculation.rawData.totalHours} hrs</Text>
+                    <Text style={styles.detailValue}>{calculation.rawData?.totalHours || 0} hrs</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Total Salary:</Text>
-                    <Text style={styles.totalSalary}>{formatCurrency(calculation.calculations.totalSalary)}</Text>
+                    <Text style={styles.totalSalary}>{formatCurrency(calculation.calculations?.totalSalary || 0)}</Text>
                   </View>
                 </View>
                 
                 <View style={styles.calculationFooter}>
                   <Text style={styles.footerText}>
-                    Created: {formatDate(calculation.createdAt)}
+                    Created: {calculation.createdAt ? formatDate(calculation.createdAt) : 'N/A'}
                   </Text>
                   {calculation.paidAt && (
                     <Text style={styles.footerText}>
@@ -452,12 +749,19 @@ const SalaryScreen: React.FC = () => {
         visible={modalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setModalVisible(false);
+          setDailyBreakdown([]);
+        }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Salary Calculation Details</Text>
             <TouchableOpacity
-              onPress={() => setModalVisible(false)}
+              onPress={() => {
+                setModalVisible(false);
+                setDailyBreakdown([]);
+              }}
               style={styles.closeButton}
             >
               <Ionicons name="close" size={24} color="#374151" />
@@ -471,32 +775,15 @@ const SalaryScreen: React.FC = () => {
                 <Text style={styles.detailSectionTitle}>Period Information</Text>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Period:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.periodDisplay}</Text>
+                  <Text style={styles.detailValue}>{selectedCalculation.periodDisplay || 'N/A'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Type:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.calculationPeriod.periodType}</Text>
+                  <Text style={styles.detailValue}>{selectedCalculation.calculationPeriod?.periodType || 'N/A'}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Days Worked:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.rawData.daysWorked} days</Text>
-                </View>
-              </View>
-
-              {/* Material Information */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Material Information</Text>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Material Type:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.material.materialType}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Category:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.material.category}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Vehicle Type:</Text>
-                  <Text style={styles.detailValue}>{selectedCalculation.material.vehicleType}</Text>
+                  <Text style={styles.detailValue}>{selectedCalculation.rawData?.daysWorked || 0} days</Text>
                 </View>
               </View>
 
@@ -505,15 +792,15 @@ const SalaryScreen: React.FC = () => {
                 <Text style={styles.detailSectionTitle}>Raw Data</Text>
                 <View style={styles.rawDataGrid}>
                   <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData.totalDistance}</Text>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalDistance || 0}</Text>
                     <Text style={styles.rawDataLabel}>Total Distance (km)</Text>
                   </View>
                   <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData.totalHours}</Text>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalHours || 0}</Text>
                     <Text style={styles.rawDataLabel}>Total Hours</Text>
                   </View>
                   <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData.daysWorked}</Text>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.daysWorked || 0}</Text>
                     <Text style={styles.rawDataLabel}>Days Worked</Text>
                   </View>
                 </View>
@@ -525,13 +812,13 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Distance Rate:</Text>
                   <Text style={styles.detailValue}>
-                    {formatCurrency(selectedCalculation.pricingConfig.distanceRate)}/km
+                    {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
                   </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Hours Rate:</Text>
                   <Text style={styles.detailValue}>
-                    {formatCurrency(selectedCalculation.pricingConfig.hoursRate)}/hour
+                    {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
                   </Text>
                 </View>
               </View>
@@ -542,25 +829,25 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.calculationGrid}>
                   <View style={styles.calculationItem}>
                     <Text style={styles.calculationValue}>
-                      {formatCurrency(selectedCalculation.calculations.distanceComputation)}
+                      {formatCurrency(selectedCalculation.calculations?.distanceComputation || 0)}
                     </Text>
                     <Text style={styles.calculationLabel}>Distance Computation</Text>
                     <Text style={styles.calculationFormula}>
-                      {selectedCalculation.rawData.totalDistance} km × {formatCurrency(selectedCalculation.pricingConfig.distanceRate)}/km
+                      {selectedCalculation.rawData?.totalDistance || 0} km × {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
                     </Text>
                   </View>
                   <View style={styles.calculationItem}>
                     <Text style={styles.calculationValue}>
-                      {formatCurrency(selectedCalculation.calculations.hoursComputation)}
+                      {formatCurrency(selectedCalculation.calculations?.hoursComputation || 0)}
                     </Text>
                     <Text style={styles.calculationLabel}>Hours Computation</Text>
                     <Text style={styles.calculationFormula}>
-                      {selectedCalculation.rawData.totalHours} hrs × {formatCurrency(selectedCalculation.pricingConfig.hoursRate)}/hour
+                      {selectedCalculation.rawData?.totalHours || 0} hrs × {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
                     </Text>
                   </View>
                   <View style={[styles.calculationItem, styles.totalCalculationItem]}>
                     <Text style={styles.totalCalculationValue}>
-                      {formatCurrency(selectedCalculation.calculations.totalSalary)}
+                      {formatCurrency(selectedCalculation.calculations?.totalSalary || 0)}
                     </Text>
                     <Text style={styles.totalCalculationLabel}>Total Salary</Text>
                     <Text style={styles.totalCalculationFormula}>
@@ -570,17 +857,70 @@ const SalaryScreen: React.FC = () => {
                 </View>
               </View>
 
+              {/* Daily Breakdown */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Daily Breakdown</Text>
+                {loadingBreakdown ? (
+                  <View style={styles.loadingBreakdown}>
+                    <Text style={styles.loadingText}>Loading daily breakdown...</Text>
+                  </View>
+                ) : dailyBreakdown.length > 0 ? (
+                  <View style={styles.dailyBreakdownContainer}>
+                    {dailyBreakdown.map((day, index) => (
+                      <View key={index} style={styles.dailyBreakdownItem}>
+                        <View style={styles.dailyBreakdownHeader}>
+                          <Text style={styles.dailyBreakdownDate}>
+                            {formatDate(day.date)}
+                          </Text>
+                          <Text style={styles.dailyBreakdownSalary}>
+                            {formatCurrency(day.dailySalary)}
+                          </Text>
+                        </View>
+                        <View style={styles.dailyBreakdownDetails}>
+                          <View style={styles.dailyBreakdownRow}>
+                            <Text style={styles.dailyBreakdownLabel}>Distance:</Text>
+                            <Text style={styles.dailyBreakdownValue}>
+                              {day.totalDistance.toFixed(2)} km
+                            </Text>
+                            <Text style={styles.dailyBreakdownSalary}>
+                              {formatCurrency(day.distanceSalary)}
+                            </Text>
+                          </View>
+                          <View style={styles.dailyBreakdownRow}>
+                            <Text style={styles.dailyBreakdownLabel}>Hours:</Text>
+                            <Text style={styles.dailyBreakdownValue}>
+                              {day.totalHours.toFixed(2)} hrs
+                            </Text>
+                            <Text style={styles.dailyBreakdownSalary}>
+                              {formatCurrency(day.hoursSalary)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                    <View style={styles.dailyBreakdownTotal}>
+                      <Text style={styles.dailyBreakdownTotalLabel}>Total Days:</Text>
+                      <Text style={styles.dailyBreakdownTotalValue}>
+                        {dailyBreakdown.length} days
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.detailValue}>No daily breakdown data available</Text>
+                )}
+              </View>
+
               {/* Status Information */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailSectionTitle}>Status Information</Text>
                 <View style={styles.statusContainer}>
                   <Ionicons
-                    name={getStatusIcon(selectedCalculation.status)}
+                    name={getStatusIcon(selectedCalculation.status || 'PENDING')}
                     size={24}
-                    color={getStatusColor(selectedCalculation.status)}
+                    color={getStatusColor(selectedCalculation.status || 'PENDING')}
                   />
-                  <Text style={[styles.statusText, { color: getStatusColor(selectedCalculation.status) }]}>
-                    {selectedCalculation.status}
+                  <Text style={[styles.statusText, { color: getStatusColor(selectedCalculation.status || 'PENDING') }]}>
+                    {selectedCalculation.status || 'PENDING'}
                   </Text>
                 </View>
                 {selectedCalculation.approvedAt && (
@@ -633,6 +973,30 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 40,
   },
   header: {
     padding: 20,
@@ -937,6 +1301,81 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
+  },
+  loadingBreakdown: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  dailyBreakdownContainer: {
+    gap: 12,
+  },
+  dailyBreakdownItem: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dailyBreakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  dailyBreakdownDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  dailyBreakdownDetails: {
+    gap: 6,
+  },
+  dailyBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dailyBreakdownLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    flex: 1,
+  },
+  dailyBreakdownValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#111827',
+    flex: 1,
+    textAlign: 'right',
+    marginRight: 12,
+  },
+  dailyBreakdownSalary: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#059669',
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  dailyBreakdownTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#D1D5DB',
+  },
+  dailyBreakdownTotalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  dailyBreakdownTotalValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
   },
 });
 

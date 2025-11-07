@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Popup, Polyline, Marker } from 'react-leaflet';
+import { Popup, Polyline, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map as LeafletMap, Icon } from 'leaflet';
@@ -175,6 +175,124 @@ const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> =
     geocodingCache.set(cacheKey, fallback); // Cache fallback too
     return fallback;
   }
+};
+
+// Component to safely update map center and zoom
+const MapController: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
+  const map = useMap();
+  const [isMapReady, setIsMapReady] = useState(false);
+  const lastUpdateRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+
+  // Wait for map to be ready before allowing updates
+  useEffect(() => {
+    if (map) {
+      map.whenReady(() => {
+        // Additional check to ensure map panes are fully initialized
+        try {
+          const mapPane = map.getPane('mapPane');
+          if (mapPane && (mapPane as any)._leaflet_pos !== undefined) {
+            setIsMapReady(true);
+          } else {
+            // Retry after a short delay if panes aren't ready
+            setTimeout(() => {
+              try {
+                const retryPane = map.getPane('mapPane');
+                if (retryPane) {
+                  setIsMapReady(true);
+                }
+              } catch {
+                // If still not ready, set ready anyway to prevent blocking
+                setIsMapReady(true);
+              }
+            }, 100);
+          }
+        } catch {
+          // If check fails, assume ready after a delay
+          setTimeout(() => setIsMapReady(true), 100);
+        }
+      });
+    }
+  }, [map]);
+
+  // Safely update map view when center or zoom changes
+  useEffect(() => {
+    if (!map || !isMapReady) return;
+
+    // Skip if this is the same update as last time
+    if (lastUpdateRef.current && 
+        lastUpdateRef.current.center[0] === center[0] &&
+        lastUpdateRef.current.center[1] === center[1] &&
+        lastUpdateRef.current.zoom === zoom) {
+      return;
+    }
+
+    try {
+      // Check if map panes are initialized and have _leaflet_pos
+      const mapPane = map.getPane('mapPane');
+      if (!mapPane) {
+        // If pane doesn't exist, wait a bit and retry
+        setTimeout(() => {
+          if (map && map.getPane('mapPane')) {
+            try {
+              map.setView(center, zoom, { animate: true, duration: 0.5 });
+              lastUpdateRef.current = { center, zoom };
+            } catch (err) {
+              console.warn('Error updating map view (retry):', err);
+            }
+          }
+        }, 100);
+        return;
+      }
+
+      // Check if _leaflet_pos exists (indicates pane is fully initialized)
+      if ((mapPane as any)._leaflet_pos === undefined) {
+        // Wait for pane to be initialized
+        setTimeout(() => {
+          try {
+            const retryPane = map.getPane('mapPane');
+            if (retryPane && (retryPane as any)._leaflet_pos !== undefined) {
+              map.setView(center, zoom, { animate: true, duration: 0.5 });
+              lastUpdateRef.current = { center, zoom };
+            }
+          } catch (err) {
+            console.warn('Error updating map view (pane check retry):', err);
+          }
+        }, 50);
+        return;
+      }
+
+      // Check if the map has valid dimensions
+      const container = map.getContainer();
+      if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
+        return;
+      }
+
+      // Use whenReady to ensure map is fully initialized before updating
+      map.whenReady(() => {
+        try {
+          const currentCenter = map.getCenter();
+          const currentZoom = map.getZoom();
+          
+          // Only update if values have actually changed
+          const centerChanged = 
+            Math.abs(currentCenter.lat - center[0]) > 0.0001 || 
+            Math.abs(currentCenter.lng - center[1]) > 0.0001;
+          const zoomChanged = currentZoom !== zoom;
+
+          if (centerChanged || zoomChanged) {
+            map.setView(center, zoom, { animate: true, duration: 0.5 });
+            lastUpdateRef.current = { center, zoom };
+          }
+        } catch (error) {
+          console.warn('Error updating map view:', error);
+        }
+      });
+    } catch (error) {
+      console.warn('Error checking map readiness:', error);
+    }
+  }, [map, center, zoom, isMapReady]);
+
+  return null;
 };
 
 const ScreenTracking: React.FC = () => {
@@ -1197,6 +1315,7 @@ const ScreenTracking: React.FC = () => {
                         // Any map initialization code can go here
                       }}
                     >
+                      <MapController center={mapCenter} zoom={zoom} />
                       {activeTab === 'live' ? (
                     // Live tracking markers - Real-time updates from WebSocket
                     <>

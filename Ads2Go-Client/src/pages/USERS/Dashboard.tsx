@@ -723,6 +723,19 @@ const Dashboard = () => {
     };
   }, [showCalendar]);
 
+  // Get selected ad's startTime and id for route filtering
+  const selectedAdStartTime = useMemo(() => {
+    if (!selectedAdForRoute || !myAdsData?.getMyAds) return undefined;
+    
+    const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
+    return selectedAd?.startTime || undefined;
+  }, [selectedAdForRoute, myAdsData?.getMyAds]);
+
+  // Get selected ad's id to look up actual deployment time (for route filtering)
+  const selectedAdIdForRoute = useMemo(() => {
+    return selectedAdForRoute || undefined;
+  }, [selectedAdForRoute]);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Background Image */}
@@ -1088,7 +1101,7 @@ const Dashboard = () => {
             {mapActiveTab === 'history' && (
               <div className="relative flex flex-col sm:flex-row gap-2 items-end pr-2 sm:pr-4 z-[10000]">
                 {/* Ad Selector */}
-                <div className="relative w-40">
+                <div className="relative w-40 z-50">
                   <button
                     onClick={() => setShowAdDropdown(!showAdDropdown)}
                     className="relative z-[10001] flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-2.5 shadow-md focus:outline-none bg-white gap-2"
@@ -1183,11 +1196,11 @@ const Dashboard = () => {
           {/* Map Container */}
           <div className="relative overflow-hidden">
             {/* Map Content */}
-            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }}>
+            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }} className="relative z-0">
               {mapActiveTab === 'today' ? (
                 <UserMaterialsMap height="100%" className="rounded-b-lg" />
               ) : (
-                <div className="h-full w-full">
+                <div className="h-full w-full relative z-0">
                   {!selectedAdForRoute ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center text-black/70 p-8">
@@ -1220,9 +1233,11 @@ const Dashboard = () => {
                       materialIds={selectedMaterialIds}
                       date={selectedRouteDate}
                       className="h-full w-full"
-                      style={{ height: '100%' }}
+                      style={{ height: '100%', position: 'relative', zIndex: 0 }}
                       snapToRoads={true}
                       disableAutoRefresh={true}
+                      adStartTime={selectedAdStartTime}
+                      adId={selectedAdIdForRoute}
                     />
                   )}
                 </div>
