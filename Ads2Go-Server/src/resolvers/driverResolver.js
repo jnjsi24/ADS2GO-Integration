@@ -186,7 +186,10 @@ Upload: GraphQLUpload,
           path: 'material',
           model: 'Material',
           select: 'materialId materialType category description mountedAt dismountedAt'
-        });
+        })
+        .populate('approvedBy', 'firstName lastName email')
+        .populate('rejectedBy', 'firstName lastName email')
+        .populate('deletedBy', 'firstName lastName email');
     },
 
     getDriverById: async (_, { driverId }, { user }) => {
@@ -784,6 +787,8 @@ createDriver: async (_, { input }) => {
     driver.accountStatus = 'ACTIVE';
     driver.reviewStatus = 'APPROVED';
     driver.approvalDate = new Date();
+    driver.approvedBy = user.id; // Store admin who approved
+    driver.rejectedBy = null; // Clear rejectedBy when approving
     driver.materialId = materialToAssign._id;
     driver.installedMaterialType = null; // Will be set when material is actually mounted
 
@@ -867,6 +872,8 @@ createDriver: async (_, { input }) => {
         driver.accountStatus = 'REJECTED';
         driver.reviewStatus = 'REJECTED';
         driver.rejectedReason = reason;
+        driver.rejectedBy = user.id; // Store admin who rejected
+        driver.approvedBy = null; // Clear approvedBy when rejecting
         
         // If driver had any materials assigned, unassign them
         if (driver.materialId) {
@@ -1084,6 +1091,7 @@ createDriver: async (_, { input }) => {
         driver.isArchived = true;
         driver.archivedAt = now;
         driver.scheduledDeletionDate = deletionDate;
+        driver.deletedBy = user.id; // Store admin who deleted
         driver.tokenVersion += 1; // Invalidate all sessions
         
         await driver.save();

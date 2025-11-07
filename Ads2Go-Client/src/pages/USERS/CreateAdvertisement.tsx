@@ -1,7 +1,7 @@
 import { useState, useEffect,  MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
-import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload, Check, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CREATE_FLEXIBLE_AD } from '../../graphql/mutations/flexibleAdMutations';
 import { 
@@ -40,6 +40,7 @@ const CreateAdvertisement: React.FC = () => {
   const [pricingCalculationError, setPricingCalculationError] = useState<string | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [showVehicleTypeDropdown, setShowVehicleTypeDropdown] = useState(false);
   const [showMaterialTypeDropdown, setShowMaterialTypeDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
@@ -581,6 +582,7 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     
     if ((isImage && isSupportedImage) || (isVideo && isSupportedVideo)) {
       handleInputChange('mediaFile', file);
+      setUploadProgress(100); // Set to 100% when file is selected
     } else {
       setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, MOV');
       // Clear the file input
@@ -611,6 +613,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     
     if (isSupportedImage || isSupportedVideo) {
       handleInputChange('mediaFile', file);
+      setUploadProgress(100); // Set to 100% when file is selected
     } else {
       setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, ');
       handleInputChange('mediaFile', null);
@@ -699,92 +702,56 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.website}</p>
           )}
         </div>
-        <div>
+        <div className="relative">
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Media File
           </label>
 
+          {/* Upload Area */}
           <div
-            className={`border-2 border-dashed rounded-md p-6 transition-colors flex flex-col items-center justify-center text-center
+            className={`relative border-2 border-dashed rounded-md p-8 transition-colors flex flex-col items-center justify-center text-center min-h-[200px]
               ${isDragging
-                ? 'border-blue-500 bg-blue-50'
+                ? 'border-blue-500'
                 : mediaFileError
-                ? 'border-red-500 bg-red-50'
-                : 'border-black/60 bg-transparent'}
+                ? 'border-red-500'
+                : 'border-gray-300'}
             `}
+            style={{
+              background: isDragging 
+                ? 'linear-gradient(to bottom, #dbeafe, #ffffff)'
+                : mediaFileError
+                ? 'linear-gradient(to bottom, #fee2e2, #ffffff)'
+                : 'linear-gradient(to bottom, #e0f2fe, #ffffff)'
+            }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
             <CloudUpload
               className={`w-12 h-12 mb-4 ${
-                mediaFileError ? 'text-red-400' : 'text-black/60'
+                mediaFileError ? 'text-red-400' : 'text-gray-600'
               }`}
             />
-            <p className="text-black/80 mb-4">Drag your file image/video here</p>
+            <p className="text-gray-700 mb-4">Drag your file image/video here</p>
 
             {/* Divider with 'or' */}
             <div className="flex items-center justify-center mb-4 w-full">
-              <div
-                className={`grow max-w-40 h-px ${
-                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-                }`}
-              ></div>
-              <span
-                className={`mx-3 text-sm ${
-                  mediaFileError ? 'text-red-400' : 'text-black/80'
-                }`}
-              >
-                or
-              </span>
-              <div
-                className={`grow max-w-40 h-px ${
-                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-                }`}
-              ></div>
+              <div className="grow max-w-40 h-px bg-gray-300"></div>
+              <span className="mx-3 text-sm text-gray-700">or</span>
+              <div className="grow max-w-40 h-px bg-gray-300"></div>
             </div>
 
-            {/* Centered Upload Button */}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setMediaFileError('');
-                  document.getElementById('media-upload')?.click();
-                }}
-                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  const button = e.currentTarget;
-                  const rect = button.getBoundingClientRect();
-                  const x = e.clientX - rect.left;
-                  const y = e.clientY - rect.top;
-                  button.style.setProperty('--x', `${x}px`);
-                  button.style.setProperty('--y', `${y}px`);
-                }}
-                className={`relative p-3 font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
-                  ${
-                    mediaFileError
-                      ? 'bg-red-500 hover:bg-red-600'
-                      : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5]'
-                  }`}
-              >
-                {/* Shiny Hover Effect */}
-                <span
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  style={{
-                    background:
-                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
-                  }}
-                />
-                <span className="relative z-10">Click to upload file</span>
-              </button>
-            </div>
-
-            {/* File feedback */}
-            <p
-              className={`text-sm mt-2 ${
-                mediaFileError ? 'text-red-500' : 'text-gray-500'
-              }`}
-            ></p>
+            {/* Upload Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setMediaFileError('');
+                document.getElementById('media-upload')?.click();
+              }}
+              className="bg-[#3674B5] hover:bg-[#2a5a94] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+            >
+              Click to upload file
+            </button>
 
             <input
               type="file"
@@ -794,36 +761,68 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               id="media-upload"
             />
 
-            {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
-              <div className="mt-4">
-                {/* Media Preview */}
-                <div className="w-full bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center h-40 mb-2">
-                  {formData.mediaFile.type.startsWith('image/') ? (
-                    <img
-                      src={URL.createObjectURL(formData.mediaFile)}
-                      alt="Preview"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  ) : (
-                    <video
-                      src={URL.createObjectURL(formData.mediaFile)}
-                      className="max-h-full max-w-full"
-                      controls
-                    />
-                  )}
-                </div>
-                <p className="text-sm text-green-600 text-center font-medium">
-                  ✓ Uploaded File: {formData.mediaFile.name}
-                </p>
+            {/* File Preview Section */}
+          {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
+            <div className="mt-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-4">
+              {/* Thumbnail */}
+              <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0 bg-gray-100">
+                {formData.mediaFile.type.startsWith('image/') ? (
+                  <img
+                    src={URL.createObjectURL(formData.mediaFile)}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                    <Play className="w-6 h-6 text-gray-400" />
+                  </div>
+                )}
               </div>
-            )}
-            
-            {isDetectingDuration && (
-              <p className="text-sm text-blue-600 mt-2 animate-pulse">
-                🎬 Detecting video duration...
-              </p>
-            )}
+
+              {/* File Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-black text-sm truncate">
+                  {formData.mediaFile.name}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {(formData.mediaFile.size / 1024).toFixed(0)} KB
+                </p>
+                
+                {/* Progress Bar */}
+                <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      isUploading ? 'bg-[#3674B5]' : 'bg-gray-200'
+                    }`}
+                    style={{ width: isUploading ? `${uploadProgress}%` : '100%' }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Action Icons */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {!isUploading && (
+                  <Check className="w-5 h-5 text-gray-600 cursor-pointer hover:text-green-600" />
+                )}
+                <X
+                  className="w-5 h-5 text-gray-600 cursor-pointer hover:text-red-600"
+                  onClick={() => {
+                    setFormData({ ...formData, mediaFile: null });
+                    setUploadProgress(0);
+                  }}
+                />
+              </div>
+            </div>
+          )}
           </div>
+
+          
+            
+          {isDetectingDuration && (
+            <p className="text-sm text-blue-600 mt-2 animate-pulse">
+              🎬 Detecting video duration...
+            </p>
+          )}
 
           {(errors.mediaFile || mediaFileError) && (
             <p className="text-sm text-red-600 mt-1">

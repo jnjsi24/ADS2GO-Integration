@@ -107,6 +107,11 @@ const adTypeDefs = gql`
     isArchived: Boolean!
     archivedAt: String
     scheduledDeletionDate: String
+    # Admin tracking fields
+    approvedBy: Admin
+    rejectedBy: Admin
+    deletedBy: Admin
+    restoredBy: Admin
   }
 
   input CreateAdInput {

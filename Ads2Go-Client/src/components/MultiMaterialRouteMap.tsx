@@ -51,6 +51,8 @@ interface MultiMaterialRouteMapProps {
   style?: React.CSSProperties;
   snapToRoads?: boolean;
   disableAutoRefresh?: boolean; // ✅ Disable auto-refresh (e.g., for history tab)
+  adStartTime?: string; // ✅ Optional: Filter route to only show locations after ad deployment time
+  adId?: string; // ✅ Optional: Ad ID to look up actual deployment time from AdsDeployment
 }
 
 // Predefined colors for different routes
@@ -74,8 +76,8 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
 
     const fitBoundsSafely = () => {
       try {
-        // ✅ FIX: Wait for map to be fully initialized before fitting bounds
-        // Check if map container and panes are ready
+        // ✅ FIX: Use safer checks without accessing internal Leaflet properties
+        // Check if map container has valid dimensions
         const container = map.getContainer();
         if (!container) {
           setTimeout(fitBoundsSafely, 100);
@@ -90,9 +92,11 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           return;
         }
 
-        // Check if map pane exists
-        const mapPane = map.getPane('mapPane');
-        if (!mapPane) {
+        // ✅ FIX: Verify map is accessible by trying to get center (safer than checking _leaflet_pos)
+        try {
+          map.getCenter();
+        } catch {
+          // Map not ready yet, retry
           setTimeout(fitBoundsSafely, 100);
           return;
         }
@@ -108,11 +112,17 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           map.whenReady(() => {
             try {
               // Double-check map is still valid before fitting
-              if (map.getContainer() && map.getPane('mapPane')) {
-                map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
+              const container = map.getContainer();
+              if (container) {
+                try {
+                  map.getCenter(); // Verify map is accessible
+                  map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
+                } catch {
+                  // Map not accessible, silently skip
+                }
               }
             } catch (error) {
-              console.warn('Error fitting bounds in whenReady:', error);
+              // Silently handle errors - don't spam console
             }
           });
         } else {
@@ -120,11 +130,11 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           try {
             map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
           } catch (error) {
-            console.warn('Error fitting bounds:', error);
+            // Silently handle errors
           }
         }
       } catch (error) {
-        console.warn('Error in fitBoundsSafely:', error);
+        // Silently handle errors - don't spam console
       }
     };
 
@@ -378,7 +388,9 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   className = '',
   style = {},
   snapToRoads = true,
-  disableAutoRefresh = false
+  disableAutoRefresh = false,
+  adStartTime,
+  adId
 }) => {
   const [materialRoutes, setMaterialRoutes] = useState<MaterialRoute[]>([]);
   const [loading, setLoading] = useState(true);
@@ -389,7 +401,9 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   
   // 🔄 Track if this is the initial load (for silent refresh)
   const isInitialLoadRef = useRef(true);
-  const lastProcessedRoutesRef = useRef<Map<string, string>>(new Map());
+  // ✅ IMPROVED: Track processed point counts per material per segment for incremental updates
+  // Map: materialId -> array of point counts per segment
+  const lastProcessedPointCountsRef = useRef<Map<string, number[]>>(new Map());
 
   // Convert route points to segments (handle offline periods)
   const processRouteSegments = (route: RoutePoint[]): [number, number][][] => {
@@ -429,15 +443,11 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     return segments;
   };
 
-  // Track route data changes for snapping trigger
-  const routesDataKey = useMemo(() => {
-    return materialRoutes.map(r => `${r.materialId}-${r.route.length}`).join('|');
-  }, [materialRoutes]);
-
-  // Apply road snapping to routes
+  // ✅ IMPROVED: Apply incremental road snapping - only process new points
   useEffect(() => {
     if (materialRoutes.length === 0) {
       setIsSnappingInProgress(false);
+      lastProcessedPointCountsRef.current.clear();
       return;
     }
 
@@ -445,54 +455,267 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       // If snapping is disabled, clear any existing snapped routes
       setMaterialRoutes(routes => routes.map(r => ({ ...r, snappedRoute: undefined })));
       setIsSnappingInProgress(false);
+      lastProcessedPointCountsRef.current.clear();
       return;
     }
 
     const applyRoadSnapping = async () => {
-      setIsSnappingInProgress(true);
+      const isInitialLoad = isInitialLoadRef.current;
       
-      const updatedRoutes = await Promise.all(
-        materialRoutes.map(async (materialRoute) => {
-          // Check if we've already processed this route
-          const routeKey = JSON.stringify(materialRoute.route);
-          const lastProcessed = lastProcessedRoutesRef.current.get(materialRoute.materialId);
-          
-          if (lastProcessed === routeKey && materialRoute.snappedRoute) {
-            // Return existing snapped route
-            return materialRoute;
+      // ✅ IMPROVED: Only set snapping in progress on initial load
+      // During silent refreshes, keep existing routes visible while processing new points
+      if (isInitialLoad) {
+        setIsSnappingInProgress(true);
+      } else {
+        // Silent refresh - process in background, keep existing routes visible
+        console.log('🔄 [MultiMaterialRouteMap] Incremental update - processing new points while keeping existing routes visible');
+      }
+
+      try {
+        const updatedRoutes = await Promise.all(
+          materialRoutes.map(async (materialRoute) => {
+            // Process route into segments
+            const currentSegments = processRouteSegments(materialRoute.route);
+            
+            if (currentSegments.length === 0) {
+              return materialRoute;
+            }
+            
+            // Get last processed point counts for this material
+            const lastProcessedCounts = lastProcessedPointCountsRef.current.get(materialRoute.materialId) || [];
+            const currentSegmentCounts = currentSegments.map(seg => seg.length);
+            
+            // Get existing snapped segments (if any)
+            const existingSnappedSegments = materialRoute.snappedRoute || [];
+            const newSnappedSegments: [number, number][][] = [];
+            
+            // ✅ FIX: Validate segment structure - check if segments match by validating continuity
+            // If segment structure changed (segments don't match), reset and re-snap all segments
+            let segmentStructureChanged = false;
+            if (lastProcessedCounts.length !== currentSegments.length) {
+              // Segment count changed - structure definitely changed
+              segmentStructureChanged = true;
+              console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId}: Segment count changed: ${lastProcessedCounts.length} → ${currentSegments.length} - resetting incremental snapping`);
+            } else if (lastProcessedCounts.length > 0 && existingSnappedSegments.length > 0) {
+              // Validate that existing segments still match current segments (by checking first/last points)
+              for (let i = 0; i < currentSegments.length && i < existingSnappedSegments.length; i++) {
+                const currentSegment = currentSegments[i];
+                const existingSnappedSegment = existingSnappedSegments[i];
+                
+                // Check if first point of current segment matches first point of existing segment
+                // (within reasonable GPS accuracy threshold of ~50 meters)
+                if (currentSegment.length > 0 && existingSnappedSegment.length > 0) {
+                  const currentFirstPoint = currentSegment[0];
+                  const existingFirstPoint = existingSnappedSegment[0];
+                  const distanceThreshold = 0.0005; // ~50 meters in degrees (rough approximation)
+                  
+                  const latDiff = Math.abs(currentFirstPoint[0] - existingFirstPoint[0]);
+                  const lngDiff = Math.abs(currentFirstPoint[1] - existingFirstPoint[1]);
+                  
+                  // If first points don't match, this is a different segment
+                  if (latDiff > distanceThreshold || lngDiff > distanceThreshold) {
+                    segmentStructureChanged = true;
+                    console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Structure changed - first points don't match (reset incremental snapping)`);
+                    break;
+                  }
+                  
+                  // Also check if segment length decreased significantly (might indicate segment was replaced)
+                  const existingProcessedCount = lastProcessedCounts[i] || 0;
+                  if (currentSegment.length < existingProcessedCount * 0.5) {
+                    // Segment length decreased by more than 50% - likely a different segment
+                    segmentStructureChanged = true;
+                    console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Length decreased significantly (${existingProcessedCount} → ${currentSegment.length}) - resetting incremental snapping`);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // If segment structure changed, reset incremental snapping state for this material
+            if (segmentStructureChanged) {
+              console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId}: Segment structure changed - resetting incremental snapping state`);
+              lastProcessedPointCountsRef.current.set(materialRoute.materialId, []);
+            }
+            
+            // Check if we have new points to process
+            let hasNewPoints = false;
+            if (segmentStructureChanged) {
+              // Structure changed - need to re-snap all segments
+              hasNewPoints = true;
+            } else if (lastProcessedCounts.length !== currentSegments.length) {
+              // Segment count changed - new segments added
+              hasNewPoints = true;
+            } else {
+              // Check if any segment has more points than before
+              for (let i = 0; i < currentSegments.length; i++) {
+                if (currentSegmentCounts[i] > (lastProcessedCounts[i] || 0)) {
+                  hasNewPoints = true;
+                  break;
+                }
+              }
+            }
+            
+            // Skip if no new points to process (route hasn't changed)
+            if (!hasNewPoints && lastProcessedCounts.length === currentSegments.length && existingSnappedSegments.length > 0 && !segmentStructureChanged) {
+              // No new points, return existing route with snapped segments
+              return materialRoute;
+            }
+            
+            // Process each segment with incremental logic
+            for (let i = 0; i < currentSegments.length; i++) {
+              const segment = currentSegments[i];
+              const lastProcessedCount = segmentStructureChanged ? 0 : (lastProcessedCounts[i] || 0);
+              const currentCount = segment.length;
+              
+              // ✅ FIX: If segment structure changed, always re-snap all segments
+              if (segmentStructureChanged) {
+                // Structure changed - re-snap entire segment
+                console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapping due to structure change - ${segment.length} points`);
+                const snappedSegment = await snapPointsToRoads(segment);
+                newSnappedSegments.push(snappedSegment);
+                console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+                continue;
+              }
+              
+              // If this segment has new points, only snap the new portion
+              if (currentCount > lastProcessedCount) {
+                if (lastProcessedCount > 0 && existingSnappedSegments[i]) {
+                  // ✅ INCREMENTAL: Segment already exists - validate continuity before merging
+                  const existingSnappedSegment = existingSnappedSegments[i];
+                  
+                  // ✅ FIX: Validate segment continuity before merging
+                  // Check if the first point of current segment matches the processed portion of existing segment
+                  const existingProcessedPortion = existingSnappedSegment.slice(0, Math.min(lastProcessedCount, existingSnappedSegment.length));
+                  const currentFirstPoint = segment[0];
+                  
+                  // Get the first point of existing processed portion
+                  let existingReferencePoint: [number, number] | null = null;
+                  if (existingProcessedPortion.length > 0) {
+                    // Use first point of existing segment to validate continuity
+                    existingReferencePoint = existingProcessedPortion[0];
+                  }
+                  
+                  // Validate continuity: first point of current segment should match first point of existing segment
+                  const distanceThreshold = 0.0005; // ~50 meters
+                  let segmentsMatch = true;
+                  if (existingReferencePoint) {
+                    const latDiff = Math.abs(currentFirstPoint[0] - existingReferencePoint[0]);
+                    const lngDiff = Math.abs(currentFirstPoint[1] - existingReferencePoint[1]);
+                    segmentsMatch = latDiff <= distanceThreshold && lngDiff <= distanceThreshold;
+                  }
+                  
+                  if (!segmentsMatch) {
+                    // Segments don't match - this is a different segment, re-snap entirely
+                    console.log(`⚠️ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Segments don't match - re-snapping entire segment (structure changed)`);
+                    const snappedSegment = await snapPointsToRoads(segment);
+                    newSnappedSegments.push(snappedSegment);
+                    console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+                    continue;
+                  }
+                  
+                  // Segments match - proceed with incremental update
+                  const newPoints = segment.slice(lastProcessedCount);
+                  
+                  console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Incremental update - ${lastProcessedCount} existing + ${newPoints.length} new points`);
+                  
+                  // Snip the new points and append to existing segment
+                  if (newPoints.length > 0) {
+                    // For smooth transition, include last point of existing segment with new points
+                    const pointsToSnap: [number, number][] = [];
+                    if (existingSnappedSegment.length > 0) {
+                      // Add last point of existing snapped segment as reference
+                      pointsToSnap.push(existingSnappedSegment[existingSnappedSegment.length - 1]);
+                    }
+                    // Add all new raw points
+                    pointsToSnap.push(...newPoints);
+                    
+                    // Snap only the new portion (including transition point)
+                    const snappedNewPortion = await snapPointsToRoads(pointsToSnap);
+                    
+                    // Merge: existing segment + new snapped portion (skip first point of new portion if it's duplicate)
+                    const mergedSegment = [...existingSnappedSegment];
+                    const startIndex = existingSnappedSegment.length > 0 && 
+                                     snappedNewPortion.length > 0 &&
+                                     Math.abs(existingSnappedSegment[existingSnappedSegment.length - 1][0] - snappedNewPortion[0][0]) < 0.0001 &&
+                                     Math.abs(existingSnappedSegment[existingSnappedSegment.length - 1][1] - snappedNewPortion[0][1]) < 0.0001
+                                     ? 1 : 0; // Skip first point if it's duplicate
+                    mergedSegment.push(...snappedNewPortion.slice(startIndex));
+                    
+                    newSnappedSegments.push(mergedSegment);
+                    console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Merged ${existingSnappedSegment.length} existing + ${snappedNewPortion.length - startIndex} new = ${mergedSegment.length} total points`);
+                  } else {
+                    // No new points, keep existing
+                    newSnappedSegments.push(existingSnappedSegment);
+                  }
+                } else {
+                  // ✅ INITIAL: First time processing this segment - snap entire segment
+                  console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Initial snap - ${segment.length} points`);
+                  const snappedSegment = await snapPointsToRoads(segment);
+                  newSnappedSegments.push(snappedSegment);
+                  console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Snapped ${segment.length} → ${snappedSegment.length} points`);
+                }
+              } else {
+                // Segment hasn't grown - keep existing snapped segment
+                if (existingSnappedSegments[i]) {
+                  newSnappedSegments.push(existingSnappedSegments[i]);
+                } else {
+                  // Shouldn't happen, but fallback: snap entire segment
+                  const snappedSegment = await snapPointsToRoads(segment);
+                  newSnappedSegments.push(snappedSegment);
+                }
+              }
+            }
+            
+            // Update processed counts for this material
+            lastProcessedPointCountsRef.current.set(materialRoute.materialId, currentSegmentCounts);
+            
+            return {
+              ...materialRoute,
+              snappedRoute: newSnappedSegments
+            };
+          })
+        );
+        
+        // ✅ IMPROVED: Always update routes (keeps routes visible during updates)
+        setMaterialRoutes(updatedRoutes);
+        setIsSnappingInProgress(false);
+        
+        // Mark initial load as complete after first successful snap
+        if (isInitialLoad) {
+          isInitialLoadRef.current = false;
+        }
+      } catch (error) {
+        console.error('❌ [MultiMaterialRouteMap] Road snapping error:', error);
+        console.warn('⚠️ [MultiMaterialRouteMap] Falling back to raw segment coordinates');
+        
+        // On error, fallback to raw coordinates but preserve existing snapped segments where possible
+        setMaterialRoutes(routes => routes.map(route => {
+          // If we have existing snapped segments, try to preserve them
+          if (route.snappedRoute && route.snappedRoute.length > 0 && !isInitialLoad) {
+            // Keep existing snapped segments
+            return route;
+          } else {
+            // Initial load failed - use raw segments
+            const rawSegments = processRouteSegments(route.route);
+            const currentSegmentCounts = rawSegments.map(seg => seg.length);
+            lastProcessedPointCountsRef.current.set(route.materialId, currentSegmentCounts);
+            return {
+              ...route,
+              snappedRoute: rawSegments
+            };
           }
-          
-          // Process route into segments
-          const segments = processRouteSegments(materialRoute.route);
-          
-          if (segments.length === 0) {
-            return materialRoute;
-          }
-          
-          // Apply road snapping to each segment
-          const snappedSegments: [number, number][][] = [];
-          
-          for (const segment of segments) {
-            const snappedSegment = await snapPointsToRoads(segment);
-            snappedSegments.push(snappedSegment);
-          }
-          
-          // Mark as processed
-          lastProcessedRoutesRef.current.set(materialRoute.materialId, routeKey);
-          
-          return {
-            ...materialRoute,
-            snappedRoute: snappedSegments
-          };
-        })
-      );
-      
-      setMaterialRoutes(updatedRoutes);
-      setIsSnappingInProgress(false);
+        }));
+        
+        setIsSnappingInProgress(false);
+        
+        if (isInitialLoad) {
+          isInitialLoadRef.current = false;
+        }
+      }
     };
 
     applyRoadSnapping();
-  }, [routesDataKey, snapToRoads]);
+  }, [materialRoutes, snapToRoads]);
 
   // ✅ Memoize materialIds to prevent unnecessary re-fetches
   const stableMaterialIds = useMemo(() => materialIds, [materialIds.join(',')]);
@@ -516,8 +739,15 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
 
         try {
-          const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${stableDate}`;
-          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId}`);
+          // ✅ Add adStartTime and adId to query if provided (filter route to only show after ad deployment)
+          let url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${stableDate}`;
+          if (adStartTime) {
+            url += `&adStartTime=${encodeURIComponent(adStartTime)}`;
+          }
+          if (adId) {
+            url += `&adId=${encodeURIComponent(adId)}`;
+          }
+          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId}${adStartTime ? ` (filtered after ${adStartTime})` : ''}${adId ? ` (adId: ${adId})` : ''}`);
           
           const response = await fetch(url);
           
@@ -602,16 +832,16 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       }
     };
 
-    // Reset initial load flag when materialIds or date changes
+    // Reset initial load flag when materialIds, date, adStartTime, or adId changes
     isInitialLoadRef.current = true;
-    lastProcessedRoutesRef.current.clear();
+    lastProcessedPointCountsRef.current.clear(); // ✅ IMPROVED: Clear processed point counts
     
     if (stableMaterialIds.length > 0) {
       fetchAllRoutes(false); // Initial load with loading state
     } else {
       setLoading(false);
     }
-  }, [stableMaterialIds, stableDate]);
+  }, [stableMaterialIds, stableDate, adStartTime, adId]);
 
   // 🔄 Auto-refresh routes every 2 seconds for smooth real-time updates (SILENT/BACKGROUND ONLY)
   useEffect(() => {
@@ -673,23 +903,27 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       const fetchedRoutes = await Promise.all(fetchPromises);
       routes.push(...fetchedRoutes.filter((route): route is MaterialRoute => route !== null));
 
-      // ✅ Silent background update - only update if route data actually changed
-      // This prevents unnecessary re-renders, re-snapping, and visual flickering
+      // ✅ IMPROVED: Update routes - preserve existing snapped routes, incremental snapping will handle new points
+      // The incremental snapping logic will detect new points and only snap them efficiently
       setMaterialRoutes(currentRoutes => {
         // Quick check: compare route counts first
         if (currentRoutes.length !== routes.length) {
           // Route count changed, update silently
           return routes.map(newRoute => {
             const existingRoute = currentRoutes.find(r => r.materialId === newRoute.materialId);
-            // Preserve snapped route if route data is identical
+            // Preserve snapped route only if route data is completely identical
             if (existingRoute && JSON.stringify(existingRoute.route) === JSON.stringify(newRoute.route)) {
-              return existingRoute;
+              return existingRoute; // No change, keep everything including snapped route
             }
-            return newRoute;
+            // Route changed - preserve existing snapped route if available, incremental snapping will handle new points
+            return {
+              ...newRoute,
+              snappedRoute: existingRoute?.snappedRoute // Preserve existing snapped route for incremental snapping
+            };
           });
         }
         
-        // Check if any route data has changed (only check last point for new data)
+        // Check if any route data has changed
         let hasChanges = false;
         const updatedRoutes = routes.map(newRoute => {
           const existingRoute = currentRoutes.find(r => r.materialId === newRoute.materialId);
@@ -699,57 +933,28 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
             return newRoute;
           }
           
-          // For auto-refresh, only check if new points were added (last point changed)
-          // This avoids re-snapping for minor GPS updates
+          // ✅ IMPROVED: Compare route data - if identical, preserve everything (including snapped route)
+          // If different, update route data but preserve existing snapped route for incremental snapping
           const currentRoute = existingRoute.route;
           const newRoutePoints = newRoute.route;
           
-          if (currentRoute.length !== newRoutePoints.length) {
-            hasChanges = true;
-            // Route length changed, preserve snapped route if possible
-            // Only clear if route is significantly different
-            if (Math.abs(currentRoute.length - newRoutePoints.length) > 5) {
-              return newRoute; // Significant change, will re-snap
-            }
-            // Minor change, try to preserve snapped route by keeping existing route structure
-            return {
-              ...newRoute,
-              snappedRoute: existingRoute.snappedRoute // Preserve snapped route
-            };
+          // Check if route data is completely identical
+          if (JSON.stringify(currentRoute) === JSON.stringify(newRoutePoints)) {
+            // No change - preserve existing route with snapped segments
+            return existingRoute;
           }
           
-          // Check if last point changed (new data added)
-          if (currentRoute.length > 0 && newRoutePoints.length > 0) {
-            const currentLast = currentRoute[currentRoute.length - 1];
-            const newLast = newRoutePoints[newRoutePoints.length - 1];
-            
-            if (currentLast.lat !== newLast.lat || currentLast.lng !== newLast.lng) {
-              hasChanges = true;
-              // New point added, update route but preserve existing snapped segments
-              // Only append new segment if significant distance
-              const distance = Math.sqrt(
-                Math.pow(newLast.lat - currentLast.lat, 2) + 
-                Math.pow(newLast.lng - currentLast.lng, 2)
-              ) * 111000; // Convert to meters
-              
-              if (distance > 50) {
-                // Significant new data, update route (will trigger smart re-snapping)
-                return newRoute;
-              } else {
-                // Minor update, preserve snapped route
-                return {
-                  ...newRoute,
-                  snappedRoute: existingRoute.snappedRoute
-                };
-              }
-            }
-          }
-          
-          // No changes to this route, keep existing
-          return existingRoute;
+          // Route data changed - update it but preserve existing snapped route
+          // Incremental snapping will detect new points and only snap them efficiently
+          hasChanges = true;
+          return {
+            ...newRoute,
+            snappedRoute: existingRoute.snappedRoute // Preserve existing snapped route for incremental snapping
+          };
         });
         
         // Only update state if there were actual changes
+        // This prevents unnecessary re-renders while allowing incremental snapping to work
         return hasChanges ? updatedRoutes : currentRoutes;
       });
     }, 2000); // Refresh every 2 seconds
@@ -789,9 +994,11 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     });
   };
 
-  // Get final route coordinates (snapped if enabled, otherwise raw segments)
+  // ✅ IMPROVED: Get final route coordinates - keep existing snapped routes visible during updates
+  // Show existing snapped routes even while processing new points (smooth updates)
   const getFinalRouteCoords = (materialRoute: MaterialRoute): [number, number][][] => {
     if (snapToRoads && materialRoute.snappedRoute && materialRoute.snappedRoute.length > 0) {
+      // Show existing snapped route, even if snapping is in progress
       return materialRoute.snappedRoute;
     }
     
@@ -799,15 +1006,20 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     return processRouteSegments(materialRoute.route);
   };
 
-  // ✅ Only show loading if initial load OR if snapping is enabled and in progress
-  if (loading || (snapToRoads && isSnappingInProgress)) {
+  // ✅ IMPROVED: Only show loading during initial load, not during silent refreshes
+  // Show loading if: initial load is in progress OR (initial load AND snapping is in progress)
+  // Don't show loading if we have existing snapped routes (even if snapping in progress)
+  const hasExistingSnappedRoutes = materialRoutes.some(r => r.snappedRoute && r.snappedRoute.length > 0);
+  const shouldShowLoading = loading || (isInitialLoadRef.current && snapToRoads && isSnappingInProgress && !hasExistingSnappedRoutes);
+  
+  if (shouldShowLoading) {
     return (
       <div style={style} className={className}>
-        <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-center h-full">
           <div className="text-center p-6">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1b5087] mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">
-              {isSnappingInProgress ? 'Snapping routes to roads...' : `Loading routes for ${materialIds.length} material${materialIds.length > 1 ? 's' : ''}...`}
+              {isSnappingInProgress ? 'Snapping routes to roads...' : `Loading routes for ${materialIds.length} material${materialIds.length > 1 ? 's' : ''}`}
             </p>
           </div>
         </div>
@@ -818,15 +1030,15 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   if (materialRoutes.length === 0) {
     return (
       <div style={style} className={className}>
-        <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-center h-full">
           <div className="text-center p-6">
-            <div className="text-gray-400 mb-3">
+            <div className="text-black/70 mb-3">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-700 mb-2">No Route Available</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="text-lg font-medium text-black/90 mb-2">No Route Available</h3>
+            <p className="text-sm text-black/70">
               No tracking data available for this date. None of the {materialIds.length} material{materialIds.length > 1 ? 's were' : ' was'} active on this day.
             </p>
           </div>
@@ -862,16 +1074,25 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
           
           return (
             <React.Fragment key={materialRoute.materialId}>
-              {/* Render route segments */}
-              {routeSegments.map((segment, segmentIndex) => (
-                <Polyline
-                  key={`${materialRoute.materialId}-segment-${segmentIndex}`}
-                  positions={segment}
-                  color={materialRoute.color}
-                  weight={4}
-                  opacity={0.8}
-                />
-              ))}
+              {/* ✅ IMPROVED: Render route segments with stable keys for smooth updates */}
+              {routeSegments.map((segment, segmentIndex) => {
+                // ✅ IMPROVED: Use stable key based only on material ID and segment index
+                // React Leaflet will smoothly update positions when the positions prop changes
+                // This prevents re-rendering the entire polyline and allows smooth incremental updates
+                const segmentKey = `${materialRoute.materialId}-segment-${segmentIndex}`;
+                
+                return (
+                  <Polyline
+                    key={segmentKey}
+                    positions={segment}
+                    color={materialRoute.color}
+                    weight={4}
+                    opacity={0.8}
+                    // ✅ IMPROVED: React Leaflet will smoothly update positions when segment changes
+                    // Using stable key ensures React updates the existing polyline instead of replacing it
+                  />
+                );
+              })}
 
               {/* Start marker */}
               {firstPoint && (

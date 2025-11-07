@@ -7,12 +7,50 @@ const GlobalPricingMultipliers = require('../models/GlobalPricingMultipliers');
 const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
 const Payment = require('../models/Payment');
+const Admin = require('../models/Admin');
+const SuperAdmin = require('../models/SuperAdmin');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 const NotificationService = require('../services/notifications/NotificationService');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
+
+/**
+ * Helper function to populate admin from Admin model
+ * Only Admins can approve/reject/delete ads, not SuperAdmins
+ */
+async function populateAdmin(adminId) {
+  if (!adminId) {
+    console.log('⚠️ populateAdmin: adminId is null or undefined');
+    return null;
+  }
+  
+  try {
+    // Convert to string if it's an ObjectId
+    const id = adminId.toString ? adminId.toString() : adminId;
+    console.log(`🔍 populateAdmin: Looking up Admin with ID: ${id}`);
+    
+    // Only check Admin model (SuperAdmins don't approve/reject/delete ads)
+    const admin = await Admin.findById(id).select('firstName lastName email isArchived');
+    if (admin) {
+      console.log(`✅ populateAdmin: Found Admin - ${admin.firstName} ${admin.lastName} (archived: ${admin.isArchived || false})`);
+      return {
+        id: admin._id.toString(),
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        email: admin.email,
+        isArchived: admin.isArchived || false
+      };
+    }
+    
+    console.log(`❌ populateAdmin: Admin not found with ID: ${id}`);
+    return null;
+  } catch (error) {
+    console.error('❌ populateAdmin: Error populating admin:', error);
+    return null;
+  }
+}
 
 /**
  * Helper function to safely convert any date value to ISO string
@@ -82,10 +120,46 @@ const adResolvers = {
         .populate('driverId')
         .populate('materialId');
       
-      // Convert to plain objects and format dates
-      const plainAds = ads.map(ad => {
+      // Convert to plain objects first, then populate admin fields
+      const plainAds = await Promise.all(ads.map(async (ad) => {
         const obj = ad.toObject();
         obj.id = ad._id.toString();
+        
+        // Populate admin fields using the helper function
+        if (ad.approvedBy) {
+          obj.approvedBy = await populateAdmin(ad.approvedBy);
+        } else {
+          obj.approvedBy = null;
+        }
+        if (ad.rejectedBy) {
+          obj.rejectedBy = await populateAdmin(ad.rejectedBy);
+        } else {
+          obj.rejectedBy = null;
+        }
+        if (ad.deletedBy) {
+          obj.deletedBy = await populateAdmin(ad.deletedBy);
+        } else {
+          obj.deletedBy = null;
+        }
+        if (ad.restoredBy) {
+          obj.restoredBy = await populateAdmin(ad.restoredBy);
+        } else {
+          obj.restoredBy = null;
+        }
+        
+        // Ensure admin fields are properly formatted
+        if (obj.approvedBy && !obj.approvedBy.id) {
+          obj.approvedBy = null;
+        }
+        if (obj.rejectedBy && !obj.rejectedBy.id) {
+          obj.rejectedBy = null;
+        }
+        if (obj.deletedBy && !obj.deletedBy.id) {
+          obj.deletedBy = null;
+        }
+        if (obj.restoredBy && !obj.restoredBy.id) {
+          obj.restoredBy = null;
+        }
         
         // Format date fields
         obj.createdAt = toISOString(obj.createdAt);
@@ -101,31 +175,115 @@ const adResolvers = {
         obj.scheduledDeletionDate = toISOString(obj.scheduledDeletionDate);
         
         return obj;
-      });
+      }));
       
       return plainAds;
     },
 
     getAdsByUser: async (_, { userId }, { user }) => {
       checkAdmin(user);
-      // ✅ Exclude archived ads - they should be treated as deleted
-      return await Ad.find({ 
-        userId,
-        isArchived: { $ne: true },
-        status: { $nin: ['ARCHIVED'] }
+      // ✅ Include archived ads for admin view
+      const ads = await Ad.find({ 
+        userId
       })
-        .populate('materialId')
+        .populate('materialId');
+      
+      // Convert to plain objects and populate admin fields
+      return await Promise.all(ads.map(async (ad) => {
+        const obj = ad.toObject();
+        obj.id = ad._id.toString();
+        
+        // Populate admin fields using the helper function
+        if (ad.approvedBy) {
+          obj.approvedBy = await populateAdmin(ad.approvedBy);
+        } else {
+          obj.approvedBy = null;
+        }
+        if (ad.rejectedBy) {
+          obj.rejectedBy = await populateAdmin(ad.rejectedBy);
+        } else {
+          obj.rejectedBy = null;
+        }
+        if (ad.deletedBy) {
+          obj.deletedBy = await populateAdmin(ad.deletedBy);
+        } else {
+          obj.deletedBy = null;
+        }
+        if (ad.restoredBy) {
+          obj.restoredBy = await populateAdmin(ad.restoredBy);
+        } else {
+          obj.restoredBy = null;
+        }
+        
+        // Ensure admin fields are properly formatted
+        if (obj.approvedBy && !obj.approvedBy.id) {
+          obj.approvedBy = null;
+        }
+        if (obj.rejectedBy && !obj.rejectedBy.id) {
+          obj.rejectedBy = null;
+        }
+        if (obj.deletedBy && !obj.deletedBy.id) {
+          obj.deletedBy = null;
+        }
+        if (obj.restoredBy && !obj.restoredBy.id) {
+          obj.restoredBy = null;
+        }
+        
+        return obj;
+      }));
     },
 
     getMyAds: async (_, __, { user }) => {
       checkAuth(user);
-      // ✅ Exclude archived ads - they should be treated as deleted
-      return await Ad.find({ 
-        userId: user.id,
-        isArchived: { $ne: true },
-        status: { $nin: ['ARCHIVED'] }
+      // ✅ Include archived ads so advertisers can see who deleted them
+      const ads = await Ad.find({ 
+        userId: user.id
       })
-        .populate('materialId')
+        .populate('materialId');
+      
+      // Convert to plain objects and populate admin fields
+      return await Promise.all(ads.map(async (ad) => {
+        const obj = ad.toObject();
+        obj.id = ad._id.toString();
+        
+        // Populate admin fields using the helper function
+        if (ad.approvedBy) {
+          obj.approvedBy = await populateAdmin(ad.approvedBy);
+        } else {
+          obj.approvedBy = null;
+        }
+        if (ad.rejectedBy) {
+          obj.rejectedBy = await populateAdmin(ad.rejectedBy);
+        } else {
+          obj.rejectedBy = null;
+        }
+        if (ad.deletedBy) {
+          obj.deletedBy = await populateAdmin(ad.deletedBy);
+        } else {
+          obj.deletedBy = null;
+        }
+        if (ad.restoredBy) {
+          obj.restoredBy = await populateAdmin(ad.restoredBy);
+        } else {
+          obj.restoredBy = null;
+        }
+        
+        // Ensure admin fields are properly formatted
+        if (obj.approvedBy && !obj.approvedBy.id) {
+          obj.approvedBy = null;
+        }
+        if (obj.rejectedBy && !obj.rejectedBy.id) {
+          obj.rejectedBy = null;
+        }
+        if (obj.deletedBy && !obj.deletedBy.id) {
+          obj.deletedBy = null;
+        }
+        if (obj.restoredBy && !obj.restoredBy.id) {
+          obj.restoredBy = null;
+        }
+        
+        return obj;
+      }));
     },
 
     getAdById: async (_, { id }, { user }) => {
@@ -147,7 +305,39 @@ const adResolvers = {
         throw new Error('This ad has been archived and is no longer accessible');
       }
       
-      return ad;
+      // Convert to plain object and populate admin fields
+      const obj = ad.toObject();
+      obj.id = ad._id.toString();
+      
+      // Populate admin fields using the helper function
+      if (ad.approvedBy) {
+        obj.approvedBy = await populateAdmin(ad.approvedBy);
+      } else {
+        obj.approvedBy = null;
+      }
+      if (ad.rejectedBy) {
+        obj.rejectedBy = await populateAdmin(ad.rejectedBy);
+      } else {
+        obj.rejectedBy = null;
+      }
+      if (ad.deletedBy) {
+        obj.deletedBy = await populateAdmin(ad.deletedBy);
+      } else {
+        obj.deletedBy = null;
+      }
+      
+      // Ensure admin fields are properly formatted
+      if (obj.approvedBy && !obj.approvedBy.id) {
+        obj.approvedBy = null;
+      }
+      if (obj.rejectedBy && !obj.rejectedBy.id) {
+        obj.rejectedBy = null;
+      }
+      if (obj.deletedBy && !obj.deletedBy.id) {
+        obj.deletedBy = null;
+      }
+      
+      return obj;
     },
 
     // Get available field combinations for ad creation
@@ -552,6 +742,8 @@ const adResolvers = {
       if (!ad) throw new Error('Ad not found');
 
       const isAdmin = ['ADMIN', 'SUPERADMIN'].includes(user.role);
+      // Only Admins (not SuperAdmins) can approve/reject/delete ads
+      const canApproveReject = user.role === 'ADMIN';
 
       // Removed applyPlanChanges - no longer using AdsPlan
 
@@ -560,15 +752,29 @@ const adResolvers = {
         if (!materialExists) throw new Error('Material not found');
       }
 
+      // Check if website field is missing (for older ads that might not have it)
+      // We'll skip validation if website is missing since we're not modifying it
+      const isWebsiteMissing = !ad.website;
+
       if (isAdmin) {
         if (input.status && input.status !== ad.status) {
           const previousStatus = ad.status;
           ad.status = input.status;
 
           if (input.status === "APPROVED") {
+            // Only Admins can approve ads
+            if (!canApproveReject) {
+              throw new Error('Only Admins can approve ads');
+            }
+            
             ad.approveTime = new Date();
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            ad.approvedBy = user.id; // Store admin who approved
+            ad.rejectedBy = null; // Clear rejectedBy when approving
+            ad.restoredBy = null; // Clear restoredBy when approving (only show "Approved by")
+            
+            console.log(`✅ Ad ${ad._id} approved by Admin ID: ${user.id}, Role: ${user.role}`);
             
             // Set paymentStatus to PENDING when admin approves
             ad.paymentStatus = 'PENDING';
@@ -595,9 +801,18 @@ const adResolvers = {
               // Don't fail the ad update if notification fails
             }
           } else if (input.status === "REJECTED") {
+            // Only Admins can reject ads
+            if (!canApproveReject) {
+              throw new Error('Only Admins can reject ads');
+            }
+            
             ad.rejectTime = new Date();
             ad.approveTime = null;
             ad.reasonForReject = input.reasonForReject || "No reason provided";
+            ad.rejectedBy = user.id; // Store admin who rejected
+            ad.approvedBy = null; // Clear approvedBy when rejecting
+            
+            console.log(`❌ Ad ${ad._id} rejected by Admin ID: ${user.id}, Role: ${user.role}`);
             
             // Send rejection notification to user
             try {
@@ -620,6 +835,8 @@ const adResolvers = {
             ad.approveTime = null;
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            // Don't clear approvedBy/rejectedBy when changing to other statuses
+            // They should remain to track who performed the action
           }
         }
 
@@ -887,7 +1104,15 @@ const adResolvers = {
         }
       }
 
-      await ad.save();
+      // Skip validation if website is missing (for legacy ads)
+      // This prevents validation errors when updating ads that don't have a website field
+      // We're not modifying the website field, so it's safe to skip validation
+      if (isWebsiteMissing) {
+        console.warn(`⚠️ Ad ${ad._id} is missing website field, skipping validation`);
+        await ad.save({ validateBeforeSave: false });
+      } else {
+        await ad.save();
+      }
       return ad;
     },
 
@@ -901,8 +1126,9 @@ const adResolvers = {
           throw new Error('Ad not found');
         }
 
-        // 2. Check permissions: Admin can delete any ad, users can only delete their own pending ads
+        // 2. Check permissions: Only Admins (not SuperAdmins) can delete ads, users can only delete their own pending ads
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const canDeleteAsAdmin = user.role === 'ADMIN'; // Only Admins can delete ads
         const isOwner = ad.userId.toString() === user.id;
         const isPending = ad.status === 'PENDING';
 
@@ -927,7 +1153,15 @@ const adResolvers = {
         ad.scheduledDeletionDate = deletionDate;
         ad.status = 'ARCHIVED'; // Change status so devices won't play it
         
-        await ad.save();
+        // Store admin who deleted (only if Admin deleted it, not if user deleted their own pending ad)
+        if (canDeleteAsAdmin) {
+          ad.deletedBy = user.id;
+          console.log(`🗑️ Ad ${ad._id} deleted by Admin ID: ${user.id}, Role: ${user.role}`);
+        }
+        
+        // Skip validation when archiving to avoid issues with required fields that might be missing
+        // We're only updating archive-related fields, not modifying the ad content
+        await ad.save({ validateBeforeSave: false });
 
         console.log(`✅ Ad ${id} archived successfully. Scheduled for permanent deletion on: ${deletionDate.toISOString()}`);
 
@@ -1046,6 +1280,7 @@ const adResolvers = {
         }
 
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const canRestoreAsAdmin = user.role === 'ADMIN'; // Only Admins can restore ads
         const isOwner = ad.userId.toString() === user.id;
 
         if (!isAdmin && !isOwner) {
@@ -1063,7 +1298,19 @@ const adResolvers = {
         ad.scheduledDeletionDate = null;
         ad.status = 'PENDING'; // Reset to pending status
         
-        await ad.save();
+        // Store admin who restored (only if Admin restored it, not if user restored their own ad)
+        if (canRestoreAsAdmin) {
+          ad.restoredBy = user.id;
+          ad.deletedBy = null; // Clear deletedBy when restored
+          console.log(`✅ Ad ${ad._id} restored by Admin ID: ${user.id}, Role: ${user.role}`);
+        } else if (isOwner) {
+          // User restoring their own ad - clear deletedBy but don't set restoredBy
+          ad.deletedBy = null;
+        }
+        
+        // Skip validation when restoring to avoid issues with required fields that might be missing
+        // We're only updating archive/restore-related fields, not modifying the ad content
+        await ad.save({ validateBeforeSave: false });
 
         console.log(`✅ Ad ${id} restored successfully`);
 

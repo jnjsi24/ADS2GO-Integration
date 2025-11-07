@@ -833,7 +833,7 @@ const Advertisements: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/ad-details/${ad.id}`);
+                            navigate(`/paymentHistory?adId=${ad.id}`);
                           }}
                           className="text-xs px-3 py-2 rounded-full border border-gray-400 text-black shadow-sm hover:border-gray-700 transition-colors duration-200 cursor-pointer"
                         >

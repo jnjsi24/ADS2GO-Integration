@@ -764,10 +764,14 @@ export class TabletRegistrationService {
         });
 
         if (!deviceTrackingResponse.ok) {
-          const errorText = await deviceTrackingResponse.text();
-          console.error('❌ Failed to update location in device tracking');
-          console.error('Status:', deviceTrackingResponse.status);
-          console.error('Response:', errorText);
+          // Only log non-server errors (4xx client errors are unexpected)
+          // 5xx server errors are expected and will be retried
+          if (deviceTrackingResponse.status < 500) {
+            const errorText = await deviceTrackingResponse.text();
+            console.error('❌ Failed to update location in device tracking');
+            console.error('Status:', deviceTrackingResponse.status);
+            console.error('Response:', errorText);
+          }
           return false;
         }
 
@@ -782,29 +786,73 @@ export class TabletRegistrationService {
         }
       } catch (error) {
         if (error instanceof Error) {
-          // If app is in background and request was cancelled, silently handle it
-          if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
-            // Silently handle - this is expected when app goes to background
-            // The location update is already queued above, so we can safely return false
-            return false;
-          }
-          if (error.name === 'AbortError') {
-            console.warn('⏱️ Location tracking request timed out - will retry via offline queue');
+          const errorMessage = error.message || String(error);
+          const errorName = error.name || '';
+          
+          // Check if this is an expected error that should be suppressed
+          const isExpectedError = 
+            (error as any)?.isCancelled === true ||
+            (error as any)?.isExpected === true ||
+            (error as any)?.isBackground === true ||
+            (error as any)?.isNetworkError === true ||
+            errorName === 'AbortError' ||
+            errorName === 'TypeError' && (errorMessage.includes('Network request failed') || errorMessage.includes('network request failed') || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) ||
+            errorMessage.includes('app in background') ||
+            errorMessage.includes('App is in background') ||
+            errorMessage.includes('Request cancelled') ||
+            errorMessage.includes('request cancelled') ||
+            errorMessage.includes('cancelled') ||
+            errorMessage.includes('Network request failed') ||
+            errorMessage.includes('network request failed') ||
+            errorMessage.includes('NetworkError') ||
+            errorMessage.includes('Failed to fetch');
+          
+          if (isExpectedError) {
+            // Silently handle - this is expected when app goes to background or network is unavailable
             // The location update is already queued above, so we can safely return false
             return false;
           }
         }
-        console.error('❌ Error sending to device tracking:', error);
+        
+        // Only log unexpected errors (not network failures or cancellations)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes('Network request failed') && 
+            !errorMessage.includes('Request cancelled') &&
+            !errorMessage.includes('app in background') &&
+            !errorMessage.includes('NetworkError') &&
+            !errorMessage.includes('Failed to fetch')) {
+          console.error('❌ Error sending to device tracking:', error);
+        }
         return false;
       }
     } catch (error) {
-      console.error('Error updating location tracking:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
+      // Only log unexpected errors (not network failures or cancellations)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : '';
+      
+      const isExpectedError = 
+        (error as any)?.isCancelled === true ||
+        (error as any)?.isExpected === true ||
+        (error as any)?.isBackground === true ||
+        (error as any)?.isNetworkError === true ||
+        errorName === 'AbortError' ||
+        errorName === 'TypeError' && (errorMessage.includes('Network request failed') || errorMessage.includes('network request failed') || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) ||
+        errorMessage.includes('app in background') ||
+        errorMessage.includes('App is in background') ||
+        errorMessage.includes('Request cancelled') ||
+        errorMessage.includes('Network request failed') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('Failed to fetch');
+      
+      if (!isExpectedError) {
+        console.error('Error updating location tracking:', error);
+        if (error instanceof Error) {
+          console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
+        }
       }
       return false;
     }
@@ -867,16 +915,34 @@ export class TabletRegistrationService {
           // Cancel all pending requests when going to background
           requestManager.cancelAllRequests();
           
-          // Update server that we're going offline (with priority)
-          if (this.registration) {
-            await this.updateTabletStatus(false);
-          }
+          // ✅ FIX: Don't mark device as offline when app goes to background
+          // The WebSocket connection should remain active and keep device online
+          // Location tracking stops, but device is still online via WebSocket
+          // Only mark offline if WebSocket actually disconnects
+          console.log('📱 [AppState] App in background - location tracking stopped, but device remains online (WebSocket connected)');
+          
+          // Note: We intentionally don't call updateTabletStatus(false) here
+          // The device status should be managed by WebSocket connection status, not app state
         } else if (nextAppState === 'active') {
           console.log('App is active, restarting location tracking if needed');
           if (this.registration) {
             // Small delay to let app stabilize
             setTimeout(async () => {
-              await this.updateTabletStatus(true);
+              // ✅ FIX: Only update status to online if WebSocket is actually connected
+              // WebSocket will automatically update status when it connects
+              // If WebSocket was disconnected, it will reconnect and update status automatically via onopen handler
+              try {
+                const wsConnected = playbackWebSocketService && playbackWebSocketService.isWebSocketConnected();
+                if (wsConnected) {
+                  // WebSocket is connected - ensure device is marked online
+                  await this.updateTabletStatus(true);
+                  console.log('✅ [AppState] Device status updated to ONLINE (WebSocket connected)');
+                } else {
+                  console.log('⏳ [AppState] WebSocket not connected - will update status when connection established');
+                }
+              } catch (error) {
+                console.error('Error checking WebSocket status:', error);
+              }
               await this.startLocationTracking();
             }, 500);
           }
@@ -931,11 +997,59 @@ export class TabletRegistrationService {
             return;
           }
 
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-            timeInterval: 2000,
-            distanceInterval: 5, // Update every 5 meters
-          });
+          // ✅ FIX: Check location services availability before attempting to get location
+          try {
+            const servicesEnabled = await Location.hasServicesEnabledAsync();
+            if (!servicesEnabled) {
+              // Location services are disabled - skip this update (don't log as error)
+              if (Math.random() < 0.01) { // Log only 1% of the time to reduce noise
+                console.log('⚠️ [LocationTracking] Location services disabled - skipping update');
+              }
+              return;
+            }
+          } catch (servicesCheckError) {
+            // If we can't check services, continue anyway
+          }
+
+          // ✅ FIX: Try to get location with error handling for GPS unavailable errors
+          let location;
+          try {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+              timeInterval: 2000,
+              distanceInterval: 5, // Update every 5 meters
+              mayShowUserSettingsDialog: false, // Don't show settings dialog automatically
+            });
+          } catch (locationError: any) {
+            // ✅ FIX: Handle CoreLocation errors gracefully
+            // kCLErrorDomain error 0 = location unavailable (GPS disabled, no signal, etc.)
+            // This is a common, non-critical error - don't log as ERROR
+            const errorMessage = locationError?.message || String(locationError);
+            const errorCode = locationError?.code;
+            
+            // Check for CoreLocation error codes
+            if (errorMessage.includes('kCLErrorDomain') || 
+                errorMessage.includes('Cannot obtain current location') ||
+                errorCode === 0) {
+              // GPS unavailable - this is normal in some situations (indoors, poor signal, etc.)
+              // Only log occasionally to reduce noise
+              if (Math.random() < 0.01) { // Log only 1% of the time
+                console.log('📍 [LocationTracking] GPS temporarily unavailable - skipping update (this is normal)');
+              }
+              return; // Skip this update, but continue tracking
+            }
+            
+            // For other errors, log them but don't stop tracking
+            if (AppState.currentState === 'active') {
+              console.warn('⚠️ [LocationTracking] Error getting location (will retry):', errorMessage);
+            }
+            return; // Skip this update, but continue tracking
+          }
+
+          if (!location || !location.coords) {
+            // Invalid location data - skip this update
+            return;
+          }
 
           const { latitude, longitude, speed, heading, accuracy } = location.coords;
 
@@ -963,14 +1077,29 @@ export class TabletRegistrationService {
             log.deviceTracking('Location updated', { latitude, longitude, speed, heading, accuracy });
           }
         } catch (error) {
-          // Only log error if app is active and it's not a network failure
+          // ✅ FIX: Improved error handling for location tracking errors
+          // Most location errors are non-critical (GPS unavailable, permissions, etc.)
+          // Only log critical errors that indicate a real problem
           if (AppState.currentState === 'active') {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            if (!errorMessage.includes('Network request failed') && 
-                !errorMessage.includes('Request cancelled') &&
-                !errorMessage.includes('app in background') &&
-                error instanceof Error && error.name !== 'AbortError') {
-              console.error('Error updating location:', error);
+            const errorCode = (error as any)?.code;
+            
+            // Skip logging for common, non-critical errors
+            const isNonCriticalError = 
+              errorMessage.includes('Network request failed') || 
+              errorMessage.includes('Request cancelled') ||
+              errorMessage.includes('app in background') ||
+              errorMessage.includes('kCLErrorDomain') ||
+              errorMessage.includes('Cannot obtain current location') ||
+              errorCode === 0 ||
+              (error instanceof Error && error.name === 'AbortError');
+            
+            if (!isNonCriticalError) {
+              // This is a real error worth logging
+              console.error('❌ [LocationTracking] Critical error in location tracking:', error);
+            } else if (Math.random() < 0.01) {
+              // Log non-critical errors occasionally for debugging
+              console.log('📍 [LocationTracking] Location update skipped:', errorMessage.substring(0, 50));
             }
           }
         }
@@ -992,36 +1121,15 @@ export class TabletRegistrationService {
     this.isTracking = false;
     log.deviceTracking('Location tracking stopped');
     
-    // Update server that we're no longer tracking
-    // Check both registration and the cleared flag before attempting update
-    if (this.registration) {
-      try {
-        // Check if registration was cleared before trying to update
-        const registrationCleared = await AsyncStorage.getItem('registration_cleared');
-        if (registrationCleared === 'true') {
-          // Registration was cleared - don't try to update status
-          return;
-        }
-        
-        // Double-check registration still exists (might have been cleared)
-        if (!this.registration) {
-          return;
-        }
-        
-        await this.updateTabletStatus(false);
-      } catch (error) {
-        // Only log error if app is active and it's not a network failure
-        if (AppState.currentState === 'active') {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          if (!errorMessage.includes('Network request failed') && 
-              !errorMessage.includes('Request cancelled') &&
-              !errorMessage.includes('app in background') &&
-              error instanceof Error && error.name !== 'AbortError') {
-            console.error('Error updating tablet status to offline:', error);
-          }
-        }
-      }
-    }
+    // ✅ FIX: Don't mark device as offline just because location tracking stopped
+    // Location tracking can stop for various reasons (app in background, GPS issues, etc.)
+    // but the device is still online if WebSocket is connected
+    // Only mark offline if WebSocket is actually disconnected
+    // The WebSocket connection itself is the source of truth for online/offline status
+    console.log('📍 [LocationTracking] Location tracking stopped - device remains online (WebSocket connected)');
+    
+    // Note: We intentionally don't call updateTabletStatus(false) here
+    // The device status should be managed by WebSocket connection status, not location tracking
   }
 
   setSimulatingOffline(isOffline: boolean): void {

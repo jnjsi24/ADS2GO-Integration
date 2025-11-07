@@ -103,6 +103,23 @@ const DriverSchema = new mongoose.Schema(
     approvalDate: Date,
     rejectedReason: String,
     resubmissionFiles: { type: [String], default: [] },
+    
+    // Admin tracking fields
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    },
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    },
 
     dateJoined: { type: Date, default: Date.now },
     currentBalance: { type: Number, default: 0 },

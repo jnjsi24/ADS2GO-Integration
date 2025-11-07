@@ -195,15 +195,27 @@ const ManageAds: React.FC = () => {
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
     errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network'
+    fetchPolicy: 'cache-and-network',
+    variables: {
+      includeArchived: activeTab === 'archived'
+    }
   });
 
-  // Reset to first page when filters change
+  // Reset to first page when filters change or tab changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, adsStatusFilter, selectedSortBy]);
+  }, [searchTerm, adsStatusFilter, selectedSortBy, activeTab]);
 
   const handleViewAdDetails = (ad: Ad) => {
+  // Debug: Log admin fields to see if they're present
+  console.log('Ad admin fields:', {
+    approvedBy: ad.approvedBy,
+    rejectedBy: ad.rejectedBy,
+    deletedBy: ad.deletedBy,
+    adId: ad.id,
+    adTitle: ad.title
+  });
+  
   setSelectedAd(ad);
   setShowAdDetailsModal(true);
 
@@ -315,6 +327,12 @@ const ManageAds: React.FC = () => {
     if (!user) return 'N/A';
     if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
     return user.email || 'N/A';
+  };
+
+  const getAdminName = (admin: { firstName: string; lastName: string; email: string } | null | undefined) => {
+    if (!admin) return 'N/A';
+    if (admin.firstName && admin.lastName) return `${admin.firstName} ${admin.lastName}`;
+    return admin.email || 'N/A';
   };
 
   // Actions
@@ -698,7 +716,7 @@ const ManageAds: React.FC = () => {
       {/* Header with Title and Filters */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-3 gap-3">
         <h1 className="text-xl md:text-3xl font-bold text-gray-800 md:pt-0">Advertisements Management</h1>
-        {activeTab === 'ads' && (
+        {(activeTab === 'ads' || activeTab === 'archived') && (
           <div className="flex gap-2">
             <input
               type="text"
@@ -1560,6 +1578,52 @@ const ManageAds: React.FC = () => {
                     <Mail size={20} className="text-gray-500" />
                     <p className='text-black'>{selectedAd.userId?.email}</p>
                     </div>
+                    {/* Show "Approved by" if ad is approved (takes highest priority) */}
+                    {(selectedAd.approvedBy && selectedAd.approvedBy.firstName) ? (
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle size={20} className="text-green-500" />
+                        <p className='text-black'>Approved by: <span className="font-semibold">{getAdminName(selectedAd.approvedBy)}</span></p>
+                      </div>
+                    ) : selectedAd.status === 'APPROVED' && selectedAd.approveTime ? (
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle size={20} className="text-green-500" />
+                        <p className='text-black text-gray-500 italic'>Approved by: <span className="font-semibold">Admin (archived)</span></p>
+                      </div>
+                    ) : null}
+                    {/* Show "Rejected by" if ad is rejected (only if not approved) */}
+                    {selectedAd.status !== 'APPROVED' && (selectedAd.rejectedBy && selectedAd.rejectedBy.firstName) ? (
+                      <div className="flex items-center space-x-3">
+                        <XCircle size={20} className="text-red-500" />
+                        <p className='text-black'>Rejected by: <span className="font-semibold">{getAdminName(selectedAd.rejectedBy)}</span></p>
+                      </div>
+                    ) : selectedAd.status === 'REJECTED' && selectedAd.rejectTime && selectedAd.status !== 'APPROVED' ? (
+                      <div className="flex items-center space-x-3">
+                        <XCircle size={20} className="text-red-500" />
+                        <p className='text-black text-gray-500 italic'>Rejected by: <span className="font-semibold">Admin (archived)</span></p>
+                      </div>
+                    ) : null}
+                    {/* Show "Restored by" or "Deleted by" only if ad is not approved */}
+                    {selectedAd.status !== 'APPROVED' && (
+                      <>
+                        {/* Show "Restored by" if ad was restored (takes priority over "Deleted by") */}
+                        {(selectedAd.restoredBy && selectedAd.restoredBy.firstName) ? (
+                          <div className="flex items-center space-x-3">
+                            <RotateCcw size={20} className="text-blue-500" />
+                            <p className='text-black'>Restored by: <span className="font-semibold">{getAdminName(selectedAd.restoredBy)}</span></p>
+                          </div>
+                        ) : (selectedAd.deletedBy && selectedAd.deletedBy.firstName) ? (
+                          <div className="flex items-center space-x-3">
+                            <Trash size={20} className="text-red-600" />
+                            <p className='text-black'>Deleted by: <span className="font-semibold">{getAdminName(selectedAd.deletedBy)}</span></p>
+                          </div>
+                        ) : selectedAd.isArchived && selectedAd.archivedAt ? (
+                          <div className="flex items-center space-x-3">
+                            <Trash size={20} className="text-red-600" />
+                            <p className='text-black text-gray-500 italic'>Deleted by: <span className="font-semibold">Admin (archived or unknown)</span></p>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                   <div className="space-y-2 border-l border-gray-300 md:border-none md:pr-10 md:pt-0 pt-4">
                     <div className="flex justify-between">

@@ -1046,25 +1046,18 @@ const ManageDrivers: React.FC = () => {
     >
       {/* Mobile Header */}
       {isMobile && (
-        <div className="flex items-center">
+        <div className="flex items-center mb-4">
           <h1 className="text-xl font-bold text-gray-800">Drivers Management</h1>
         </div>
       )}
 
-      {/* Tabs Section */}
-      <div className="mb-4">
-        <nav className={`flex ${isMobile ? 'space-x-2 overflow-x-auto' : 'space-x-8'}`}>
-          {/* ... */}
-        </nav>
-      </div>
-
       {/* Header with Title and Filters */}
-      <div className="flex flex-col gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
         {!isMobile && (
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Drivers Management</h1>
+          <h1 className="text-2xl pt-5 lg:text-3xl font-bold text-gray-800">Drivers Management</h1>
         )}
         
-        <div className={`flex ${isMobile ? 'flex-col' : 'flex-row'} gap-2 w-full`}>
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
           {/* Search Input */}
           <div className="w-full lg:w-80">
             <input
@@ -1076,9 +1069,9 @@ const ManageDrivers: React.FC = () => {
             />
           </div>
           
-          <div className={`flex ${isMobile ? 'flex-col w-full' : 'flex-row gap-2'}`}>
+          <div className="flex gap-2">
             {/* STATUS Filter */}
-            <div className={`relative ${isMobile ? 'w-full' : 'flex-1 sm:flex-none sm:w-32'}`} ref={statusDropdownRef}>
+            <div className="relative flex-1 sm:flex-none sm:w-32" ref={statusDropdownRef}>
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                 className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
@@ -1099,7 +1092,7 @@ const ManageDrivers: React.FC = () => {
                     transition={{ duration: 0.2 }}
                     className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
-                    {statusFilterOptions.map(status => (
+                    {statusFilterOptions.map((status) => (
                       <button
                         key={status}
                         onClick={() => handleStatusFilterChange(status)}
@@ -1112,10 +1105,79 @@ const ManageDrivers: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
-            {/* ... */}
+
+            {/* SORT BY Filter */}
+            <div className="relative flex-1 sm:flex-none sm:w-40" ref={sortDropdownRef}>
+              <button
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{sortBy}</span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showSortDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                  >
+                    {sortByOptions.map((sortOption) => (
+                      <button
+                        key={sortOption}
+                        onClick={() => {
+                          setSortBy(sortOption);
+                          setShowSortDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {sortOption}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
+      {/* Tabs Section */}
+      <div className="mb-4">
+          <nav className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Active Drivers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'active' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('archived')}
+              className={`relative flex items-center py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Archived Drivers
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
+                  activeTab === 'archived' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </nav>
+        </div>
 
       {/* Driver List */}
       {loading ? (

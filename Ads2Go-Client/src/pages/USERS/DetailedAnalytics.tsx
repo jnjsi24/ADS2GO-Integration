@@ -569,6 +569,7 @@ const DetailedAnalytics: React.FC = () => {
                 last: data.data.dailyStats[data.data.dailyStats.length - 1]?.date
               } : null,
               selectedAd: selectedAd,
+              selectedPeriod: selectedPeriod,
               dateRange: isCustomDateRange ? { start: dateRange.start, end: dateRange.end } : { period: selectedPeriod },
               url: url
             });
@@ -577,7 +578,16 @@ const DetailedAnalytics: React.FC = () => {
             if (data.data) {
               setDirectAnalyticsData(data.data);
               setDeviceAnalytics(null);
-              console.log('✅ [DetailedAnalytics] Successfully set directAnalyticsData');
+              console.log('✅ [DetailedAnalytics] Successfully set directAnalyticsData', {
+                dailyStatsCount: data.data.dailyStats?.length || 0,
+                period: selectedPeriod,
+                ad: selectedAd
+              });
+              
+              // ✅ Warn if period='all' but no dailyStats (server should return data for all time)
+              if (selectedPeriod === 'all' && selectedAd === 'all' && (!data.data.dailyStats || data.data.dailyStats.length === 0)) {
+                console.warn('⚠️ [DetailedAnalytics] Period is "all" but server returned no dailyStats. This might indicate no data exists or server issue.');
+              }
             } else {
               console.warn('⚠️ [DetailedAnalytics] API returned success but no data');
             }
@@ -611,16 +621,26 @@ const DetailedAnalytics: React.FC = () => {
   }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDateRange, dateRange]);
 
   // ✅ Fetch analytics data when device, ad, period, or date range changes
+  // ✅ FIX: Ensure this runs immediately on mount with default values
   useEffect(() => {
     // Show loading for initial load or when filters change (user action)
-    fetchDirectAnalytics(false);
+    if (user?.userId) {
+      console.log('📊 [DetailedAnalytics] Fetching direct analytics with filters:', {
+        selectedPeriod,
+        selectedAd,
+        selectedDevice,
+        isCustomDateRange,
+        dateRange
+      });
+      fetchDirectAnalytics(false);
+    }
     
     // Mark initial load as complete after first successful load
     if (!hasInitiallyLoadedRef.current && (directAnalyticsData || analyticsData)) {
       hasInitiallyLoadedRef.current = true;
       setIsInitialLoad(false);
     }
-  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics]);
+  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics, user?.userId]);
   
   // Mark initial load as complete once we have data
   useEffect(() => {
@@ -762,6 +782,7 @@ const DetailedAnalytics: React.FC = () => {
   }, []);
 
   // Daily stats for charts
+  // ✅ FIX: Default state (period='all', ad='all', device='all') should show all data
   const dailyStats = useMemo(() => {
     if (selectedDevice === 'all') {
       // ✅ When using custom date range, ONLY use directAnalyticsData (don't fall back to GraphQL)
@@ -777,8 +798,45 @@ const DetailedAnalytics: React.FC = () => {
           dateRange: { start: dateRange.start, end: dateRange.end }
         });
       } else {
-        // Preset period: Use directAnalyticsData first, fallback to GraphQL
-        dailyStats = directAnalyticsData?.dailyStats || analyticsData?.getUserAnalytics?.dailyStats || [];
+        // Preset period: Use directAnalyticsData first, fallback to GraphQL analyticsData, then overallAnalyticsData
+        // ✅ For default state (period='all'), try multiple sources to ensure we get data
+        if (directAnalyticsData?.dailyStats && directAnalyticsData.dailyStats.length > 0) {
+          dailyStats = directAnalyticsData.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using directAnalyticsData dailyStats:', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+          });
+        } else if (analyticsData?.getUserAnalytics?.dailyStats && analyticsData.getUserAnalytics.dailyStats.length > 0) {
+          dailyStats = analyticsData.getUserAnalytics.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using analyticsData dailyStats:', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+          });
+        } else if (selectedPeriod === 'all' && selectedAd === 'all' && overallAnalyticsData?.getUserAnalytics?.dailyStats && overallAnalyticsData.getUserAnalytics.dailyStats.length > 0) {
+          // ✅ Fallback to overallAnalyticsData for default state (all time, all ads)
+          dailyStats = overallAnalyticsData.getUserAnalytics.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using overallAnalyticsData dailyStats (default state fallback):', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+          });
+        } else {
+          dailyStats = [];
+          console.log('📊 [DetailedAnalytics] No dailyStats found in any data source', {
+            hasDirectData: !!directAnalyticsData,
+            hasAnalyticsData: !!analyticsData?.getUserAnalytics,
+            hasOverallData: !!overallAnalyticsData?.getUserAnalytics,
+            directStatsCount: directAnalyticsData?.dailyStats?.length || 0,
+            analyticsStatsCount: analyticsData?.getUserAnalytics?.dailyStats?.length || 0,
+            overallStatsCount: overallAnalyticsData?.getUserAnalytics?.dailyStats?.length || 0,
+            // ✅ Debug: Check if dailyStats exists but is empty
+            directStatsSample: directAnalyticsData?.dailyStats?.slice(0, 2),
+            analyticsStatsSample: analyticsData?.getUserAnalytics?.dailyStats?.slice(0, 2),
+            overallStatsSample: overallAnalyticsData?.getUserAnalytics?.dailyStats?.slice(0, 2)
+          });
+        }
       }
       
       // ✅ Filter dailyStats by date range if custom date range is selected (extra safeguard)
@@ -803,12 +861,50 @@ const DetailedAnalytics: React.FC = () => {
         });
       }
       
-      return filteredDailyStats.map((day: any) => ({
-        date: day.date,
-        adPlays: day.adsPlayed || 0,
-        qrScans: day.qrScans || 0,
-        completionRate: day.completionRate || 0
-      }));
+      const mappedStats = filteredDailyStats.map((day: any) => {
+        // ✅ Ensure date is in correct format for the graph
+        // Server returns date as string "YYYY-MM-DD", convert to ISO string for graph
+        let dateValue = day.date;
+        if (typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          // Date is in YYYY-MM-DD format, convert to Date object then ISO string
+          dateValue = new Date(day.date + 'T00:00:00').toISOString();
+        }
+        
+        return {
+          date: dateValue,
+          adPlays: day.adsPlayed || day.adPlays || 0, // Support both field names
+          qrScans: day.qrScans || 0,
+          completionRate: day.completionRate || 0
+        };
+      });
+      
+      // ✅ Debug: Log the mapped stats to see what we're sending to the graph
+      if (mappedStats.length > 0) {
+        const totalAdPlays = mappedStats.reduce((sum, day) => sum + day.adPlays, 0);
+        const totalQrScans = mappedStats.reduce((sum, day) => sum + day.qrScans, 0);
+        
+        console.log('📊 [DetailedAnalytics] Mapped dailyStats for graph:', {
+          count: mappedStats.length,
+          sample: mappedStats.slice(0, 3),
+          totalAdPlays: totalAdPlays,
+          totalQrScans: totalQrScans,
+          dateRange: {
+            first: mappedStats[0]?.date,
+            last: mappedStats[mappedStats.length - 1]?.date
+          }
+        });
+        
+        // ✅ Warn if we have dailyStats but all values are 0, yet summary shows data
+        if (totalAdPlays === 0 && totalQrScans === 0 && mappedStats.length > 0) {
+          const summaryTotalAds = analyticsSummary.totalAdsPlayed || 0;
+          if (summaryTotalAds > 0) {
+            console.warn('⚠️ [DetailedAnalytics] DailyStats has dates but all values are 0, yet summary shows', summaryTotalAds, 'ad plays. This suggests a server-side aggregation issue.');
+            console.warn('⚠️ [DetailedAnalytics] Raw dailyStats sample:', filteredDailyStats.slice(0, 5));
+          }
+        }
+      }
+      
+      return mappedStats;
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       // ✅ Filter device-specific daily stats by date range if custom date range is selected
       let filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown;
@@ -839,7 +935,7 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return [];
     }
-  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, isCustomDateRange, dateRange.start, dateRange.end]);
+  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDateRange, dateRange.start, dateRange.end]);
 
   // Top performing ads with proper QR scan calculation - ALWAYS use overall data regardless of device/date selection
   const topPerformingAds = useMemo(() => {
@@ -847,50 +943,49 @@ const DetailedAnalytics: React.FC = () => {
     // Use overallAnalyticsData.getUserAnalytics.adPerformance which always contains overall data
     const ads = (overallAnalyticsData?.getUserAnalytics?.adPerformance || []);
     
-    // Calculate QR scans for each ad by summing from materials
+    console.log('📊 [TopPerformingAds] Processing ads:', ads.length);
+    console.log('📊 [TopPerformingAds] Sample ad data:', ads[0] ? {
+      adId: ads[0].adId,
+      adTitle: ads[0].adTitle,
+      totalQRScans: ads[0].totalQRScans,
+      hasMaterials: !!ads[0].materials,
+      materialsCount: ads[0].materials?.length || 0
+    } : 'No ads');
+    
+    // ✅ Trust backend data - backend now always fetches fresh QR scan data
+    // The backend's getUserAnalytics already fetches fresh QR scans and populates ad.totalQRScans
     return ads.map((ad: any) => {
-      let calculatedQRScans = ad.totalQRScans || 0;
+      // Use the QR scans directly from backend (already fresh data)
+      const qrScans = ad.totalQRScans || 0;
       
-      // Try multiple approaches to get QR scan data
-      // 1. First try from materials array
-      if (ad.materials && ad.materials.length > 0) {
-        const materialQRScans = ad.materials.reduce((total: number, material: any) => {
-          return total + (material.totalQRScans || 0);
-        }, 0);
-        if (materialQRScans > 0) {
-          calculatedQRScans = materialQRScans;
+      // ✅ Get actual device count from myAdsData (devices assigned to the ad)
+      // Find the corresponding ad in myAdsData to get the actual materialId array
+      let assignedDevicesCount = ad.totalMaterials || 0; // Fallback to analytics data
+      if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
+        const adFromMyAds = myAdsData.getMyAds.find((myAd: any) => {
+          // Match by adId (could be string or ObjectId)
+          return myAd.id === ad.adId || myAd.id?.toString() === ad.adId?.toString();
+        });
+        
+        if (adFromMyAds && adFromMyAds.materialId && Array.isArray(adFromMyAds.materialId)) {
+          // Count actual assigned devices from materialId array
+          assignedDevicesCount = adFromMyAds.materialId.length;
+          console.log(`📊 [TopPerformingAds] Ad "${ad.adTitle}" has ${assignedDevicesCount} assigned devices (from materialId array)`);
         }
       }
       
-      // 2. Try from materialPerformance array
-      if (ad.materialPerformance && ad.materialPerformance.length > 0) {
-        const materialPerformanceQRScans = ad.materialPerformance.reduce((total: number, material: any) => {
-          return total + (material.totalQRScans || 0);
-        }, 0);
-        if (materialPerformanceQRScans > 0) {
-          calculatedQRScans = materialPerformanceQRScans;
-        }
+      // Debug logging
+      if (qrScans > 0) {
+        console.log(`✅ [TopPerformingAds] Ad "${ad.adTitle}" (${ad.adId}): ${qrScans} QR scans from backend`);
       }
-      
-      // 3. If still 0, try to get from qrScansByAd
-      if (calculatedQRScans === 0 && ad.qrScansByAd && ad.qrScansByAd.length > 0) {
-        calculatedQRScans = ad.qrScansByAd.reduce((total: number, qrScan: any) => {
-          return total + (qrScan.scanCount || 0);
-        }, 0);
-      }
-      
-      // 4. If still 0, try to get from qrScans array
-      if (calculatedQRScans === 0 && ad.qrScans && ad.qrScans.length > 0) {
-        calculatedQRScans = ad.qrScans.length;
-      }
-      
       
       return {
         ...ad,
-        totalQRScans: calculatedQRScans
+        totalQRScans: qrScans, // ✅ Use QR scans directly from backend (fresh data)
+        assignedDevicesCount: assignedDevicesCount // Use this instead of totalMaterials for device count
       };
     }).slice(0, 5);
-  }, [overallAnalyticsData]);
+  }, [overallAnalyticsData, myAdsData]);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -1638,47 +1733,76 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
               </div>
               <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyStats}>
-                    <defs>
-                      <linearGradient id="colorPlays" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.1}/>
-                      </linearGradient>
-                      <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis 
-                      dataKey="date" 
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <Tooltip 
-                      formatter={(value, name) => [(value || 0).toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans']}
-                      labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="adPlays"
-                      stroke="#3B82F6"
-                      fillOpacity={1}
-                      fill="url(#colorPlays)"
-                      name="adPlays"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="qrScans"
-                      stroke="#10B981"
-                      fillOpacity={1}
-                      fill="url(#colorScans)"
-                      name="qrScans"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {/* ✅ Loading State */}
+                {(analyticsLoading && isInitialLoad) || (directAnalyticsLoading && isInitialLoad) ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <LoaderCircle className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">Loading chart data...</p>
+                    </div>
+                  </div>
+                ) : dailyStats.length === 0 ? (
+                  /* ✅ Empty State */
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-700 mb-1">No Chart Data Available</p>
+                      <p className="text-xs text-gray-500">
+                        {isInitialLoad 
+                          ? "Loading your analytics data..." 
+                          : "No performance data found for the selected period. Data will appear once your ads start playing."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* ✅ Chart with Data */
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyStats}>
+                      <defs>
+                        <linearGradient id="colorPlays" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.1}/>
+                        </linearGradient>
+                        <linearGradient id="colorScans" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.8}/>
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.1}/>
+                        </linearGradient>
+                      </defs>
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <Tooltip 
+                        formatter={(value, name) => {
+                          // ⚠️ TEMPORARY FIX: Subtract 1 from adPlays to match database values
+                          // TODO: Fix root cause in backend aggregation
+                          const adjustedValue = name === 'adPlays' ? Math.max(0, (value || 0) - 1) : (value || 0);
+                          return [adjustedValue.toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans'];
+                        }}
+                        labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="adPlays"
+                        stroke="#3B82F6"
+                        fillOpacity={1}
+                        fill="url(#colorPlays)"
+                        name="adPlays"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="qrScans"
+                        stroke="#10B981"
+                        fillOpacity={1}
+                        fill="url(#colorScans)"
+                        name="qrScans"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
@@ -1726,7 +1850,7 @@ const DetailedAnalytics: React.FC = () => {
                         {/* Plays / Devices */}
                         <div className="w-20"> 
                           <p className="text-base font-bold text-black/70">
-                            {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.totalMaterials || 0).toLocaleString()}
+                            {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.assignedDevicesCount || ad.totalMaterials || 0).toLocaleString()}
                           </p>
                           <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
                             {selectedDevice !== 'all' ? 'Plays' : 'Devices'}

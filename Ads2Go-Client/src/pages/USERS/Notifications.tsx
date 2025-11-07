@@ -52,10 +52,10 @@ const Notifications: React.FC = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'SUCCESS': return '✅';
-      case 'WARNING': return '⚠️';
-      case 'ERROR': return '❌';
-      default: return 'ℹ️';
+      case 'SUCCESS': return;
+      case 'WARNING': return;
+      case 'ERROR': return;
+      default: return;
     }
   };
 
@@ -88,7 +88,7 @@ const Notifications: React.FC = () => {
       {/* Main content */}
       <div className="relative min-h-screen lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10 pt-20 lg:pt-10">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-semibold text-gray-800">Notifications</h1>
             <p className="text-black text-sm">
@@ -100,29 +100,6 @@ const Notifications: React.FC = () => {
           <div className="flex items-center space-x-2">
             {notifications.length > 0 && (
               <div className="flex items-center gap-2">
-                {selectedNotifications.size > 0 && (
-                  <button
-                    onClick={handleDeleteSelected}
-                    onMouseMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const x = ((e.clientX - rect.left) / rect.width) * 100;
-                      const y = ((e.clientY - rect.top) / rect.height) * 100;
-                      setPos({ x, y });
-                    }}
-                    className="relative group inline-flex items-center shadow-md justify-center overflow-hidden px-2 py-2 text-sm font-semibold text-red-600 rounded-md bg-red-200"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Trash2 size={16} />
-                      Delete ({selectedNotifications.size})
-                    </span>
-                    <span
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                      style={{
-                        background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
-                      }}
-                    />
-                  </button>
-                )}
                 <button
                   onClick={toggleSelectAll}
                   className="flex items-center gap-2 px-4 py-2 bg-white/20 text-black hover:text-black/80 rounded-md shadow-md transition"
@@ -139,28 +116,6 @@ const Notifications: React.FC = () => {
               </div>
             )}
 
-            <button
-              onClick={refreshNotifications}
-              onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / rect.width) * 100;
-                const y = ((e.clientY - rect.top) / rect.height) * 100;
-                setPos({ x, y });
-              }}
-              className="relative group w-28 inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-white rounded-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] hover:scale-105 transition"
-            >
-              <span className="inline-flex items-center gap-2">
-                <RefreshCw size={16} />
-                Refresh
-              </span>
-              <span
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
-                }}
-              />
-            </button>
-
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
@@ -171,6 +126,41 @@ const Notifications: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="flex justify-end mb-6 gap-2">
+          {selectedNotifications.size > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                setPos({ x, y });
+              }}
+              className="relative group inline-flex items-center shadow-md justify-center overflow-hidden px-2 py-2 text-sm font-semibold text-red-600 rounded-md bg-red-200"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Trash2 size={16} />
+                Delete ({selectedNotifications.size})
+              </span>
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                }}
+              />
+            </button>
+          )}
+          <button
+            onClick={refreshNotifications}
+            className="relative w-28 inline-flex items-center justify-center px-6 py-2 text-sm font-medium text-white rounded bg-[#3674B5] hover:shadow-md"
+          >
+            <span className="inline-flex items-center gap-2">
+              <RefreshCw size={16} />
+              Refresh
+            </span>
+          </button>
         </div>
 
         {/* Notifications List */}

@@ -150,183 +150,181 @@ const UserReportsList: React.FC = () => {
   }
 
   return (
-    <div className="">
-      <div className="divide-y divide-gray-200">
-        {reports.map((report: UserReport) => (
-          <div key={report.id}>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-lg font-medium text-gray-900">{report.title}</h3>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${getStatusColor(report.status)}`}>
-                    {getStatusIcon(report.status)}
-                    {report.status.replace('_', ' ')}
-                  </span>
-                </div>
-                
-               <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-gray-600 mb-3">
-                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-[#3674B5]/70 text-white"> {getCategoryLabel(report.reportType)}</span>
-                {report.resolvedAt && (
-                  <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolved:</strong> {formatDate(report.resolvedAt)}</span>
-                )}
-                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"> {report.id}</span>
-                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Last Updated:</strong> {formatDate(report.updatedAt)}</span>
-                {report.status === 'RESOLVED' && report.resolvedAt && (
-                  <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolution Date:</strong> {formatDate(report.resolvedAt)}</span>
-                )}
-              </div>
-
-
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">
-                  <strong>Created:</strong> {formatDate(report.createdAt)}
+    <div className="divide-y divide-gray-200">
+      {reports.map((report: UserReport) => (
+        <div key={report.id}>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-lg font-medium text-gray-900">{report.title}</h3>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${getStatusColor(report.status)}`}>
+                  {getStatusIcon(report.status)}
+                  {report.status.replace('_', ' ')}
                 </span>
-                <button
-                  onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
-                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  {expandedReport === report.id ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
               </div>
+              
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-gray-600 mb-3">
+              <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-[#3674B5]/70 text-white"> {getCategoryLabel(report.reportType)}</span>
+              {report.resolvedAt && (
+                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolved:</strong> {formatDate(report.resolvedAt)}</span>
+              )}
+              <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-200"> {report.id}</span>
+              <span className="flex items-center gap-2 rounded-md px-2"><span className="font-medium">Last Updated:</span> {formatDate(report.updatedAt)}</span>
+              {report.status === 'RESOLVED' && report.resolvedAt && (
+                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolution Date:</strong> {formatDate(report.resolvedAt)}</span>
+              )}
             </div>
 
-            {expandedReport === report.id && (
-              <div className="pt-4">
-                <div className="space-y-4">
-                  {/* Description */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-2"><strong>Description:</strong></p>
-                    <p className="text-gray-700">{report.description}</p>
-                  </div>
 
-                  {/* Attachments */}
-                  {report.attachments && report.attachments.length > 0 && (
-  <div>
-    <p className="text-sm font-medium text-gray-600 mb-2">
-      <strong>Attachments:</strong>
-    </p>
-
-    <div className="space-y-3">
-      {/* Image attachments grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {report.attachments.map((attachment, index) => {
-          const isImage =
-            attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
-            attachment.includes('data:image/') ||
-            (attachment.includes('firebasestorage.googleapis.com') &&
-              (attachment.includes('image') ||
-                attachment.match(/\.(jpg|jpeg|png|gif|webp)/i)));
-
-          const isPdf = attachment.match(/\.pdf$/i) || attachment.includes('application/pdf');
-
-          const getFileType = (url: string) => {
-            if (isImage) return 'image';
-            if (isPdf) return 'pdf';
-            if (url.includes('data:text/')) return 'text';
-            return 'file';
-          };
-
-          const fileType = getFileType(attachment);
-          const fileName = `Attachment ${index + 1}`;
-
-          // 🖼 If image: show in fixed grid cell
-          if (fileType === 'image') {
-            return (
-              <div
-                key={index}
-                className="relative border border-gray-200 rounded-lg p-2 bg-white shadow-sm hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-green-600" />
-                    <span className="text-xs font-medium text-gray-700">{fileName}</span>
-                  </div>
-                  <a
-                    href={attachment}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 text-xs underline"
-                  >
-                    Open
-                  </a>
-                </div>
-                <img
-                  src={attachment}
-                  alt={fileName}
-                  className="w-full h-40 object-cover rounded-md border border-gray-200 cursor-pointer"
-                  onClick={() => window.open(attachment, '_blank')}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
-              </div>
-            );
-          }
-
-          // 📄 Non-image file layout
-          return (
-            <div
-              key={index}
-              className="flex items-center justify-between border border-gray-200 rounded-lg p-3 shadow-sm bg-white"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0">
-                  {fileType === 'pdf' ? (
-                    <FileText className="w-5 h-5 text-red-600" />
-                  ) : fileType === 'text' ? (
-                    <FileText className="w-5 h-5 text-blue-600" />
-                  ) : (
-                    <FileText className="w-5 h-5 text-gray-600" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700">{fileName}</p>
-                  <p className="text-xs text-gray-500 capitalize">{fileType} file</p>
-                </div>
-              </div>
-              <a
-                href={attachment}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-800 text-sm underline"
-              >
-                Open
-              </a>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-)}
 
-
-                  {/* Admin Notes */}
-                  {report.adminNotes && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-sm font-medium text-blue-800">Admin Response:</p>
-                        {report.adminNotesUpdatedAt && (
-                          <p className="text-xs text-blue-600">{formatDate(report.adminNotesUpdatedAt)}</p>
-                        )}
-                      </div>
-                      <p className="text-sm text-blue-700 mb-2">{report.adminNotes}</p>
-                      <p className="text-xs text-blue-600 italic">Response by: Admin</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">
+                <strong>Created:</strong> {formatDate(report.createdAt)}
+              </span>
+              <button
+                onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                {expandedReport === report.id ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
+
+          {expandedReport === report.id && (
+            <div className="pt-4">
+              <div className="space-y-4">
+                {/* Description */}
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-2"><strong>Description:</strong></p>
+                  <p className="text-gray-700">{report.description}</p>
+                </div>
+
+                {/* Attachments */}
+                {report.attachments && report.attachments.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-2">
+                      <strong>Attachments:</strong>
+                    </p>
+
+                    <div className="space-y-3">
+                      {/* Image attachments grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {report.attachments.map((attachment, index) => {
+                          const isImage =
+                            attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
+                            attachment.includes('data:image/') ||
+                            (attachment.includes('firebasestorage.googleapis.com') &&
+                              (attachment.includes('image') ||
+                                attachment.match(/\.(jpg|jpeg|png|gif|webp)/i)));
+
+                          const isPdf = attachment.match(/\.pdf$/i) || attachment.includes('application/pdf');
+
+                          const getFileType = (url: string) => {
+                            if (isImage) return 'image';
+                            if (isPdf) return 'pdf';
+                            if (url.includes('data:text/')) return 'text';
+                            return 'file';
+                          };
+
+                          const fileType = getFileType(attachment);
+                          const fileName = `Attachment ${index + 1}`;
+
+                          // 🖼 If image: show in fixed grid cell
+                          if (fileType === 'image') {
+                            return (
+                              <div
+                                key={index}
+                                className="relative border border-gray-200 rounded-lg p-2 bg-white shadow-sm hover:shadow-md transition-all"
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-green-600" />
+                                    <span className="text-xs font-medium text-gray-700">{fileName}</span>
+                                  </div>
+                                  <a
+                                    href={attachment}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 text-xs underline"
+                                  >
+                                    Open
+                                  </a>
+                                </div>
+                                <img
+                                  src={attachment}
+                                  alt={fileName}
+                                  className="w-full h-40 object-cover rounded-md border border-gray-200 cursor-pointer"
+                                  onClick={() => window.open(attachment, '_blank')}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                  }}
+                                />
+                              </div>
+                            );
+                          }
+
+                          // 📄 Non-image file layout
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between border border-gray-200 rounded-lg p-3 shadow-sm bg-white"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="flex-shrink-0">
+                                  {fileType === 'pdf' ? (
+                                    <FileText className="w-5 h-5 text-red-600" />
+                                  ) : fileType === 'text' ? (
+                                    <FileText className="w-5 h-5 text-blue-600" />
+                                  ) : (
+                                    <FileText className="w-5 h-5 text-gray-600" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-700">{fileName}</p>
+                                  <p className="text-xs text-gray-500 capitalize">{fileType} file</p>
+                                </div>
+                              </div>
+                              <a
+                                href={attachment}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-sm underline"
+                              >
+                                Open
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+
+                {/* Admin Notes */}
+                {report.adminNotes && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-blue-800">Admin Response:</p>
+                      {report.adminNotesUpdatedAt && (
+                        <p className="text-xs text-blue-600">{formatDate(report.adminNotesUpdatedAt)}</p>
+                      )}
+                    </div>
+                    <p className="text-sm text-blue-700 mb-2">{report.adminNotes}</p>
+                    <p className="text-xs text-blue-600 italic">Response by: Admin</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

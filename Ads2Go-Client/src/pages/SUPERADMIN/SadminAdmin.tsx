@@ -502,6 +502,16 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
 
   return (
   <div className="min-h-screen ml-60 bg-gray-50">
+
+      {/* Header Section */}
+      <AdminSearchHeader
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        sortOrder={sortOrder}
+        setSortOrder={setSortOrder}
+        onCreateAdminClick={() => setShowCreateAdminPopup(true)}
+      />
+
       {/* Tabs Section */}
       <div className="p-6 pb-0">
         <nav className="flex space-x-8">
@@ -511,7 +521,6 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
               activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Users className="w-4 h-4 mr-2" />
             Active Admins
             <span
               className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
@@ -525,7 +534,6 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
               activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Archive className="w-4 h-4 mr-2" />
             Archived Admins
             <span
               className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300 ${
@@ -535,15 +543,6 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
           </button>
         </nav>
       </div>
-
-      {/* Header Section */}
-      <AdminSearchHeader
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        sortOrder={sortOrder}
-        setSortOrder={setSortOrder}
-        onCreateAdminClick={() => setShowCreateAdminPopup(true)}
-      />
 
       {/* Admins List */}
       <AdminList

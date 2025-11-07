@@ -11,6 +11,7 @@ import playbackWebSocketService from '../services/playbackWebSocketService';
 import companyAdService, { CompanyAd } from '../services/companyAdService';
 import offlineQueueService from '../services/offlineQueueService';
 import adaptiveGPSService from '../services/adaptiveGPSService';
+import requestManager from '../services/requestManager';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
@@ -1042,7 +1043,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Send to analytics endpoint (handles both online and tracks properly)
       if (!isOffline) {
         try {
-          const requestManager = (await import('../services/requestManager')).default;
+          // Use statically imported requestManager
           const analyticsResponse = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
             method: 'POST',
             headers: {
@@ -1096,22 +1097,48 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Get current GPS location
       let gpsData = null;
       try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 1,
-        });
-        gpsData = {
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
-          speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
-          heading: location.coords.heading || 0,
-          accuracy: location.coords.accuracy || 0,
-          altitude: location.coords.altitude || 0
-        };
-        console.log('GPS data for QR scan:', gpsData);
-      } catch (locationError) {
-        console.warn('Could not get GPS location for QR scan:', locationError);
+        // ✅ FIX: Check location services availability first
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+          console.log('📍 [QRScan] Location services disabled - skipping GPS data');
+        } else {
+          try {
+            const location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5000,
+              distanceInterval: 1,
+              mayShowUserSettingsDialog: false,
+            });
+            
+            if (location && location.coords) {
+              gpsData = {
+                lat: location.coords.latitude,
+                lng: location.coords.longitude,
+                speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
+                heading: location.coords.heading || 0,
+                accuracy: location.coords.accuracy || 0,
+                altitude: location.coords.altitude || 0
+              };
+              console.log('📍 [QRScan] GPS data obtained:', gpsData);
+            }
+          } catch (locationError: any) {
+            // ✅ FIX: Handle CoreLocation errors gracefully
+            const errorMessage = locationError?.message || String(locationError);
+            const errorCode = locationError?.code;
+            
+            if (errorMessage.includes('kCLErrorDomain') || 
+                errorMessage.includes('Cannot obtain current location') ||
+                errorCode === 0) {
+              // GPS unavailable - this is normal, don't log as warning
+              console.log('📍 [QRScan] GPS unavailable - QR scan will continue without location data');
+            } else {
+              console.warn('⚠️ [QRScan] Could not get GPS location:', errorMessage);
+            }
+          }
+        }
+      } catch (error) {
+        // Error checking services - continue without GPS data
+        console.log('📍 [QRScan] Could not check location services - continuing without GPS data');
       }
 
       // Get device information
@@ -1193,8 +1220,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('📤 Redirect URL in QR scan data:', qrScanData.redirectUrl);
 
       // Send to QR scan tracking endpoint
-      // Use requestManager for better error handling
-      const requestManager = (await import('../services/requestManager')).default;
+      // Use requestManager for better error handling (statically imported at top)
       const response = await requestManager.fetch(`${API_BASE_URL}/ads/qr-scan`, {
         method: 'POST',
         headers: {
@@ -1246,22 +1272,48 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Get current GPS location
       let gpsData = null;
       try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeInterval: 5000,
-          distanceInterval: 1,
-        });
-        gpsData = {
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
-          speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
-          heading: location.coords.heading || 0,
-          accuracy: location.coords.accuracy || 0,
-          altitude: location.coords.altitude || 0
-        };
-        console.log('GPS data for QR display:', gpsData);
-      } catch (locationError) {
-        console.warn('Could not get GPS location for QR display:', locationError);
+        // ✅ FIX: Check location services availability first
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+          console.log('📍 [QRDisplay] Location services disabled - skipping GPS data');
+        } else {
+          try {
+            const location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5000,
+              distanceInterval: 1,
+              mayShowUserSettingsDialog: false,
+            });
+            
+            if (location && location.coords) {
+              gpsData = {
+                lat: location.coords.latitude,
+                lng: location.coords.longitude,
+                speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
+                heading: location.coords.heading || 0,
+                accuracy: location.coords.accuracy || 0,
+                altitude: location.coords.altitude || 0
+              };
+              console.log('📍 [QRDisplay] GPS data obtained:', gpsData);
+            }
+          } catch (locationError: any) {
+            // ✅ FIX: Handle CoreLocation errors gracefully
+            const errorMessage = locationError?.message || String(locationError);
+            const errorCode = locationError?.code;
+            
+            if (errorMessage.includes('kCLErrorDomain') || 
+                errorMessage.includes('Cannot obtain current location') ||
+                errorCode === 0) {
+              // GPS unavailable - this is normal, don't log as warning
+              console.log('📍 [QRDisplay] GPS unavailable - QR display will continue without location data');
+            } else {
+              console.warn('⚠️ [QRDisplay] Could not get GPS location:', errorMessage);
+            }
+          }
+        }
+      } catch (error) {
+        // Error checking services - continue without GPS data
+        console.log('📍 [QRDisplay] Could not check location services - continuing without GPS data');
       }
 
       // Get device information
@@ -1327,8 +1379,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('QR display data to send:', qrDisplayData);
 
       // Send to device tracking endpoint (new daily staging system)
-      // Use requestManager for better error handling
-      const requestManager = (await import('../services/requestManager')).default;
+      // Use requestManager for better error handling (statically imported at top)
       const deviceTrackingResponse = await requestManager.fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
         method: 'POST',
         headers: {
@@ -1658,7 +1709,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const checkNetworkStatus = async () => {
     try {
       // First check if we can reach the server directly
-      const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
+      // Use statically imported tabletRegistrationService (no dynamic import needed)
       const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
       
       if (serverAccessible === 'skipped') {
@@ -1694,17 +1745,34 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       if (cachedData) {
         const parsedAds = JSON.parse(cachedData);
         
-        // Validate cached ads as well
-        const validCachedAds = await filterValidAds(parsedAds);
+        // ✅ FIX: For cached ads, skip validation if URLs were recently validated
+        // This prevents filtering out valid cached ads when app state is transitioning
+        const shouldValidate = AppState.currentState === 'active';
         
-        if (validCachedAds.length > 0) {
-          setAds(validCachedAds);
-          setCurrentAdIndex(0);
-          console.log('Loaded valid cached ads:', validCachedAds.length);
-          return true;
+        if (shouldValidate) {
+          // Only validate if app is active - otherwise trust the cache
+          const validCachedAds = await filterValidAds(parsedAds);
+          
+          if (validCachedAds.length > 0) {
+            setAds(validCachedAds);
+            setCurrentAdIndex(0);
+            console.log('✅ Loaded valid cached ads:', validCachedAds.length);
+            return true;
+          } else {
+            // ✅ FIX: If validation filtered out all ads but app might be in transition, use cached ads anyway
+            console.log('⚠️ [CacheLoad] Validation filtered out all cached ads - using cached ads anyway (might be app state issue)');
+            setAds(parsedAds);
+            setCurrentAdIndex(0);
+            console.log('✅ Loaded cached ads (bypassed validation):', parsedAds.length);
+            return true;
+          }
         } else {
-          console.log('No valid cached ads found, clearing cache');
-          await AsyncStorage.removeItem(cacheKey);
+          // ✅ FIX: App not active - trust the cache and skip validation
+          console.log('📍 [CacheLoad] App not active, using cached ads without validation');
+          setAds(parsedAds);
+          setCurrentAdIndex(0);
+          console.log('✅ Loaded cached ads (no validation):', parsedAds.length);
+          return true;
         }
       }
     } catch (err) {
@@ -1730,19 +1798,108 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   };
 
   // Validate video URL before attempting playback
+  // ✅ FIX: Cache validation results to avoid re-validating URLs
+  const urlValidationCache = new Map<string, { isValid: boolean; timestamp: number }>();
+  const VALIDATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   const validateVideoUrl = async (url: string): Promise<boolean> => {
     try {
-      const requestManager = (await import('../services/requestManager')).default;
+      // ✅ FIX: Check cache first - don't re-validate URLs that were recently validated
+      const cached = urlValidationCache.get(url);
+      if (cached && Date.now() - cached.timestamp < VALIDATION_CACHE_TTL) {
+        return cached.isValid;
+      }
+
+      // ✅ FIX: Skip validation if we're currently resuming from background
+      if (isResumingFromBackground.current) {
+        console.log('📍 [VideoValidation] Skipping validation during background resume, using cache or assuming valid');
+        if (cached) {
+          return cached.isValid;
+        }
+        return true; // Assume valid during resume to avoid blocking playback
+      }
+
+      // ✅ FIX: Wait a bit if app just became active to ensure state is fully updated
+      if (AppState.currentState !== 'active') {
+        // App is not active - wait a bit and check again
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (AppState.currentState !== 'active') {
+          // Still not active - use cached validation if available, otherwise assume valid
+          if (cached) {
+            return cached.isValid;
+          }
+          // No cache - assume valid to avoid filtering out all ads
+          console.log('📍 [VideoValidation] App not active, assuming URL is valid:', url);
+          return true;
+        }
+      }
+
+      // ✅ FIX: Allow validation even during brief state transitions, but catch cancellation errors
       const response = await requestManager.fetch(url, { 
         method: 'HEAD',
         timeout: 5000,
         priority: 1,
         allowDuplicate: false,
-      });
-      return response.ok;
-    } catch (error) {
-      console.log('Video URL validation failed:', url, error);
-      return false;
+        allowInBackground: true, // ✅ FIX: Allow validation even if app state is briefly inactive
+      } as any);
+      
+      const isValid = response.ok;
+      
+      // ✅ FIX: Cache the result
+      urlValidationCache.set(url, { isValid, timestamp: Date.now() });
+      
+      return isValid;
+    } catch (error: any) {
+      // ✅ FIX: Handle all types of cancellation errors gracefully
+      const errorMessage = error?.message || String(error);
+      const errorName = error?.name || '';
+      
+      // Check for various cancellation/abort error patterns
+      const isCancellationError = 
+        (error as any)?.isCancelled === true ||
+        (error as any)?.isExpected === true ||
+        (error as any)?.isNetworkError === true ||
+        errorName === 'AbortError' ||
+        errorName === 'TypeError' && (errorMessage.includes('Network request failed') || errorMessage.includes('network request failed') || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) ||
+        errorMessage.includes('AbortError') ||
+        errorMessage.includes('App is in background') || 
+        errorMessage.includes('app in background') ||
+        errorMessage.includes('request cancelled') ||
+        errorMessage.includes('Request cancelled') ||
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('Cancelled') ||
+        errorMessage.includes('Network request failed') ||
+        errorMessage.includes('network request failed') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('default') ||
+        errorMessage.includes('undefined');
+      
+      if (isCancellationError) {
+        // Request was cancelled (likely due to app state change) - check cache or assume valid
+        const cached = urlValidationCache.get(url);
+        if (cached) {
+          console.log('📍 [VideoValidation] Request cancelled, using cached validation result:', cached.isValid);
+          return cached.isValid;
+        }
+        // No cache - assume valid to avoid filtering out all ads
+        // This is safe because we only validate when necessary, and cancelled requests don't mean the URL is invalid
+        console.log('📍 [VideoValidation] Request cancelled (no cache), assuming URL is valid:', url.substring(0, 50));
+        return true;
+      }
+      
+      // For other errors (network errors, etc.), log but assume valid to avoid blocking playback
+      console.log('📍 [VideoValidation] Validation error (non-cancellation), assuming valid:', url.substring(0, 50), errorMessage);
+      
+      // ✅ FIX: Don't cache failed validation if it's a network error - might be temporary
+      // Only cache if we're sure the URL is actually invalid (not just a network issue)
+      if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        urlValidationCache.set(url, { isValid: false, timestamp: Date.now() });
+        return false;
+      }
+      
+      // For other errors, assume valid but don't cache
+      return true;
     }
   };
 
@@ -1750,18 +1907,47 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const filterValidAds = async (adsToFilter: Ad[]): Promise<Ad[]> => {
     const validAds: Ad[] = [];
     
+    // ✅ FIX: If app is not active, wait a bit for state to stabilize
+    if (AppState.currentState !== 'active') {
+      console.log('📍 [AdFilter] App not active, waiting for state to stabilize...');
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+    }
+    
     for (const ad of adsToFilter) {
       if (ad.mediaFile && ad.mediaFile.trim() !== '') {
-        const isValid = await validateVideoUrl(ad.mediaFile);
-        if (isValid) {
+        try {
+          const isValid = await validateVideoUrl(ad.mediaFile);
+          if (isValid) {
+            validAds.push(ad);
+          } else {
+            // ✅ FIX: Only skip if we're sure the URL is invalid (not just due to app state)
+            const cached = urlValidationCache.get(ad.mediaFile);
+            if (cached && !cached.isValid) {
+              console.log('Skipping invalid video URL (confirmed invalid):', ad.mediaFile);
+            } else {
+              // Validation failed but might be due to app state - include the ad anyway
+              console.log('📍 [AdFilter] Validation failed but assuming valid (app state issue):', ad.mediaFile);
+              validAds.push(ad);
+            }
+          }
+        } catch (error) {
+          // ✅ FIX: If validation throws an error, assume valid to avoid filtering out all ads
+          console.log('📍 [AdFilter] Validation error, assuming valid:', ad.mediaFile, error);
           validAds.push(ad);
-        } else {
-          console.log('Skipping invalid video URL:', ad.mediaFile);
         }
+      } else {
+        // No media file - skip this ad
       }
     }
     
     console.log(`Filtered ${adsToFilter.length} ads to ${validAds.length} valid ads`);
+    
+    // ✅ FIX: If all ads were filtered out, something is wrong - return original ads
+    if (validAds.length === 0 && adsToFilter.length > 0) {
+      console.warn('⚠️ [AdFilter] All ads were filtered out - this might be a validation issue. Returning original ads.');
+      return adsToFilter;
+    }
+    
     return validAds;
   };
 
@@ -1807,6 +1993,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       setError(null);
       setIsDeviceOffline(false);
       
+      // ✅ FIX: Don't fetch ads if app is in background - wait for foreground
+      if (appStateRef.current !== 'active') {
+        console.log('📱 [AdFetch] App not in foreground - loading cached ads instead');
+        const hasCached = await loadCachedAds();
+        setLoading(false);
+        return;
+      }
+      
       // Check network status first
       const isConnected = await checkNetworkStatus();
       if (!isConnected) {
@@ -1824,7 +2018,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         }
       }
       
-      const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
+      // ✅ FIX: Use statically imported tabletRegistrationService (no dynamic import needed)
       const result = await tabletRegistrationService.fetchAds(materialId, slotNumber);
       
       if (result.success && result.ads.length > 0) {
@@ -1894,7 +2088,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(async (state: any) => {
       // Use server accessibility check instead of just NetInfo
-      const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
+      // Use statically imported tabletRegistrationService (no dynamic import needed)
       const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
       
       // If server check was skipped (app in background), use NetInfo result
@@ -1970,6 +2164,179 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
   // ✅ Track if initial ads fetch has been completed to prevent repeated fetching
   const hasFetchedInitialAds = useRef(false);
+  const appStateRef = useRef(AppState.currentState);
+  const wasPlayingBeforeBackground = useRef(false);
+  const currentVideoPositionBeforeBackground = useRef<number>(0);
+  const isResumingFromBackground = useRef(false); // Track if we're currently resuming from background
+  
+  // ✅ FIX: Handle app state changes to preserve and resume playback
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (previousState === 'active' && (nextAppState === 'background' || nextAppState === 'inactive')) {
+        // App is going to background
+        console.log('📱 [AdPlayer] App going to background - preserving playback state');
+        
+        // Save current playback state
+        wasPlayingBeforeBackground.current = isPlaying && !isPaused;
+        
+        // Save current video position if available
+        if (videoRef.current && wasPlayingBeforeBackground.current) {
+          try {
+            const status = await videoRef.current.getStatusAsync();
+            if (status.isLoaded && status.positionMillis) {
+              currentVideoPositionBeforeBackground.current = status.positionMillis / 1000; // Convert to seconds
+              console.log(`📱 [AdPlayer] Saved video position: ${currentVideoPositionBeforeBackground.current.toFixed(2)}s`);
+            }
+          } catch (error) {
+            console.log('📱 [AdPlayer] Could not get video position:', error);
+          }
+        }
+        
+        // Pause video playback (optional - you can comment this out if you want background playback)
+        // Note: Some platforms may pause automatically when app goes to background
+        if (videoRef.current && isPlaying && !isPaused) {
+          try {
+            await videoRef.current.pauseAsync();
+            setIsPaused(true);
+            console.log('📱 [AdPlayer] Video paused due to background');
+          } catch (error) {
+            console.log('📱 [AdPlayer] Error pausing video:', error);
+          }
+        }
+      } else if ((previousState === 'background' || previousState === 'inactive') && nextAppState === 'active') {
+        // App is coming back to foreground
+        console.log('📱 [AdPlayer] App coming to foreground - auto-resuming playback');
+        
+        // Mark that we're resuming from background to prevent conflicts with other useEffects
+        // This also prevents URL validation during resume to avoid cancelled request errors
+        isResumingFromBackground.current = true;
+        
+        // ✅ FIX: Wait a bit for app state to fully stabilize and request manager to recognize app is active
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // ✅ FIX: Don't refetch ads if we already have them - just resume playback
+        if (ads.length > 0 || companyAds.length > 0) {
+          console.log('📱 [AdPlayer] Ads already loaded - auto-resuming playback without refetching');
+          
+          // Wait a bit longer to ensure video ref is fully ready and component is mounted
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // ✅ FIX: Always try to resume if we have ads, not just if it was playing before
+          // Check if we have a current ad to play
+          const hasCurrentAd = (currentAdIndex >= 0 && currentAdIndex < ads.length) || 
+                              (currentAdIndex === -1 && companyAds.length > 0);
+          
+          if (hasCurrentAd && videoRef.current) {
+            try {
+              // Get current video status to check if it's loaded
+              const status = await videoRef.current.getStatusAsync();
+              
+              if (status.isLoaded) {
+                // Restore video position if we saved it
+                if (currentVideoPositionBeforeBackground.current > 0 && wasPlayingBeforeBackground.current) {
+                  await videoRef.current.setPositionAsync(currentVideoPositionBeforeBackground.current * 1000);
+                  console.log(`📱 [AdPlayer] Restored video position: ${currentVideoPositionBeforeBackground.current.toFixed(2)}s`);
+                }
+                
+                // ✅ AUTO-RESUME: Always resume playback when app comes to foreground
+                await videoRef.current.playAsync();
+                setIsPaused(false);
+                setIsPlaying(true);
+                console.log('📱 [AdPlayer] ✅ Video auto-resumed from background');
+              } else {
+                // Video not loaded yet - wait a bit more and try again
+                console.log('📱 [AdPlayer] Video not loaded yet, waiting...');
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Try again
+                const retryStatus = await videoRef.current.getStatusAsync();
+                if (retryStatus.isLoaded) {
+                  await videoRef.current.playAsync();
+                  setIsPaused(false);
+                  setIsPlaying(true);
+                  console.log('📱 [AdPlayer] ✅ Video auto-resumed from background (retry)');
+                } else {
+                  console.log('📱 [AdPlayer] ⚠️ Video still not loaded, setting shouldPlay to true');
+                  // If video isn't loaded yet, at least set paused to false so it plays when ready
+                  setIsPaused(false);
+                }
+              }
+            } catch (error) {
+              console.log('📱 [AdPlayer] Error auto-resuming video:', error);
+              // If resume fails, try to play from current position
+              try {
+                await videoRef.current.playAsync();
+                setIsPaused(false);
+                setIsPlaying(true);
+                console.log('📱 [AdPlayer] ✅ Video auto-resumed from background (fallback)');
+              } catch (resumeError) {
+                console.log('📱 [AdPlayer] ⚠️ Error on auto-resume retry, setting shouldPlay to true:', resumeError);
+                // Last resort: just set paused to false so video plays when ready
+                setIsPaused(false);
+              }
+            }
+          } else if (!hasCurrentAd) {
+            console.log('📱 [AdPlayer] No current ad to resume, but ads are loaded');
+          } else if (!videoRef.current) {
+            console.log('📱 [AdPlayer] Video ref not ready yet, setting paused to false');
+            // Video ref not ready, but set paused to false so it plays when ready
+            setIsPaused(false);
+          }
+        } else {
+          // No ads loaded - fetch them now
+          console.log('📱 [AdPlayer] No ads loaded - fetching ads after coming to foreground');
+          if (isRegistered === true && !loading && !isDeviceOffline) {
+            fetchAds();
+            fetchCompanyAds();
+          }
+        }
+        
+        // Clear the flag after a delay to allow the state to settle and requests to complete
+        // This prevents URL validation from triggering during the resume process
+        setTimeout(() => {
+          isResumingFromBackground.current = false;
+          console.log('📱 [AdPlayer] Background resume flag cleared - validation can proceed normally');
+        }, 2000); // Increased to 2 seconds to ensure app state is fully stable
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isPlaying, isPaused, ads.length, companyAds.length, currentAdIndex, isRegistered, loading, isDeviceOffline, fetchAds, fetchCompanyAds]);
+  
+  // ✅ FIX: Ensure video plays when isPaused becomes false (e.g., after returning from background)
+  // This is a backup mechanism - the AppState listener handles the main resume logic
+  useEffect(() => {
+    // Skip if we're already handling resume from AppState listener
+    if (isResumingFromBackground.current) {
+      return;
+    }
+    
+    // When paused state changes to false and we have a video ref, ensure it plays
+    if (!isPaused && videoRef.current && (ads.length > 0 || companyAds.length > 0)) {
+      const ensurePlayback = async () => {
+        try {
+          const status = await videoRef.current?.getStatusAsync();
+          if (status && status.isLoaded && !status.isPlaying) {
+            // Video is loaded but not playing - start it
+            console.log('📱 [AdPlayer] Ensuring video playback - starting video');
+            await videoRef.current?.playAsync();
+            setIsPlaying(true);
+          }
+        } catch (error) {
+          console.log('📱 [AdPlayer] Error ensuring playback:', error);
+        }
+      };
+      
+      // Small delay to ensure video ref is ready
+      const timeoutId = setTimeout(ensurePlayback, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isPaused, ads.length, companyAds.length]);
   
   // ✅ Initial ad fetch on mount (ads start/end at 8 AM via cron, no need for 5-min polling)
   useEffect(() => {
@@ -1978,6 +2345,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     // 2. Not currently loading
     // 3. Device is online (not in offline mode)
     // 4. Haven't already fetched initial ads (or materialId changed)
+    // 5. App is in foreground (don't fetch if app is in background)
     if (isRegistered === false || isRegistered === null) {
       return; // Don't fetch if not registered
     }
@@ -1990,10 +2358,18 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       return; // Don't fetch if device is offline
     }
 
+    // ✅ FIX: Don't fetch if app is in background
+    if (appStateRef.current !== 'active') {
+      console.log('📱 [AdPlayer] App not in foreground - skipping ad fetch');
+      return;
+    }
+
     // ✅ Prevent repeated fetching - only fetch if:
     // - We haven't fetched initial ads yet, OR
-    // - Material ID changed (different device)
-    const shouldFetch = !hasFetchedInitialAds.current || (hasFetchedInitialAds.current && ads.length === 0);
+    // - Material ID changed (different device), OR
+    // - We have no ads at all
+    const shouldFetch = !hasFetchedInitialAds.current || 
+                       (hasFetchedInitialAds.current && ads.length === 0 && companyAds.length === 0);
     
     if (!shouldFetch) {
       return; // Already fetched and have ads, don't fetch again

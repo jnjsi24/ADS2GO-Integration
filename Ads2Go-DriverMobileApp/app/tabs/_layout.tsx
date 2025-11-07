@@ -53,19 +53,7 @@ export default function TabLayout() {
           )
         }} 
       />
-      <Tabs.Screen 
-        name="profile" 
-        options={{ 
-          title: "Profile",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons 
-              name={focused ? "person" : "person-outline"} 
-              size={size} 
-              color={color} 
-            />
-          )
-        }} 
-      />
+      
       <Tabs.Screen 
         name="notifications" 
         options={{ 
@@ -73,6 +61,20 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons 
               name={focused ? "notifications" : "notifications-outline"} 
+              size={size} 
+              color={color} 
+            />
+          )
+        }} 
+      />
+      
+      <Tabs.Screen 
+        name="profile" 
+        options={{ 
+          title: "Profile",
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons 
+              name={focused ? "person" : "person-outline"} 
               size={size} 
               color={color} 
             />

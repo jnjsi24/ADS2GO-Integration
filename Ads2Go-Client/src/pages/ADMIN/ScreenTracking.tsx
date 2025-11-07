@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Popup, Polyline, Marker } from 'react-leaflet';
+import { Popup, Polyline, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map as LeafletMap, Icon } from 'leaflet';
@@ -175,6 +175,118 @@ const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> =
     geocodingCache.set(cacheKey, fallback); // Cache fallback too
     return fallback;
   }
+};
+
+// Component to safely update map center and zoom
+const MapController: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
+  const map = useMap();
+  const [isMapReady, setIsMapReady] = useState(false);
+  const lastUpdateRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+
+  // Wait for map to be ready before allowing updates
+  useEffect(() => {
+    if (!map) return;
+
+    const checkMapReady = () => {
+      try {
+        // Check if map container has valid dimensions (safer than checking _leaflet_pos)
+        const container = map.getContainer();
+        if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+          // Try to get center to verify map is initialized
+          try {
+            map.getCenter();
+            setIsMapReady(true);
+            return true;
+          } catch {
+            // Map not fully ready yet
+            return false;
+          }
+        }
+        return false;
+      } catch (error) {
+        // Silently handle errors - map might not be ready yet
+        return false;
+      }
+    };
+
+    // Use whenReady callback
+    map.whenReady(() => {
+      if (checkMapReady()) {
+        return;
+      }
+      
+      // If not ready, retry after a short delay
+      setTimeout(() => {
+        if (checkMapReady()) {
+          return;
+        }
+        // If still not ready after retry, set ready anyway to prevent blocking
+        setIsMapReady(true);
+      }, 100);
+    });
+  }, [map]);
+
+  // Safely update map view when center or zoom changes
+  useEffect(() => {
+    if (!map || !isMapReady) return;
+
+    // Skip if this is the same update as last time
+    if (lastUpdateRef.current && 
+        lastUpdateRef.current.center[0] === center[0] &&
+        lastUpdateRef.current.center[1] === center[1] &&
+        lastUpdateRef.current.zoom === zoom) {
+      return;
+    }
+
+    const updateMapView = () => {
+      try {
+        // Check if the map has valid dimensions
+        const container = map.getContainer();
+        if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
+          return false;
+        }
+
+        // Verify map is accessible
+        try {
+          map.getCenter();
+        } catch {
+          // Map not accessible yet
+          return false;
+        }
+
+        // Get current view state
+        const currentCenter = map.getCenter();
+        const currentZoom = map.getZoom();
+        
+        // Only update if values have actually changed
+        const centerChanged = 
+          Math.abs(currentCenter.lat - center[0]) > 0.0001 || 
+          Math.abs(currentCenter.lng - center[1]) > 0.0001;
+        const zoomChanged = currentZoom !== zoom;
+
+        if (centerChanged || zoomChanged) {
+          map.setView(center, zoom, { animate: true, duration: 0.5 });
+          lastUpdateRef.current = { center, zoom };
+        }
+        return true;
+      } catch (error) {
+        // Silently handle errors - don't spam console
+        return false;
+      }
+    };
+
+    // Use whenReady to ensure map is fully initialized before updating
+    map.whenReady(() => {
+      if (!updateMapView()) {
+        // If update failed, retry after a short delay
+        setTimeout(() => {
+          updateMapView();
+        }, 50);
+      }
+    });
+  }, [map, center, zoom, isMapReady]);
+
+  return null;
 };
 
 const ScreenTracking: React.FC = () => {
@@ -1197,6 +1309,7 @@ const ScreenTracking: React.FC = () => {
                         // Any map initialization code can go here
                       }}
                     >
+                      <MapController center={mapCenter} zoom={zoom} />
                       {activeTab === 'live' ? (
                     // Live tracking markers - Real-time updates from WebSocket
                     <>

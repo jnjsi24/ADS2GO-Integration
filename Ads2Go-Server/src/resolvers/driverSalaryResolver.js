@@ -436,32 +436,87 @@ const resolvers = {
       try {
         let calculations = [];
         
-        if (driver) {
-          // First try to find by driverId
+        if (!driver) {
+          console.log('⚠️ getMySalaryCalculations: No driver object in context');
+          return {
+            success: false,
+            message: 'Driver authentication required',
+            calculations: [],
+            totalCount: 0
+          };
+        }
+
+        console.log(`🔍 getMySalaryCalculations: Looking for calculations for driverId: ${driver.driverId}`);
+        
+        // First try to find by driverId
+        try {
           calculations = await DriverSalaryCalculation.find({ 
             driverId: driver.driverId,
             isActive: true 
           })
-            .populate('material', 'materialId materialType category vehicleType')
+            .populate({
+              path: 'material',
+              select: 'materialId materialType category vehicleType',
+              strictPopulate: false // Don't throw error if material is missing
+            })
             .sort({ 'calculationPeriod.startDate': -1 });
           
-          // If no calculations found by driverId, try by deviceId
-          if (calculations.length === 0 && driver.deviceId) {
+          console.log(`✅ Found ${calculations.length} calculations by driverId: ${driver.driverId}`);
+        } catch (findError) {
+          console.error('❌ Error finding calculations by driverId:', findError);
+          console.error('Error details:', {
+            message: findError.message,
+            stack: findError.stack,
+            driverId: driver.driverId
+          });
+          throw findError;
+        }
+        
+        // If no calculations found by driverId, try by deviceId
+        if (calculations.length === 0 && driver.deviceId) {
+          console.log(`🔍 Trying to find by deviceId: ${driver.deviceId}`);
+          try {
             calculations = await DriverSalaryCalculation.find({ 
               deviceId: driver.deviceId,
               isActive: true 
             })
-              .populate('material', 'materialId materialType category vehicleType')
+              .populate({
+                path: 'material',
+                select: 'materialId materialType category vehicleType',
+                strictPopulate: false
+              })
               .sort({ 'calculationPeriod.startDate': -1 });
+            
+            console.log(`✅ Found ${calculations.length} calculations by deviceId: ${driver.deviceId}`);
+          } catch (deviceFindError) {
+            console.error('❌ Error finding calculations by deviceId:', deviceFindError);
+            console.error('Device find error details:', {
+              message: deviceFindError.message,
+              stack: deviceFindError.stack,
+              deviceId: driver.deviceId
+            });
+            // Don't throw, just log - we'll return empty array
           }
-        } else {
-          // If no driver object, return all calculations as a fallback
-          calculations = await DriverSalaryCalculation.find({ 
-            isActive: true 
-          })
-            .populate('material', 'materialId materialType category vehicleType')
-            .sort({ 'calculationPeriod.startDate': -1 });
         }
+        
+        // Ensure periodDisplay is set for each calculation (fallback if virtual doesn't work)
+        calculations = calculations.map(calc => {
+          // Convert to plain object to ensure virtuals are included
+          const calcObj = calc.toObject ? calc.toObject() : calc;
+          if (!calcObj.periodDisplay && calcObj.calculationPeriod) {
+            const startDate = new Date(calcObj.calculationPeriod.startDate);
+            const endDate = new Date(calcObj.calculationPeriod.endDate);
+            const formatDate = (date) => {
+              return date.toLocaleDateString('en-PH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              });
+            };
+            calcObj.periodDisplay = `${formatDate(startDate)} - ${formatDate(endDate)}`;
+          }
+          return calcObj;
+        });
         
         return {
           success: true,
@@ -470,10 +525,11 @@ const resolvers = {
           totalCount: calculations.length
         };
       } catch (error) {
-        console.error('Error getting driver salary calculations:', error);
+        console.error('❌ Error getting driver salary calculations:', error);
+        console.error('Error stack:', error.stack);
         return {
           success: false,
-          message: 'Failed to retrieve your salary calculations',
+          message: `Failed to retrieve your salary calculations: ${error.message}`,
           calculations: [],
           totalCount: 0
         };
@@ -483,8 +539,13 @@ const resolvers = {
     getMySalarySummary: async (_, __, { driver }) => {
       try {
         let calculations = [];
+        let fullDriver = null;
         
         if (driver) {
+          // Fetch full driver object with all required fields (vehicleType, etc.)
+          fullDriver = await Driver.findOne({ driverId: driver.driverId })
+            .select('driverId firstName lastName email vehicleType');
+          
           // First try to find by driverId
           calculations = await DriverSalaryCalculation.find({ 
             driverId: driver.driverId,
@@ -517,8 +578,8 @@ const resolvers = {
           success: true,
           message: 'Your salary summary retrieved successfully',
           summary: {
-            driverId: driver?.driverId || 'unknown',
-            driver: driver || null,
+            driverId: driver?.driverId || fullDriver?.driverId || 'unknown',
+            driver: fullDriver || null,
             totalCalculations,
             totalSalary: Math.round(totalSalary * 100) / 100,
             totalDistanceSalary: Math.round(totalDistanceSalary * 100) / 100,

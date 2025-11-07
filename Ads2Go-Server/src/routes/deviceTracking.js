@@ -700,18 +700,24 @@ router.post('/qr-scan', async (req, res) => {
     // Track QR scan using the new schema (always store, with slotNumber)
     const slot = deviceTracking.getSlot(parseInt(deviceSlot));
     if (slot) {
-      // Add QR scan to the device tracking
+      // Add QR scan to the device tracking (always store, regardless of master/slave)
       deviceTracking.qrScans.push({
         ...qrScanData,
         slotNumber: parseInt(deviceSlot)
       });
       
-      // ✅ Only increment totals if this is the master slot
+      // ✅ FIX: Always recalculate totalQRScans from actual qrScans array length
+      // This ensures accuracy even if scans come from slave slots
+      deviceTracking.totalQRScans = deviceTracking.qrScans.length;
+      
+      // Mark qrScans as modified to ensure post-save hook triggers archiving
+      deviceTracking.markModified('qrScans');
+      deviceTracking.markModified('totalQRScans');
+      
       if (isMasterSlot) {
-        deviceTracking.totalQRScans += 1;
-        console.log(`✅ [QRScan] Master slot - incremented totals`);
+        console.log(`✅ [QRScan] Master slot - counted in analytics (total: ${deviceTracking.totalQRScans})`);
       } else {
-        console.log(`💤 [QRScan] Slave slot - skipped incrementing totals`);
+        console.log(`💤 [QRScan] Slave slot - stored but not counted in analytics (total: ${deviceTracking.totalQRScans})`);
       }
       
       await deviceTracking.save();

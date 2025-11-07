@@ -71,15 +71,15 @@ interface ReportIssueModalProps {
 }
 
 const categories = [
-  { value: 'BUG', label: 'Bug / Technical Issue', icon: 'bug-outline' },
-  { value: 'PAYMENT', label: 'Payment Issue', icon: 'card-outline' },
-  { value: 'ACCOUNT', label: 'Account Issue', icon: 'person-outline' },
-  { value: 'VEHICLE_ISSUE', label: 'Vehicle Issue', icon: 'car-outline' },
-  { value: 'MATERIAL_ISSUE', label: 'Material Issue', icon: 'cube-outline' },
-  { value: 'APP_ISSUE', label: 'App Issue', icon: 'phone-portrait-outline' },
-  { value: 'REQUEST_ACCOUNT_CLOSURE', label: 'Request Account Closure', icon: 'trash-outline' },
-  { value: 'UPDATE_PROFILE_DETAILS', label: 'Update Profile Details', icon: 'person-circle-outline' },
-  { value: 'OTHER', label: 'Other', icon: 'help-circle-outline' },
+  { value: 'BUG', label: 'Bug / Technical Issue'},
+  { value: 'PAYMENT', label: 'Payment Issue'},
+  { value: 'ACCOUNT', label: 'Account Issue'},
+  { value: 'VEHICLE_ISSUE', label: 'Vehicle Issue'},
+  { value: 'MATERIAL_ISSUE', label: 'Material Issue'},
+  { value: 'APP_ISSUE', label: 'App Issue'},
+  { value: 'REQUEST_ACCOUNT_CLOSURE', label: 'Request Account Closure'},
+  { value: 'UPDATE_PROFILE_DETAILS', label: 'Update Profile Details'},
+  { value: 'OTHER', label: 'Other'},
 ];
 
 interface ProfileField {
@@ -546,11 +546,6 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                   onPress={() => handleInputChange('category', category.value)}
                   disabled={isSubmitting}
                 >
-                  <Ionicons
-                    name={category.icon as any}
-                    size={24}
-                    color={formData.category === category.value ? '#fff' : '#3b82f6'}
-                  />
                   <Text
                     style={[
                       styles.categoryButtonText,
@@ -587,7 +582,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                       <Ionicons
                         name={selectedFields.includes(field.key) ? 'checkbox' : 'square-outline'}
                         size={24}
-                        color={selectedFields.includes(field.key) ? '#3b82f6' : '#9ca3af'}
+                        color={selectedFields.includes(field.key) ? '#3674B5' : '#9ca3af'}
                       />
                       <Text style={styles.fieldLabel}>{field.label}</Text>
                     </TouchableOpacity>
@@ -604,13 +599,13 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                               disabled={uploadingField === field.key || isSubmitting}
                             >
                               {uploadingField === field.key ? (
-                                <ActivityIndicator size="small" color="#3b82f6" />
+                                <ActivityIndicator size="small" color="#3674B5" />
                               ) : (
                                 <>
                                   <Ionicons
                                     name={uploadedFiles[field.key] ? 'checkmark-circle' : 'cloud-upload-outline'}
                                     size={20}
-                                    color={uploadedFiles[field.key] ? '#22c55e' : '#3b82f6'}
+                                    color={uploadedFiles[field.key] ? '#22c55e' : '#3674B5'}
                                   />
                                   <Text style={[styles.fileUploadButtonText, uploadedFiles[field.key] && styles.fileUploadButtonTextSuccess]}>
                                     {uploadedFiles[field.key] ? 'File Uploaded' : `Upload ${field.fileType === 'image' ? 'Image' : 'File'}`}
@@ -628,6 +623,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                           <TextInput
                             style={styles.fieldInput}
                             placeholder={`Enter new ${field.label.toLowerCase()}`}
+                            placeholderTextColor="#6B7280"
                             value={fieldValues[field.key] || ''}
                             onChangeText={(value) => handleFieldValueChange(field.key, value)}
                             editable={!isSubmitting}
@@ -651,6 +647,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                 <TextInput
                   style={[styles.input, errors.title && styles.inputError]}
                   placeholder="Brief description of the issue"
+                  placeholderTextColor="#6B7280"
                   value={formData.title}
                   onChangeText={(value) => handleInputChange('title', value)}
                   maxLength={200}
@@ -668,6 +665,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                 <TextInput
                   style={[styles.textArea, errors.description && styles.inputError]}
                   placeholder="Please provide detailed information about the issue..."
+                  placeholderTextColor="#6B7280"
                   value={formData.description}
                   onChangeText={(value) => handleInputChange('description', value)}
                   maxLength={2000}
@@ -684,7 +682,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
 
           {/* Info Box */}
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={20} color="#3b82f6" />
+            <Ionicons name="information-circle" size={20} color="#f59e0b" />
             <Text style={styles.infoText}>
               {formData.category === 'UPDATE_PROFILE_DETAILS'
                 ? 'Your profile update request will be reviewed by an admin. You will be notified once your request is processed.'
@@ -740,9 +738,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   closeButton: {
     padding: 4,
@@ -754,6 +749,7 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 36,
+    color: '#000000',
   },
   content: {
     flex: 1,
@@ -777,10 +773,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9CA3AF',
     padding: 12,
     fontSize: 16,
     color: '#1f2937',
@@ -789,10 +783,8 @@ const styles = StyleSheet.create({
     borderColor: '#ef4444',
   },
   textArea: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9CA3AF',
     padding: 12,
     fontSize: 16,
     color: '#1f2937',
@@ -820,15 +812,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+    elevation: 5,
     padding: 16,
     gap: 12,
   },
   categoryButtonSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: '#3674B5',
+    borderColor: '#3674B5',
   },
   categoryButtonText: {
     flex: 1,
@@ -840,12 +835,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   fieldContainer: {
-    marginBottom: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
   },
   fieldCheckbox: {
     flexDirection: 'row',
@@ -869,12 +859,10 @@ const styles = StyleSheet.create({
   },
   fieldInput: {
     backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9CA3AF',
     padding: 10,
     fontSize: 15,
-    color: '#1f2937',
   },
   fileUploadContainer: {
     gap: 8,
@@ -885,7 +873,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#eff6ff',
     borderWidth: 1,
-    borderColor: '#3b82f6',
+    borderColor: '#3674B5',
     borderRadius: 8,
     padding: 12,
     gap: 8,
@@ -897,7 +885,7 @@ const styles = StyleSheet.create({
   fileUploadButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#3b82f6',
+    color: '#3674B5',
   },
   fileUploadButtonTextSuccess: {
     color: '#22c55e',
@@ -909,7 +897,7 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#fffbeb',
     borderRadius: 12,
     padding: 16,
     gap: 12,
@@ -918,14 +906,15 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#1e40af',
+    color: '#f59e0b',
     lineHeight: 20,
+    fontWeight: '600',
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3674B5',
     borderRadius: 12,
     padding: 16,
     gap: 8,

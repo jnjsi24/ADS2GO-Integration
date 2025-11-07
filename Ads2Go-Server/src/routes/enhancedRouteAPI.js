@@ -12,7 +12,7 @@ const GPSValidation = require('../utils/gpsValidation');
 router.get('/route/:materialId', async (req, res) => {
   try {
     const { materialId } = req.params;
-    const { date, startDate, endDate, includeMetrics = true, includeSpeedSegments = true } = req.query;
+    const { date, startDate, endDate, includeMetrics = true, includeSpeedSegments = true, adStartTime, adId } = req.query;
 
     if (!materialId) {
       return res.status(400).json({
@@ -21,7 +21,68 @@ router.get('/route/:materialId', async (req, res) => {
       });
     }
 
-    console.log(`🗺️ [Enhanced Route API] Fetching route for material: ${materialId}, date: ${date}`);
+    console.log(`🗺️ [Enhanced Route API] Fetching route for material: ${materialId}, date: ${date}${adStartTime ? `, filtered after ad deployment: ${adStartTime}` : ''}${adId ? `, adId: ${adId}` : ''}`);
+
+    // ✅ Get actual deployment time from AdsDeployment or DeviceTracking if adId is provided
+    let actualDeploymentTime = adStartTime ? new Date(adStartTime) : null;
+    if (adId && materialId) {
+      try {
+        const AdsDeployment = require('../models/adsDeployment');
+        const DeviceTracking = require('../models/deviceTracking');
+        
+        // Try to find deployment in AdsDeployment
+        const deployment = await AdsDeployment.findOne({
+          materialId: materialId,
+          $or: [
+            { adId: adId },
+            { 'lcdSlots.adId': adId }
+          ]
+        }).sort({ createdAt: -1 }); // Get most recent deployment
+        
+        if (deployment) {
+          // For LCD materials, check lcdSlots for the specific ad
+          if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+            const matchingSlot = deployment.lcdSlots.find(slot => 
+              slot.adId && slot.adId.toString() === adId.toString()
+            );
+            if (matchingSlot && matchingSlot.deployedAt) {
+              actualDeploymentTime = new Date(matchingSlot.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment.lcdSlots: ${actualDeploymentTime.toISOString()}`);
+            } else if (deployment.deployedAt) {
+              actualDeploymentTime = new Date(deployment.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment: ${actualDeploymentTime.toISOString()}`);
+            }
+          } else if (deployment.deployedAt) {
+            // For non-LCD materials
+            actualDeploymentTime = new Date(deployment.deployedAt);
+            console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment: ${actualDeploymentTime.toISOString()}`);
+          }
+        } else {
+          // Fallback: Check DeviceTracking.deployedAds
+          const deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+          if (deviceTracking && deviceTracking.deployedAds && deviceTracking.deployedAds.length > 0) {
+            const deployedAd = deviceTracking.deployedAds.find(ad => 
+              ad.adId && ad.adId.toString() === adId.toString()
+            );
+            if (deployedAd && deployedAd.deployedAt) {
+              actualDeploymentTime = new Date(deployedAd.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from DeviceTracking.deployedAds: ${actualDeploymentTime.toISOString()}`);
+            }
+          }
+        }
+        
+        if (!actualDeploymentTime && adStartTime) {
+          console.log(`⚠️ [Enhanced Route API] Could not find deployment time, using provided adStartTime: ${adStartTime}`);
+          actualDeploymentTime = new Date(adStartTime);
+        }
+      } catch (deploymentError) {
+        console.error(`⚠️ [Enhanced Route API] Error looking up deployment time:`, deploymentError.message);
+        // Fallback to adStartTime if provided
+        if (adStartTime) {
+          actualDeploymentTime = new Date(adStartTime);
+        }
+      }
+    }
 
     // Determine if the requested date is today (Philippines timezone)
     const now = new Date();
@@ -223,11 +284,67 @@ router.get('/route/:materialId', async (req, res) => {
       console.log(`⏱️ [Enhanced Route API] Fallback to GPS timestamp span: ${totalDuration}s`);
     }
 
+    // ✅ FILTER: If actualDeploymentTime is found, filter location points to only include those after ad deployment
+    let filteredLocationPoints = allLocationPoints;
+    if (actualDeploymentTime) {
+      // ✅ Check if ad deployment time is on the same date as the requested date
+      const deploymentDateStr = actualDeploymentTime.toISOString().split('T')[0];
+      const requestedDateStr = date;
+      
+      if (deploymentDateStr === requestedDateStr) {
+        // Ad was deployed on the requested date - filter points after deployment time
+        console.log(`🔍 [Enhanced Route API] Filtering route to only show locations after ad deployment: ${actualDeploymentTime.toISOString()} (on same date)`);
+        
+        const beforeFilter = allLocationPoints.length;
+        filteredLocationPoints = allLocationPoints.filter(point => {
+          if (!point || !point.timestamp) return false;
+          const pointTimestamp = new Date(point.timestamp);
+          return pointTimestamp >= actualDeploymentTime;
+        });
+        
+        const afterFilter = filteredLocationPoints.length;
+        console.log(`✅ [Enhanced Route API] Filtered ${beforeFilter} points to ${afterFilter} points (removed ${beforeFilter - afterFilter} points before ad deployment)`);
+        
+        // ✅ If no points remain after filtering, return empty route (ad was just deployed, no movement yet)
+        if (filteredLocationPoints.length === 0) {
+          console.log(`ℹ️ [Enhanced Route API] No location data after ad deployment time - ad was just deployed, no route yet`);
+        }
+        
+        // Update totalDistance to only count distance after ad deployment
+        if (filteredLocationPoints.length > 0) {
+          // Recalculate distance from filtered points only
+          totalDistance = 0;
+          for (let i = 1; i < filteredLocationPoints.length; i++) {
+            const prevPoint = filteredLocationPoints[i - 1];
+            const currentPoint = filteredLocationPoints[i];
+            if (prevPoint && currentPoint && prevPoint.coordinates && currentPoint.coordinates) {
+              const segmentDist = GPSValidation.calculateDistance(
+                prevPoint.coordinates[1], prevPoint.coordinates[0],
+                currentPoint.coordinates[1], currentPoint.coordinates[0]
+              );
+              totalDistance += segmentDist;
+            }
+          }
+        } else {
+          // No route data after deployment
+          totalDistance = 0;
+        }
+      } else if (deploymentDateStr > requestedDateStr) {
+        // Ad was deployed AFTER the requested date - return empty route (ad wasn't active yet)
+        console.log(`⚠️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is after requested date (${requestedDateStr}) - returning empty route`);
+        filteredLocationPoints = [];
+        totalDistance = 0;
+      } else {
+        // Ad was deployed BEFORE the requested date - show all points (ad was already active)
+        console.log(`ℹ️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is before requested date (${requestedDateStr}) - showing all route points`);
+      }
+    }
+
     // Create route points with enhanced data
     const routePoints = [];
     let cumulativeDistance = 0;
 
-    allLocationPoints.forEach((point, index) => {
+    filteredLocationPoints.forEach((point, index) => {
       // Safety check: ensure point has coordinates
       if (!point || !point.coordinates || point.coordinates.length < 2) {
         console.warn(`⚠️ [Enhanced Route API] Skipping invalid point at index ${index}:`, point);
@@ -248,36 +365,62 @@ router.get('/route/:materialId', async (req, res) => {
       let isSegmentBreak = false; // Flag to indicate this point starts a new segment (after offline)
       
       if (index > 0 && routePoints.length > 0) {
-        const prevPoint = allLocationPoints[index - 1];
+        const prevPoint = filteredLocationPoints[index - 1];
         if (prevPoint && prevPoint.coordinates && prevPoint.coordinates.length >= 2) {
-          // ✅ FIX: Check time gap to detect offline periods
+          // ✅ FIX: Check time gap to detect offline periods (improved logic)
           const prevTimestamp = new Date(prevPoint.timestamp);
           const currentTimestamp = new Date(point.timestamp);
           const timeGapSeconds = (currentTimestamp - prevTimestamp) / 1000;
-          const MAX_TIME_GAP = 60; // 60 seconds = 1 minute
+          const MAX_TIME_GAP = 300; // 300 seconds = 5 minutes (increased from 60s to reduce false breaks)
           
-          // ✅ FIX: If time gap is too large, don't calculate distance (device was offline)
-          if (timeGapSeconds > MAX_TIME_GAP) {
+          // Calculate distance first to check both time and distance gaps
+          segmentDistance = GPSValidation.calculateDistance(
+            prevPoint.coordinates[1], prevPoint.coordinates[0],
+            lat, lng
+          );
+          
+          // ✅ IMPROVED: Only create segment break if BOTH conditions are met:
+          // 1. Time gap is large (likely offline period) AND
+          // 2. Distance jump is also large (device actually moved far, not just GPS drift)
+          // This prevents breaking route lines for normal GPS updates with small delays
+          const MAX_DISTANCE_JUMP = 0.5; // 0.5 km = 500 meters - large distance jump indicates real offline/teleport
+          
+          if (timeGapSeconds > MAX_TIME_GAP && segmentDistance > MAX_DISTANCE_JUMP) {
+            // Large time gap AND large distance = device was offline and moved (real segment break)
             isSegmentBreak = true;
-            console.log(`⏸️ [Enhanced Route API] Time gap detected at point ${index}: ${timeGapSeconds.toFixed(1)}s - marking as segment break`);
-          } else {
-            segmentDistance = GPSValidation.calculateDistance(
-              prevPoint.coordinates[1], prevPoint.coordinates[0],
-              lat, lng
-            );
-            
-            // ✅ FIX: Validate speed is realistic before adding distance
+            console.log(`⏸️ [Enhanced Route API] Segment break detected at point ${index}: time gap ${timeGapSeconds.toFixed(1)}s, distance jump ${(segmentDistance * 1000).toFixed(1)}m - marking as segment break`);
+          } else if (timeGapSeconds > MAX_TIME_GAP) {
+            // Large time gap but small distance = GPS signal loss but device stationary (don't break)
+            console.log(`📍 [Enhanced Route API] Large time gap (${timeGapSeconds.toFixed(1)}s) but small movement (${(segmentDistance * 1000).toFixed(1)}m) - likely GPS signal loss while stationary, not breaking route`);
+            // Continue normally - don't break route for stationary GPS signal loss
+          }
+          
+          // ✅ FIX: Validate speed is realistic before adding distance
+          // Only check speed if we haven't already marked this as a segment break
+          if (!isSegmentBreak) {
             const calculatedSpeed = timeGapSeconds > 0 ? (segmentDistance / timeGapSeconds) * 3600 : 0; // km/h
-            const MAX_REALISTIC_SPEED = 150; // km/h
+            const MAX_REALISTIC_SPEED = 200; // km/h (increased from 150 to allow highway speeds)
             
             if (calculatedSpeed <= MAX_REALISTIC_SPEED) {
+              // Speed is realistic - count the distance
               cumulativeDistance += segmentDistance;
             } else {
-              // Speed is unrealistic - likely GPS jump or offline period
-              isSegmentBreak = true;
-              segmentDistance = 0; // Don't count this distance
-              console.log(`⏸️ [Enhanced Route API] Unrealistic speed detected at point ${index}: ${calculatedSpeed.toFixed(1)} km/h - marking as segment break`);
+              // Speed is unrealistic - likely GPS jump, but don't break route if distance is small
+              const distanceInMeters = segmentDistance * 1000;
+              if (distanceInMeters > (MAX_DISTANCE_JUMP * 1000)) {
+                // Large distance jump with unrealistic speed = real GPS jump, break route
+                isSegmentBreak = true;
+                segmentDistance = 0; // Don't count this distance
+                console.log(`⏸️ [Enhanced Route API] Unrealistic speed (${calculatedSpeed.toFixed(1)} km/h) with large distance jump (${distanceInMeters.toFixed(1)}m) - marking as segment break`);
+              } else {
+                // Unrealistic speed but small distance = GPS drift, ignore it but don't break route
+                segmentDistance = 0;
+                console.log(`⚠️ [Enhanced Route API] Unrealistic speed (${calculatedSpeed.toFixed(1)} km/h) but small distance (${distanceInMeters.toFixed(1)}m) - likely GPS drift, ignoring but not breaking route`);
+              }
             }
+          } else {
+            // Segment break already detected - don't count distance
+            segmentDistance = 0;
           }
         }
       }

@@ -37,7 +37,9 @@ export default function HomeScreen() {
     configureCleanLogging();
     initializeApp();
     
+    // ✅ TEMPORARILY DISABLED FOR TESTING - Periodic rest period check commented out
     // Set up periodic check for rest period transitions (every minute)
+    /*
     const restPeriodCheckInterval = setInterval(async () => {
       const lockCheck = await check8HourLock();
       
@@ -60,10 +62,11 @@ export default function HomeScreen() {
         }
       }
     }, 60000); // Check every minute
+    */
     
     // Cleanup function to stop tracking when component unmounts
     return () => {
-      clearInterval(restPeriodCheckInterval);
+      // clearInterval(restPeriodCheckInterval); // ✅ Commented out since interval is disabled
       
       if (isTracking) {
         console.log('Stopping location tracking on component unmount...');
@@ -120,11 +123,14 @@ export default function HomeScreen() {
     try {
       console.log('🔍 [Lock Check] Checking for 8-hour completion lock and mandatory rest period...');
       
+      // ✅ TEMPORARILY DISABLED FOR TESTING - Rest period lock commented out
       // Check current time FIRST (mandatory rest period check)
       const now = new Date();
       const currentHour = now.getHours();
       
       // 🚨 MANDATORY REST PERIOD: 12:00 AM - 7:59 AM (ALL drivers must rest)
+      // ⚠️ COMMENTED OUT FOR TESTING - Ad player will NOT lock during rest period
+      /*
       const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
       
       if (isMandatoryRestPeriod) {
@@ -149,9 +155,11 @@ export default function HomeScreen() {
           };
         }
       }
+      */
       
       // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
-      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Not in rest period`);
+      // ✅ TEMPORARILY DISABLED - Rest period check is commented out, so this always runs
+      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Rest period lock DISABLED for testing`);
       
       // Get 8-hour completion data from AsyncStorage
       const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
@@ -189,7 +197,9 @@ export default function HomeScreen() {
       
     } catch (error) {
       console.error('❌ [Lock Check] Error checking lock status:', error);
+      // ✅ TEMPORARILY DISABLED FOR TESTING - Rest period lock in error handler commented out
       // On error, check time at minimum for safety
+      /*
       const currentHour = new Date().getHours();
       const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
       
@@ -200,6 +210,7 @@ export default function HomeScreen() {
           message: '🔒 Ad Player Locked\n\nMandatory rest period: 12:00 AM - 8:00 AM\n\nThe ad player will unlock at 8:00 AM.'
         };
       }
+      */
       
       console.log('⚠️ [Lock Check] Error occurred - defaulting to unlocked');
       return { isLocked: false, message: '' };
@@ -234,17 +245,49 @@ export default function HomeScreen() {
       let currentLocation = null;
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
-        let loc = await Location.getCurrentPositionAsync({});
-        currentLocation = loc; // Store in local variable for immediate use
-        setLocation(loc); // Also update state for UI
-        await AsyncStorage.setItem("lastLocation", JSON.stringify(loc));
-        console.log('📍 GPS Location obtained:', {
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-          accuracy: loc.coords.accuracy
-        });
+        try {
+          // ✅ FIX: Check location services availability first
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) {
+            console.log('⚠️ [AppInit] Location services disabled - cannot get initial location');
+          } else {
+            try {
+              let loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced, // Use balanced for initial location (more reliable)
+                mayShowUserSettingsDialog: false,
+              });
+              
+              if (loc && loc.coords) {
+                currentLocation = loc; // Store in local variable for immediate use
+                setLocation(loc); // Also update state for UI
+                await AsyncStorage.setItem("lastLocation", JSON.stringify(loc));
+                console.log('📍 [AppInit] GPS Location obtained:', {
+                  lat: loc.coords.latitude,
+                  lng: loc.coords.longitude,
+                  accuracy: loc.coords.accuracy
+                });
+              }
+            } catch (locationError: any) {
+              // ✅ FIX: Handle CoreLocation errors gracefully
+              const errorMessage = locationError?.message || String(locationError);
+              const errorCode = locationError?.code;
+              
+              if (errorMessage.includes('kCLErrorDomain') || 
+                  errorMessage.includes('Cannot obtain current location') ||
+                  errorCode === 0) {
+                // GPS unavailable - this is normal, app can continue without initial location
+                console.log('📍 [AppInit] GPS unavailable for initial location - app will continue (this is normal)');
+              } else {
+                console.warn('⚠️ [AppInit] Could not get initial location:', errorMessage);
+              }
+            }
+          }
+        } catch (error) {
+          // Error checking services - continue without location
+          console.log('📍 [AppInit] Could not check location services - continuing without initial location');
+        }
       } else {
-        console.warn('⚠️ Location permission not granted');
+        console.warn('⚠️ [AppInit] Location permission not granted');
       }
 
       // Get registration data

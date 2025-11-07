@@ -377,15 +377,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#555',
     marginBottom: 8,
+    marginTop: 20,
+
   },
   required: {
     color: '#e74c3c',
   },
   inputContainer: {
     backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    
     paddingHorizontal: 15,
     paddingVertical: 12,
   },
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   },
   addressInput: {
     backgroundColor: '#fff',
-    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: '#ccc',
     borderRadius: 10,
     paddingHorizontal: 15,
