@@ -1,36 +1,69 @@
-require('dotenv').config({ path: '.env.production' });
+// Don't use dotenv in production - Railway provides environment variables directly
+// Only use dotenv in development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: '.env.production' });
+}
 const admin = require('firebase-admin');
 
-// ✅ Ensure FIREBASE_PRIVATE_KEY exists
+// ✅ Ensure FIREBASE_PRIVATE_KEY exists and is valid
 if (!process.env.FIREBASE_PRIVATE_KEY) {
-  throw new Error("❌ FIREBASE_PRIVATE_KEY is not defined in .env");
+  console.error("❌ FIREBASE_PRIVATE_KEY is not defined in environment variables");
+  console.error("⚠️  Firebase Admin will not be initialized. Storage operations will fail.");
+  module.exports = { admin: null, db: null, bucket: null, auth: null };
+  return;
 }
 
 // Debug private key format
-console.log(`🔍 Private key length: ${process.env.FIREBASE_PRIVATE_KEY.length}`);
-console.log(`🔍 Private key starts with: ${process.env.FIREBASE_PRIVATE_KEY.substring(0, 50)}...`);
-console.log(`🔍 Private key ends with: ...${process.env.FIREBASE_PRIVATE_KEY.substring(process.env.FIREBASE_PRIVATE_KEY.length - 50)}`);
+const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+console.log(`🔍 Private key length: ${rawPrivateKey.length}`);
+
+// Check if private key seems truncated (should be at least 1000 characters)
+if (rawPrivateKey.length < 1000) {
+  console.error("❌ WARNING: Private key appears to be truncated!");
+  console.error(`   Expected length: ~1600+ characters`);
+  console.error(`   Actual length: ${rawPrivateKey.length} characters`);
+  console.error("   This usually means the environment variable in Railway is not set correctly.");
+  console.error("   Please check that FIREBASE_PRIVATE_KEY contains the FULL private key.");
+  console.error("⚠️  Firebase Admin will not be initialized. Storage operations will fail.");
+  module.exports = { admin: null, db: null, bucket: null, auth: null };
+  return;
+}
+
+console.log(`🔍 Private key starts with: ${rawPrivateKey.substring(0, 50)}...`);
+console.log(`🔍 Private key ends with: ...${rawPrivateKey.substring(rawPrivateKey.length - 50)}`);
 
 // Fix private key formatting
-let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+let privateKey = rawPrivateKey.trim();
+
+// Remove any surrounding quotes that might have been added
+privateKey = privateKey.replace(/^["']+|["']+$/g, '');
 
 // Handle different private key formats
 if (privateKey.includes('\\n')) {
   // Replace literal \n with actual newlines
   privateKey = privateKey.replace(/\\n/g, '\n');
-} else if (!privateKey.includes('\n')) {
-  // If no newlines at all, add them manually
-  privateKey = privateKey.replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
-                         .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
 }
 
-// Ensure proper newline formatting
-if (!privateKey.startsWith('-----BEGIN PRIVATE KEY-----\n')) {
-  privateKey = '-----BEGIN PRIVATE KEY-----\n' + privateKey.replace('-----BEGIN PRIVATE KEY-----', '');
+// Check if END marker is missing and add it if needed
+if (!privateKey.includes('-----END PRIVATE KEY-----')) {
+  console.warn('⚠️  Private key is missing END marker, attempting to fix...');
+  // Try to find where the key ends (usually ends with base64 characters)
+  // Add the END marker
+  privateKey = privateKey.trim() + '\n-----END PRIVATE KEY-----';
 }
-if (!privateKey.endsWith('\n-----END PRIVATE KEY-----')) {
-  privateKey = privateKey.replace('-----END PRIVATE KEY-----', '') + '\n-----END PRIVATE KEY-----';
+
+// Ensure proper newline formatting after BEGIN marker
+if (privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+  privateKey = privateKey.replace(/-----BEGIN PRIVATE KEY-----[\s\n]*/, '-----BEGIN PRIVATE KEY-----\n');
 }
+
+// Ensure proper newline formatting before END marker
+if (privateKey.includes('-----END PRIVATE KEY-----')) {
+  privateKey = privateKey.replace(/[\s\n]*-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+}
+
+// Clean up any extra whitespace/newlines
+privateKey = privateKey.trim();
 
 console.log(`🔍 Formatted private key length: ${privateKey.length}`);
 console.log(`🔍 Formatted private key starts with: ${privateKey.substring(0, 50)}...`);
@@ -75,26 +108,44 @@ try {
   console.error("🔍 Error details:", error);
   
   // Additional debugging for private key issues
-  if (error.message.includes('private key') || error.message.includes('ASN.1')) {
+  if (error.message.includes('private key') || error.message.includes('ASN.1') || error.message.includes('PEM')) {
     console.error("🔧 Private key debugging:");
     console.error(`   Key length: ${serviceAccount.private_key.length}`);
     console.error(`   Contains BEGIN: ${serviceAccount.private_key.includes('-----BEGIN PRIVATE KEY-----')}`);
     console.error(`   Contains END: ${serviceAccount.private_key.includes('-----END PRIVATE KEY-----')}`);
     console.error(`   Contains newlines: ${serviceAccount.private_key.includes('\n')}`);
-    console.error(`   First 100 chars: ${serviceAccount.private_key.substring(0, 100)}`);
-    console.error(`   Last 100 chars: ${serviceAccount.private_key.substring(serviceAccount.private_key.length - 100)}`);
+    console.error(`   First 150 chars: ${serviceAccount.private_key.substring(0, 150)}`);
+    console.error(`   Last 150 chars: ${serviceAccount.private_key.substring(serviceAccount.private_key.length - 150)}`);
+    console.error("\n🔧 Common issues:");
+    console.error("   1. Missing -----END PRIVATE KEY----- marker");
+    console.error("   2. Extra quotes in Railway environment variable");
+    console.error("   3. Incorrect newline handling (should use \\n for literal newlines)");
+    console.error("\n💡 Fix in Railway:");
+    console.error("   FIREBASE_PRIVATE_KEY should be:");
+    console.error('   "-----BEGIN PRIVATE KEY-----\\n...key content...\\n-----END PRIVATE KEY-----"');
+    console.error("   (Note: Single quote at start, \\n for newlines, must include END marker)");
   }
   
-  process.exit(1);
+  // Don't exit - let the server start even if Firebase fails
+  // This allows Railway health checks to pass
+  console.error("⚠️  Firebase Admin initialization failed, but server will continue to run");
+  console.error("⚠️  Storage operations will fail until Firebase is properly configured");
+  module.exports = { admin: null, db: null, bucket: null, auth: null };
+  return;
 }
 
-// Initialize Firebase services
-const db = admin.firestore();
-const auth = admin.auth();
-const bucket = admin.storage().bucket(bucketName);
+// Initialize Firebase services (only if admin was successfully initialized)
+const db = admin ? admin.firestore() : null;
+const auth = admin ? admin.auth() : null;
+const bucket = admin ? admin.storage().bucket(bucketName) : null;
 
-// Test Storage connection with a more specific check
+// Test Storage connection with a more specific check (only if bucket is available)
 const checkBucketAccess = async () => {
+  if (!bucket) {
+    console.warn('⚠️  Firebase bucket is not available - skipping bucket access check');
+    return;
+  }
+  
   try {
     const [exists] = await bucket.exists();
     if (exists) {
