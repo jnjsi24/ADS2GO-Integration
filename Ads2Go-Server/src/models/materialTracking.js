@@ -189,7 +189,8 @@ MaterialTrackingSchema.methods.addMonthlyPhoto = function(month, photoUrls, driv
 
 MaterialTrackingSchema.methods.calculateNextPhotoDue = function() {
   const now = new Date();
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  // Set to midnight (00:00:00) of the first day of next month to avoid time component issues
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
   return nextMonth;
 };
 
