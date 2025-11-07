@@ -233,7 +233,7 @@ const ForgotPasswordScreen = () => {
             </Text>
             <View style={styles.codeContainer}>
               {Array.from({ length: 6 }).map((_, index) => (
-                <View key={index} style={[styles.codeInput, { borderColor: code.length === index ? '#1B5087' : '#e1e5e9' }]}>
+                <View key={index} style={[styles.codeInput, { borderColor: code.length === index ? '#3674B5' : '#e1e5e9' }]}>
                   <TextInput
                     style={styles.codeInputText}
                     maxLength={1}
@@ -305,7 +305,7 @@ const ForgotPasswordScreen = () => {
                 onPress={handleResendCode} 
                 disabled={timer > 0 || loading}
               >
-                <Text style={[styles.linkText, (timer > 0 || loading) && { color: '#ccc' }]}>
+                <Text style={[styles.linkText, (timer > 0 || loading) && { color: '#E5E7EB' }]}>
                   {timer > 0 
                     ? `Send code again: ${`00:${timer < 10 ? '0' + timer : timer}`}`
                     : 'Send code again'
@@ -452,16 +452,16 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 50,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9CA3AF',
+    borderRadius: 8,
     paddingHorizontal: 15,
     fontSize: 16,
   },
   button: {
     height: 50,
-    backgroundColor: '#1B5087',
-    borderRadius: 10,
+    backgroundColor: '#3674B5',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -511,9 +511,9 @@ const styles = StyleSheet.create({
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#9CA3AF',
+    borderRadius: 8,
     backgroundColor: '#fff',
     paddingHorizontal: 10,
   },
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     height: 50,
     fontSize: 16,
     color: '#2c3e50',
-    borderWidth: 0,
+    borderBottomWidth: 0,
     paddingHorizontal: 0,
   },
   passwordToggle: {
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
   },
   linkBold: {
     fontWeight: 'bold',
-    color: '#1B5087',
+    color: '#3674B5',
   },
   centeredContent: {
     justifyContent: 'center',

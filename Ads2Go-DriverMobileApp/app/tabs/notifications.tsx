@@ -360,7 +360,7 @@ export default function NotificationsScreen() {
         return '#F59E0B';
       case 'INFO':
       default:
-        return '#3B82F6';
+        return '#3674B5';
     }
   };
 
@@ -408,12 +408,7 @@ export default function NotificationsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3674B5" />
-        <Text style={styles.loadingText}>Loading notifications...</Text>
-        <View style={styles.loadingDotsContainer}>
-          <View style={[styles.loadingDot, styles.loadingDot1]} />
-          <View style={[styles.loadingDot, styles.loadingDot2]} />
-          <View style={[styles.loadingDot, styles.loadingDot3]} />
-        </View>
+        <Text style={styles.loadingText}>Loading notifications</Text>
       </View>
     );
   }
@@ -423,7 +418,6 @@ export default function NotificationsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>Notifications</Text>
           {unreadCount > 0 ? (
             <View style={styles.subtitleContainer}>
               <View style={styles.unreadBadge}>
@@ -434,7 +428,7 @@ export default function NotificationsScreen() {
               </Text>
             </View>
           ) : (
-            <Text style={styles.subtitleAllRead}>All caught up! ✨</Text>
+            <Text style={styles.subtitleAllRead}>All caught up</Text>
           )}
         </View>
         {notifications.length > 0 && !selectionMode && (
@@ -451,49 +445,52 @@ export default function NotificationsScreen() {
       {/* Action Buttons (shown in selection mode) */}
       {notifications.length > 0 && selectionMode && (
         <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity 
-            style={styles.selectAllButton} 
-            onPress={toggleSelectAll}
-          >
-            <Ionicons 
-              name={selectedIds.size === notifications.length ? "checkbox" : "square-outline"} 
-              size={18} 
-              color="#ffffff" 
-            />
-            <Text style={styles.selectAllText}>
-              {selectedIds.size === notifications.length ? 'Deselect All' : 'Select All'}
-            </Text>
-          </TouchableOpacity>
-
-          {selectedIds.size > 0 && (
+          <View style={styles.topRowButtons}>
             <TouchableOpacity 
-              style={styles.deleteSelectedButton} 
-              onPress={deleteSelected}
+              style={styles.selectAllButton} 
+              onPress={toggleSelectAll}
             >
-              <Ionicons name="trash-outline" size={18} color="#ffffff" />
-              <Text style={styles.deleteSelectedText}>Delete ({selectedIds.size})</Text>
+              <Ionicons 
+                name={selectedIds.size === notifications.length ? "checkmark-circle" : "ellipse-outline"} 
+                size={18} 
+                color={selectedIds.size === notifications.length ? "#ffffff" : "#ffffff"}
+              />
+              <Text style={styles.selectAllText}>
+                {selectedIds.size === notifications.length ? 'Deselect All' : 'Select All'}
+              </Text>
             </TouchableOpacity>
-          )}
-
-          {unreadCount > 0 && (
             <TouchableOpacity 
-              style={styles.markReadButton} 
-              onPress={markAllAsRead}
+              style={styles.cancelButton} 
+              onPress={() => {
+                setSelectionMode(false);
+                setSelectedIds(new Set());
+              }}
             >
-              <Ionicons name="checkmark-done-outline" size={18} color="#ffffff" />
-              <Text style={styles.markReadText}>Mark all read</Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-          )}
+          </View>
 
-          <TouchableOpacity 
-            style={styles.cancelButton} 
-            onPress={() => {
-              setSelectionMode(false);
-              setSelectedIds(new Set());
-            }}
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
+          <View style={styles.rightButtons}>
+            {selectedIds.size > 0 && (
+              <TouchableOpacity 
+                style={styles.deleteSelectedButton} 
+                onPress={deleteSelected}
+              >
+                <Ionicons name="trash-outline" size={18} color="#ffffff" />
+                <Text style={styles.deleteSelectedText}>Delete ({selectedIds.size})</Text>
+              </TouchableOpacity>
+            )}
+
+            {unreadCount > 0 && (
+              <TouchableOpacity 
+                style={styles.markReadButton} 
+                onPress={markAllAsRead}
+              >
+                <Ionicons name="checkmark-done-outline" size={18} color="#ffffff" />
+                <Text style={styles.markReadText}>Mark all read</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -534,7 +531,7 @@ export default function NotificationsScreen() {
                     <Ionicons
                       name={selectedIds.has(notification.id) ? "checkmark-circle" : "ellipse-outline"}
                       size={24}
-                      color={selectedIds.has(notification.id) ? "#3B82F6" : "#9CA3AF"}
+                      color={selectedIds.has(notification.id) ? "#3674B5" : "#9CA3AF"}
                     />
                   </TouchableOpacity>
                 )}
@@ -583,26 +580,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 16,
   },
-  loadingDotsContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 8,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3674B5',
-  },
-  loadingDot1: {
-    opacity: 0.3,
-  },
-  loadingDot2: {
-    opacity: 0.6,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -610,17 +587,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     paddingTop: 60,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   headerLeft: {
     flex: 1,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
   },
   subtitleContainer: {
     flexDirection: 'row',
@@ -648,14 +617,14 @@ const styles = StyleSheet.create({
   },
   subtitleAllRead: {
     fontSize: 14,
-    color: '#10B981',
+    color: '#000',
     marginTop: 4,
     fontWeight: '500',
   },
   selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#3674B5',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
@@ -668,22 +637,28 @@ const styles = StyleSheet.create({
   },
   actionButtonsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    gap: 8,
+  },
+  topRowButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rightButtons: {
+    flexDirection: 'row',
     gap: 8,
   },
   selectAllButton: {
     flexDirection: 'row',
+    backgroundColor: '#3674B5',
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6B7280',
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 8,
     gap: 5,
   },
   selectAllText: {
@@ -698,8 +673,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
     paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 8,
     gap: 5,
+    borderRadius: 5,
   },
   deleteSelectedText: {
     color: '#FFFFFF',
@@ -710,7 +685,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#3674B5',
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 8,
@@ -725,13 +700,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#9CA3AF',
-    paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 8,
   },
   cancelText: {
-    color: '#FFFFFF',
+    color: '#000',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -814,7 +787,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#3674B5',
     marginLeft: 8,
   },
 });

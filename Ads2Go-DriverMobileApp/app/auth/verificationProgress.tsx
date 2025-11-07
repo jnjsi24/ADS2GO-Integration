@@ -140,13 +140,11 @@ const VerificationProgress = () => {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <MaterialIcons name="verified-user" size={64} color="#3f51b5" style={styles.icon} />
-        
         <Text style={styles.title}>Account Verification</Text>
         
         {checkingStatus ? (
           <View style={styles.statusContainer}>
-            <ActivityIndicator size="large" color="#3f51b5" />
+            <ActivityIndicator size="large" color="#3674B5" />
             <Text style={styles.statusText}>Checking your verification status...</Text>
           </View>
         ) : status === 'approved' ? (
@@ -172,7 +170,7 @@ const VerificationProgress = () => {
             <MaterialIcons name="hourglass-empty" size={48} color="#ff9800" style={styles.statusIcon} />
             <Text style={[styles.statusText, styles.warningText]}>Account Still Under Review</Text>
             <Text style={styles.subText}>Your account is currently being reviewed by our team. You will be notified once the review is complete.</Text>
-            <Text style={styles.subText}>Please do not attempt to login until your account is approved.</Text>
+            <Text style={styles.subText1}>Please do not attempt to login until your account is approved.</Text>
           </View>
         )}
         
@@ -218,7 +216,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   content: {
-    backgroundColor: '#fff',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -257,6 +254,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
   },
+  subText1: {
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginTop: 20,
+    fontStyle: 'italic',
+  },
   successText: {
     color: '#4caf50',
   },
@@ -284,12 +288,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   primaryButton: {
-    backgroundColor: '#3f51b5',
+    backgroundColor: '#3674B5',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#3f51b5',
   },
   buttonText: {
     color: '#fff',
@@ -297,7 +299,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   secondaryButtonText: {
-    color: '#3f51b5',
+    color: '#9CA3AF',
   },
 });
 

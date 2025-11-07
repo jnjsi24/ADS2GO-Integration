@@ -57,6 +57,25 @@ interface Material {
   };
 }
 
+interface DriverAnalytics {
+  driverId: string;
+  vehiclePlateNumber: string;
+  vehicleModel: string;
+  vehicleType: string;
+  deviceId: string;
+  screenType: string;
+  materialId: string;
+  totalDistance: number;
+  totalHours: number;
+  hoursRemaining: number;
+  averageSpeed: number;
+  maxSpeed: number;
+  qrImpressions: number;
+  totalRoutes: number;
+  isOnline: boolean;
+  complianceRate: number;
+}
+
 type TabType = 'profile' | 'vehicle' | 'material';
 
 const GET_DRIVER_PROFILE = `
@@ -137,6 +156,7 @@ const GET_SALARY_SUMMARY = `
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -381,12 +401,60 @@ export default function ProfileScreen() {
         setMaterials([]);
       }
 
+      // Fetch driver analytics for device ID
+      await fetchDriverAnalytics(driverId);
+
     } catch (error) {
       console.error('Error loading profile:', error);
       Alert.alert('Error', 'Failed to load profile');
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchDriverAnalytics = async (driverId: string) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.error('No token found for analytics request');
+        return;
+      }
+
+      // Use the same endpoint as the dashboard and materials screen
+      const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        // Handle 404 gracefully - device may have been unregistered
+        if (response.status === 404) {
+          // Device not registered - this is normal
+          setAnalytics(null);
+          return;
+        }
+        
+        // Handle other errors
+        console.warn(`Analytics endpoint error: ${response.status}`);
+        setAnalytics(null);
+        return;
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        setAnalytics(result.data);
+      } else {
+        console.log('ℹ️ Analytics fetch unsuccessful:', result.message);
+        setAnalytics(null);
+      }
+    } catch (error) {
+      console.log('ℹ️ Could not fetch driver analytics - this is normal if device is not registered');
+      setAnalytics(null);
     }
   };
 
@@ -444,12 +512,7 @@ export default function ProfileScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3674B5" />
-        <Text style={styles.loadingText}>Loading profile...</Text>
-        <View style={styles.loadingDotsContainer}>
-          <View style={[styles.loadingDot, styles.loadingDot1]} />
-          <View style={[styles.loadingDot, styles.loadingDot2]} />
-          <View style={[styles.loadingDot, styles.loadingDot3]} />
-        </View>
+        <Text style={styles.loadingText}>Loading profile</Text>
       </View>
     );
   }
@@ -575,15 +638,21 @@ export default function ProfileScreen() {
                     </View>
                   </View>
 
-                  {/* Materials Button */}
-                  <TouchableOpacity 
-                    style={styles.materialsActionButton} 
-                  onPress={() => router.push('/materials')}
-                >
-                  <Ionicons name="cube-outline" size={20} color="#ffffff" />
-                  <Text style={styles.materialsActionText}>View Assigned Material</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-                </TouchableOpacity>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="tablet-portrait-outline" size={20} color="#9ca3af" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.deviceInfoLabel}>Device ID</Text>
+                      <Text style={styles.infoValue}>{analytics?.deviceId || 'N/A'}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                  <Ionicons name="tv-outline" size={20} color="#9ca3af" />
+                  <View style={styles.infoTextContainer}>
+                    <Text style={styles.infoLabel}>Device Type</Text>
+                    <Text style={styles.infoValue}>{analytics?.screenType || 'N/A'}</Text>
+                  </View>
+                </View>
 
                   {/* Compliance Upload Button */}
                   <TouchableOpacity 
@@ -615,11 +684,6 @@ export default function ProfileScreen() {
                     ]}>
                       {hasAnyPendingPhotos() ? 'Waiting for Admin Result' : 'Upload Compliance Photos'}
                     </Text>
-                    <Ionicons 
-                      name="chevron-forward" 
-                      size={20} 
-                      color={hasAnyPendingPhotos() ? "#999" : "#ffffff"} 
-                    />
                   </TouchableOpacity>
                 </View>
               ))
@@ -648,46 +712,48 @@ export default function ProfileScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
+        {/* Row 1: Header Icons */}
+        <View style={styles.headerIcons}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/my-reports')}>
+            <Ionicons name="document-text-outline" size={24} color="#10b981" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={() => setShowReportModal(true)}>
+            <Ionicons name="mail-outline" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Row 2: Profile Section */}
+        <View style={styles.profileSection}>
           <View style={styles.profileAvatarContainer}>
-            {
-              (() => {
-                const getImageUrl = (src?: string | null) => {
-                  if (!src) return null;
-                  if (/^https?:\/\//i.test(src)) return src;
-                  return `${API_CONFIG.BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`;
-                };
-                const imgUrl = getImageUrl(profile.profilePicture);
-                if (imgUrl) {
-                  return (
-                    <Image
-                      source={{ uri: imgUrl }}
-                      style={{ width: 70, height: 70, borderRadius: 35 }}
-                    />
-                  );
-                }
-                return <Ionicons name="person-circle" size={70} color="#5b8ec5" />;
-              })()
-            }
+            {(() => {
+              const getImageUrl = (src?: string | null) => {
+                if (!src) return null;
+                if (/^https?:\/\//i.test(src)) return src;
+                return `${API_CONFIG.BASE_URL}${src.startsWith('/') ? '' : '/'}${src}`;
+              };
+              const imgUrl = getImageUrl(profile.profilePicture);
+              if (imgUrl) {
+                return (
+                  <Image
+                    source={{ uri: imgUrl }}
+                    style={{ width: 70, height: 70, borderRadius: 35 }}
+                  />
+                );
+              }
+              return <Ionicons name="person-circle" size={70} color="#5b8ec5" />;
+            })()}
             {profile.isOnline && <View style={styles.onlineIndicator} />}
           </View>
-          <View style={styles.headerIcons}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/my-reports')}>
-              <Ionicons name="document-text-outline" size={24} color="#10b981" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setShowReportModal(true)}>
-              <Ionicons name="mail-outline" size={24} color="#3b82f6" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
-              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
-            </TouchableOpacity>
+          <View style={styles.profileInfo}>
+            <Text style={styles.name}>
+              {profile.firstName} {profile.lastName}
+            </Text>
+            <Text style={styles.driverId}>Driver ID: {profile.driverId}</Text>
           </View>
         </View>
-        
-        <Text style={styles.name}>
-          {profile.firstName} {profile.lastName}
-        </Text>
-        <Text style={styles.driverId}>Driver ID: {profile.driverId}</Text>
       </View>
 
       {/* Stats Cards */}
@@ -775,26 +841,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginTop: 16,
   },
-  loadingDotsContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 8,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3674B5',
-  },
-  loadingDot1: {
-    opacity: 0.3,
-  },
-  loadingDot2: {
-    opacity: 0.6,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -825,11 +871,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
   },
-  headerTop: {
+  headerIcons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    justifyContent: 'flex-end', // Align icons to the right
+    alignItems: 'center',
+    marginBottom: 20, // Add space between row 1 and row 2
+    gap: 3,
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   profileAvatarContainer: {
     position: 'relative',
@@ -845,9 +897,9 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#ffffff',
   },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 12,
+  profileInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
   iconButton: {
     padding: 4,
@@ -877,7 +929,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -894,9 +946,6 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
     paddingHorizontal: 8,
   },
   tab: {
@@ -928,14 +977,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
   },
   infoTextContainer: {
     flex: 1,
     marginLeft: 16,
   },
   infoLabel: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginBottom: 4,
+  },
+  deviceInfoLabel: {
     fontSize: 13,
     color: '#9ca3af',
     marginBottom: 4,
@@ -951,16 +1003,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '600',
   },
-  materialsActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3674B5',
-    paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 20,
-    gap: 8,
-  },
   materialsActionText: {
     fontSize: 15,
     fontWeight: '600',
@@ -970,10 +1012,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0077CC',
+    backgroundColor: '#3674B5',
     paddingVertical: 14,
     borderRadius: 8,
-    marginTop: 10,
+    marginTop: 60,
     gap: 8,
   },
   disabledButton: {

@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  Modal
+  Modal,
+  Animated,
+  PanResponder
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -109,6 +111,83 @@ const RouteTab: React.FC = () => {
   
   // 🔄 NEW: Batch GPS updates to prevent constant WebView reloads (smooth route line display)
   const pendingGPSPointsRef = useRef<RoutePoint[]>([]);
+  
+  // Bottom Sheet State
+  const bottomSheetHeight = screenHeight * 0.85; // 85% of screen height when fully open
+  const bottomSheetDefaultHeight = 230; // Default height to show vehicle status and metrics
+  const bottomSheetMinHeight = 120; // Minimum height when collapsed
+  const bottomSheetY = useRef(new Animated.Value(screenHeight - bottomSheetDefaultHeight)).current;
+  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  
+  // PanResponder for bottom sheet drag
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        bottomSheetY.setOffset((bottomSheetY as any)._value);
+        (bottomSheetY as any)._value = 0;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const currentValue = (bottomSheetY as any)._offset + gestureState.dy;
+        const minY = screenHeight - bottomSheetHeight;
+        const maxY = screenHeight - bottomSheetMinHeight;
+        const clampedValue = Math.max(minY, Math.min(maxY, currentValue));
+        bottomSheetY.setValue(clampedValue - (bottomSheetY as any)._offset);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        bottomSheetY.flattenOffset();
+        const currentY = (bottomSheetY as any)._value;
+        const minY = screenHeight - bottomSheetHeight; // Fully expanded
+        const defaultY = screenHeight - bottomSheetDefaultHeight; // Default (shows vehicle status + metrics)
+        const maxY = screenHeight - bottomSheetMinHeight; // Fully collapsed
+        
+        // Determine target position based on current position, gesture direction, and velocity
+        const threshold1 = (minY + defaultY) / 2; // Between expanded and default
+        const threshold2 = (defaultY + maxY) / 2; // Between default and collapsed
+        
+        let targetY: number;
+        
+        if (currentY < threshold1) {
+          // Closer to expanded - snap to expanded
+          targetY = minY;
+          setBottomSheetExpanded(true);
+        } else if (currentY < threshold2) {
+          // Between expanded and collapsed - snap to default
+          targetY = defaultY;
+          setBottomSheetExpanded(false);
+        } else {
+          // Closer to collapsed - snap to collapsed
+          targetY = maxY;
+          setBottomSheetExpanded(false);
+        }
+        
+        // Override with velocity if strong enough
+        if (gestureState.vy < -0.8 && currentY > defaultY) {
+          // Strong upward swipe from default/collapsed -> expand
+          targetY = minY;
+          setBottomSheetExpanded(true);
+        } else if (gestureState.vy > 0.8 && currentY < defaultY) {
+          // Strong downward swipe from expanded -> default
+          targetY = defaultY;
+          setBottomSheetExpanded(false);
+        } else if (gestureState.vy > 0.8 && currentY >= defaultY) {
+          // Strong downward swipe from default -> collapse
+          targetY = maxY;
+          setBottomSheetExpanded(false);
+        }
+        
+        Animated.spring(bottomSheetY, {
+          toValue: targetY,
+          useNativeDriver: false,
+          tension: 50,
+          friction: 8,
+        }).start();
+      },
+    })
+  ).current;
   useEffect(() => {
     // ✅ CRITICAL FIX: Use local date comparison to avoid timezone issues
     const selectedYear = selectedDate.getFullYear();
@@ -1187,13 +1266,8 @@ const RouteTab: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading route data...</Text>
-        <View style={styles.loadingDotsContainer}>
-          <View style={[styles.loadingDot, styles.loadingDot1]} />
-          <View style={[styles.loadingDot, styles.loadingDot2]} />
-          <View style={[styles.loadingDot, styles.loadingDot3]} />
-        </View>
+        <ActivityIndicator size="large" color="#3674B5" />
+        <Text style={styles.loadingText}>Loading route data</Text>
       </View>
     );
   }
@@ -1234,83 +1308,191 @@ const RouteTab: React.FC = () => {
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-        <Text style={styles.headerTitle}>Route Tracking</Text>
-        <Text style={styles.headerSubtitle}>GPS Route Visualization</Text>
-          </View>
+    <View style={styles.fullScreenContainer}>
+      {/* Full Screen Map */}
+      <View style={styles.fullScreenMapContainer}>
+        {/* ✅ FIXED: Show single marker during midnight reset mode, otherwise show full route */}
+        {(() => {
+          // During midnight reset mode (12 AM - 8 AM on current day):
+          // - showOnlyLastLocation = true
+          // - lastLocationPoint = yesterday's last GPS location
+          // - routeData = null (we skip the API call)
+          const shouldShowSingleMarker = showOnlyLastLocation && lastLocationPoint;
           
-          {/* Ad Player Online Status Indicator */}
-          <View style={[styles.onlineStatusBadge, isAdPlayerOnline ? styles.onlineStatusOnline : styles.onlineStatusOffline]}>
-            <View style={[styles.statusDot, isAdPlayerOnline && styles.statusDotOnline]} />
-            <Text style={[styles.onlineStatusText, isAdPlayerOnline && styles.onlineStatusTextOnline]}>
-              {isAdPlayerOnline ? 'ONLINE' : 'OFFLINE'}
-            </Text>
+          console.log('🗺️ [Map Render] Decision:', {
+            date: selectedDate.toDateString(),
+            showOnlyLastLocation,
+            hasLastLocationPoint: !!lastLocationPoint,
+            hasRouteData: !!routeData?.route,
+            routePointCount: routeData?.route?.length || 0,
+            shouldShowSingleMarker,
+            willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
+          });
+          
+          return shouldShowSingleMarker ? (
+            <>
+              <RouteMapView 
+                route={[lastLocationPoint]} 
+                style={styles.fullScreenMap}
+                showSpeedColors={false}
+                showWaypoints={false}
+              />
+              <View style={styles.midnightResetBanner}>
+                <Ionicons name="moon" size={16} color="#f59e0b" />
+                <Text style={styles.midnightResetText}>
+                  Showing last location from yesterday (driver completed 8 hours). New route will appear when ad player starts at 8 AM.
+                </Text>
+              </View>
+            </>
+          ) : (
+            <RouteMapView 
+              route={routeData?.route || []} 
+              style={styles.fullScreenMap}
+              showSpeedColors={false}
+              showWaypoints={false}
+            />
+          );
+        })()}
+        
+        {/* Date Selector Overlay on Map */}
+        <View style={styles.mapOverlayControls}>
+          <View style={styles.controlsRow}>
+            <TouchableOpacity 
+              style={styles.dateButtonOverlay}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Ionicons name="calendar" size={20} color="#3674B5" />
+              <Text style={styles.dateButtonText}>
+                {selectedDate.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#6b7280" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[
+                styles.todayButton,
+                isSelectedDateToday() && styles.todayButtonDisabled
+              ]}
+              onPress={() => {
+                if (!isSelectedDateToday()) {
+                  const now = new Date();
+                  // ✅ Create today's date at midnight to avoid timezone issues
+                  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                  console.log('🎯 [Today Button] Clicked:', {
+                    dateStr: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+                    dateString: today.toDateString()
+                  });
+                  setSelectedDate(today);
+                }
+              }}
+              disabled={isSelectedDateToday()}
+              activeOpacity={isSelectedDateToday() ? 1 : 0.7}
+            >
+              <Text style={[
+                styles.todayButtonText,
+                isSelectedDateToday() && styles.todayButtonTextDisabled
+              ]}>
+                Today
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-        
-        {/* Real-time WebSocket indicator */}
-        {lastUpdate && (
-          <View style={styles.refreshIndicator}>
-            <Ionicons 
-              name={isRealTimeActive ? "flash" : "sync"} 
-              size={12} 
-              color={isRealTimeActive ? '#22c55e' : '#9ca3af'} 
-            />
-            <Text style={styles.refreshText}>
-              {isRealTimeActive 
-                ? `⚡ Real-time • Last: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-                : `Updated: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
-              }
-            </Text>
-          </View>
-        )}
-        
-        {/* Show last seen time when offline */}
-        {!isAdPlayerOnline && lastSeenTime && (
-          <Text style={styles.lastSeenText}>
-            Last seen: {lastSeenTime.toLocaleString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              hour: 'numeric', 
-              minute: '2-digit'
-            })}
-          </Text>
-        )}
-        
-        {driverInfo && (
-          <View style={styles.driverInfo}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoItem}>
-                <Ionicons name="person" size={16} color="#3b82f6" />
-                <Text style={styles.infoLabel}>Driver</Text>
-                <Text style={styles.infoValue}>{driverInfo.driverId}</Text>
+      </View>
+
+      {/* Bottom Sheet - Pull Up Feature */}
+      <Animated.View 
+        style={[
+          styles.bottomSheet,
+          {
+            transform: [{ translateY: bottomSheetY }],
+          },
+        ]}
+      >
+        {/* Drag Handle */}
+        <View style={styles.dragHandle} {...panResponder.panHandlers}>
+          <View style={styles.dragHandleBar} />
+        </View>
+
+        {/* Scrollable Content */}
+        <View style={styles.bottomSheetScrollContainer}>
+          <ScrollView 
+            style={styles.bottomSheetContent}
+            contentContainerStyle={styles.bottomSheetContentContainer}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+          {/* Vehicle/Device Status Card */}
+          <View style={styles.vehicleStatusCard}>
+            <View style={styles.vehicleStatusHeader}>
+              <View style={styles.vehicleIdContainer}>
+              <Text style={styles.vehicleIdText}>{driverInfo?.driverId}</Text>                
+              <Text style={styles.deviceIdText}>{driverInfo?.materialId}</Text>
               </View>
-              <View style={styles.infoItem}>
-                <Ionicons name="cube" size={16} color="#3b82f6" />
-                <Text style={styles.infoLabel}>Material</Text>
-                <Text style={styles.infoValue} numberOfLines={1} ellipsizeMode="middle">
-                  {driverInfo.materialId}
+              <View style={styles.statusContainer}>
+                <View style={[styles.statusBadge, !isAdPlayerOnline && styles.statusBadgeOffline]}>
+                  <View style={[styles.statusDot, isAdPlayerOnline && styles.statusDotOnline]} />
+                  <Text style={[styles.statusText, isAdPlayerOnline && styles.statusTextOnline]}>
+                    {isAdPlayerOnline ? 'ONLINE' : 'OFFLINE'}
+                  </Text>
+                </View>
+                {/* Real-time indicator */}
+                {lastUpdate && (
+                  <Text style={styles.lastUpdateText}>
+                    {isRealTimeActive ? 'Real-time:' : 'Updated:'} {lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                  </Text>
+                )}
+              </View>
+            </View>
+            
+            {/* Route Statistics - 2x2 Grid */}
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Distance</Text>
+                <Text style={styles.metricValue}>
+                  {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km
+                </Text>
+              </View>
+              
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Duration</Text>
+                <Text style={styles.metricValue}>
+                  {/* ✅ FIXED: Use sessionStatus.currentHours for today's date to match dashboard */}
+                  {isSelectedDateToday() && sessionStatus?.currentHours !== undefined
+                    ? `${sessionStatus.currentHours.toFixed(2)}h`
+                    : routeData?.metrics?.totalDuration
+                    ? formatDuration(routeData.metrics.totalDuration)
+                    : '0 sec'}
+                </Text>
+              </View>
+              
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Avg Speed</Text>
+                <Text style={styles.metricValue}>
+                  {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
+                </Text>
+              </View>
+              
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Points</Text>
+                <Text style={styles.metricValue}>
+                {((routeData?.metrics?.pointCount ?? routeData?.route?.length ?? 0 ) + " points")}
                 </Text>
               </View>
             </View>
           </View>
-        )}
-      </View>
 
-      {/* Session Status Card (8-Hour Requirement) */}
+          {/* Session Status Card (8-Hour Requirement) */}
       {selectedDate.toDateString() === new Date().toDateString() && (
         <View style={styles.sessionCard}>
           <View style={styles.sessionHeader}>
-            <Ionicons name="time-outline" size={24} color="#3b82f6" />
+            <Ionicons name="time-outline" size={24} color="#3674B5" />
             <Text style={styles.sessionTitle}>Daily 8-Hour Requirement</Text>
           </View>
           
@@ -1330,9 +1512,9 @@ const RouteTab: React.FC = () => {
                     overallCompliance.rating === 'GOOD' && { color: '#2563eb' },
                     overallCompliance.rating === 'AVERAGE' && { color: '#f59e0b' }
                   ]}>
-                    {overallCompliance.rating === 'VERY GOOD' && '🌟 VERY GOOD'}
-                    {overallCompliance.rating === 'GOOD' && '✅ GOOD'}
-                    {overallCompliance.rating === 'AVERAGE' && '⚠️ AVERAGE'}
+                    {overallCompliance.rating === 'VERY GOOD' && 'VERY GOOD'}
+                    {overallCompliance.rating === 'GOOD' && 'GOOD'}
+                    {overallCompliance.rating === 'AVERAGE' && 'AVERAGE'}
                   </Text>
                 </View>
                 <Text style={styles.compliancePercent}>
@@ -1349,15 +1531,15 @@ const RouteTab: React.FC = () => {
             // ✅ ACTUALLY COMPLETED (reached 8 hours)
             <View style={styles.sessionCompleted}>
               <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
-              <Text style={styles.sessionCompletedTitle}>8-Hour Requirement Completed! 🎯</Text>
+              <Text style={styles.sessionCompletedTitle}>8-Hour Requirement Completed!</Text>
               <Text style={styles.sessionCompletedText}>
                 You completed {sessionStatus.currentHours.toFixed(2)} hours today
               </Text>
               <Text style={styles.sessionCompletedTime}>
-                {new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
+                {sessionStatus.startTime ? new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
                   hour: 'numeric', 
                   minute: '2-digit'
-                })} - {sessionStatus.endTime ? new Date(sessionStatus.endTime).toLocaleTimeString('en-US', { 
+                }) : 'N/A'} - {sessionStatus.endTime ? new Date(sessionStatus.endTime).toLocaleTimeString('en-US', { 
                   hour: 'numeric', 
                   minute: '2-digit'
                 }) : 'In Progress'}
@@ -1379,21 +1561,6 @@ const RouteTab: React.FC = () => {
                     {sessionStatus.remainingHours.toFixed(2)}h
                   </Text>
                 </View>
-                <View style={styles.sessionStatItem}>
-                  <Text style={styles.sessionStatLabel}>Status</Text>
-                  <Text style={[
-                    styles.sessionStatValue,
-                    { 
-                      color: overallCompliance?.rating === 'VERY GOOD' ? '#16a34a' : 
-                             overallCompliance?.rating === 'GOOD' ? '#2563eb' : '#f59e0b'
-                    }
-                  ]}>
-                    {overallCompliance?.rating === 'VERY GOOD' && '🌟 VERY GOOD'}
-                    {overallCompliance?.rating === 'GOOD' && '✅ GOOD'}
-                    {overallCompliance?.rating === 'AVERAGE' && '⚠️ AVERAGE'}
-                    {!overallCompliance && 'N/A'}
-                  </Text>
-                </View>
               </View>
               
               {/* Progress Bar */}
@@ -1405,7 +1572,7 @@ const RouteTab: React.FC = () => {
                       width: `${sessionStatus.progressPercent}%`,
                       backgroundColor: overallCompliance?.rating === 'VERY GOOD' ? '#16a34a' : 
                                        overallCompliance?.rating === 'GOOD' ? '#2563eb' : 
-                                       overallCompliance?.rating === 'AVERAGE' ? '#f59e0b' : '#3b82f6'
+                                       overallCompliance?.rating === 'AVERAGE' ? '#f59e0b' : '#3674B5'
                     }
                   ]} />
                 </View>
@@ -1416,11 +1583,11 @@ const RouteTab: React.FC = () => {
               
               <View style={styles.sessionTimeInfo}>
                 <Text style={styles.sessionTimeText}>
-                  Started: {new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
+                  Started: {sessionStatus.startTime ? new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
                     hour: 'numeric', 
                     minute: '2-digit',
                     hour12: true 
-                  })}
+                  }) : 'N/A'}
                 </Text>
                 {sessionStatus.complianceStatus === 'COMPLIANT' && sessionStatus.endTime && (
                   <Text style={[styles.sessionTimeText, { color: '#22c55e', fontWeight: '600' }]}>
@@ -1436,12 +1603,7 @@ const RouteTab: React.FC = () => {
           ) : (
             // Session Not Started - Only shows if sessionStatus is null
             <View style={styles.sessionNotStarted}>
-              <Ionicons name="tablet-portrait-outline" size={48} color="#9ca3af" />
-              <Text style={styles.sessionNotStartedText}>
-                Session will start automatically when ad player opens
-              </Text>
               <View style={styles.autoStartInfo}>
-                <Ionicons name="information-circle" size={20} color="#3b82f6" />
                 <Text style={styles.autoStartText}>
                   Your 8-hour tracking begins automatically when the ad player device connects and starts running.
                 </Text>
@@ -1451,53 +1613,52 @@ const RouteTab: React.FC = () => {
         </View>
       )}
 
-      {/* Date Selector */}
-      <View style={styles.controlsCard}>
-        <View style={styles.controlsRow}>
-          <TouchableOpacity 
-            style={styles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Ionicons name="calendar" size={20} color="#3b82f6" />
-            <Text style={styles.dateButtonText}>
-              {selectedDate.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                year: 'numeric' 
-              })}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color="#6b7280" />
-          </TouchableOpacity>
+          {/* Route Timeline Section */}
+          <View style={styles.statusCard}>
+            <View style={styles.statusHeader}>
+              <Text style={styles.statusTitle}>Route Timeline</Text>
+            </View>
+            
+            {routeData && routeData.route.length > 0 ? (
+              addressesReady ? (
+                <RouteTimelineView
+                  route={routeData.route}
+                  segmentRoute={segmentRoute}
+                  formatTime={formatTime}
+                  formatDuration={formatDuration}
+                  geocodeSegmentLocations={geocodeSegmentLocations}
+                  getLocationAddress={getLocationAddress}
+                  isGeocoding={isGeocoding}
+                  addressesReady={addressesReady}
+                />
+              ) : (
+                <View style={styles.timelineLoadingContainer}>
+                  <ActivityIndicator size="large" color="#3674B5" />
+                  <Text style={styles.timelineLoadingText}>Loading addresses</Text>
+                </View>
+              )
+            ) : (
+              <View style={styles.noDataContainer}>
+                <Ionicons name="location-outline" size={32} color="#9ca3af" />
+                <Text style={styles.noDataText}>
+                  {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown' 
+                    ? 'No device registered yet' 
+                    : 'No route data available'}
+                </Text>
+                <Text style={styles.noDataSubtext}>
+                  {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown'
+                    ? 'Please contact admin to register your device and start tracking'
+                    : 'Route data will appear when GPS tracking is active'}
+                </Text>
+              </View>
+            )}
+          </View>
 
-          <TouchableOpacity 
-            style={[
-              styles.todayButton,
-              isSelectedDateToday() && styles.todayButtonDisabled
-            ]}
-            onPress={() => {
-              if (!isSelectedDateToday()) {
-                const now = new Date();
-                // ✅ Create today's date at midnight to avoid timezone issues
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-                console.log('🎯 [Today Button] Clicked:', {
-                  dateStr: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
-                  dateString: today.toDateString()
-                });
-                setSelectedDate(today);
-              }
-            }}
-            disabled={isSelectedDateToday()}
-            activeOpacity={isSelectedDateToday() ? 1 : 0.7}
-          >
-            <Text style={[
-              styles.todayButtonText,
-              isSelectedDateToday() && styles.todayButtonTextDisabled
-            ]}>
-              Today
-            </Text>
-          </TouchableOpacity>
+          {/* Bottom Spacing */}
+          <View style={styles.bottomSpacing} />
+          </ScrollView>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Date Picker Modal */}
       <Modal
@@ -1580,16 +1741,18 @@ const RouteTab: React.FC = () => {
                       <Text style={[styles.dateItemText, isSelected && styles.dateItemTextSelected]}>
                         {date.toLocaleDateString('en-US', { 
                           weekday: 'short',
-                          month: 'short', 
+                          month: 'long', 
                           day: 'numeric', 
                           year: 'numeric' 
                         })}
                       </Text>
                       {isSelected && (
-                        <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
+                        <Ionicons name="checkmark-circle" size={20} color="#3674B5" />
                       )}
                     </View>
-                    {i === 0 && <Text style={styles.todayBadge}>Today</Text>}
+                    {i === 0 && <View style={styles.todayBadgeInline}>
+                            <Text style={styles.todayBadgeInlineText}>Today</Text>
+                          </View>}
                   </TouchableOpacity>
                 );
                 });
@@ -1598,143 +1761,7 @@ const RouteTab: React.FC = () => {
           </View>
         </View>
       </Modal>
-
-      {/* Route Statistics - Always show */}
-      <View style={styles.metricsContainer}>
-        <Text style={styles.metricsTitle}>Route Statistics</Text>
-        
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <Ionicons name="speedometer" size={24} color="#22c55e" />
-            <Text style={styles.metricLabel}>Distance</Text>
-            <Text style={styles.metricValue}>
-              {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km
-            </Text>
-          </View>
-          
-          <View style={styles.metricCard}>
-            <Ionicons name="time" size={24} color="#3b82f6" />
-            <Text style={styles.metricLabel}>Duration</Text>
-            <Text style={styles.metricValue}>
-              {/* ✅ FIXED: Use sessionStatus.currentHours for today's date to match dashboard */}
-              {isSelectedDateToday() && sessionStatus?.currentHours !== undefined
-                ? `${sessionStatus.currentHours.toFixed(2)}h`
-                : routeData?.metrics?.totalDuration
-                ? formatDuration(routeData.metrics.totalDuration)
-                : '0s'}
-            </Text>
-          </View>
-          
-          <View style={styles.metricCard}>
-            <Ionicons name="trending-up" size={24} color="#f59e0b" />
-            <Text style={styles.metricLabel}>Avg Speed</Text>
-            <Text style={styles.metricValue}>
-              {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
-            </Text>
-          </View>
-          
-          <View style={styles.metricCard}>
-            <Ionicons name="location" size={24} color="#8b5cf6" />
-            <Text style={styles.metricLabel}>Points</Text>
-            <Text style={styles.metricValue}>
-              {routeData?.metrics?.pointCount || routeData?.route?.length || 0}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Interactive Route Map */}
-      <View style={styles.mapContainer}>
-        <View style={styles.mapWrapper}>
-          {/* ✅ FIXED: Show single marker during midnight reset mode, otherwise show full route */}
-          {(() => {
-            // During midnight reset mode (12 AM - 8 AM on current day):
-            // - showOnlyLastLocation = true
-            // - lastLocationPoint = yesterday's last GPS location
-            // - routeData = null (we skip the API call)
-            const shouldShowSingleMarker = showOnlyLastLocation && lastLocationPoint;
-            
-            console.log('🗺️ [Map Render] Decision:', {
-              date: selectedDate.toDateString(),
-              showOnlyLastLocation,
-              hasLastLocationPoint: !!lastLocationPoint,
-              hasRouteData: !!routeData?.route,
-              routePointCount: routeData?.route?.length || 0,
-              shouldShowSingleMarker,
-              willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
-            });
-            
-            return shouldShowSingleMarker ? (
-              <>
-                <RouteMapView 
-                  route={[lastLocationPoint]} 
-                  style={styles.map}
-                  showSpeedColors={false}
-                  showWaypoints={false}
-                />
-                <View style={styles.midnightResetBanner}>
-                  <Ionicons name="moon" size={16} color="#f59e0b" />
-                  <Text style={styles.midnightResetText}>
-                    Showing last location from yesterday (driver completed 8 hours). New route will appear when ad player starts at 8 AM.
-                  </Text>
-                </View>
-              </>
-            ) : (
-          <RouteMapView 
-            route={routeData?.route || []} 
-            style={styles.map}
-            showSpeedColors={false}
-            showWaypoints={false}
-          />
-            );
-          })()}
-        </View>
-      </View>
-
-      {/* Route Status Timeline */}
-      <View style={styles.statusCard}>
-        <View style={styles.statusHeader}>
-          <Ionicons name="time" size={24} color="#3b82f6" />
-          <Text style={styles.statusTitle}>Route Timeline</Text>
-        </View>
-        
-        {routeData && routeData.route.length > 0 ? (
-          addressesReady ? (
-            <RouteTimelineView
-              route={routeData.route}
-              segmentRoute={segmentRoute}
-              formatTime={formatTime}
-              formatDuration={formatDuration}
-              geocodeSegmentLocations={geocodeSegmentLocations}
-              getLocationAddress={getLocationAddress}
-              isGeocoding={isGeocoding}
-            />
-          ) : (
-            <View style={styles.timelineLoadingContainer}>
-              <ActivityIndicator size="large" color="#3b82f6" />
-              <Text style={styles.timelineLoadingText}>Loading addresses...</Text>
-            </View>
-          )
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Ionicons name="location-outline" size={32} color="#9ca3af" />
-            <Text style={styles.noDataText}>
-              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown' 
-                ? 'No device registered yet' 
-                : 'No route data available'}
-            </Text>
-            <Text style={styles.noDataSubtext}>
-              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown'
-                ? 'Please contact admin to register your device and start tracking'
-                : 'Route data will appear when GPS tracking is active'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Bottom Spacing */}
-      <View style={styles.bottomSpacing} />
-    </ScrollView>
+    </View>
   );
 };
 
@@ -1759,6 +1786,7 @@ interface RouteTimelineViewProps {
   }>) => Promise<void>;
   getLocationAddress: (lat: number, lng: number, existingAddress?: string) => string;
   isGeocoding: boolean;
+  addressesReady: boolean;
 }
 
 const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
@@ -1768,7 +1796,8 @@ const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
   formatDuration,
   geocodeSegmentLocations,
   getLocationAddress,
-  isGeocoding
+  isGeocoding,
+  addressesReady
 }) => {
   const segments = segmentRoute(route);
   
@@ -1776,8 +1805,8 @@ const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
     <ScrollView style={styles.timelineContainer} nestedScrollEnabled>
       {isGeocoding && (
         <View style={styles.geocodingIndicator}>
-          <ActivityIndicator size="small" color="#3b82f6" />
-          <Text style={styles.geocodingText}>Loading addresses...</Text>
+          <ActivityIndicator size="small" color="#3674B5" />
+          <Text style={styles.geocodingText}>Loading addresses</Text>
         </View>
       )}
       {segments.map((segment, index) => {
@@ -1831,7 +1860,7 @@ const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
               {segment.type === 'TRAVELED' ? (
                 <View style={styles.timelineDetails}>
                   <View style={styles.locationRow}>
-                    <Ionicons name="navigate" size={14} color="#3b82f6" />
+                    <Ionicons name="navigate" size={14} color="#3674B5" />
                     <Text style={styles.locationText} numberOfLines={2}>
                       From: {displayStartAddress}
                     </Text>
@@ -1868,6 +1897,90 @@ const RouteTimelineView: React.FC<RouteTimelineViewProps> = ({
 };
 
 const styles = StyleSheet.create({
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+  },
+  fullScreenMapContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  fullScreenMap: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  mapOverlayControls: {
+    position: 'absolute',
+    top: 50,
+    left: 55,
+    right: 20,
+    zIndex: 10,
+    width: '85%',
+  },
+  dateButtonOverlay: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+    gap: 8,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: screenHeight,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  dragHandle: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingBottom: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: '#ffffff',
+    zIndex: 1,
+    minHeight: 50,
+  },
+  dragHandleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#d1d5db',
+    borderRadius: 2,
+  },
+  bottomSheetScrollContainer: {
+    flex: 1,
+  },
+  bottomSheetContent: {
+    flex: 1,
+  },
+  bottomSheetContentContainer: {
+    paddingBottom: 100,
+    paddingTop: 0,
+  },
+  lastUpdateText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+    textAlign: 'right',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -1882,26 +1995,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
-  },
-  loadingDotsContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 8,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3b82f6',
-  },
-  loadingDot1: {
-    opacity: 0.3,
-  },
-  loadingDot2: {
-    opacity: 0.6,
-  },
-  loadingDot3: {
-    opacity: 1,
   },
   errorContainer: {
     flex: 1,
@@ -1963,7 +2056,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3674B5',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -2074,14 +2167,13 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     margin: 20,
-    backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    marginBottom: 70,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -2092,7 +2184,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
-    marginLeft: 8,
   },
   statusContent: {
     gap: 8,
@@ -2139,28 +2230,75 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 16,
   },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  metricCard: {
-    width: '48%',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
+  vehicleStatusCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
+  vehicleStatusHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  vehicleIdContainer: {
+    flex: 1,
+  },
+  vehicleIdText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  deviceIdText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#dcfce7',
+    gap: 6,
+  },
+  statusBadgeOffline: {
+    backgroundColor: '#fee2e2',
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  statusTextOnline: {
+    color: '#16a34a',
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 30,
+  },
+  metricCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
   metricLabel: {
     fontSize: 12,
     color: '#6b7280',
-    marginTop: 8,
     marginBottom: 4,
   },
   metricValue: {
@@ -2191,8 +2329,8 @@ const styles = StyleSheet.create({
   },
   midnightResetBanner: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 100,
+    left: 55,
     right: 10,
     backgroundColor: 'rgba(251, 191, 36, 0.95)',
     padding: 12,
@@ -2205,6 +2343,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 5,
+    width: '85%',
   },
   midnightResetText: {
     flex: 1,
@@ -2218,22 +2357,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bottomSpacing: {
-    height: 20,
+    height: 60,
   },
 
   // Date and Controls Styles
   controlsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    marginHorizontal: 20,
     marginTop: 10,
     marginBottom: 20,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 3,
   },
   controlsRow: {
     flexDirection: 'row',
@@ -2242,45 +2373,48 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dateButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    flex: 1,
-    marginRight: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    gap: 8,
   },
   dateButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginLeft: 8,
-    marginRight: 8,
     flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+    marginLeft: 4,
   },
   todayButton: {
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    backgroundColor: '#3674B5',
     borderRadius: 8,
-  },
-  todayButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginLeft: 8,
   },
   todayButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: '#dfdfdf',
     shadowOpacity: 0,
     elevation: 0,
   },
-  todayButtonTextDisabled: {
-    color: '#d1d5db',
+  todayButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
-  
+  todayButtonTextDisabled: {
+    color: '#9CA3AF',
+  },  
   // Date Picker Modal Styles
   modalOverlay: {
     flex: 1,
@@ -2292,54 +2426,66 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '70%',
-    paddingBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: '600',
+    color: '#1f2937',
   },
   dateList: {
-    padding: 10,
+    maxHeight: 400,
   },
   dateItem: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: '#f8fafc',
-  },
-  dateItemSelected: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 2,
-    borderColor: '#3b82f6',
-  },
-  dateItemContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  dateItemSelected: {
+    backgroundColor: '#eff6ff',
+  },
+  dateItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   dateItemText: {
-    fontSize: 16,
-    color: '#111827',
+    fontSize: 15,
     fontWeight: '500',
+    color: '#1f2937',
   },
   dateItemTextSelected: {
-    color: '#3b82f6',
-    fontWeight: '700',
+    color: '#3674B5',
+    fontWeight: '600',
   },
-  todayBadge: {
-    fontSize: 12,
-    color: '#22c55e',
-    fontWeight: '700',
-    marginTop: 4,
+  todayBadgeInline: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  todayBadgeInlineText: {
+    color: '#3674B5',
+    fontSize: 11,
+    fontWeight: '600',
   },
   noDateContainer: {
     flex: 1,
@@ -2392,8 +2538,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6',
   },
   timelineHeader: {
     flexDirection: 'row',
@@ -2426,9 +2570,9 @@ const styles = StyleSheet.create({
   },
   distanceText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#000',
     marginTop: 4,
-    fontWeight: '600',
+    fontWeight: '400',
   },
   geocodingIndicator: {
     flexDirection: 'row',
@@ -2442,7 +2586,7 @@ const styles = StyleSheet.create({
   },
   geocodingText: {
     fontSize: 12,
-    color: '#3b82f6',
+    color: '#3674B5',
     fontWeight: '500',
   },
   timelineLoadingContainer: {
@@ -2522,7 +2666,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3b82f6',
+    color: '#3674B5',
     textAlign: 'center',
   },
   sessionTimeInfo: {
@@ -2557,52 +2701,36 @@ const styles = StyleSheet.create({
   },
   sessionNotStarted: {
     alignItems: 'center',
-    paddingVertical: 20,
     gap: 16,
-  },
-  sessionNotStartedText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 8,
   },
   autoStartInfo: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#eff6ff',
     padding: 16,
     borderRadius: 10,
     gap: 12,
-    marginTop: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#3b82f6',
   },
   autoStartText: {
     flex: 1,
     fontSize: 14,
-    color: '#1e40af',
+    color: '#000',
     lineHeight: 20,
+    textAlign: 'center',
   },
   
   // ✅ NEW: Overall Compliance Rating Styles
   overallComplianceCard: {
-    marginBottom: 16,
+    marginBottom: 10,
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: 8,
   },
   veryGoodCard: {
     backgroundColor: '#f0fdf4',
-    borderColor: '#16a34a',
   },
   goodCard: {
     backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
   },
   averageCard: {
     backgroundColor: '#fffbeb',
-    borderColor: '#f59e0b',
   },
   ratingRow: {
     flexDirection: 'row',

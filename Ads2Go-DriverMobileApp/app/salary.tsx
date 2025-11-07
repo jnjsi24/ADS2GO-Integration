@@ -321,7 +321,6 @@ const SalaryScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>My Salary</Text>
-          <Text style={styles.subtitle}>Track your earnings and salary calculations</Text>
         </View>
 
         {/* Summary Card */}
@@ -637,9 +636,6 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   title: {
     fontSize: 24,
@@ -647,15 +643,11 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
   summaryCard: {
     margin: 20,
     padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: '#3674B5',
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -665,7 +657,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: '#ffffff',
     marginBottom: 16,
   },
   summaryRow: {
@@ -678,13 +670,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#ffffff',
     marginBottom: 4,
   },
   summaryValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#ffffff',
   },
   calculationsSection: {
     padding: 20,
@@ -773,7 +765,7 @@ const styles = StyleSheet.create({
   },
   pricingConfigBadge: {
     backgroundColor: '#E0F2FE',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,

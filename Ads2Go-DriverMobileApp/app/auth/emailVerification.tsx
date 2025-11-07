@@ -228,7 +228,6 @@ const EmailVerification = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.card}>
-        <Ionicons name="sparkles" size={30} color="#34D9B0" style={styles.sparkleIcon} />
         <View style={styles.header}>
           <Text style={styles.title}>Verify Your Email</Text>
           <Text style={styles.subtitle}>
@@ -393,7 +392,7 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
   },
   verifyButton: {
-    backgroundColor: '#1B5087',
+    backgroundColor: '#3674B5',
     paddingVertical: 15,
     borderRadius: 8,
     width: '105%',
@@ -401,7 +400,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   verifyButtonDisabled: {
-    backgroundColor: '#1B5087',
+    backgroundColor: '#3674B5',
   },
   verifyButtonText: {
     fontSize: 16,
@@ -423,7 +422,7 @@ const styles = StyleSheet.create({
   resendButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FF9800',
+    color: '#3674B5',
   },
   timerText: {
     fontSize: 14,
@@ -439,7 +438,7 @@ const styles = StyleSheet.create({
   },
   changeEmailText: {
     fontSize: 14,
-    color: '#1B5087',
+    color: '#000000',
     fontWeight: 'bold',
   },
 });

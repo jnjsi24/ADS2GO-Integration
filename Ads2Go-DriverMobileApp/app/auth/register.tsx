@@ -1,6 +1,6 @@
 //REGISTER
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -12,7 +12,8 @@ import {
   StyleSheet,
   Dimensions,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Animated
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -40,6 +41,180 @@ type CreateDriverInput = {
   orCrPicture: any;
   preferredMaterialType: string[];
   profilePicture?: any;
+};
+
+// Animated Input Component with Floating Label
+const AnimatedInput: React.FC<{
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  keyboardType?: any;
+  secureTextEntry?: boolean;
+  multiline?: boolean;
+  autoCapitalize?: any;
+  required?: boolean;
+  error?: boolean;
+  containerStyle?: any;
+  inputStyle?: any;
+  labelCenter?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  externalFocus?: boolean;
+}> = ({
+  label,
+  value,
+  onChangeText,
+  keyboardType,
+  secureTextEntry = false,
+  multiline = false,
+  autoCapitalize = 'words',
+  required = false,
+  error = false,
+  containerStyle,
+  inputStyle,
+  labelCenter = false,
+  onFocus,
+  onBlur,
+  externalFocus,
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    const targetValue = (externalFocus !== undefined ? externalFocus : isFocused) || value ? 1 : 0;
+    Animated.timing(animatedValue, {
+      toValue: targetValue,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, value, externalFocus]);
+
+  const labelStyle: any = {
+    position: 'absolute' as const,
+    left: labelCenter ? 0 : 0,
+    right: labelCenter ? 0 : undefined,
+    width: labelCenter ? '100%' : undefined,
+    top: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [16, -8],
+    }),
+    fontSize: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [16, 12],
+    }),
+    color: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['#999', '#3674B5'],
+    }),
+    fontWeight: ((externalFocus !== undefined ? externalFocus : isFocused) || value ? 'bold' : 'normal') as 'bold' | 'normal',
+    textAlign: labelCenter ? 'center' : 'left',
+  };
+
+  return (
+    <View style={[{ position: 'relative', marginBottom: 0 }, containerStyle]}>
+      <Animated.Text style={labelStyle}>
+        {label} {required && <Text style={{ color: '#e74c3c' }}>*</Text>}
+      </Animated.Text>
+      <TextInput
+        style={[
+          {
+            width: '100%',
+            borderWidth: 1,
+            borderBottomWidth: 1,
+            borderTopWidth: 0,
+            borderLeftWidth: 0,
+            borderRightWidth: 0,
+            borderColor: error ? '#ef4444' : '#ccc',
+            paddingTop: 20,
+            paddingBottom: 8,
+            paddingHorizontal: 0,
+            borderRadius: 0,
+            backgroundColor: 'transparent',
+            color: '#2c3e50',
+            fontSize: 16,
+          },
+          multiline && { minHeight: 80, textAlignVertical: 'top' as const },
+          inputStyle,
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        keyboardType={keyboardType}
+        secureTextEntry={secureTextEntry}
+        multiline={multiline}
+        autoCapitalize={autoCapitalize}
+      />
+    </View>
+  );
+};
+
+// Contact Number Input Component with Animated Label
+const ContactNumberInput: React.FC<{
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  required?: boolean;
+}> = ({ label, value, onChangeText, required = false }) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <View style={styles.inputContainer}>
+      <View style={styles.contactNumberWrapper}>
+        <AnimatedInput
+          label={label}
+          value={value}
+          onChangeText={(text) => {
+            // Allow only digits in the input field (UI shows +63 separately)
+            const digitsOnly = text.replace(/[^0-9]/g, '');
+            // Limit to 10 digits (e.g., 9123456789)
+            const limited = digitsOnly.slice(0, 10);
+            onChangeText(limited);
+          }}
+          keyboardType="phone-pad"
+          autoCapitalize="none"
+          required={required}
+          labelCenter={true}
+          externalFocus={isFocused}
+          containerStyle={{ marginBottom: 0, width: '100%' }}
+          inputStyle={{ 
+            borderWidth: 0, 
+            borderBottomWidth: 0, 
+            paddingLeft: 0,
+            paddingTop: 0,
+            paddingBottom: 0,
+            opacity: 0,
+            position: 'absolute',
+            height: 0,
+          }}
+        />
+        <View style={styles.mobileInputGroup}>
+          <View style={styles.countryCodeContainer}>
+            <Text style={styles.countryText}>🇵🇭</Text>
+            <Text style={styles.countryCodeText}>+63</Text>
+          </View>
+          <View style={styles.contactNumberInputContainer}>
+            <TextInput
+              style={styles.contactNumberInput}
+              value={value}
+              onChangeText={(text) => {
+                // Allow only digits in the input field (UI shows +63 separately)
+                const digitsOnly = text.replace(/[^0-9]/g, '');
+                // Limit to 10 digits (e.g., 9123456789)
+                const limited = digitsOnly.slice(0, 10);
+                onChangeText(limited);
+              }}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              placeholderTextColor="#999"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+            />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
 };
 
 const RegisterForm = () => {
@@ -494,43 +669,20 @@ const RegisterForm = () => {
     
     return (
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>
-          {label} {options?.required && <Text style={styles.required}>*</Text>}
-        </Text>
-        <View style={isPasswordInput ? styles.passwordContainer : isContactNumberInput ? styles.mobileInputGroup : null}>
-          {isContactNumberInput && (
-            <View style={styles.countryCodeContainer}>
-              <Text style={styles.countryText}>🇵🇭</Text>
-              <Text style={styles.countryCodeText}>+63</Text>
-            </View>
-          )}
-          <TextInput
-            style={[
-              styles.input, 
-              options?.multiline && styles.multilineInput,
-              isPasswordInput && styles.passwordInput,
-              isContactNumberInput && styles.mobileInput
-            ]}
-            value={value}
-            onChangeText={(text) => {
-              if (isContactNumberInput) {
-                // Allow only digits in the input field (UI shows +63 separately)
-                const digitsOnly = text.replace(/[^0-9]/g, '');
-                // Limit to 10 digits (e.g., 9123456789)
-                const limited = digitsOnly.slice(0, 10);
-                onChangeText(limited);
-              } else {
-                onChangeText(text);
-              }
-            }}
-            placeholder={options?.placeholder || `Enter ${label.toLowerCase()}`}
-            keyboardType={options?.keyboardType || 'default'}
-            secureTextEntry={options?.secureTextEntry}
-            multiline={options?.multiline || false}
-            autoCapitalize={options?.autoCapitalize || 'words'}
-            placeholderTextColor="#999"
-          />
-          {isPasswordInput && (
+        {isPasswordInput ? (
+          <View style={styles.passwordContainer}>
+            <AnimatedInput
+              label={label}
+              value={value}
+              onChangeText={onChangeText}
+              keyboardType={options?.keyboardType || 'default'}
+              secureTextEntry={options?.secureTextEntry}
+              multiline={options?.multiline || false}
+              autoCapitalize={options?.autoCapitalize || 'words'}
+              required={options?.required}
+              containerStyle={{ flex: 1, marginBottom: 0 }}
+              inputStyle={{ borderWidth: 0, borderBottomWidth: 0, marginBottom: 0 }}
+            />
             <TouchableOpacity onPress={options?.togglePassword} style={styles.passwordToggle}>
               <Ionicons
                 name={options?.showPassword ? "eye-off-outline" : "eye-outline"}
@@ -538,8 +690,25 @@ const RegisterForm = () => {
                 color="#666"
               />
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        ) : isContactNumberInput ? (
+          <ContactNumberInput
+            label={label}
+            value={value}
+            onChangeText={onChangeText}
+            required={options?.required}
+          />
+        ) : (
+          <AnimatedInput
+            label={label}
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType={options?.keyboardType || 'default'}
+            multiline={options?.multiline || false}
+            autoCapitalize={options?.autoCapitalize || 'words'}
+            required={options?.required}
+          />
+        )}
       </View>
     );
   };
@@ -615,11 +784,11 @@ const RegisterForm = () => {
       case 0:
         return (
           <View style={styles.stepContent}>
-            <Text style={styles.stepDescription}>Let&apos;s start with your basic information</Text>
+            <Text style={styles.stepTitle}>Personal information</Text>
             
-            {renderInput('First Name', firstName, setFirstName, { required: true, placeholder: 'Enter First Name' })}
-            {renderInput('Middle Name', middleName, setMiddleName, { placeholder: 'Optional' })}
-            {renderInput('Last Name', lastName, setLastName, { required: true, placeholder: 'Enter Last Name' })}
+            {renderInput('First Name', firstName, setFirstName, { required: true })}
+            {renderInput('Middle Name', middleName, setMiddleName, { })}
+            {renderInput('Last Name', lastName, setLastName, { required: true })}
             
             <LocationAutocomplete
               label="Address"
@@ -654,18 +823,9 @@ const RegisterForm = () => {
               <Text style={styles.socialSeparator}>or Register with</Text>
               <View style={styles.socialButtonsContainer}>
                 <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-facebook" size={22} color="#1877F2" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.socialButton}>
                   <Ionicons name="logo-google" size={22} color="#DB4437" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-apple" size={22} color="#000" />
-                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => router.push('/auth/login')}>
-                <Text style={styles.loginLink}>Already have an account? <Text style={styles.loginLinkBold}>Log in</Text></Text>
-              </TouchableOpacity>
             </View>
           </View>
         );
@@ -674,7 +834,6 @@ const RegisterForm = () => {
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Account Setup</Text>
-            <Text style={styles.stepDescription}>Create your login credentials</Text>
             
             {renderInput('Email Address', email, setEmail, {
               keyboardType: 'email-address',
@@ -695,7 +854,6 @@ const RegisterForm = () => {
             })}
             {renderInput('Confirm Password', confirmPassword, setConfirmPassword, {
               secureTextEntry: !showConfirmPassword,
-              placeholder: 'Re-enter your password',
               required: true,
               togglePassword: () => setShowConfirmPassword(!showConfirmPassword),
               showPassword: showConfirmPassword
@@ -727,7 +885,6 @@ const RegisterForm = () => {
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Vehicle Information</Text>
-            <Text style={styles.stepDescription}>Tell us about your vehicle</Text>
             {renderSelectButton('Vehicle Type', vehicleTypes, vehicleType ? [vehicleType] : [], (values) => setVehicleType(values[0] || null), false)}
             {renderInput('Vehicle Model', vehicleModel, setVehicleModel, { required: true, placeholder: 'e.g., Toyota Vios, Honda Click' })}
             {renderInput('Vehicle Year', vehicleYear?.toString() || '', (text) => { const year = parseInt(text); setVehicleYear(isNaN(year) ? undefined : year); }, { keyboardType: 'numeric', required: true })}
@@ -751,7 +908,6 @@ const RegisterForm = () => {
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Upload Documents</Text>
-            <Text style={styles.stepDescription}>Upload your photos and documents (optional but recommended)</Text>
             
             {renderImagePicker('Profile Picture', profilePicture, () => pickImage(setProfilePicture))}
             {renderImagePicker('Vehicle Photo', vehiclePhoto, () => pickImage(setVehiclePhoto), true)}
@@ -786,36 +942,89 @@ const RegisterForm = () => {
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Review Your Information</Text>
-            <Text style={styles.stepDescription}>Please review all details before submitting</Text>
             
             <View style={styles.reviewSection}>
               <Text style={styles.reviewSectionTitle}>Personal Information</Text>
-              <Text style={styles.reviewItem}>Name: {firstName} {middleName} {lastName}</Text>
-              <Text style={styles.reviewItem}>Email: {email}</Text>
-              <Text style={styles.reviewItem}>Phone: {contactNumber}</Text>
-              <Text style={styles.reviewItem}>Address: {address}</Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Name: </Text>
+                <Text style={styles.reviewValue}>{firstName} {middleName} {lastName}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Email: </Text>
+                <Text style={styles.reviewValue}>{email}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Phone: </Text>
+                <Text style={styles.reviewValue}>{contactNumber}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Address: </Text>
+                <Text style={styles.reviewValue}>{address}</Text>
+              </Text>
             </View>
 
             <View style={styles.reviewSection}>
               <Text style={styles.reviewSectionTitle}>Vehicle Information</Text>
-              <Text style={styles.reviewItem}>Type: {vehicleType}</Text>
-              {vehicleModel && <Text style={styles.reviewItem}>Model: {vehicleModel}</Text>}
-              {vehicleYear && <Text style={styles.reviewItem}>Year: {vehicleYear}</Text>}
-              {vehiclePlateNumber && <Text style={styles.reviewItem}>Plate: {vehiclePlateNumber}</Text>}
-              {licenseNumber && <Text style={styles.reviewItem}>License: {licenseNumber}</Text>}
               <Text style={styles.reviewItem}>
-                Materials: {preferredMaterialType.join(', ')}
+                <Text style={styles.reviewLabel}>Type: </Text>
+                <Text style={styles.reviewValue}>{vehicleType}</Text>
+              </Text>
+              {vehicleModel && (
+                <Text style={styles.reviewItem}>
+                  <Text style={styles.reviewLabel}>Model: </Text>
+                  <Text style={styles.reviewValue}>{vehicleModel}</Text>
+                </Text>
+              )}
+              {vehicleYear && (
+                <Text style={styles.reviewItem}>
+                  <Text style={styles.reviewLabel}>Year: </Text>
+                  <Text style={styles.reviewValue}>{vehicleYear}</Text>
+                </Text>
+              )}
+              {vehiclePlateNumber && (
+                <Text style={styles.reviewItem}>
+                  <Text style={styles.reviewLabel}>Plate: </Text>
+                  <Text style={styles.reviewValue}>{vehiclePlateNumber}</Text>
+                </Text>
+              )}
+              {licenseNumber && (
+                <Text style={styles.reviewItem}>
+                  <Text style={styles.reviewLabel}>License: </Text>
+                  <Text style={styles.reviewValue}>{licenseNumber}</Text>
+                </Text>
+              )}
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Materials: </Text>
+                <Text style={styles.reviewValue}>{preferredMaterialType.join(', ')}</Text>
               </Text>
             </View>
 
             <View style={styles.reviewSection}>
               <Text style={styles.reviewSectionTitle}>Uploaded Documents</Text>
-              <Text style={styles.reviewItem}>Profile Picture: {profilePicture ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>Vehicle Photo: {vehiclePhoto ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>License Front: {licensePhotoFront ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>License Back: {licensePhotoBack ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>OR: {orPhoto ? '✓' : '✗'}</Text>
-              <Text style={styles.reviewItem}>CR: {crPhoto ? '✓' : '✗'}</Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Profile Picture: </Text>
+                <Text style={styles.reviewValue}>{profilePicture ? '✓' : '✗'}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>Vehicle Photo: </Text>
+                <Text style={styles.reviewValue}>{vehiclePhoto ? '✓' : '✗'}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>License Front: </Text>
+                <Text style={styles.reviewValue}>{licensePhotoFront ? '✓' : '✗'}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>License Back: </Text>
+                <Text style={styles.reviewValue}>{licensePhotoBack ? '✓' : '✗'}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>OR: </Text>
+                <Text style={styles.reviewValue}>{orPhoto ? '✓' : '✗'}</Text>
+              </Text>
+              <Text style={styles.reviewItem}>
+                <Text style={styles.reviewLabel}>CR: </Text>
+                <Text style={styles.reviewValue}>{crPhoto ? '✓' : '✗'}</Text>
+              </Text>
             </View>
 
             <View style={styles.formButtonContainer}>
@@ -897,7 +1106,7 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 5,
   },
-  logo: { width: 120, height: 120, marginBottom: 10 },
+  logo: { width: 120, height: 70},
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -908,12 +1117,12 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#d8d8d8',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepCircleActive: {
-    backgroundColor: '#1B5087',
+    backgroundColor: '#3674B5',
   },
   stepLine: {
     height: 2,
@@ -922,12 +1131,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   stepLineActive: {
-    backgroundColor: '#1B5087',
+    backgroundColor: '#3674B5',
   },
   stepNumber: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#7f8c8d',
+    color: '#9CA3AF',
   },
   stepNumberActive: {
     color: '#fff',
@@ -964,7 +1173,7 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   tabTextActive: {
-    color: '#1B5087',
+    color: '#3674B5',
     fontWeight: 'bold',
   },
   tabTextInactive: {
@@ -984,15 +1193,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
-    marginBottom: 5,
-  },
-  stepDescription: {
-    fontSize: 16,
-    color: '#7f8c8d',
-    marginBottom: 25,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 13,
+    marginTop: 15,
   },
   inputLabel: {
     fontSize: 14,
@@ -1015,9 +1221,10 @@ const styles = StyleSheet.create({
   passwordContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 10,
+    marginBottom: 35,
+    marginTop: -30,
   },
   passwordInput: {
     flex: 1,
@@ -1101,9 +1308,14 @@ const styles = StyleSheet.create({
   },
   reviewItem: {
     fontSize: 14,
-    color: '#7f8c8d',
     marginBottom: 5,
     lineHeight: 20,
+  },
+  reviewLabel: {
+    color: '#7f8c8d',
+  },
+  reviewValue: {
+    color: '#000',
   },
   formButtonContainer: {
     flexDirection: 'row',
@@ -1114,7 +1326,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1126,7 +1338,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e1e5e9',
-    marginRight: 10,
+    marginRight: 5,
   },
   backButtonText: {
     fontSize: 16,
@@ -1134,8 +1346,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   nextButton: {
-    backgroundColor: '#1B5087',
-    marginLeft: 10,
+    backgroundColor: '#3674B5',
+    marginLeft: 15,
   },
   nextButtonText: {
     fontSize: 16,
@@ -1161,40 +1373,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  loginLink: {
-    textAlign: 'center',
+  contactNumberLabel: {
     fontSize: 14,
-    color: '#555',
-    marginTop: 20,
-  },
-  loginLinkBold: {
     fontWeight: 'bold',
-    color: '#1B5087',
+    color: '#3674B5',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  contactNumberWrapper: {
+    position: 'relative',
+    width: '100%',
   },
   mobileInputGroup: {
     flexDirection: 'row',
-    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: '#ccc',
-    borderRadius: 10,
-    overflow: 'hidden',
+    marginBottom: 20,
+    alignItems: 'center',
   },
   countryCodeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 2,
-    backgroundColor: '#f8f8f8',
-    borderRightWidth: 1,
-    borderRightColor: '#e1e5e9',
+    paddingVertical: 12,
+    paddingLeft: 0,
+    paddingRight: 12,
+    minWidth: 70,
   },
   countryText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#2c3e50',
+    fontSize: 18,
+    marginRight: 6,
   },
   countryCodeText: {
-    marginLeft: 8,
-    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
+  },
+  contactNumberInputContainer: {
+    flex: 1,
+    paddingVertical: 12,
+  },
+  contactNumberInput: {
+    fontSize: 16,
     color: '#2c3e50',
+    paddingHorizontal: 0,
   },
   mobileInput: {
     flex: 1,

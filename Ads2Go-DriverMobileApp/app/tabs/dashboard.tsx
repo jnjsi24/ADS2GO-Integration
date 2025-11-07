@@ -849,12 +849,7 @@ const Dashboard: React.FC = () => {
       <View style={styles.loadingContainer}>
         <View style={styles.loadingContent}>
           <ActivityIndicator size="large" color="#3674B5" />
-          <Text style={styles.loadingText}>Loading analytics...</Text>
-          <View style={styles.loadingDotsContainer}>
-            <View style={[styles.loadingDot, styles.loadingDot1]} />
-            <View style={[styles.loadingDot, styles.loadingDot2]} />
-            <View style={[styles.loadingDot, styles.loadingDot3]} />
-          </View>
+          <Text style={styles.loadingText}>Loading analytics</Text>
         </View>
       </View>
     );
@@ -903,8 +898,9 @@ const Dashboard: React.FC = () => {
             {/* Text */}
             <View style={styles.welcomeTextContainer}>
               <Text style={styles.welcomeText}>
-                Welcome back, {user?.firstName || 'Driver'}
+                Welcome back
               </Text>
+              <Text style={styles.welcomeTextName}>{user?.firstName + ' ' + user?.lastName || 'Driver'}</Text>
             </View>
           </View>
         </View>
@@ -933,10 +929,10 @@ const Dashboard: React.FC = () => {
             style={styles.datePickerButton}
             onPress={() => setShowDatePicker(true)}
           >
-            <Ionicons name="calendar" size={20} color="#3b82f6" />
+            <Ionicons name="calendar" size={20} color="#3674B5" />
             <Text style={styles.datePickerText}>
               {selectedDate.toLocaleDateString('en-US', { 
-                month: 'short', 
+                month: 'long', 
                 day: 'numeric', 
                 year: 'numeric' 
               })}
@@ -1041,8 +1037,8 @@ const Dashboard: React.FC = () => {
                       <View style={styles.dateItemContent}>
                         <Text style={[styles.dateItemText, isSelected && styles.dateItemTextSelected]}>
                           {date.toLocaleDateString('en-US', { 
-                            weekday: 'short',
-                            month: 'short', 
+                            weekday: 'long',
+                            month: 'long', 
                             day: 'numeric', 
                             year: 'numeric' 
                           })}
@@ -1054,7 +1050,7 @@ const Dashboard: React.FC = () => {
                         )}
                       </View>
                       {isSelected && (
-                        <Ionicons name="checkmark-circle" size={20} color="#3b82f6" />
+                        <Ionicons name="checkmark-circle" size={20} color="#3674B5" />
                       )}
                     </TouchableOpacity>
                   );
@@ -1096,7 +1092,6 @@ const Dashboard: React.FC = () => {
       {/* Circular Gauge Display */}
       <View style={styles.gaugeContainer}>
         <View style={styles.gaugeCard}>
-          <Text style={styles.gaugeTitle}>{getMetricShortLabel().toUpperCase()}</Text>
           
           {/* Circular Progress */}
           <View style={styles.circularGaugeWrapper}>
@@ -1106,7 +1101,7 @@ const Dashboard: React.FC = () => {
                 cx="110"
                 cy="110"
                 r="90"
-                stroke="#9CA3AF"
+                stroke="#E5E7EB"
                 strokeWidth="14"
                 fill="none"
               />
@@ -1115,7 +1110,7 @@ const Dashboard: React.FC = () => {
                 cx="110"
                 cy="110"
                 r="90"
-                stroke="#2563EB"
+                stroke="#3674B5"
                 strokeWidth="14"
                 fill="none"
                 strokeDasharray={`${Math.min((getCurrentMetricValue() / (selectedMetric === 'distance' ? 100 : 10)) * 565, 565)} 565`}
@@ -1221,26 +1216,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3674B5',
   },
-  loadingDotsContainer: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 8,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#3674B5',
-  },
-  loadingDot1: {
-    opacity: 0.3,
-  },
-  loadingDot2: {
-    opacity: 0.6,
-  },
-  loadingDot3: {
-    opacity: 1,
-  },
   loadingOverlay: {
     position: 'absolute',
     top: 0,
@@ -1331,33 +1306,27 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     backgroundColor: '#f3f4f6',
+    marginTop: 40,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   profileContainer: {
-    marginRight: 12,
+    marginRight: 4,
   },
   welcomeTextContainer: {
     flex: 1,
   },
-  welcomeText: {
-    fontSize: 20,
-    fontWeight: '600',
+  welcomeTextName: {
+    fontSize: 18,
     color: '#111827',
+    fontWeight: '600',
+
   },
-  
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+  welcomeText: {
+    fontSize: 14,
+    color: '#6b7280',
   },
   
   statusText: {
@@ -1366,10 +1335,9 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 
-
   // Balance Container
   cardContainer: {
-    backgroundColor: '#5B8EC5',
+    backgroundColor: '#3674B5',
     borderRadius: 16,
     padding: 24,
     marginHorizontal: 20,
@@ -1684,7 +1652,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
     shadowColor: '#000',
@@ -1704,18 +1672,18 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   todayButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
+    backgroundColor: '#3674B5',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    shadowColor: '#3b82f6',
+    shadowColor: '#3674B5',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
   },
   todayButtonDisabled: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: '#dfdfdf',
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1725,8 +1693,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   todayButtonTextDisabled: {
-    color: '#d1d5db',
+    color: '#9CA3AF',
   },
+
   // Modal Styles (matches Route Tab)
   modalOverlay: {
     flex: 1,
@@ -1785,7 +1754,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   dateItemTextSelected: {
-    color: '#3b82f6',
+    color: '#3674B5',
     fontWeight: '600',
   },
   todayBadgeInline: {
@@ -1795,7 +1764,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   todayBadgeInlineText: {
-    color: '#3b82f6',
+    color: '#3674B5',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1820,8 +1789,6 @@ const styles = StyleSheet.create({
   metricSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
     paddingHorizontal: 8,
   },
   metricButton: {
@@ -1833,7 +1800,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   metricButtonActive: {
-    borderBottomColor: '#3B82F6',
+    borderBottomColor: '#3674B5',
   },
   metricButtonText: {
     fontSize: 12,
@@ -1842,9 +1809,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   metricButtonTextActive: {
-    color: '#3B82F6',
+    color: '#3674B5',
     fontWeight: '600',
   },
+
   // Circular Gauge Display
   gaugeContainer: {
     marginHorizontal: 20,
@@ -1854,14 +1822,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-  },
-  gaugeTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 20,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   circularGaugeWrapper: {
     position: 'relative',
@@ -1895,6 +1855,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#9ca3af',
   },
+  
   chartContainer: {
     marginHorizontal: 20,
     backgroundColor: '#ffffff',

@@ -42,7 +42,7 @@ interface Report {
 
 const STATUS_COLORS = {
   PENDING: { bg: '#fef3c7', text: '#92400e', border: '#fbbf24' },
-  IN_PROGRESS: { bg: '#dbeafe', text: '#1e40af', border: '#3b82f6' },
+  IN_PROGRESS: { bg: '#dbeafe', text: '#1e40af', border: '#3674B5' },
   RESOLVED: { bg: '#d1fae5', text: '#065f46', border: '#10b981' },
   CLOSED: { bg: '#e5e7eb', text: '#374151', border: '#9ca3af' },
 };
@@ -264,7 +264,7 @@ export default function MyReportsScreen() {
 
                   {report.adminNotes && (
                     <View style={styles.adminNotesPreview}>
-                      <Ionicons name="chatbox-ellipses" size={16} color="#3b82f6" />
+                      <Ionicons name="chatbox-ellipses" size={16} color="#3674B5" />
                       <Text style={styles.adminNotesPreviewText} numberOfLines={1}>
                         Admin responded
                       </Text>
@@ -356,7 +356,7 @@ export default function MyReportsScreen() {
                                   <Text style={styles.changeValueLabel}>Current:</Text>
                                   <Text style={styles.changeCurrentValue}>{change.currentValue || 'N/A'}</Text>
                                 </View>
-                                <Ionicons name="arrow-forward" size={16} color="#3b82f6" style={styles.changeArrow} />
+                                <Ionicons name="arrow-forward" size={16} color="#3674B5" style={styles.changeArrow} />
                                 <View style={styles.changeValueContainer}>
                                   <Text style={styles.changeValueLabel}>New:</Text>
                                   <Text style={styles.changeNewValue}>{change.newValue || 'N/A'}</Text>
@@ -459,12 +459,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   header: {
-    backgroundColor: '#ffffff',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   headerTop: {
     flexDirection: 'row',
@@ -489,10 +486,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   filterContainer: {
-    backgroundColor: '#ffffff',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   filterScrollContent: {
     paddingHorizontal: 20,
@@ -507,8 +501,8 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   filterButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+    backgroundColor: '#3674B5',
+    borderColor: '#3674B5',
   },
   filterButtonText: {
     fontSize: 14,
@@ -717,7 +711,7 @@ const styles = StyleSheet.create({
   adminNotesBox: {
     backgroundColor: '#eff6ff',
     borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
+    borderLeftColor: '#3674B5',
     padding: 16,
     borderRadius: 8,
   },
@@ -799,7 +793,7 @@ const styles = StyleSheet.create({
   },
   changeNewValue: {
     fontSize: 14,
-    color: '#3b82f6',
+    color: '#3674B5',
     fontWeight: '600',
   },
   changeArrow: {

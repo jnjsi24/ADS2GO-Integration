@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   BackHandler,
   Image,
+  Animated,
 } from "react-native";
 import { useRouter, useLocalSearchParams, type Router } from "expo-router";
 import { useAuth } from '../../contexts/AuthContext';
@@ -69,6 +70,95 @@ type LoginFormState = {
   rememberMe: boolean;
   successMessage: string | null;
   errorMessage: string | null;
+};
+
+// Animated Input Component with Floating Label
+interface AnimatedInputProps {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  secureTextEntry?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  error?: boolean;
+  style?: any;
+  containerStyle?: any;
+}
+
+const AnimatedInput: React.FC<AnimatedInputProps> = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry = false,
+  autoCapitalize = 'none',
+  error = false,
+  style,
+  containerStyle,
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(animatedValue, {
+      toValue: isFocused || value ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, value]);
+
+  const labelStyle: any = {
+    position: 'absolute' as const,
+    left: 0,
+    top: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [16, -8],
+    }),
+    fontSize: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [16, 12],
+    }),
+    color: animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['#aaa', '#3674B5'],
+    }),
+    fontWeight: (isFocused || value ? 'bold' : 'normal') as 'bold' | 'normal',
+  };
+
+  return (
+    <View style={[{ position: 'relative', marginBottom: 14 }, containerStyle]}>
+      <Animated.Text style={labelStyle}>{label}</Animated.Text>
+      <TextInput
+        style={[
+          {
+            width: '100%',
+            borderWidth: 1,
+            borderBottomWidth: 1,
+            borderTopWidth: 0,
+            borderLeftWidth: 0,
+            borderRightWidth: 0,
+            borderColor: error ? '#ef4444' : '#ccc',
+            paddingTop: 20,
+            paddingBottom: 8,
+            paddingHorizontal: 0,
+            borderRadius: 0,
+            backgroundColor: 'transparent',
+            color: '#2E2E2E',
+            fontSize: 16,
+          },
+          style,
+        ]}
+        placeholder={isFocused || value ? '' : placeholder}
+        placeholderTextColor="#aaa"
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
+      />
+    </View>
+  );
 };
 
 export default function Login() {
@@ -268,7 +358,6 @@ export default function Login() {
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.subtitle}>Sign in to continue</Text>
       </View>
 
       {formState.successMessage && (
@@ -298,25 +387,26 @@ export default function Login() {
 
       {/* Form */}
       <View style={styles.form}>
-        <Text style={styles.label}>Email address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Your email"
-          placeholderTextColor="#aaa"
-          autoCapitalize="none"
+        <AnimatedInput
+          label="Email address"
           value={formState.email}
           onChangeText={(email) => setFormState(prev => ({ ...prev, email }))}
+          autoCapitalize="none"
+          error={!!formState.errorMessage && !formState.email}
         />
 
-        <Text style={styles.label}>Password</Text>
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={[styles.input, { flex: 5, marginBottom: 0, borderWidth: 0 }]}
-            placeholder="Password"
-            placeholderTextColor="#aaa"
-            secureTextEntry={!formState.showPassword}
+        <View style={[
+          styles.passwordContainer,
+          formState.errorMessage && !formState.password && { borderColor: '#ef4444' }
+        ]}>
+          <AnimatedInput
+            label="Password"
             value={formState.password}
             onChangeText={(password) => setFormState(prev => ({ ...prev, password }))}
+            secureTextEntry={!formState.showPassword}
+            error={!!formState.errorMessage && !formState.password}
+            containerStyle={{ flex: 1, marginBottom: 0 }}
+            style={{ borderWidth: 0, borderBottomWidth: 0, marginBottom: 0 }}
           />
           <TouchableOpacity onPress={() => setFormState(prev => ({ ...prev, showPassword: !prev.showPassword }))} style={styles.passwordToggle}>
               <Ionicons
@@ -401,14 +491,12 @@ const styles = StyleSheet.create({
     color: '#c62828',
     fontSize: 14,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 8,
-  },
-  header: { alignItems: "center", marginBottom: 30 },
-  logo: { width: 120, height: 120 },
+  header: { alignItems: "center"},
+
+  logo: { width: 120, height: 80 },
+
   title: { fontSize: 22, fontWeight: "700", marginTop: 8 },
+
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#f2f2f2',
@@ -440,17 +528,21 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   tabActiveText: {
-    color: '#1B5087',
+    color: '#3674B5',
     fontWeight: 'bold',
   },
   tabTextInactive: {
     color: '#999',
   },
-  form: {},
+  form: {marginTop: 20},
   label: { fontSize: 14, marginBottom: 6, fontWeight: "500", color: "#2E2E2E" },
   input: {
     width: "100%",
     borderWidth: 1,
+    borderBottomWidth: 1,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
     borderColor: "#ccc",
     padding: 12,
     borderRadius: 10,
@@ -460,9 +552,10 @@ const styles = StyleSheet.create({
   passwordContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    borderBottomWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 10,
+    marginBottom: 14,
+    marginTop: 15,
   },
   passwordInput: {
     flex: 1,
@@ -498,9 +591,9 @@ const styles = StyleSheet.create({
     color: "#555"
   },
   loginBtn: {
-    backgroundColor: "#1B5087",
+    backgroundColor: "#3674B5",
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: "center",
     marginBottom: 20,
   },
