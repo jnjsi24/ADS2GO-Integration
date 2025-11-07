@@ -164,6 +164,13 @@ const Dashboard = () => {
   const [selectedRouteDateObj, setSelectedRouteDateObj] = useState<Date | null>(new Date());
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  
+  // ✅ FIX: Calculate if auto-refresh should be enabled (enable for today's date, disable for past dates)
+  const shouldDisableAutoRefresh = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = selectedRouteDate === today;
+    return !isToday; // Disable auto-refresh only for past dates
+  }, [selectedRouteDate]);
 
   // Currently playing ads state
   interface CurrentlyPlayingAd {
@@ -1235,7 +1242,7 @@ const Dashboard = () => {
                       className="h-full w-full"
                       style={{ height: '100%', position: 'relative', zIndex: 0 }}
                       snapToRoads={true}
-                      disableAutoRefresh={true}
+                      disableAutoRefresh={shouldDisableAutoRefresh}
                       adStartTime={selectedAdStartTime}
                       adId={selectedAdIdForRoute}
                     />

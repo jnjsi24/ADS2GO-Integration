@@ -489,9 +489,60 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
             const existingSnappedSegments = materialRoute.snappedRoute || [];
             const newSnappedSegments: [number, number][][] = [];
             
+            // ✅ FIX: Validate segment structure - check if segments match by validating continuity
+            // If segment structure changed (segments don't match), reset and re-snap all segments
+            let segmentStructureChanged = false;
+            if (lastProcessedCounts.length !== currentSegments.length) {
+              // Segment count changed - structure definitely changed
+              segmentStructureChanged = true;
+              console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId}: Segment count changed: ${lastProcessedCounts.length} → ${currentSegments.length} - resetting incremental snapping`);
+            } else if (lastProcessedCounts.length > 0 && existingSnappedSegments.length > 0) {
+              // Validate that existing segments still match current segments (by checking first/last points)
+              for (let i = 0; i < currentSegments.length && i < existingSnappedSegments.length; i++) {
+                const currentSegment = currentSegments[i];
+                const existingSnappedSegment = existingSnappedSegments[i];
+                
+                // Check if first point of current segment matches first point of existing segment
+                // (within reasonable GPS accuracy threshold of ~50 meters)
+                if (currentSegment.length > 0 && existingSnappedSegment.length > 0) {
+                  const currentFirstPoint = currentSegment[0];
+                  const existingFirstPoint = existingSnappedSegment[0];
+                  const distanceThreshold = 0.0005; // ~50 meters in degrees (rough approximation)
+                  
+                  const latDiff = Math.abs(currentFirstPoint[0] - existingFirstPoint[0]);
+                  const lngDiff = Math.abs(currentFirstPoint[1] - existingFirstPoint[1]);
+                  
+                  // If first points don't match, this is a different segment
+                  if (latDiff > distanceThreshold || lngDiff > distanceThreshold) {
+                    segmentStructureChanged = true;
+                    console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Structure changed - first points don't match (reset incremental snapping)`);
+                    break;
+                  }
+                  
+                  // Also check if segment length decreased significantly (might indicate segment was replaced)
+                  const existingProcessedCount = lastProcessedCounts[i] || 0;
+                  if (currentSegment.length < existingProcessedCount * 0.5) {
+                    // Segment length decreased by more than 50% - likely a different segment
+                    segmentStructureChanged = true;
+                    console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Length decreased significantly (${existingProcessedCount} → ${currentSegment.length}) - resetting incremental snapping`);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // If segment structure changed, reset incremental snapping state for this material
+            if (segmentStructureChanged) {
+              console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId}: Segment structure changed - resetting incremental snapping state`);
+              lastProcessedPointCountsRef.current.set(materialRoute.materialId, []);
+            }
+            
             // Check if we have new points to process
             let hasNewPoints = false;
-            if (lastProcessedCounts.length !== currentSegments.length) {
+            if (segmentStructureChanged) {
+              // Structure changed - need to re-snap all segments
+              hasNewPoints = true;
+            } else if (lastProcessedCounts.length !== currentSegments.length) {
               // Segment count changed - new segments added
               hasNewPoints = true;
             } else {
@@ -505,7 +556,7 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
             }
             
             // Skip if no new points to process (route hasn't changed)
-            if (!hasNewPoints && lastProcessedCounts.length === currentSegments.length && existingSnappedSegments.length > 0) {
+            if (!hasNewPoints && lastProcessedCounts.length === currentSegments.length && existingSnappedSegments.length > 0 && !segmentStructureChanged) {
               // No new points, return existing route with snapped segments
               return materialRoute;
             }
@@ -513,14 +564,56 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
             // Process each segment with incremental logic
             for (let i = 0; i < currentSegments.length; i++) {
               const segment = currentSegments[i];
-              const lastProcessedCount = lastProcessedCounts[i] || 0;
+              const lastProcessedCount = segmentStructureChanged ? 0 : (lastProcessedCounts[i] || 0);
               const currentCount = segment.length;
+              
+              // ✅ FIX: If segment structure changed, always re-snap all segments
+              if (segmentStructureChanged) {
+                // Structure changed - re-snap entire segment
+                console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapping due to structure change - ${segment.length} points`);
+                const snappedSegment = await snapPointsToRoads(segment);
+                newSnappedSegments.push(snappedSegment);
+                console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+                continue;
+              }
               
               // If this segment has new points, only snap the new portion
               if (currentCount > lastProcessedCount) {
                 if (lastProcessedCount > 0 && existingSnappedSegments[i]) {
-                  // ✅ INCREMENTAL: Segment already exists - only snap new points
+                  // ✅ INCREMENTAL: Segment already exists - validate continuity before merging
                   const existingSnappedSegment = existingSnappedSegments[i];
+                  
+                  // ✅ FIX: Validate segment continuity before merging
+                  // Check if the first point of current segment matches the processed portion of existing segment
+                  const existingProcessedPortion = existingSnappedSegment.slice(0, Math.min(lastProcessedCount, existingSnappedSegment.length));
+                  const currentFirstPoint = segment[0];
+                  
+                  // Get the first point of existing processed portion
+                  let existingReferencePoint: [number, number] | null = null;
+                  if (existingProcessedPortion.length > 0) {
+                    // Use first point of existing segment to validate continuity
+                    existingReferencePoint = existingProcessedPortion[0];
+                  }
+                  
+                  // Validate continuity: first point of current segment should match first point of existing segment
+                  const distanceThreshold = 0.0005; // ~50 meters
+                  let segmentsMatch = true;
+                  if (existingReferencePoint) {
+                    const latDiff = Math.abs(currentFirstPoint[0] - existingReferencePoint[0]);
+                    const lngDiff = Math.abs(currentFirstPoint[1] - existingReferencePoint[1]);
+                    segmentsMatch = latDiff <= distanceThreshold && lngDiff <= distanceThreshold;
+                  }
+                  
+                  if (!segmentsMatch) {
+                    // Segments don't match - this is a different segment, re-snap entirely
+                    console.log(`⚠️ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Segments don't match - re-snapping entire segment (structure changed)`);
+                    const snappedSegment = await snapPointsToRoads(segment);
+                    newSnappedSegments.push(snappedSegment);
+                    console.log(`✅ [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+                    continue;
+                  }
+                  
+                  // Segments match - proceed with incremental update
                   const newPoints = segment.slice(lastProcessedCount);
                   
                   console.log(`🔄 [MultiMaterialRouteMap] ${materialRoute.materialId} Segment ${i + 1}: Incremental update - ${lastProcessedCount} existing + ${newPoints.length} new points`);

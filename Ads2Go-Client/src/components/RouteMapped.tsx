@@ -343,23 +343,49 @@ const snapPointsToRoads = async (points: [number, number][]): Promise<[number, n
 };
 
 // Google Roads API implementation with batching for better accuracy
+// ✅ FIX: Overlap batches to ensure smooth connections between batches
 const snapWithGoogleRoads = async (points: [number, number][], apiKey: string): Promise<[number, number][]> => {
   try {
     // Google Roads API has a limit of 100 points per request
     const maxPointsPerBatch = 100;
     const batches: [number, number][][] = [];
     
-    // Split points into batches
-    for (let i = 0; i < points.length; i += maxPointsPerBatch) {
-      batches.push(points.slice(i, i + maxPointsPerBatch));
+    // ✅ FIX: Split points into overlapping batches to ensure smooth connections
+    // Include the last point of previous batch as the first point of next batch
+    // This ensures that when batches are snapped, they connect smoothly at the overlap point
+    let batchIndex = 0;
+    let startIndex = 0;
+    
+    while (startIndex < points.length) {
+      // Calculate end index for this batch
+      const endIndex = Math.min(startIndex + maxPointsPerBatch, points.length);
+      
+      // Create batch with overlap (except for first batch)
+      if (batchIndex === 0) {
+        // First batch: no overlap, start from 0
+        batches.push(points.slice(0, Math.min(maxPointsPerBatch, points.length)));
+        startIndex = maxPointsPerBatch - 1; // Next batch starts at point 99 (overlap with point 99)
+      } else {
+        // Subsequent batches: include last point of previous batch (overlap)
+        batches.push(points.slice(startIndex, endIndex));
+        startIndex = startIndex + maxPointsPerBatch - 1; // Next batch overlaps at last point of current batch
+      }
+      
+      batchIndex++;
+      
+      // Safety check to prevent infinite loop
+      if (batches.length > 1000) {
+        console.error('⚠️ Too many batches created, breaking loop');
+        break;
+      }
     }
     
-    console.log(`📍 Processing ${points.length} points in ${batches.length} batches`);
+    console.log(`📍 Processing ${points.length} points in ${batches.length} overlapping batches`);
   
-  // Warn if we have a lot of points (might hit API limits)
-  if (points.length > 1000) {
-    console.warn(`⚠️ Large route detected: ${points.length} points. This may take a while and could hit API rate limits.`);
-  }
+    // Warn if we have a lot of points (might hit API limits)
+    if (points.length > 1000) {
+      console.warn(`⚠️ Large route detected: ${points.length} points. This may take a while and could hit API rate limits.`);
+    }
     
     const allSnappedPoints: [number, number][] = [];
     
@@ -377,7 +403,9 @@ const snapWithGoogleRoads = async (points: [number, number][], apiKey: string): 
         const errorText = await response.text();
         console.warn(`❌ Google Roads API batch ${batchIndex + 1} failed:`, response.status, errorText);
         // If a batch fails, use original points for that batch
-        allSnappedPoints.push(...batch);
+        // ✅ FIX: Skip first point if it's a duplicate (overlap from previous batch)
+        const pointsToAdd = batchIndex > 0 ? batch.slice(1) : batch;
+        allSnappedPoints.push(...pointsToAdd);
         continue;
       }
       
@@ -392,11 +420,37 @@ const snapWithGoogleRoads = async (points: [number, number][], apiKey: string): 
         console.log(`✅ Batch ${batchIndex + 1} snapped successfully:`, snappedPoints.length, 'points');
         console.log(`📍 Batch ${batchIndex + 1} first snapped point:`, snappedPoints[0]);
         console.log(`📍 Batch ${batchIndex + 1} last snapped point:`, snappedPoints[snappedPoints.length - 1]);
-        allSnappedPoints.push(...snappedPoints);
+        
+        // ✅ FIX: Skip first point if it's a duplicate (overlap from previous batch)
+        // This ensures smooth connection between batches
+        if (batchIndex > 0 && allSnappedPoints.length > 0) {
+          // Check if first point of this batch matches last point of previous batch
+          const lastPoint = allSnappedPoints[allSnappedPoints.length - 1];
+          const firstPoint = snappedPoints[0];
+          const distanceThreshold = 0.0001; // ~11 meters - very close points are duplicates
+          
+          const latDiff = Math.abs(lastPoint[0] - firstPoint[0]);
+          const lngDiff = Math.abs(lastPoint[1] - firstPoint[1]);
+          
+          if (latDiff < distanceThreshold && lngDiff < distanceThreshold) {
+            // Points are duplicates (overlap) - skip first point
+            console.log(`🔄 Batch ${batchIndex + 1}: Skipping duplicate first point (overlap from previous batch)`);
+            allSnappedPoints.push(...snappedPoints.slice(1));
+          } else {
+            // Points don't match - keep first point (might be slight variation due to snapping)
+            // But still add all points to maintain route continuity
+            allSnappedPoints.push(...snappedPoints);
+          }
+        } else {
+          // First batch - include all points
+          allSnappedPoints.push(...snappedPoints);
+        }
       } else {
         console.warn(`⚠️ No snapped points in batch ${batchIndex + 1}, using original points`);
         console.log(`📍 Batch ${batchIndex + 1} original points:`, batch.slice(0, 2));
-        allSnappedPoints.push(...batch);
+        // ✅ FIX: Skip first point if it's a duplicate (overlap from previous batch)
+        const pointsToAdd = batchIndex > 0 ? batch.slice(1) : batch;
+        allSnappedPoints.push(...pointsToAdd);
       }
       
       // Add small delay between batches to avoid rate limiting
@@ -405,7 +459,7 @@ const snapWithGoogleRoads = async (points: [number, number][], apiKey: string): 
       }
     }
     
-    console.log('✅ Google Roads snapping completed:', allSnappedPoints.length, 'total snapped points');
+    console.log('✅ Google Roads snapping completed:', allSnappedPoints.length, 'total snapped points (with overlapping batches for smooth connections)');
     return allSnappedPoints;
   } catch (error) {
     console.warn('❌ Google Roads API error:', error);
@@ -646,9 +700,61 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
       const lastProcessedCounts = lastProcessedPointCountsRef.current;
       const currentSegmentCounts = routeSegments.map(seg => seg.length);
       
+      // ✅ FIX: Validate segment structure - check if segments match by validating continuity
+      // If segment structure changed (segments don't match), reset and re-snap all segments
+      let segmentStructureChanged = false;
+      if (lastProcessedCounts.length !== routeSegments.length) {
+        // Segment count changed - structure definitely changed
+        segmentStructureChanged = true;
+        console.log(`🔄 [RouteMapped] Segment count changed: ${lastProcessedCounts.length} → ${routeSegments.length} - resetting incremental snapping`);
+      } else if (lastProcessedCounts.length > 0 && snappedSegmentCoords.length > 0) {
+        // Validate that existing segments still match current segments (by checking first/last points)
+        for (let i = 0; i < routeSegments.length && i < snappedSegmentCoords.length; i++) {
+          const currentSegment = routeSegments[i];
+          const existingSnappedSegment = snappedSegmentCoords[i];
+          
+          // Check if first point of current segment matches first point of existing segment
+          // (within reasonable GPS accuracy threshold of ~50 meters)
+          if (currentSegment.length > 0 && existingSnappedSegment.length > 0) {
+            const currentFirstPoint = currentSegment[0];
+            const existingFirstPoint = existingSnappedSegment[0];
+            const distanceThreshold = 0.0005; // ~50 meters in degrees (rough approximation)
+            
+            const latDiff = Math.abs(currentFirstPoint[0] - existingFirstPoint[0]);
+            const lngDiff = Math.abs(currentFirstPoint[1] - existingFirstPoint[1]);
+            
+            // If first points don't match, this is a different segment
+            if (latDiff > distanceThreshold || lngDiff > distanceThreshold) {
+              segmentStructureChanged = true;
+              console.log(`🔄 [RouteMapped] Segment ${i + 1} structure changed - first points don't match (reset incremental snapping)`);
+              break;
+            }
+            
+            // Also check if segment length decreased significantly (might indicate segment was replaced)
+            const existingProcessedCount = lastProcessedCounts[i] || 0;
+            if (currentSegment.length < existingProcessedCount * 0.5) {
+              // Segment length decreased by more than 50% - likely a different segment
+              segmentStructureChanged = true;
+              console.log(`🔄 [RouteMapped] Segment ${i + 1} length decreased significantly (${existingProcessedCount} → ${currentSegment.length}) - resetting incremental snapping`);
+              break;
+            }
+          }
+        }
+      }
+      
+      // If segment structure changed, reset incremental snapping state
+      if (segmentStructureChanged) {
+        console.log('🔄 [RouteMapped] Segment structure changed - resetting incremental snapping state');
+        lastProcessedPointCountsRef.current = [];
+        // Continue to re-snap all segments below
+      }
+      
       // Check if we have new points to process
       let hasNewPoints = false;
-      if (lastProcessedCounts.length !== routeSegments.length) {
+      if (segmentStructureChanged) {
+        // Structure changed - need to re-snap all segments
+        hasNewPoints = true;
+      } else if (lastProcessedCounts.length !== routeSegments.length) {
         // Segment count changed - new segments added
         hasNewPoints = true;
       } else {
@@ -662,7 +768,7 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
       }
       
       // Skip if no new points to process (route hasn't changed)
-      if (!hasNewPoints && lastProcessedCounts.length === routeSegments.length) {
+      if (!hasNewPoints && lastProcessedCounts.length === routeSegments.length && !segmentStructureChanged) {
         console.log('🔄 [RouteMapped] No new points to process, skipping road snapping');
         return;
       }
@@ -687,14 +793,56 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
         // Process each segment with incremental logic
         for (let i = 0; i < routeSegments.length; i++) {
           const segment = routeSegments[i];
-          const lastProcessedCount = lastProcessedCounts[i] || 0;
+          const lastProcessedCount = segmentStructureChanged ? 0 : (lastProcessedCounts[i] || 0);
           const currentCount = segment.length;
+          
+          // ✅ FIX: If segment structure changed, always re-snap all segments
+          if (segmentStructureChanged) {
+            // Structure changed - re-snap entire segment
+            console.log(`🔄 [RouteMapped] Segment ${i + 1}: Re-snapping due to structure change - ${segment.length} points`);
+            const snappedSegment = await snapPointsToRoads(segment);
+            newSnappedSegments.push(snappedSegment);
+            console.log(`✅ [RouteMapped] Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+            continue;
+          }
           
           // If this segment has new points, only snap the new portion
           if (currentCount > lastProcessedCount) {
             if (lastProcessedCount > 0 && existingSnappedSegments[i]) {
-              // ✅ INCREMENTAL: Segment already exists - only snap new points
+              // ✅ INCREMENTAL: Segment already exists - validate continuity before merging
               const existingSnappedSegment = existingSnappedSegments[i];
+              
+              // ✅ FIX: Validate segment continuity before merging
+              // Check if the first point of current segment matches the processed portion of existing segment
+              const existingProcessedPortion = existingSnappedSegment.slice(0, Math.min(lastProcessedCount, existingSnappedSegment.length));
+              const currentFirstPoint = segment[0];
+              
+              // Get the first point of existing processed portion (or last point if we're continuing)
+              let existingReferencePoint: [number, number] | null = null;
+              if (existingProcessedPortion.length > 0) {
+                // Use first point of existing segment to validate continuity
+                existingReferencePoint = existingProcessedPortion[0];
+              }
+              
+              // Validate continuity: first point of current segment should match first point of existing segment
+              const distanceThreshold = 0.0005; // ~50 meters
+              let segmentsMatch = true;
+              if (existingReferencePoint) {
+                const latDiff = Math.abs(currentFirstPoint[0] - existingReferencePoint[0]);
+                const lngDiff = Math.abs(currentFirstPoint[1] - existingReferencePoint[1]);
+                segmentsMatch = latDiff <= distanceThreshold && lngDiff <= distanceThreshold;
+              }
+              
+              if (!segmentsMatch) {
+                // Segments don't match - this is a different segment, re-snap entirely
+                console.log(`⚠️ [RouteMapped] Segment ${i + 1}: Segments don't match - re-snapping entire segment (structure changed)`);
+                const snappedSegment = await snapPointsToRoads(segment);
+                newSnappedSegments.push(snappedSegment);
+                console.log(`✅ [RouteMapped] Segment ${i + 1}: Re-snapped ${segment.length} → ${snappedSegment.length} points`);
+                continue;
+              }
+              
+              // Segments match - proceed with incremental update
               const newPoints = segment.slice(lastProcessedCount);
               
               console.log(`🔄 [RouteMapped] Segment ${i + 1}: Incremental update - ${lastProcessedCount} existing + ${newPoints.length} new points`);
