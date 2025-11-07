@@ -76,8 +76,8 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
 
     const fitBoundsSafely = () => {
       try {
-        // ✅ FIX: Wait for map to be fully initialized before fitting bounds
-        // Check if map container and panes are ready
+        // ✅ FIX: Use safer checks without accessing internal Leaflet properties
+        // Check if map container has valid dimensions
         const container = map.getContainer();
         if (!container) {
           setTimeout(fitBoundsSafely, 100);
@@ -92,9 +92,11 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           return;
         }
 
-        // Check if map pane exists
-        const mapPane = map.getPane('mapPane');
-        if (!mapPane) {
+        // ✅ FIX: Verify map is accessible by trying to get center (safer than checking _leaflet_pos)
+        try {
+          map.getCenter();
+        } catch {
+          // Map not ready yet, retry
           setTimeout(fitBoundsSafely, 100);
           return;
         }
@@ -110,11 +112,17 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           map.whenReady(() => {
             try {
               // Double-check map is still valid before fitting
-              if (map.getContainer() && map.getPane('mapPane')) {
-                map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
+              const container = map.getContainer();
+              if (container) {
+                try {
+                  map.getCenter(); // Verify map is accessible
+                  map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
+                } catch {
+                  // Map not accessible, silently skip
+                }
               }
             } catch (error) {
-              console.warn('Error fitting bounds in whenReady:', error);
+              // Silently handle errors - don't spam console
             }
           });
         } else {
@@ -122,11 +130,11 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
           try {
             map.fitBounds(leafletBounds, { padding: [20, 20], animate: false, maxZoom: 18 });
           } catch (error) {
-            console.warn('Error fitting bounds:', error);
+            // Silently handle errors
           }
         }
       } catch (error) {
-        console.warn('Error in fitBoundsSafely:', error);
+        // Silently handle errors - don't spam console
       }
     };
 
@@ -453,7 +461,15 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     }
 
     const applyRoadSnapping = async () => {
-      setIsSnappingInProgress(true);
+      // ✅ FIX: Only set snapping in progress (and show loading) on initial load
+      // During silent refreshes, snap in background without showing loading state
+      const isInitialLoad = isInitialLoadRef.current;
+      if (isInitialLoad) {
+        setIsSnappingInProgress(true);
+      } else {
+        // Silent refresh - snap in background without showing loading
+        console.log('🗺️ [MultiMaterialRouteMap] Silent road snapping - no loading state');
+      }
       
       const updatedRoutes = await Promise.all(
         materialRoutes.map(async (materialRoute) => {
@@ -493,6 +509,10 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       
       setMaterialRoutes(updatedRoutes);
       setIsSnappingInProgress(false);
+      
+      // ✅ FIX: Only update loading state if this was an initial load
+      // During silent refreshes, don't change loading state (keep it false)
+      // Note: isSnappingInProgress is already set to false above, which is fine for both cases
     };
 
     applyRoadSnapping();
@@ -810,8 +830,11 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     return processRouteSegments(materialRoute.route);
   };
 
-  // ✅ Only show loading if initial load OR if snapping is enabled and in progress
-  if (loading || (snapToRoads && isSnappingInProgress)) {
+  // ✅ FIX: Only show loading during initial load, not during silent refreshes
+  // Show loading if: initial load is in progress OR (initial load AND snapping is in progress)
+  const shouldShowLoading = loading || (isInitialLoadRef.current && snapToRoads && isSnappingInProgress);
+  
+  if (shouldShowLoading) {
     return (
       <div style={style} className={className}>
         <div className="flex items-center justify-center h-full">

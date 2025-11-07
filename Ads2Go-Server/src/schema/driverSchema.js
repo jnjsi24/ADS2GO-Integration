@@ -131,6 +131,10 @@ const typeDefs = gql`
     isArchived: Boolean!
     archivedAt: String
     scheduledDeletionDate: String
+    # Admin tracking fields
+    approvedBy: Admin
+    rejectedBy: Admin
+    deletedBy: Admin
   }
 
   type DriverWithMaterial {

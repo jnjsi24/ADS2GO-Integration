@@ -100,6 +100,28 @@ const AdSchema = new mongoose.Schema({
   approveTime: { type: Date, default: null },
   rejectTime: { type: Date, default: null },
   
+  // Admin tracking fields
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  rejectedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  restoredBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  },
+  
   // Deployment tracking
   deploymentStatus: { 
     type: String, 

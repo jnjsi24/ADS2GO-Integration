@@ -95,11 +95,15 @@ class DailyArchiveJobV2 {
       const deviceTimezone = 'Asia/Manila';
       const targetDate = new Date(dateStr);
 
+      // Prepare QR scans array first (filter out invalid location data and entries without userId)
+      const cleanedQrScans = this.cleanQRScanData(device.qrScans || []).filter(scan => scan.userId);
+      
       // Prepare daily data
       const dailyData = {
         date: targetDate,
         totalAdPlays: device.totalAdPlays || 0,
-        totalQRScans: device.totalQRScans || 0,
+        // ✅ FIX: Calculate totalQRScans from actual qrScans array length instead of device.totalQRScans
+        totalQRScans: cleanedQrScans.length,
         totalDistanceTraveled: device.totalDistanceTraveled || 0,
         totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
         totalAdImpressions: device.totalAdImpressions || 0,
@@ -123,7 +127,7 @@ class DailyArchiveJobV2 {
         adPerformance: (device.adPerformance || []).filter(perf => perf.userId),
         
         // QR scan details (filter out invalid location data and entries without userId)
-        qrScans: this.cleanQRScanData(device.qrScans).filter(scan => scan.userId),
+        qrScans: cleanedQrScans,
         qrScansByAd: (device.qrScansByAd || []).filter(scan => scan.userId),
         
         // Ad playback details (keep last 800 entries, filter out entries without userId)
@@ -189,6 +193,9 @@ class DailyArchiveJobV2 {
           // Final cleaning of the daily data before assignment
           dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
+          // ✅ FIX: Recalculate totalQRScans from actual qrScans array length after merging
+          dailyData.totalQRScans = dailyData.qrScans.length;
+          
           // Update the daily data
           existingDocument.dailyData[existingDailyIndex] = dailyData;
           existingDocument.lastArchiveUpdate = new Date();
@@ -242,6 +249,9 @@ class DailyArchiveJobV2 {
           // Final cleaning of the daily data before adding
           dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
+          // ✅ FIX: Recalculate totalQRScans from actual qrScans array length
+          dailyData.totalQRScans = dailyData.qrScans.length;
+          
           existingDocument.addDailyData(dailyData);
           existingDocument.lastArchiveUpdate = new Date();
           existingDocument.totalUpdates += 1;
@@ -291,6 +301,9 @@ class DailyArchiveJobV2 {
         
         // Final cleaning of the daily data before creating new document
         dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+        
+        // ✅ FIX: Recalculate totalQRScans from actual qrScans array length
+        dailyData.totalQRScans = dailyData.qrScans.length;
         
         const newDocument = new DeviceDataHistoryV2({
           materialId: device.materialId,

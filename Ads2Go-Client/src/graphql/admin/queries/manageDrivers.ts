@@ -40,6 +40,24 @@ export const GET_ALL_DRIVERS = gql`
       isArchived
       archivedAt
       scheduledDeletionDate
+      approvedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejectedBy {
+        id
+        firstName
+        lastName
+        email
+      }
+      deletedBy {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;
