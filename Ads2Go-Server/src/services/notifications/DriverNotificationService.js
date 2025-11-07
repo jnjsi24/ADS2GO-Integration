@@ -326,16 +326,17 @@ class DriverNotificationService extends BaseNotificationService {
                 <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #28a745; font-weight: bold;">ASSIGNED ✅</span></p>
               </div>
               
-              <p style="color: #666; text-align: center; margin: 20px 0;">
-                You have been assigned to a new material. Please check your driver dashboard for more details.
-              </p>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/driver-dashboard" 
-                   style="background-color: #4A90E2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                  View Driver Dashboard
-                </a>
+              <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <h3 style="color: #856404; margin: 0 0 10px 0;">📋 Important Instructions:</h3>
+                <p style="margin: 5px 0; color: #856404; line-height: 1.6;">
+                  Please proceed to the <strong>Ads2Go main office</strong> to install the device assigned to you. 
+                  Our team will assist you with the installation process and provide you with all the necessary information.
+                </p>
               </div>
+              
+              <p style="color: #666; text-align: center; margin: 20px 0;">
+                You have been assigned to a new material. Please visit our main office for device installation.
+              </p>
             </div>
           </div>
         `
