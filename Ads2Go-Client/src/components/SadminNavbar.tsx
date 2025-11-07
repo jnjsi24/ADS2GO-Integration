@@ -88,7 +88,6 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Analytics', path: '/sadmin-analytics', icon: <BarChart3 size={20} /> },
     { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
     { label: 'Pricing', path: '/sadmin-pricing', icon: <DollarSign size={20} /> },
     { label: 'Driver Salary', path: '/sadmin-driver-salary', icon: <Calculator size={20} /> },
