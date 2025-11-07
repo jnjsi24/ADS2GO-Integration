@@ -56,31 +56,46 @@ class BaseNotificationService {
           notificationItem._id = new mongoose.Types.ObjectId();
         }
         
-        const updateResult = await collection.findOneAndUpdate(
-          { userId: userIdObj },
-          {
-            $push: {
-              notifications: {
-                $each: [notificationItem],
-                $position: 0  // Add to beginning (most recent first)
-              }
-            },
-            $inc: { unreadCount: 1 },
-            $setOnInsert: {
-              userId: userIdObj,
-              userRole: options.userRole || 'USER',
-              notificationPreferences: {
-                email: true,
-                inApp: true,
-                categories: []
-              },
-              createdAt: new Date(),
-              updatedAt: new Date()
-            },
-            $set: {
-              updatedAt: new Date()
+        // Build update operation
+        // IMPORTANT: When using native MongoDB collection operations (bypassing Mongoose),
+        // Mongoose's timestamps middleware does NOT run. However, we still need to handle
+        // the updatedAt field manually.
+        //
+        // The ConflictingUpdateOperators error occurs when the same field appears in
+        // multiple conflicting update operators (e.g., both $set and $currentDate).
+        //
+        // Solution: Use $set for updatedAt, which applies to both insert (via upsert) and update.
+        // Do NOT put updatedAt in $setOnInsert to avoid any potential conflicts.
+        // MongoDB allows $set to work with upsert - it will set the field on both insert and update.
+        const now = new Date();
+        const updateOperation = {
+          $push: {
+            notifications: {
+              $each: [notificationItem],
+              $position: 0  // Add to beginning (most recent first)
             }
           },
+          $inc: { unreadCount: 1 },
+          $set: {
+            updatedAt: now  // This will set updatedAt for BOTH new documents (insert) and existing (update)
+          },
+          $setOnInsert: {
+            userId: userIdObj,
+            userRole: options.userRole || 'USER',
+            notificationPreferences: {
+              email: true,
+              inApp: true,
+              categories: []
+            },
+            createdAt: now
+            // DO NOT include updatedAt here - it's handled by $set above
+            // MongoDB will use $set for updatedAt in both insert and update scenarios
+          }
+        };
+
+        const updateResult = await collection.findOneAndUpdate(
+          { userId: userIdObj },
+          updateOperation,
           {
             upsert: true,  // Create document if it doesn't exist
             returnDocument: 'after'  // Return updated document (equivalent to new: true)
@@ -134,18 +149,29 @@ class BaseNotificationService {
           id: notificationId.toString()
         };
       } catch (error) {
-        // Check if it's a version conflict error
-        if (error.name === 'VersionError' && retryCount < maxRetries - 1) {
+        // Check if it's a version conflict error or MongoDB operator conflict
+        if ((error.name === 'VersionError' || 
+             (error.codeName === 'ConflictingUpdateOperators' && error.code === 40)) && 
+            retryCount < maxRetries - 1) {
           retryCount++;
           // Exponential backoff: wait 50ms, 100ms, 200ms
           const delay = Math.pow(2, retryCount - 1) * 50;
-          console.warn(`⚠️ Version conflict on notification creation, retrying (${retryCount}/${maxRetries}) after ${delay}ms...`);
+          console.warn(`⚠️ Conflict on notification creation (${error.name || error.codeName}), retrying (${retryCount}/${maxRetries}) after ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
-        // If not a version error or max retries reached, throw the error
+        // Log the full error for debugging
         console.error('Error creating notification:', error);
+        if (error.codeName === 'ConflictingUpdateOperators') {
+          console.error('🔍 ConflictingUpdateOperators details:', {
+            message: error.message,
+            code: error.code,
+            codeName: error.codeName
+          });
+        }
+        
+        // If not a retryable error or max retries reached, throw the error
         throw error;
       }
     }

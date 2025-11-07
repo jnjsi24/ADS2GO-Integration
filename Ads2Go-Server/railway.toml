@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "echo 'no build step'"
+buildCommand = "npm install --omit=dev"
 
 [deploy]
 startCommand = "npm start"
