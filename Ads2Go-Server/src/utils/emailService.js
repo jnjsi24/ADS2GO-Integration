@@ -13,9 +13,14 @@ class EmailService {
       return this.resend;
     }
 
+    // Debug: Check if RESEND_API_KEY exists (don't log the actual key for security)
+    console.log('🔍 Checking RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ Found (hidden)' : '❌ Not found');
+    console.log('🔍 All env vars containing "RESEND":', Object.keys(process.env).filter(k => k.includes('RESEND')).join(', ') || 'None');
+
     // Validate required environment variable
     if (!process.env.RESEND_API_KEY) {
       console.error('❌ Email service not configured: Missing RESEND_API_KEY');
+      console.error('💡 Make sure RESEND_API_KEY is added in Railway and the service has been restarted');
       this.isConfigured = false;
       return null;
     }
@@ -53,7 +58,17 @@ class EmailService {
     }
   }
 
-  // Get transporter (wrapper for backward compatibility)
+  // Get Resend instance directly
+  static getResendInstance() {
+    if (!this.resend && !this.initializeTransporter()) {
+      console.error('❌ EmailService: Failed to initialize Resend');
+      console.error('❌ EmailService: Check RESEND_API_KEY environment variable');
+      return null;
+    }
+    return this.resend;
+  }
+
+  // Get transporter (wrapper for backward compatibility with old nodemailer code)
   static getTransporter() {
     if (!this.resend && !this.initializeTransporter()) {
       console.error('❌ EmailService: Failed to initialize Resend');
@@ -118,7 +133,7 @@ class EmailService {
   static async sendVerificationEmail(email, code) {
     console.log(`📧 Attempting to send verification email to: ${email}`);
     
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       console.error('   Please check your .env file for RESEND_API_KEY');
@@ -169,7 +184,7 @@ class EmailService {
 
   // Send password reset email
   static async sendPasswordResetEmail(email, resetToken) {
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
@@ -218,7 +233,7 @@ class EmailService {
 
   // Send newsletter welcome email
   static async sendNewsletterWelcomeEmail(email, subject = 'Welcome to Ads2Go Newsletter!') {
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
@@ -296,7 +311,7 @@ class EmailService {
 
   // Send newsletter email to all subscribers
   static async sendNewsletterEmail(subject, content, subscribers) {
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
@@ -329,7 +344,7 @@ class EmailService {
 
   // Send newsletter email with image and styled template
   static async sendNewsletterEmailWithImage(subject, message, imageUrl, subscribers) {
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
@@ -407,7 +422,7 @@ class EmailService {
   static async sendContactReply(toEmail, toName, subject, message, adminName) {
     console.log(`📧 Sending contact reply to: ${toEmail}`);
     
-    const resend = this.getTransporter();
+    const resend = this.getResendInstance();
     if (!resend) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
