@@ -104,7 +104,7 @@ class EnhancedEmailNotificationService {
         html: emailData.html
       };
 
-      const transporter = EmailService.initializeTransporter();
+      const transporter = EmailService.getTransporter();
       if (!transporter) {
         throw new Error('Email service not configured');
       }

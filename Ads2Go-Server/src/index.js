@@ -120,18 +120,18 @@ EmailService.initializeTransporter();
 EmailService.verifyConfiguration()
   .then(isConfigured => {
     if (isConfigured) {
-      logger.info('✅ Email Service: Ready and configured');
+      logger.info('✅ Email Service: Ready and configured (Resend API)');
     } else {
       logger.warn('⚠️  Email Service: Configuration issues detected');
-      logger.warn('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
-      logger.warn('   Run: node verify-gmail-setup.js to test email configuration');
+      logger.warn('   Check your .env file for RESEND_API_KEY');
+      logger.warn('   Sign up at https://resend.com and add your API key to Railway');
     }
   })
   .catch(err => {
     console.error('❌ Email Service initialization error:', err.message);
   });
 
-// ✅ Apollo Server setup
+  // ✅ Apollo Server setup
 const server = new ApolloServer({
   typeDefs: (() => {
     const schemas = [
@@ -192,6 +192,35 @@ const server = new ApolloServer({
     
     return mergeResolvers(resolvers);
   })(),
+  // Add request timeout and other performance settings
+  requestTimeout: 60000, // 60 seconds timeout for GraphQL requests
+  keepAliveTimeout: 65000, // 65 seconds keep-alive timeout
+  // Increase allowed payload size for file uploads
+  csrfPrevention: true,
+  // Format errors properly
+  formatError: (err) => {
+    // Don't expose internal errors in production
+    if (process.env.NODE_ENV === 'production') {
+      if (err.message.includes('timeout') || err.message.includes('ETIMEDOUT')) {
+        return {
+          message: 'Request timeout - the server took too long to respond. Please try again.',
+          extensions: {
+            code: err.extensions?.code || 'REQUEST_TIMEOUT'
+          }
+        };
+      }
+      // Hide internal error details in production
+      if (err.extensions?.code === 'INTERNAL_SERVER_ERROR') {
+        return {
+          message: 'An internal server error occurred',
+          extensions: {
+            code: 'INTERNAL_SERVER_ERROR'
+          }
+        };
+      }
+    }
+    return err;
+  },
 });
 
 const app = express();
@@ -269,8 +298,9 @@ async function startServer() {
     res.sendStatus(200);
   });
 
-  // Regular express body parsing
-  app.use(express.json());
+  // Regular express body parsing with size limits
+  app.use(express.json({ limit: '50mb' })); // Increased for large GraphQL operations
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   
   // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -365,8 +395,33 @@ app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for o
 
   const PORT = process.env.PORT || 5000;
   
-  // Create HTTP server
+  // Create HTTP server with timeout configurations
   const httpServer = http.createServer(app);
+  
+  // Configure HTTP server timeouts to prevent hanging connections
+  httpServer.timeout = 120000; // 2 minutes - timeout for inactive connections
+  httpServer.keepAliveTimeout = 65000; // 65 seconds - timeout for keep-alive connections
+  httpServer.headersTimeout = 66000; // 66 seconds - timeout for headers (should be > keepAliveTimeout)
+  
+  // Set max headers count to prevent header overflow
+  httpServer.maxHeadersCount = 2000;
+  
+  // Handle timeout errors
+  httpServer.on('timeout', (socket) => {
+    console.warn('⚠️ HTTP request timeout - closing connection');
+    socket.destroy();
+  });
+  
+  // Handle client errors (connection resets, etc.)
+  httpServer.on('clientError', (err, socket) => {
+    if (err.code === 'ECONNRESET' || err.code === 'EPIPE') {
+      // These are common and not critical - just close the connection
+      socket.destroy();
+    } else {
+      console.error('❌ HTTP client error:', err.message);
+      socket.destroy();
+    }
+  });
   
   // Initialize WebSocket server
   deviceStatusService.initializeWebSocketServer(httpServer);
