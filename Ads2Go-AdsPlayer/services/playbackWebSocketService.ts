@@ -149,7 +149,7 @@ class PlaybackWebSocketService {
 
       this.ws = new WebSocket(wsUrl);
 
-      this.ws.onopen = () => {
+      this.ws.onopen = async () => {
         if (this.reconnectAttempts > 0) {
           console.log('🔌 [WebSocket] ✅ Reconnected to playback server successfully');
         } else {
@@ -158,6 +158,18 @@ class PlaybackWebSocketService {
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.clearReconnectInterval();
+        
+        // ✅ FIX: Update device status to online when WebSocket connects
+        // This ensures device is marked online when connection is established
+        try {
+          const tabletRegistrationService = (await import('./tabletRegistration')).default;
+          if (this.deviceId && tabletRegistrationService) {
+            await tabletRegistrationService.updateTabletStatus(true);
+            console.log('✅ [WebSocket] Device status updated to ONLINE after connection');
+          }
+        } catch (error) {
+          console.error('Error updating device status on WebSocket connect:', error);
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -210,18 +222,29 @@ class PlaybackWebSocketService {
         }
       };
 
-      this.ws.onclose = (event) => {
+      this.ws.onclose = async (event) => {
         // Only log disconnection if it's unexpected (not during reconnection)
         if (this.reconnectAttempts === 0) {
           console.log('🔌 [WebSocket] Connection closed:', event.code, event.reason);
         }
+        const wasConnected = this.isConnected;
         this.isConnected = false;
         this.ws = null;
         
+        // ✅ FIX: Server-side WebSocket handler will mark device offline when connection closes
+        // We don't need to mark offline here - the server handles it in handleDisconnect()
+        // Only try to reconnect if we haven't exceeded max attempts
+        // Note: Server will mark device offline immediately when connection closes,
+        // but will mark it back online when reconnection succeeds
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          // Still trying to reconnect - schedule reconnection attempt
           this.scheduleReconnect();
         } else {
-          console.error('🔌 [WebSocket] Max reconnection attempts reached');
+          // Max reconnection attempts reached
+          // Server has already marked device offline via handleDisconnect()
+          console.error('🔌 [WebSocket] Max reconnection attempts reached - device is offline');
+          // Note: Device status is already managed by server-side WebSocket handler
+          // No need to call updateTabletStatus here - server handles it
         }
       };
 

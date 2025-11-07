@@ -90,25 +90,75 @@ class AdaptiveGPSService {
         return false;
       }
 
+      // ✅ FIX: Check location services availability before starting tracking
+      try {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+          console.log('📍 [AdaptiveGPS] Location services disabled - cannot start tracking');
+          return false;
+        }
+      } catch (servicesCheckError) {
+        // If we can't check services, continue anyway
+      }
+
       this.onGPSUpdate = onUpdate;
       this.isTracking = true;
 
-      // Start location watching with high accuracy
-      this.locationWatcher = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 1000,     // Check every 1 second
-          distanceInterval: 1,    // Or when moved 1 meter
-        },
-        (location) => {
-          this.handleLocationUpdate(location, config);
-        }
-      );
+      // ✅ FIX: Start location watching with error handling
+      try {
+        // Start location watching with high accuracy
+        this.locationWatcher = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 1000,     // Check every 1 second
+            distanceInterval: 1,    // Or when moved 1 meter
+          },
+          (location) => {
+            // ✅ FIX: Handle location errors in callback
+            try {
+              this.handleLocationUpdate(location, config);
+            } catch (updateError: any) {
+              // Handle errors in location update callback gracefully
+              const errorMessage = updateError?.message || String(updateError);
+              if (!errorMessage.includes('kCLErrorDomain') && 
+                  !errorMessage.includes('Cannot obtain current location')) {
+                console.warn('📍 [AdaptiveGPS] Error in location update callback:', errorMessage);
+              }
+            }
+          }
+        );
 
-      console.log('📍 [AdaptiveGPS] Started adaptive GPS tracking');
-      return true;
-    } catch (error) {
-      console.error('📍 [AdaptiveGPS] Error starting tracking:', error);
+        console.log('📍 [AdaptiveGPS] Started adaptive GPS tracking');
+        return true;
+      } catch (watchError: any) {
+        // ✅ FIX: Handle CoreLocation errors when starting watchPositionAsync
+        this.isTracking = false;
+        const errorMessage = watchError?.message || String(watchError);
+        const errorCode = watchError?.code;
+        
+        if (errorMessage.includes('kCLErrorDomain') || 
+            errorMessage.includes('Cannot obtain current location') ||
+            errorCode === 0) {
+          // GPS unavailable - this is normal in some situations
+          console.log('📍 [AdaptiveGPS] GPS unavailable - cannot start tracking (this is normal)');
+        } else {
+          console.error('📍 [AdaptiveGPS] Error starting tracking:', errorMessage);
+        }
+        return false;
+      }
+    } catch (error: any) {
+      // ✅ FIX: Handle general errors gracefully
+      this.isTracking = false;
+      const errorMessage = error?.message || String(error);
+      const errorCode = error?.code;
+      
+      if (errorMessage.includes('kCLErrorDomain') || 
+          errorMessage.includes('Cannot obtain current location') ||
+          errorCode === 0) {
+        console.log('📍 [AdaptiveGPS] GPS unavailable - cannot start tracking');
+      } else {
+        console.error('📍 [AdaptiveGPS] Error starting tracking:', errorMessage);
+      }
       return false;
     }
   }
@@ -120,6 +170,21 @@ class AdaptiveGPSService {
     location: Location.LocationObject,
     config: Partial<GPSConfig>
   ) {
+    // ✅ FIX: Validate location data before processing
+    if (!location || !location.coords) {
+      // Invalid location data - skip this update
+      return;
+    }
+
+    // ✅ FIX: Validate coordinates (check for NaN, null, or invalid values)
+    if (typeof location.coords.latitude !== 'number' || 
+        typeof location.coords.longitude !== 'number' ||
+        isNaN(location.coords.latitude) || 
+        isNaN(location.coords.longitude)) {
+      // Invalid coordinates - skip this update
+      return;
+    }
+
     const now = Date.now();
     
     // Calculate optimal interval
@@ -230,9 +295,47 @@ class AdaptiveGPSService {
    */
   async forceUpdate(): Promise<GPSData | null> {
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // ✅ FIX: Check location services availability first
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        console.log('📍 [AdaptiveGPS] Location services disabled - cannot force update');
+        return null;
+      }
+
+      // ✅ FIX: Try with high accuracy first, fallback to balanced if that fails
+      let location;
+      try {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          mayShowUserSettingsDialog: false,
+        });
+      } catch (highAccuracyError: any) {
+        // If high accuracy fails, try with balanced accuracy (more reliable)
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            mayShowUserSettingsDialog: false,
+          });
+        } catch (balancedError: any) {
+          // Both attempts failed - check if it's a CoreLocation error
+          const errorMessage = balancedError?.message || String(balancedError);
+          const errorCode = balancedError?.code;
+          
+          if (errorMessage.includes('kCLErrorDomain') || 
+              errorMessage.includes('Cannot obtain current location') ||
+              errorCode === 0) {
+            // GPS unavailable - this is normal in some situations
+            console.log('📍 [AdaptiveGPS] GPS unavailable - cannot force update (this is normal)');
+          } else {
+            console.warn('📍 [AdaptiveGPS] Error forcing GPS update:', errorMessage);
+          }
+          return null;
+        }
+      }
+
+      if (!location || !location.coords) {
+        return null;
+      }
 
       const gpsData: GPSData = {
         lat: location.coords.latitude,
@@ -249,8 +352,19 @@ class AdaptiveGPSService {
 
       console.log('📍 [AdaptiveGPS] Forced GPS update:', gpsData);
       return gpsData;
-    } catch (error) {
-      console.error('📍 [AdaptiveGPS] Error forcing GPS update:', error);
+    } catch (error: any) {
+      // ✅ FIX: Handle errors gracefully - don't log CoreLocation errors as errors
+      const errorMessage = error?.message || String(error);
+      const errorCode = error?.code;
+      
+      if (errorMessage.includes('kCLErrorDomain') || 
+          errorMessage.includes('Cannot obtain current location') ||
+          errorCode === 0) {
+        // GPS unavailable - normal, don't log as error
+        console.log('📍 [AdaptiveGPS] GPS unavailable - cannot force update');
+      } else {
+        console.warn('📍 [AdaptiveGPS] Error forcing GPS update:', errorMessage);
+      }
       return null;
     }
   }

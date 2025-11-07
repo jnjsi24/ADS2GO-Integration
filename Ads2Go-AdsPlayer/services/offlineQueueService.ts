@@ -534,19 +534,46 @@ class OfflineQueueService {
              }
     } catch (error) {
       if (error instanceof Error) {
-        // If app is in background and request was cancelled, silently handle it
-        if (error.name === 'AbortError' || error.message.includes('app in background') || error.message.includes('Request cancelled')) {
-          // Silently handle - this is expected when app goes to background
-          // The item will be retried when app comes back to foreground
+        const errorMessage = error.message || String(error);
+        const errorName = error.name || '';
+        
+        // Check if this is an expected error that should be suppressed
+        const isExpectedError = 
+          (error as any)?.isCancelled === true ||
+          (error as any)?.isExpected === true ||
+          (error as any)?.isBackground === true ||
+          (error as any)?.isNetworkError === true ||
+          errorName === 'AbortError' ||
+          errorName === 'TypeError' && (errorMessage.includes('Network request failed') || errorMessage.includes('network request failed') || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) ||
+          errorMessage.includes('app in background') ||
+          errorMessage.includes('App is in background') ||
+          errorMessage.includes('Request cancelled') ||
+          errorMessage.includes('request cancelled') ||
+          errorMessage.includes('cancelled') ||
+          errorMessage.includes('Network request failed') ||
+          errorMessage.includes('network request failed') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('Failed to fetch');
+        
+        if (isExpectedError) {
+          // Silently handle - this is expected when app goes to background or network is unavailable
+          // The item will be retried when app comes back to foreground or network is restored
           return;
         }
-        if (error.name === 'AbortError') {
-          console.warn(`⏱️ [OfflineQueue] Request timed out for device status ${item.id} - will retry later`);
-          // Don't throw for timeout - let it be retried by the queue system
+        
+        if (errorName === 'AbortError') {
+          // Timeout errors - silently handle, will be retried
           return;
         }
       }
-      console.error(`❌ [OfflineQueue] Failed to send device status ${item.id}:`, error);
+      
+      // Only log unexpected errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('Network request failed') && 
+          !errorMessage.includes('Request cancelled') &&
+          !errorMessage.includes('app in background')) {
+        console.error(`❌ [OfflineQueue] Failed to send device status ${item.id}:`, error);
+      }
       throw error;
     }
   }

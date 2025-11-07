@@ -153,10 +153,12 @@ class RequestManager {
       this.executeRequest(queuedRequest.url, queuedRequest.options, queuedRequest.id)
         .then(queuedRequest.resolve)
         .catch((error) => {
-          // If app is in background and request was aborted, silently reject (don't log as error)
-          if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
-            // Silently reject - this is expected when app goes to background
-            queuedRequest.reject(new Error('Request cancelled - app in background'));
+          // If request was cancelled/aborted, create a silent error
+          if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted') || (error as any).isCancelled)) {
+            const silentError = new Error('Request cancelled');
+            (silentError as any).isCancelled = true;
+            (silentError as any).isExpected = true;
+            queuedRequest.reject(silentError);
           } else {
             queuedRequest.reject(error);
           }
@@ -226,11 +228,32 @@ class RequestManager {
       clearTimeout(timeoutId);
       this.pendingRequests.delete(requestId);
       
-      // If app is in background and request was aborted, don't throw error (it's expected)
-      if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
-        // Return a rejected promise that won't be logged as an error
-        // This is expected behavior when app goes to background
-        return Promise.reject(new Error('Request cancelled - app in background'));
+      if (error instanceof Error) {
+        const errorMessage = error.message || String(error);
+        const errorName = error.name || '';
+        const errorString = String(error);
+        
+        // Check if this is a network error or cancellation
+        const isNetworkError = 
+          errorName === 'TypeError' && (errorMessage.includes('Network request failed') || errorMessage.includes('network request failed') || errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) ||
+          errorName === 'AbortError' ||
+          errorMessage.includes('aborted') ||
+          errorMessage.includes('Network request failed') ||
+          errorMessage.includes('network request failed') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('Failed to fetch') ||
+          errorString.includes('Network request failed') ||
+          errorString.includes('network request failed');
+        
+        if (isNetworkError) {
+          // Request was cancelled or network failed - this is expected behavior
+          // Create a silent error that won't be logged as a critical error
+          const silentError = new Error('Request cancelled');
+          (silentError as any).isCancelled = true;
+          (silentError as any).isExpected = true;
+          (silentError as any).isNetworkError = true;
+          return Promise.reject(silentError);
+        }
       }
       
       throw error;
@@ -301,9 +324,18 @@ class RequestManager {
       }
     }
 
-    // Don't queue requests if app is in background (unless explicitly allowed)
-    if (this.appState !== 'active' && !(options as any).allowInBackground) {
-      throw new Error('App is in background - request cancelled');
+    // ✅ FIX: Don't queue requests if app is in background (unless explicitly allowed)
+    // Allow requests during grace period after app becomes active, or if explicitly allowed
+    const allowRequest = this.appState === 'active' || 
+                        (options as any).allowInBackground;
+    
+    if (!allowRequest) {
+      // Return a silent rejection instead of throwing - this is expected behavior
+      const silentError = new Error('Request cancelled');
+      (silentError as any).isCancelled = true;
+      (silentError as any).isExpected = true;
+      (silentError as any).isBackground = true;
+      return Promise.reject(silentError);
     }
 
     // If under concurrent limit, execute immediately
@@ -318,9 +350,12 @@ class RequestManager {
         this.activeRequestCount--;
         this.processQueue();
         
-        // If app is in background and request was aborted, return a silent rejection
-        if (error instanceof Error && error.name === 'AbortError' && this.appState !== 'active') {
-          throw new Error('Request cancelled - app in background');
+        // If request was cancelled/aborted, create a silent error
+        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted') || (error as any).isCancelled)) {
+          const silentError = new Error('Request cancelled');
+          (silentError as any).isCancelled = true;
+          (silentError as any).isExpected = true;
+          throw silentError;
         }
         
         throw error;

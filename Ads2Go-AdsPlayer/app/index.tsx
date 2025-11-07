@@ -234,17 +234,49 @@ export default function HomeScreen() {
       let currentLocation = null;
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
-        let loc = await Location.getCurrentPositionAsync({});
-        currentLocation = loc; // Store in local variable for immediate use
-        setLocation(loc); // Also update state for UI
-        await AsyncStorage.setItem("lastLocation", JSON.stringify(loc));
-        console.log('📍 GPS Location obtained:', {
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-          accuracy: loc.coords.accuracy
-        });
+        try {
+          // ✅ FIX: Check location services availability first
+          const servicesEnabled = await Location.hasServicesEnabledAsync();
+          if (!servicesEnabled) {
+            console.log('⚠️ [AppInit] Location services disabled - cannot get initial location');
+          } else {
+            try {
+              let loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced, // Use balanced for initial location (more reliable)
+                mayShowUserSettingsDialog: false,
+              });
+              
+              if (loc && loc.coords) {
+                currentLocation = loc; // Store in local variable for immediate use
+                setLocation(loc); // Also update state for UI
+                await AsyncStorage.setItem("lastLocation", JSON.stringify(loc));
+                console.log('📍 [AppInit] GPS Location obtained:', {
+                  lat: loc.coords.latitude,
+                  lng: loc.coords.longitude,
+                  accuracy: loc.coords.accuracy
+                });
+              }
+            } catch (locationError: any) {
+              // ✅ FIX: Handle CoreLocation errors gracefully
+              const errorMessage = locationError?.message || String(locationError);
+              const errorCode = locationError?.code;
+              
+              if (errorMessage.includes('kCLErrorDomain') || 
+                  errorMessage.includes('Cannot obtain current location') ||
+                  errorCode === 0) {
+                // GPS unavailable - this is normal, app can continue without initial location
+                console.log('📍 [AppInit] GPS unavailable for initial location - app will continue (this is normal)');
+              } else {
+                console.warn('⚠️ [AppInit] Could not get initial location:', errorMessage);
+              }
+            }
+          }
+        } catch (error) {
+          // Error checking services - continue without location
+          console.log('📍 [AppInit] Could not check location services - continuing without initial location');
+        }
       } else {
-        console.warn('⚠️ Location permission not granted');
+        console.warn('⚠️ [AppInit] Location permission not granted');
       }
 
       // Get registration data
