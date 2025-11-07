@@ -1658,7 +1658,12 @@ const DetailedAnalytics: React.FC = () => {
                     <YAxis tick={{ fontSize: 12 }} />
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <Tooltip 
-                      formatter={(value, name) => [(value || 0).toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans']}
+                      formatter={(value, name) => {
+                        // ⚠️ TEMPORARY FIX: Subtract 1 from adPlays to match database values
+                        // TODO: Fix root cause in backend aggregation
+                        const adjustedValue = name === 'adPlays' ? Math.max(0, (value || 0) - 1) : (value || 0);
+                        return [adjustedValue.toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans'];
+                      }}
                       labelFormatter={(label) => new Date(label).toLocaleDateString()}
                     />
                     <Area
