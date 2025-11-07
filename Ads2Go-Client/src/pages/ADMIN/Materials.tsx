@@ -154,6 +154,8 @@ const Materials: React.FC = () => {
   const [showTabletInterface, setShowTabletInterface] = useState(false);
   const [selectedTabletMaterialId, setSelectedTabletMaterialId] = useState<string | null>(null);
   const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
+      // Store the material that was open when opening slot modal, so we can restore it when closing
+  const [materialBeforeSlotModal, setMaterialBeforeSlotModal] = useState<Material | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
   const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
@@ -411,9 +413,25 @@ const Materials: React.FC = () => {
   // Function to show connection details modal
   const showConnectionDetails = (materialId: string, slotNumber: number) => {
     console.log('Opening connection details for:', { materialId, slotNumber });
-    setSelectedTabletMaterialId(materialId);
-    setSelectedTabletSlotNumber(slotNumber);
-    setShowTabletInterface(true);
+    // Store the current material so we can restore it when closing the slot modal
+    if (selectedMaterialDetails) {
+      setMaterialBeforeSlotModal(selectedMaterialDetails);
+    } else {
+      // If material details modal wasn't open, find the material from the list
+      const material = materials.find(m => m.materialId === materialId);
+      if (material) {
+        setMaterialBeforeSlotModal(material);
+      }
+    }
+    // Close Material Details modal first to prevent overlap
+    setShowDetailsModal(false);
+    setSelectedMaterialDetails(null);
+    // Small delay to ensure modal closes before opening new one
+    setTimeout(() => {
+      setSelectedTabletMaterialId(materialId);
+      setSelectedTabletSlotNumber(slotNumber);
+      setShowTabletInterface(true);
+    }, 100);
   };
 
   // Function to create tablet configuration
@@ -1517,11 +1535,19 @@ const Materials: React.FC = () => {
       />
       {/* Connection Details Modal */}
       <TabletConnectionModal
-        isOpen={showTabletInterface}
+        isOpen={showTabletInterface && !showDetailsModal}
         onClose={() => {
           setShowTabletInterface(false);
           setSelectedTabletMaterialId(null);
           setSelectedTabletSlotNumber(null);
+          // Restore the Material Details modal if we had one open before
+          if (materialBeforeSlotModal) {
+            setTimeout(() => {
+              setSelectedMaterialDetails(materialBeforeSlotModal);
+              setShowDetailsModal(true);
+              setMaterialBeforeSlotModal(null);
+            }, 100);
+          }
         }}
         materialId={selectedTabletMaterialId}
         slotNumber={selectedTabletSlotNumber}
@@ -1543,7 +1569,7 @@ const Materials: React.FC = () => {
 
     {/* Material Details Modal */}  
     <MaterialDetailsModal
-      isOpen={showDetailsModal}
+      isOpen={showDetailsModal && !showTabletInterface}
       onClose={handleCloseModal}
       material={selectedMaterialDetails}
       onRemoveFromDriver={handleRemoveFromDriver}
