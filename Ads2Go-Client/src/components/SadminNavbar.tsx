@@ -227,7 +227,7 @@ const SadminNavbar: React.FC = () => {
       >
         <div className="p-2">
           {/* Logo */}
-          <div className="flex mt-6 items-center justify-center space-x-3 mb-10">
+          <div className="flex mt-12 items-center justify-center space-x-3 mb-10">
             <img src="/image/Ads2GoLogoText.png" alt="Logo" className="w-32 h-12" />
           </div>
 

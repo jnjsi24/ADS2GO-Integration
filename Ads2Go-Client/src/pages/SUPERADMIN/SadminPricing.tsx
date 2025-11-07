@@ -349,7 +349,7 @@ const SadminPricing: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-900 mt-5">Pricing Management</h1>
+              <h1 className="text-3xl font-semibold text-gray-900 mt-10">Pricing Management</h1>
             </div>
           </div>
         </div>
@@ -386,7 +386,7 @@ const SadminPricing: React.FC = () => {
                   onClick={() => setActiveTab(tab as "active" | "inactive" | "archived")}
                   className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
                     isActive
-                      ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
+                      ? "text-[#3674B5]" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   {tab === "active" ? "Active" : tab === "inactive" ? "Inactive" : "Archived"}
@@ -395,8 +395,8 @@ const SadminPricing: React.FC = () => {
                   <span
                     className={`absolute bottom-0 left-0 h-0.5 w-full rounded-full transform origin-left transition-transform duration-300 ease-out ${
                       isActive
-                        ? "bg-blue-500 scale-x-100"
-                        : "bg-blue-500 scale-x-0 group-hover:scale-x-100"
+                        ? "bg-[#3674B5] scale-x-100"
+                        : "bg-[#3674B5] scale-x-0 group-hover:scale-x-100"
                     }`}
                   />
                 </button>
@@ -443,7 +443,7 @@ const SadminPricing: React.FC = () => {
             {activeTab === 'active' && (
               <button
                 onClick={handleCreateConfig}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
+                className="bg-[#3674B5] text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
               >
                 <Plus className="w-5 h-5" />
                 Create Pricing Config
@@ -471,7 +471,7 @@ const SadminPricing: React.FC = () => {
                     </div>
                     <p className="text-gray-600 text-sm">{config.category}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center">
                     {/* Show Restore button only for archived config */}
                     {config.isArchived ? (
                       <button
@@ -496,7 +496,7 @@ const SadminPricing: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleEditConfig(config)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-[#3674B5] hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit Configuration"
                         >
                           <Edit className="w-4 h-4" />
@@ -555,7 +555,7 @@ const SadminPricing: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-[9999]">
         <div className="bg-white rounded-md shadow-md w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">
@@ -673,7 +673,7 @@ const SadminPricing: React.FC = () => {
 
               {/* Category (Auto-determined) */}
               <div className="relative">
-                <div className="w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-0 transition">
+                <div className="w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent border-gray-300 focus:outline-none focus:border-[#3674B5] focus:ring-0 transition">
                   <div className="text-sm text-gray-600">
                     {formData.category || 'Will be determined automatically'}
                   </div>
@@ -699,7 +699,7 @@ const SadminPricing: React.FC = () => {
                   min="0.01"
                   value={formData.basePrice}
                   onChange={(e) => setFormData(prev => ({ ...prev, basePrice: parseFloat(e.target.value) || 0 }))}
-                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
+                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
                   required
                 />
                 <label
@@ -708,7 +708,7 @@ const SadminPricing: React.FC = () => {
                 >
                   Base Price (for 20-second ad / 1 month / 1 device)
                 </label>
-                <span className="text-xs text-blue-500 mt-1 block">
+                <span className="text-xs text-[#3674B5] mt-1 block">
                   This is the starting price for the smallest possible ad package. For example: $50.00 for Car/LCD, $30.00 for Car/Headdress.
                 </span>
                 {validationErrors.basePrice && (
@@ -785,7 +785,7 @@ const SadminPricing: React.FC = () => {
                           }));
                         }}
                         disabled={key === 'months1'}
-                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 ${key === 'months1' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300 ${key === 'months1' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         required
                       />
                       <label

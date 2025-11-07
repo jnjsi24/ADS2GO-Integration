@@ -119,7 +119,7 @@ const SadminAnalytics: React.FC = () => {
         <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
           {/* Left side: icon */}
           <div>
-            <Users className="h-12 w-12 text-white rounded-full bg-blue-500 p-2" />
+            <Users className="h-12 w-12 text-white rounded-full bg-blue-400 p-2" />
           </div>
 
           {/* Right side: label + value */}
@@ -564,7 +564,7 @@ const SadminAnalytics: React.FC = () => {
 
   return (
     <div className="p-8 ml-60 bg-gray-50 min-h-screen text-gray-800 font-sans">
-      <div className="pt-5 mb-8">
+      <div className="pt-9 mb-8">
         <Link
           to="/sadmin-dashboard"
           className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
@@ -581,42 +581,6 @@ const SadminAnalytics: React.FC = () => {
 
           {/* Filters */}
           <div className="flex items-center gap-2">
-            {/* Date Filter */}
-            <div className="relative w-36">
-              <button
-                onClick={() => setShowDateDropdown(!showDateDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg px-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                {selectedDateFilter}
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform duration-200 ${
-                    showDateDropdown ? "rotate-180" : "rotate-0"
-                  }`}
-                />
-              </button>
-              <AnimatePresence>
-                {showDateDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {dateFilterOptions.map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => handleDateFilterChange(option)}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
             {/* Refresh Button */}
             <button
               onClick={handleRefresh}
@@ -642,7 +606,7 @@ const SadminAnalytics: React.FC = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`relative group flex items-center py-3 px-1 font-medium text-sm transition-colors ${
-                    isActive ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
+                    isActive ? "text-[#3674B5]" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   <Icon className="h-4 w-4 mr-2" />
@@ -650,7 +614,7 @@ const SadminAnalytics: React.FC = () => {
 
                   {/* Animated underline */}
                   <span
-                    className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                    className={`absolute bottom-0 left-0 h-0.5 w-full bg-[#3674B5] transform origin-left transition-transform duration-300 ease-out ${
                       isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
                     }`}
                   />

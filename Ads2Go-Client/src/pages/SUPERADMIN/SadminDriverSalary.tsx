@@ -306,7 +306,7 @@ const SadminDriverSalary: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-900 mt-5">Driver Salary Management</h1>
+              <h1 className="text-3xl font-semibold text-gray-900 mt-10">Driver Salary Management</h1>
             </div>
           </div>
         </div>
@@ -343,7 +343,7 @@ const SadminDriverSalary: React.FC = () => {
                   onClick={() => setActiveTab(tab as "active" | "inactive" | "archived")}
                   className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
                     isActive
-                      ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
+                      ? "text-[#3674B5]" : "text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   {tab === "active" ? "Active" : tab === "inactive" ? "Inactive" : "Archived"}
@@ -352,8 +352,8 @@ const SadminDriverSalary: React.FC = () => {
                   <span
                     className={`absolute bottom-0 left-0 h-0.5 w-full rounded-full transform origin-left transition-transform duration-300 ease-out ${
                       isActive
-                        ? "bg-blue-500 scale-x-100"
-                        : "bg-blue-500 scale-x-0 group-hover:scale-x-100"
+                        ? "bg-[#3674B5] scale-x-100"
+                        : "bg-[#3674B5] scale-x-0 group-hover:scale-x-100"
                     }`}
                   />
                 </button>
@@ -518,7 +518,7 @@ const SadminDriverSalary: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-[9999]">
           <div className="bg-white rounded-md shadow-2xl w-full max-w-lg mx-4 p-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
@@ -587,24 +587,6 @@ const SadminDriverSalary: React.FC = () => {
                   </div>
                   {validationErrors.vehicleType && (
                     <p className="text-red-500 text-xs mt-1">{validationErrors.vehicleType}</p>
-                  )}
-                </div>
-
-                {/* Category - Auto-determined (Read-only) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category
-                  </label>
-                  <div className="relative w-full">
-                    <div className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md bg-gray-50 border border-gray-300">
-                      {formData.category === 'NON_DIGITAL' ? 'NON DIGITAL' : formData.category || 'Will be determined automatically'}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Category is automatically determined based on material type
-                    </p>
-                  </div>
-                  {validationErrors.category && (
-                    <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
                   )}
                 </div>
 
@@ -684,6 +666,25 @@ const SadminDriverSalary: React.FC = () => {
                   )}
                 </div>
 
+                
+                {/* Category - Auto-determined (Read-only) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <div className="relative w-full">
+                    <div className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md bg-white">
+                      {formData.category === 'NON_DIGITAL' ? 'NON DIGITAL' : formData.category || 'Will be determined automatically'}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Category is automatically determined based on material type
+                    </p>
+                  </div>
+                  {validationErrors.category && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
+                  )}
+                </div>
+
                 {/* Distance Rate */}
                 <div className="relative">
                   <input
@@ -694,12 +695,12 @@ const SadminDriverSalary: React.FC = () => {
                     min="0"
                     value={formData.distanceRate}
                     onChange={(e) => setFormData(prev => ({ ...prev, distanceRate: parseFloat(e.target.value) || 0 }))}
-                    className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.distanceRate ? 'border-red-400' : 'border-gray-300'}`}
+                    className={`peer w-full px-0 pt-10 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.distanceRate ? 'border-red-400' : 'border-gray-300'}`}
                     required
                   />
                   <label
                     htmlFor="distanceRate"
-                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.distanceRate ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.distanceRate ? 'top-1 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-1 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:top-1 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                   >
                     Distance Rate (₱/km)
                   </label>
@@ -718,7 +719,7 @@ const SadminDriverSalary: React.FC = () => {
                     min="0"
                     value={formData.hoursRate}
                     onChange={(e) => setFormData(prev => ({ ...prev, hoursRate: parseFloat(e.target.value) || 0 }))}
-                    className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.hoursRate ? 'border-red-400' : 'border-gray-300'}`}
+                    className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.hoursRate ? 'border-red-400' : 'border-gray-300'}`}
                     required
                   />
                   <label
@@ -752,14 +753,13 @@ const SadminDriverSalary: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleModalClose}
-                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
-                >
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"                >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={createLoading || updateLoading}
-                  className="px-4 py-2 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                  className="px-6 py-2 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
                   {createLoading || updateLoading ? 'Saving...' : editingPricing ? 'Update Pricing' : 'Create Pricing'}
                 </button>

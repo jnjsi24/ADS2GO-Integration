@@ -53,7 +53,7 @@ const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ minHeight: '100vh' }}>
+    <div className="min-h-screen flex items-center justify-center relative" style={{ minHeight: '100vh' }}>
       <style>
         {`
           input:-webkit-autofill,
@@ -76,24 +76,19 @@ const AdminLogin: React.FC = () => {
         `}
       </style>
 
-      {/* Background Image */}
+      {/* Background Image - Fixed to cover entire viewport */}
       <div 
-        className="absolute inset-0 bg-cover bg-center z-0"
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat z-0"
         style={{ 
           backgroundImage: "url('/image/login.png')",
-          minWidth: '100%',
-          minHeight: '100%',
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          top: '0',
-          left: '0',
+          width: '100vw',
+          height: '100vh',
           zIndex: -1
         }}
       />
 
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-lg z-0"></div>
+      {/* Dark overlay - Fixed to cover entire viewport */}
+      <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-lg z-0"></div>
 
       {/* Mobile View */}
       <div className="relative z-10 w-full px-4 py-6 md:hidden">

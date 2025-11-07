@@ -17,7 +17,7 @@ const AdminSearchHeader: React.FC<AdminSearchHeaderProps> = ({
   onCreateAdminClick,
 }) => {
   return (
-    <div className="p-6 pb-0 pt-7 flex justify-between items-end">
+    <div className="p-6 pb-0 pt-10 flex justify-between items-end">
       <div>
         <h1 className="text-3xl font-semibold text-gray-900 mt-5">Admins</h1>
       </div>
@@ -37,13 +37,6 @@ const AdminSearchHeader: React.FC<AdminSearchHeaderProps> = ({
         >
           <UserPlus size={18} />
           <span>Add New Admin</span>
-        </button>
-        <button
-          onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
-          className="flex items-center space-x-2 px-4 py-3 rounded-lg bg-white text-black text-xs border border-gray-200 shadow-md hover:shadow-lg transition-colors"
-        >
-          {sortOrder === 'newest' ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
-          <span>{sortOrder === 'newest' ? 'Newest' : 'Oldest'}</span>
         </button>
       </div>
     </div>
