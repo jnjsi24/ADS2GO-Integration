@@ -1451,7 +1451,7 @@ const RouteTab: React.FC = () => {
               </View>
             </View>
             
-            {/* Route Statistics - 2x2 Grid */}
+            {/* Route Statistics - 2x2 Grid with 3 items (Avg Speed centered) */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>Distance</Text>
@@ -1472,18 +1472,13 @@ const RouteTab: React.FC = () => {
                 </Text>
               </View>
               
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Avg Speed</Text>
-                <Text style={styles.metricValue}>
-                  {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
-                </Text>
-              </View>
-              
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Points</Text>
-                <Text style={styles.metricValue}>
-                {((routeData?.metrics?.pointCount ?? routeData?.route?.length ?? 0 ) + " points")}
-                </Text>
+              <View style={styles.metricCardWrapper}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Avg Speed</Text>
+                  <Text style={styles.metricValue}>
+                    {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -2168,12 +2163,15 @@ const styles = StyleSheet.create({
   statusCard: {
     margin: 20,
     borderRadius: 12,
+    backgroundColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
     marginBottom: 70,
+    borderWidth: 0,
+    overflow: 'hidden',
   },
   statusHeader: {
     flexDirection: 'row',
@@ -2294,6 +2292,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
+    alignItems: 'center',
+  },
+  metricCardWrapper: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   metricLabel: {
@@ -2538,6 +2542,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 12,
+    borderWidth: 0,
+    overflow: 'hidden',
   },
   timelineHeader: {
     flexDirection: 'row',
