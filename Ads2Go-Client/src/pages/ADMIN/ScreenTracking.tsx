@@ -1224,6 +1224,9 @@ const ScreenTracking: React.FC = () => {
                   </div>
                   {activeTab === 'historical' && (
                     <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center space-x-4'}`}>
+                      <div className={`${isMobile ? 'text-xs' : 'text-xs'} w-60 text-gray-500 leading-tight line-clamp-2`}>
+                        {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}                      
+                      </div>
                       <button
                         onClick={() => {
                           if (selectedScreen) {
@@ -1240,10 +1243,6 @@ const ScreenTracking: React.FC = () => {
                         <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
                       </button>
-                      
-                      <div className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500`}>
-                        {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
-                      </div>
                     </div>
                   )}
                 </div>
