@@ -12,7 +12,7 @@ const GPSValidation = require('../utils/gpsValidation');
 router.get('/route/:materialId', async (req, res) => {
   try {
     const { materialId } = req.params;
-    const { date, startDate, endDate, includeMetrics = true, includeSpeedSegments = true } = req.query;
+    const { date, startDate, endDate, includeMetrics = true, includeSpeedSegments = true, adStartTime, adId } = req.query;
 
     if (!materialId) {
       return res.status(400).json({
@@ -21,7 +21,68 @@ router.get('/route/:materialId', async (req, res) => {
       });
     }
 
-    console.log(`🗺️ [Enhanced Route API] Fetching route for material: ${materialId}, date: ${date}`);
+    console.log(`🗺️ [Enhanced Route API] Fetching route for material: ${materialId}, date: ${date}${adStartTime ? `, filtered after ad deployment: ${adStartTime}` : ''}${adId ? `, adId: ${adId}` : ''}`);
+
+    // ✅ Get actual deployment time from AdsDeployment or DeviceTracking if adId is provided
+    let actualDeploymentTime = adStartTime ? new Date(adStartTime) : null;
+    if (adId && materialId) {
+      try {
+        const AdsDeployment = require('../models/adsDeployment');
+        const DeviceTracking = require('../models/deviceTracking');
+        
+        // Try to find deployment in AdsDeployment
+        const deployment = await AdsDeployment.findOne({
+          materialId: materialId,
+          $or: [
+            { adId: adId },
+            { 'lcdSlots.adId': adId }
+          ]
+        }).sort({ createdAt: -1 }); // Get most recent deployment
+        
+        if (deployment) {
+          // For LCD materials, check lcdSlots for the specific ad
+          if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+            const matchingSlot = deployment.lcdSlots.find(slot => 
+              slot.adId && slot.adId.toString() === adId.toString()
+            );
+            if (matchingSlot && matchingSlot.deployedAt) {
+              actualDeploymentTime = new Date(matchingSlot.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment.lcdSlots: ${actualDeploymentTime.toISOString()}`);
+            } else if (deployment.deployedAt) {
+              actualDeploymentTime = new Date(deployment.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment: ${actualDeploymentTime.toISOString()}`);
+            }
+          } else if (deployment.deployedAt) {
+            // For non-LCD materials
+            actualDeploymentTime = new Date(deployment.deployedAt);
+            console.log(`✅ [Enhanced Route API] Found actual deployment time from AdsDeployment: ${actualDeploymentTime.toISOString()}`);
+          }
+        } else {
+          // Fallback: Check DeviceTracking.deployedAds
+          const deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+          if (deviceTracking && deviceTracking.deployedAds && deviceTracking.deployedAds.length > 0) {
+            const deployedAd = deviceTracking.deployedAds.find(ad => 
+              ad.adId && ad.adId.toString() === adId.toString()
+            );
+            if (deployedAd && deployedAd.deployedAt) {
+              actualDeploymentTime = new Date(deployedAd.deployedAt);
+              console.log(`✅ [Enhanced Route API] Found actual deployment time from DeviceTracking.deployedAds: ${actualDeploymentTime.toISOString()}`);
+            }
+          }
+        }
+        
+        if (!actualDeploymentTime && adStartTime) {
+          console.log(`⚠️ [Enhanced Route API] Could not find deployment time, using provided adStartTime: ${adStartTime}`);
+          actualDeploymentTime = new Date(adStartTime);
+        }
+      } catch (deploymentError) {
+        console.error(`⚠️ [Enhanced Route API] Error looking up deployment time:`, deploymentError.message);
+        // Fallback to adStartTime if provided
+        if (adStartTime) {
+          actualDeploymentTime = new Date(adStartTime);
+        }
+      }
+    }
 
     // Determine if the requested date is today (Philippines timezone)
     const now = new Date();
@@ -223,11 +284,67 @@ router.get('/route/:materialId', async (req, res) => {
       console.log(`⏱️ [Enhanced Route API] Fallback to GPS timestamp span: ${totalDuration}s`);
     }
 
+    // ✅ FILTER: If actualDeploymentTime is found, filter location points to only include those after ad deployment
+    let filteredLocationPoints = allLocationPoints;
+    if (actualDeploymentTime) {
+      // ✅ Check if ad deployment time is on the same date as the requested date
+      const deploymentDateStr = actualDeploymentTime.toISOString().split('T')[0];
+      const requestedDateStr = date;
+      
+      if (deploymentDateStr === requestedDateStr) {
+        // Ad was deployed on the requested date - filter points after deployment time
+        console.log(`🔍 [Enhanced Route API] Filtering route to only show locations after ad deployment: ${actualDeploymentTime.toISOString()} (on same date)`);
+        
+        const beforeFilter = allLocationPoints.length;
+        filteredLocationPoints = allLocationPoints.filter(point => {
+          if (!point || !point.timestamp) return false;
+          const pointTimestamp = new Date(point.timestamp);
+          return pointTimestamp >= actualDeploymentTime;
+        });
+        
+        const afterFilter = filteredLocationPoints.length;
+        console.log(`✅ [Enhanced Route API] Filtered ${beforeFilter} points to ${afterFilter} points (removed ${beforeFilter - afterFilter} points before ad deployment)`);
+        
+        // ✅ If no points remain after filtering, return empty route (ad was just deployed, no movement yet)
+        if (filteredLocationPoints.length === 0) {
+          console.log(`ℹ️ [Enhanced Route API] No location data after ad deployment time - ad was just deployed, no route yet`);
+        }
+        
+        // Update totalDistance to only count distance after ad deployment
+        if (filteredLocationPoints.length > 0) {
+          // Recalculate distance from filtered points only
+          totalDistance = 0;
+          for (let i = 1; i < filteredLocationPoints.length; i++) {
+            const prevPoint = filteredLocationPoints[i - 1];
+            const currentPoint = filteredLocationPoints[i];
+            if (prevPoint && currentPoint && prevPoint.coordinates && currentPoint.coordinates) {
+              const segmentDist = GPSValidation.calculateDistance(
+                prevPoint.coordinates[1], prevPoint.coordinates[0],
+                currentPoint.coordinates[1], currentPoint.coordinates[0]
+              );
+              totalDistance += segmentDist;
+            }
+          }
+        } else {
+          // No route data after deployment
+          totalDistance = 0;
+        }
+      } else if (deploymentDateStr > requestedDateStr) {
+        // Ad was deployed AFTER the requested date - return empty route (ad wasn't active yet)
+        console.log(`⚠️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is after requested date (${requestedDateStr}) - returning empty route`);
+        filteredLocationPoints = [];
+        totalDistance = 0;
+      } else {
+        // Ad was deployed BEFORE the requested date - show all points (ad was already active)
+        console.log(`ℹ️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is before requested date (${requestedDateStr}) - showing all route points`);
+      }
+    }
+
     // Create route points with enhanced data
     const routePoints = [];
     let cumulativeDistance = 0;
 
-    allLocationPoints.forEach((point, index) => {
+    filteredLocationPoints.forEach((point, index) => {
       // Safety check: ensure point has coordinates
       if (!point || !point.coordinates || point.coordinates.length < 2) {
         console.warn(`⚠️ [Enhanced Route API] Skipping invalid point at index ${index}:`, point);
@@ -248,7 +365,7 @@ router.get('/route/:materialId', async (req, res) => {
       let isSegmentBreak = false; // Flag to indicate this point starts a new segment (after offline)
       
       if (index > 0 && routePoints.length > 0) {
-        const prevPoint = allLocationPoints[index - 1];
+        const prevPoint = filteredLocationPoints[index - 1];
         if (prevPoint && prevPoint.coordinates && prevPoint.coordinates.length >= 2) {
           // ✅ FIX: Check time gap to detect offline periods
           const prevTimestamp = new Date(prevPoint.timestamp);

@@ -3415,20 +3415,46 @@ class UserAnalyticsService {
       }
 
       // Get current status from DeviceTracking
-      const currentDay = new Date().toISOString().split('T')[0];
+      // ✅ FIX: Query by date range to match Date objects, not strings
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
       const currentData = await DeviceTracking.find({
         materialId: { $in: materialIds },
-        date: currentDay
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
       });
 
       // Add current status and performance data
       materialDetails.forEach(material => {
         const currentDevice = currentData.find(device => device.materialId === material.materialId);
         if (currentDevice) {
+          // ✅ FIX: Convert GeoJSON coordinates [lng, lat] to { lat, lng } format
+          let currentLocation = null;
+          if (currentDevice.currentLocation && currentDevice.currentLocation.coordinates) {
+            const [lng, lat] = currentDevice.currentLocation.coordinates;
+            currentLocation = {
+              lat: lat,
+              lng: lng,
+              timestamp: currentDevice.currentLocation.timestamp,
+              speed: currentDevice.currentLocation.speed || 0,
+              heading: currentDevice.currentLocation.heading || 0,
+              accuracy: currentDevice.currentLocation.accuracy || 0,
+              address: currentDevice.currentLocation.address || ''
+            };
+          } else if (currentDevice.currentLocation && currentDevice.currentLocation.lat) {
+            // Already in the correct format
+            currentLocation = currentDevice.currentLocation;
+          }
+          
           material.currentStatus = {
             isOnline: currentDevice.isOnline,
             lastSeen: currentDevice.lastSeen,
-            currentLocation: currentDevice.currentLocation,
+            currentLocation: currentLocation,
             totalAdPlays: currentDevice.totalAdPlays || 0,
             totalQRScans: currentDevice.totalQRScans || 0,
             totalAdPlayTime: currentDevice.totalAdPlayTime || 0,

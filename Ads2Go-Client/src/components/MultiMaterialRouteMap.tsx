@@ -51,6 +51,8 @@ interface MultiMaterialRouteMapProps {
   style?: React.CSSProperties;
   snapToRoads?: boolean;
   disableAutoRefresh?: boolean; // ✅ Disable auto-refresh (e.g., for history tab)
+  adStartTime?: string; // ✅ Optional: Filter route to only show locations after ad deployment time
+  adId?: string; // ✅ Optional: Ad ID to look up actual deployment time from AdsDeployment
 }
 
 // Predefined colors for different routes
@@ -378,7 +380,9 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   className = '',
   style = {},
   snapToRoads = true,
-  disableAutoRefresh = false
+  disableAutoRefresh = false,
+  adStartTime,
+  adId
 }) => {
   const [materialRoutes, setMaterialRoutes] = useState<MaterialRoute[]>([]);
   const [loading, setLoading] = useState(true);
@@ -516,8 +520,15 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
 
         try {
-          const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${stableDate}`;
-          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId}`);
+          // ✅ Add adStartTime and adId to query if provided (filter route to only show after ad deployment)
+          let url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${stableDate}`;
+          if (adStartTime) {
+            url += `&adStartTime=${encodeURIComponent(adStartTime)}`;
+          }
+          if (adId) {
+            url += `&adId=${encodeURIComponent(adId)}`;
+          }
+          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId}${adStartTime ? ` (filtered after ${adStartTime})` : ''}${adId ? ` (adId: ${adId})` : ''}`);
           
           const response = await fetch(url);
           
@@ -602,7 +613,7 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       }
     };
 
-    // Reset initial load flag when materialIds or date changes
+    // Reset initial load flag when materialIds, date, adStartTime, or adId changes
     isInitialLoadRef.current = true;
     lastProcessedRoutesRef.current.clear();
     
@@ -611,7 +622,7 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     } else {
       setLoading(false);
     }
-  }, [stableMaterialIds, stableDate]);
+  }, [stableMaterialIds, stableDate, adStartTime, adId]);
 
   // 🔄 Auto-refresh routes every 2 seconds for smooth real-time updates (SILENT/BACKGROUND ONLY)
   useEffect(() => {

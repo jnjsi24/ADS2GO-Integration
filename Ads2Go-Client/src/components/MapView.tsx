@@ -41,11 +41,19 @@ const MapView: React.FC<MapViewProps> = ({
   const [isClient, setIsClient] = React.useState(false);
   const [isContainerReady, setIsContainerReady] = React.useState(false);
   const [mapKey, setMapKey] = React.useState(0);
+  const initialCenterRef = useRef<[number, number]>(center);
+  const initialZoomRef = useRef<number>(zoom);
 
   // Set client-side rendering
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Update initial values only when mapKey changes (map remounts)
+  useEffect(() => {
+    initialCenterRef.current = center;
+    initialZoomRef.current = zoom;
+  }, [mapKey, center, zoom]);
 
   // Check container readiness after mount - use a more aggressive approach
   useEffect(() => {
@@ -226,8 +234,8 @@ const MapView: React.FC<MapViewProps> = ({
       <div ref={containerRef} id={`map-container-${mapKey}`} style={style} className={className}>
         <MapContainer 
           key={mapKey}
-          center={center} 
-          zoom={zoom} 
+          center={initialCenterRef.current} 
+          zoom={initialZoomRef.current} 
           style={{ height: '100%', width: '100%' }}
           whenReady={handleMapReady}
           {...rest}

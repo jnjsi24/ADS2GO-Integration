@@ -703,6 +703,19 @@ const Dashboard = () => {
       .filter((id: string) => id); // Remove any null/undefined
   }, [selectedAdForRoute, myAdsData?.getMyAds]);
 
+  // Get selected ad's startTime and id for route filtering
+  const selectedAdStartTime = useMemo(() => {
+    if (!selectedAdForRoute || !myAdsData?.getMyAds) return undefined;
+    
+    const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
+    return selectedAd?.startTime || undefined;
+  }, [selectedAdForRoute, myAdsData?.getMyAds]);
+
+  // Get selected ad's id to look up actual deployment time (for route filtering)
+  const selectedAdIdForRoute = useMemo(() => {
+    return selectedAdForRoute || undefined;
+  }, [selectedAdForRoute]);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Background Image */}
@@ -1054,12 +1067,12 @@ const Dashboard = () => {
           <div className="relative bg-white shadow-sm overflow-hidden">
             {/* History Tab Controls */}
             {mapActiveTab === 'history' && (
-              <div className="p-4 bg-gray-50 flex flex justify-end gap-2 items-center">
+              <div className="p-4 bg-gray-50 flex flex justify-end gap-2 items-center relative z-50">
                 {/* Ad Selector */}
-                <div className="relative w-40">
+                <div className="relative w-40 z-50">
                   <button
                     onClick={() => setShowAdDropdown(!showAdDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2 relative z-50"
                   >
                     <span className="truncate">
                       {selectedAdForRoute 
@@ -1075,7 +1088,8 @@ const Dashboard = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute z-20 top-full mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        className="absolute z-[1000] top-full mt-1 w-full bg-white rounded-md shadow-lg max-h-60 overflow-y-auto"
+                        style={{ pointerEvents: 'auto' }}
                       >
                         {userAdsForRoute.length === 0 ? (
                           <div className="px-4 py-3 text-sm text-gray-500 text-center">
@@ -1120,11 +1134,11 @@ const Dashboard = () => {
             )}
 
             {/* Map Content */}
-            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }}>
+            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }} className="relative z-0">
               {mapActiveTab === 'today' ? (
                 <UserMaterialsMap height="100%" className="rounded-b-lg" />
               ) : (
-                <div className="h-full w-full">
+                <div className="h-full w-full relative z-0">
                   {!selectedAdForRoute ? (
                     <div className="flex items-center justify-center h-full bg-gray-50">
                       <div className="text-center p-8">
@@ -1157,9 +1171,11 @@ const Dashboard = () => {
                       materialIds={selectedMaterialIds}
                       date={selectedRouteDate}
                       className="h-full w-full"
-                      style={{ height: '100%' }}
+                      style={{ height: '100%', position: 'relative', zIndex: 0 }}
                       snapToRoads={true}
                       disableAutoRefresh={true}
+                      adStartTime={selectedAdStartTime}
+                      adId={selectedAdIdForRoute}
                     />
                   )}
                 </div>
