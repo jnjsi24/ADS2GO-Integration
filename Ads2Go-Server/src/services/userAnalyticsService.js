@@ -302,17 +302,17 @@ class UserAnalyticsService {
             data: syncResult.data
           };
           this.setCachedData(cumulativeCacheKey, dataToCache);
-          console.log('✅ Cached cumulative data for 5 minutes');
+          if (isVerbose()) logger.verbose('✅ Cached cumulative data for 5 minutes');
         } else {
           // Fallback to UserAnalytics if sync fails
-        filteredTotals = {
-          totalAdPlays: userAnalytics.totalAdPlays || 0,
-          totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
-          totalQRScans: userAnalytics.totalQRScans || 0,
-          totalMaterials: userAnalytics.totalMaterials || 0,
-          totalDevices: userAnalytics.totalDevices || 0
-        };
-          console.log('⚠️ Fallback to UserAnalytics data:', filteredTotals);
+          filteredTotals = {
+            totalAdPlays: userAnalytics.totalAdPlays || 0,
+            totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
+            totalQRScans: userAnalytics.totalQRScans || 0,
+            totalMaterials: userAnalytics.totalMaterials || 0,
+            totalDevices: userAnalytics.totalDevices || 0
+          };
+          if (isVerbose()) logger.verbose('⚠️ Fallback to UserAnalytics data:', filteredTotals);
         }
       } else {
         // For 30d queries, skip expensive sync and use optimized aggregation directly
@@ -322,7 +322,7 @@ class UserAnalyticsService {
         let syncResult;
         
         if (shouldSkipSync) {
-          console.log(`⚡ Large date range detected (${daysDiff} days), skipping sync and using optimized aggregation directly`);
+          if (isVerbose()) logger.verbose(`⚡ Large date range detected (${daysDiff} days), skipping sync and using optimized aggregation directly`);
           syncResult = { 
             success: false, 
             message: 'Large date range - using optimized query directly',
@@ -330,12 +330,14 @@ class UserAnalyticsService {
           };
         } else {
           // For smaller date ranges, try sync with aggressive timeout
-          console.log('🔄 Syncing UserAnalytics with fresh data from DeviceDataHistoryV2...');
-          console.log('📊 UserAnalytics before sync:', {
-            totalAdPlays: userAnalytics.totalAdPlays,
-            totalQRScans: userAnalytics.totalQRScans,
-            averageAdCompletionRate: userAnalytics.averageAdCompletionRate
-          });
+          if (isVerbose()) {
+            logger.verbose('🔄 Syncing UserAnalytics with fresh data from DeviceDataHistoryV2...');
+            logger.verbose('📊 UserAnalytics before sync:', {
+              totalAdPlays: userAnalytics.totalAdPlays,
+              totalQRScans: userAnalytics.totalQRScans,
+              averageAdCompletionRate: userAnalytics.averageAdCompletionRate
+            });
+          }
           
           try {
             // Aggressive timeout for sync (10 seconds max)
@@ -346,14 +348,16 @@ class UserAnalyticsService {
               )
             ]);
             
-            console.log('🔍 Sync result received:', {
-              success: syncResult.success,
-              hasData: !!syncResult.data,
-              message: syncResult.message,
-              adIdFilter: adId || 'none (all ads)'
-            });
+            if (isVerbose()) {
+              logger.verbose('🔍 Sync result received:', {
+                success: syncResult.success,
+                hasData: !!syncResult.data,
+                message: syncResult.message,
+                adIdFilter: adId || 'none (all ads)'
+              });
+            }
           } catch (timeoutError) {
-            console.warn('⚠️ Sync timeout or error, falling back to optimized aggregation:', timeoutError.message);
+            if (isVerbose()) logger.verbose('⚠️ Sync timeout or error, falling back to optimized aggregation:', timeoutError.message);
             syncResult = { 
               success: false, 
               message: 'Timeout - using optimized query',
@@ -365,33 +369,38 @@ class UserAnalyticsService {
         if (syncResult.success) {
           // Refresh the userAnalytics with synced data
           userAnalytics = await this.initializeUserAnalytics(userId);
-          console.log('✅ UserAnalytics synced successfully');
           if (isVerbose()) {
+            logger.verbose('✅ UserAnalytics synced successfully');
             logger.verbose('📊 UserAnalytics after sync:', {
-            totalAdPlays: userAnalytics.totalAdPlays,
-            totalQRScans: userAnalytics.totalQRScans,
-            averageAdCompletionRate: userAnalytics.averageAdCompletionRate
-          });
+              totalAdPlays: userAnalytics.totalAdPlays,
+              totalQRScans: userAnalytics.totalQRScans,
+              averageAdCompletionRate: userAnalytics.averageAdCompletionRate
+            });
+          }
           
           // Refresh the userAnalytics with synced data - fetch directly from DB
           const UserAnalytics = require('../models/userAnalytics');
           userAnalytics = await UserAnalytics.findOne({ userId });
-          console.log('✅ UserAnalytics reloaded from DB after sync');
-          console.log('🔍 UserAnalytics ads count:', userAnalytics?.ads?.length || 0);
+          if (isVerbose()) {
+            logger.verbose('✅ UserAnalytics reloaded from DB after sync');
+            logger.verbose('🔍 UserAnalytics ads count:', userAnalytics?.ads?.length || 0);
+          }
           
           // ✅ Get the filtered totals from the sync result (real-time data from DeviceTracking/DeviceDataHistoryV2)
           // IMPORTANT: syncResult.data contains the processed data from fetchAndUpdateUserAnalyticsFromHistory
           // which includes totalAdPlays, etc. from DeviceDataHistoryV2
-          console.log('📊 [SYNC] Full syncResult.data:', {
-            totalAdPlays: syncResult.data?.totalAdPlays,
-            totalAdPlayTime: syncResult.data?.totalAdPlayTime,
-            totalQRScans: syncResult.data?.totalQRScans,
-            totalMaterials: syncResult.data?.totalMaterials,
-            totalDevices: syncResult.data?.totalDevices,
-            adsCount: syncResult.data?.ads?.length,
-            hasData: !!syncResult.data,
-            dataKeys: syncResult.data ? Object.keys(syncResult.data) : []
-          });
+          if (isVerbose()) {
+            logger.verbose('📊 [SYNC] Full syncResult.data:', {
+              totalAdPlays: syncResult.data?.totalAdPlays,
+              totalAdPlayTime: syncResult.data?.totalAdPlayTime,
+              totalQRScans: syncResult.data?.totalQRScans,
+              totalMaterials: syncResult.data?.totalMaterials,
+              totalDevices: syncResult.data?.totalDevices,
+              adsCount: syncResult.data?.ads?.length,
+              hasData: !!syncResult.data,
+              dataKeys: syncResult.data ? Object.keys(syncResult.data) : []
+            });
+          }
           
           filteredTotals = {
             totalAdPlays: syncResult.data?.totalAdPlays || 0,
@@ -403,7 +412,7 @@ class UserAnalyticsService {
           
           if (isVerbose()) logger.verbose('📊 [SYNC] Filtered totals extracted from sync result (REAL-TIME DATA):', filteredTotals);
         } else {
-          console.log('⚠️ Sync failed or timed out, using optimized aggregation fallback:', syncResult.message);
+          if (isVerbose()) logger.verbose('⚠️ Sync failed or timed out, using optimized aggregation fallback:', syncResult.message);
           
           // Fallback: Use the optimized aggregation pipeline directly
           try {
@@ -417,9 +426,9 @@ class UserAnalyticsService {
                 totalMaterials: deviceStats.calculatedSummary.totalMaterials || 0,
                 totalDevices: deviceStats.calculatedSummary.totalDevices || 0
               };
-              console.log('✅ Fallback aggregation succeeded:', filteredTotals);
+              if (isVerbose()) logger.verbose('✅ Fallback aggregation succeeded:', filteredTotals);
             } else {
-              console.log('⚠️ Fallback aggregation returned no data, using existing UserAnalytics');
+              if (isVerbose()) logger.verbose('⚠️ Fallback aggregation returned no data, using existing UserAnalytics');
               filteredTotals = {
                 totalAdPlays: userAnalytics.totalAdPlays || 0,
                 totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
@@ -429,7 +438,7 @@ class UserAnalyticsService {
               };
             }
           } catch (fallbackError) {
-            console.error('❌ Fallback aggregation failed:', fallbackError.message);
+            if (isVerbose()) logger.verbose('❌ Fallback aggregation failed:', fallbackError.message);
             // Final fallback: use existing userAnalytics data
             filteredTotals = {
               totalAdPlays: userAnalytics.totalAdPlays || 0,
@@ -466,13 +475,14 @@ class UserAnalyticsService {
               // This ensures the summary calculation uses the processed totals (9 plays, etc.)
               if (isVerbose()) {
                 logger.verbose('📊 [SYNC-ALL] Full syncResult.data for "all" period:', {
-                totalAdPlays: syncResult.data.totalAdPlays,
-                totalAdPlayTime: syncResult.data.totalAdPlayTime,
-                totalQRScans: syncResult.data.totalQRScans,
-                totalMaterials: syncResult.data.totalMaterials,
-                totalDevices: syncResult.data.totalDevices,
-                dataKeys: Object.keys(syncResult.data || {})
-              });
+                  totalAdPlays: syncResult.data.totalAdPlays,
+                  totalAdPlayTime: syncResult.data.totalAdPlayTime,
+                  totalQRScans: syncResult.data.totalQRScans,
+                  totalMaterials: syncResult.data.totalMaterials,
+                  totalDevices: syncResult.data.totalDevices,
+                  dataKeys: Object.keys(syncResult.data || {})
+                });
+              }
               
               // ✅ Extract filteredTotals from sync result (real-time data from DeviceTracking/DeviceDataHistoryV2)
               filteredTotals = {
@@ -488,16 +498,21 @@ class UserAnalyticsService {
               // Refresh the userAnalytics with synced data - fetch directly from DB
               const UserAnalytics = require('../models/userAnalytics');
               userAnalytics = await UserAnalytics.findOne({ userId });
-              console.log('✅ UserAnalytics synced successfully for "all" period');
-              console.log('🔍 UserAnalytics ads:', userAnalytics.ads.map(ad => ({ adId: ad.adId, totalQRScans: ad.totalQRScans })));
+              if (isVerbose()) {
+                logger.verbose('✅ UserAnalytics synced successfully for "all" period');
+                logger.verbose('🔍 UserAnalytics ads:', userAnalytics.ads.map(ad => ({ adId: ad.adId, totalQRScans: ad.totalQRScans })));
+              }
             } else {
-              console.warn('⚠️ Sync returned success but with no valid play data (all zeros), skipping filteredTotals extraction');
+              if (isVerbose()) logger.verbose('⚠️ Sync returned success but with no valid play data (all zeros), skipping filteredTotals extraction');
             }
           } else {
-            console.warn('⚠️ Sync failed or returned no data, skipping filteredTotals extraction');
+            if (isVerbose()) logger.verbose('⚠️ Sync failed or returned no data, skipping filteredTotals extraction');
           }
         } catch (timeoutError) {
-          console.warn('⚠️ All period sync timeout or error, continuing with existing data:', timeoutError.message);
+          // ✅ FIX: Only log timeout errors in verbose mode
+          if (isVerbose()) {
+            logger.verbose('⚠️ All period sync timeout or error, continuing with existing data:', timeoutError.message);
+          }
           // Continue with existing userAnalytics data
           // ✅ Don't set filteredTotals if sync failed - we'll use userAnalytics data instead
           // This prevents overwriting good data with zeros from a failed sync
@@ -942,7 +957,7 @@ class UserAnalyticsService {
       if (shouldCache) {
         this.setCachedData(cacheKey, result);
       } else {
-        console.log('⚠️ Skipping cache for "all" period - sync may have failed or no valid data (all zeros)');
+        if (isVerbose()) logger.verbose('⚠️ Skipping cache for "all" period - sync may have failed or no valid data (all zeros)');
       }
       
       return result;
