@@ -1118,19 +1118,35 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   // Add distance if significant movement
   if (distanceAdded > 0) {
     updateData.totalDistanceTraveled = this.totalDistanceTraveled;
+    // ✅ FIX: Also update currentSession.totalDistanceTraveled
+    if (this.currentSession) {
+      updateData['currentSession.totalDistanceTraveled'] = (this.currentSession.totalDistanceTraveled || 0) + distanceAdded;
+    }
+  }
+  
+  // ✅ FIX: Build update operation to push to both root locationHistory AND currentSession.locationHistory
+  const updateOperation = {
+    $set: updateData,
+    $push: {
+      locationHistory: {
+        $each: [newLocation],
+        $slice: -14400 // Keep only last 14400 entries (8 hours at 2s intervals)
+      }
+    }
+  };
+  
+  // ✅ CRITICAL FIX: Also push to currentSession.locationHistory if session exists and is active
+  // Use dot notation in quotes for MongoDB nested field updates
+  if (this.currentSession && this.currentSession.isActive) {
+    updateOperation.$push['currentSession.locationHistory'] = {
+      $each: [newLocation],
+      $slice: -14400 // Keep same limit for session history
+    };
   }
   
   return this.constructor.findByIdAndUpdate(
     this._id,
-    {
-      $set: updateData,
-      $push: {
-        locationHistory: {
-          $each: [newLocation],
-          $slice: -14400 // Keep only last 14400 entries (8 hours at 2s intervals)
-        }
-      }
-    },
+    updateOperation,
     { 
       new: true,
       runValidators: true
@@ -1144,13 +1160,18 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
     // Sometimes findByIdAndUpdate doesn't return the full updated document with arrays
     const freshDoc = await this.constructor.findById(this._id).lean();
     const historySize = freshDoc?.locationHistory?.length || 0;
+    const sessionHistorySize = freshDoc?.currentSession?.locationHistory?.length || 0;
     const lastPoint = historySize > 0 ? freshDoc.locationHistory[historySize - 1] : null;
     
-    console.log(`📍 [updateLocation] ${this.materialId}: locationHistory size: ${historySize} points`);
+    console.log(`📍 [updateLocation] ${this.materialId}: locationHistory size: ${historySize} points, currentSession.locationHistory size: ${sessionHistorySize} points`);
     if (lastPoint) {
       console.log(`📍 [updateLocation] ${this.materialId}: Last point in history: lat=${lastPoint.coordinates?.[1]?.toFixed(6)}, lng=${lastPoint.coordinates?.[0]?.toFixed(6)}, accuracy=${lastPoint.accuracy?.toFixed(1)}m`);
     } else {
       console.warn(`⚠️ [updateLocation] ${this.materialId}: WARNING - locationHistory is empty or last point is missing!`);
+    }
+    
+    if (sessionHistorySize === 0 && historySize > 0 && this.currentSession && this.currentSession.isActive) {
+      console.warn(`⚠️ [updateLocation] ${this.materialId}: WARNING - currentSession.locationHistory is empty but root locationHistory has ${historySize} points! This may indicate the nested push failed.`);
     }
     
     // Return the fresh document to ensure we have the latest locationHistory

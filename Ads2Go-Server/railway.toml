@@ -1,6 +1,9 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install --omit=dev"
+# Using --omit=dev explicitly (newer flag) to avoid deprecation warnings
+# Note: Railway/Nixpacks may still run `npm ci` automatically before this,
+# which can show a harmless warning about --production flag deprecation
+buildCommand = "npm ci --omit=dev || npm install --omit=dev"
 
 [deploy]
 startCommand = "npm start"
