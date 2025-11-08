@@ -100,20 +100,51 @@ router.get('/route/:materialId', async (req, res) => {
     // ✅ TODAY'S DATE: Use real-time data for instant, up-to-date routes
     if (isToday && date) {
       console.log(`📍 [Enhanced Route API] Requesting TODAY's route - using real-time data`);
+      console.log(`📍 [Enhanced Route API] MaterialId: ${materialId}, Date: ${date}`);
       
       try {
         const DeviceTracking = require('../models/deviceTracking');
-        const deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+        
+        // ✅ DEBUG: Try multiple lookup methods to find the device
+        console.log(`🔍 [Enhanced Route API] Looking up DeviceTracking for materialId: ${materialId}`);
+        
+        let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+        
+        // If not found, try direct query with today's date
+        if (!deviceTracking) {
+          console.log(`⚠️ [Enhanced Route API] findByMaterialId returned null, trying direct query...`);
+          const now = new Date();
+          const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+          deviceTracking = await DeviceTracking.findOne({ materialId, date: today });
+        }
+        
+        // If still not found, try finding any record for this materialId
+        if (!deviceTracking) {
+          console.log(`⚠️ [Enhanced Route API] Direct query returned null, trying latest record...`);
+          deviceTracking = await DeviceTracking.findOne({ materialId }).sort({ date: -1 });
+        }
         
         console.log(`🔍 [Enhanced Route API] DeviceTracking lookup result:`, {
           found: !!deviceTracking,
+          materialId: deviceTracking?.materialId,
+          date: deviceTracking?.date,
+          _id: deviceTracking?._id,
           hasLocationHistory: deviceTracking?.locationHistory?.length > 0,
-          locationCount: deviceTracking?.locationHistory?.length || 0
+          locationCount: deviceTracking?.locationHistory?.length || 0,
+          hasCurrentLocation: !!deviceTracking?.currentLocation,
+          currentLocation: deviceTracking?.currentLocation ? {
+            lat: deviceTracking.currentLocation.coordinates?.[1],
+            lng: deviceTracking.currentLocation.coordinates?.[0],
+            timestamp: deviceTracking.currentLocation.timestamp,
+            accuracy: deviceTracking.currentLocation.accuracy
+          } : null
         });
         
         if (deviceTracking && deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
           // Use real-time location data
           console.log(`✅ [Enhanced Route API] Found ${deviceTracking.locationHistory.length} real-time location points`);
+          console.log(`📍 [Enhanced Route API] First point:`, deviceTracking.locationHistory[0]);
+          console.log(`📍 [Enhanced Route API] Last point:`, deviceTracking.locationHistory[deviceTracking.locationHistory.length - 1]);
           
           // Clean the GPS data
           const cleanedPoints = GPSValidation.cleanGPSData(deviceTracking.locationHistory, {
@@ -125,6 +156,8 @@ router.get('/route/:materialId', async (req, res) => {
             maxSpeed: 200
           });
           
+          console.log(`🧹 [Enhanced Route API] After cleaning: ${cleanedPoints.length} points (removed ${deviceTracking.locationHistory.length - cleanedPoints.length} invalid points)`);
+          
           allLocationPoints = cleanedPoints;
           totalDistance = deviceTracking.totalDistanceTraveled || 0;
           totalAdPlays = deviceTracking.totalAdPlays || 0;
@@ -132,9 +165,24 @@ router.get('/route/:materialId', async (req, res) => {
           totalHoursOnline = (deviceTracking.currentSession && deviceTracking.currentSession.totalHoursOnline) ? deviceTracking.currentSession.totalHoursOnline : 0;
           
           console.log(`✅ [Enhanced Route API] Processed ${allLocationPoints.length} real-time points for today`);
+        } else if (deviceTracking && deviceTracking.currentLocation) {
+          // ✅ FALLBACK: If locationHistory is empty but currentLocation exists, use it as a route point
+          console.log(`⚠️ [Enhanced Route API] locationHistory is empty but currentLocation exists - using currentLocation as route point`);
+          console.log(`📍 [Enhanced Route API] Current location:`, deviceTracking.currentLocation);
+          
+          if (deviceTracking.currentLocation.coordinates && deviceTracking.currentLocation.coordinates.length >= 2) {
+            allLocationPoints = [deviceTracking.currentLocation];
+            totalDistance = deviceTracking.totalDistanceTraveled || 0;
+            totalAdPlays = deviceTracking.totalAdPlays || 0;
+            totalQRScans = deviceTracking.totalQRScans || 0;
+            totalHoursOnline = (deviceTracking.currentSession && deviceTracking.currentSession.totalHoursOnline) ? deviceTracking.currentSession.totalHoursOnline : 0;
+            
+            console.log(`✅ [Enhanced Route API] Using currentLocation as single route point`);
+          }
         } else {
           // Fallback: Check if today's data was already archived
           console.log(`⚠️ [Enhanced Route API] No real-time data, checking historical archive for today...`);
+          console.log(`🔍 [Enhanced Route API] DeviceTracking exists: ${!!deviceTracking}, has locationHistory: ${deviceTracking?.locationHistory?.length > 0}, has currentLocation: ${!!deviceTracking?.currentLocation}`);
           
           const deviceData = await DeviceDataHistoryV2.findOne({ materialId });
           

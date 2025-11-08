@@ -1051,11 +1051,26 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       new: true,
       runValidators: true
     }
-  ).then((updatedDoc) => {
+  ).then(async (updatedDoc) => {
     if (distanceAdded > 0) {
       console.log(`📍 [updateLocation] ${this.materialId}: +${distanceAdded.toFixed(3)}km (total: ${updatedDoc.totalDistanceTraveled.toFixed(3)}km)`);
     }
-    return updatedDoc;
+    
+    // ✅ CRITICAL: Verify locationHistory was actually updated
+    // Sometimes findByIdAndUpdate doesn't return the full updated document with arrays
+    const freshDoc = await this.constructor.findById(this._id).lean();
+    const historySize = freshDoc?.locationHistory?.length || 0;
+    const lastPoint = historySize > 0 ? freshDoc.locationHistory[historySize - 1] : null;
+    
+    console.log(`📍 [updateLocation] ${this.materialId}: locationHistory size: ${historySize} points`);
+    if (lastPoint) {
+      console.log(`📍 [updateLocation] ${this.materialId}: Last point in history: lat=${lastPoint.coordinates?.[1]?.toFixed(6)}, lng=${lastPoint.coordinates?.[0]?.toFixed(6)}, accuracy=${lastPoint.accuracy?.toFixed(1)}m`);
+    } else {
+      console.warn(`⚠️ [updateLocation] ${this.materialId}: WARNING - locationHistory is empty or last point is missing!`);
+    }
+    
+    // Return the fresh document to ensure we have the latest locationHistory
+    return this.constructor.findById(this._id);
   });
 };
 

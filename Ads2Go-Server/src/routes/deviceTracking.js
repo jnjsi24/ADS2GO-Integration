@@ -187,8 +187,21 @@ router.post('/location-update',
       const updatedDevice = await carTracking.updateLocation(lat, lng, speed, heading, accuracy, '', timestamp);
       
       if (updatedDevice) {
-        console.log(`✅ [LocationUpdate] Updated location for ${updatedDevice.materialId}`);
+        // ✅ CRITICAL: Refresh from DB to get accurate locationHistory count
+        const freshTracking = await DeviceTracking.findById(updatedDevice._id);
+        const historySize = freshTracking?.locationHistory?.length || 0;
+        console.log(`✅ [LocationUpdate] Updated location for ${updatedDevice.materialId} (locationHistory: ${historySize} points after update)`);
+        
+        // Log first and last points if history exists
+        if (historySize > 0) {
+          const firstPoint = freshTracking.locationHistory[0];
+          const lastPoint = freshTracking.locationHistory[historySize - 1];
+          console.log(`📍 [LocationUpdate] First point: lat=${firstPoint.coordinates?.[1]?.toFixed(6)}, lng=${firstPoint.coordinates?.[0]?.toFixed(6)}`);
+          console.log(`📍 [LocationUpdate] Last point: lat=${lastPoint.coordinates?.[1]?.toFixed(6)}, lng=${lastPoint.coordinates?.[0]?.toFixed(6)}, accuracy=${lastPoint.accuracy?.toFixed(1)}m`);
+        }
       }
+    } else {
+      console.log(`⚠️ [LocationUpdate] Skipped location update for ${materialId} - did not pass shouldUpdateLocation check (lat=${lat}, lng=${lng}, accuracy=${accuracy}m)`);
     }
 
     // Refresh carTracking from database to get latest state after updates
