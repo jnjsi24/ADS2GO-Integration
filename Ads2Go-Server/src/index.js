@@ -88,6 +88,7 @@ const cleanupRoutes = require('./routes/cleanup');
 const deviceHoursNotificationRoutes = require('./routes/deviceHoursNotification');
 const deviceOfflineNotificationRoutes = require('./routes/deviceOfflineNotification');
 const diagnosticDeviceHoursRoutes = require('./routes/diagnosticDeviceHours');
+const googleOAuthRoutes = require('./routes/googleOAuth');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -373,6 +374,7 @@ app.use('/api/admin', require('./routes/createIndexes'));
 app.use('/api/verifyMetrics', require('./routes/verifyMetrics'));
 app.use('/api/analyzeGPS', require('./routes/analyzeGPS'));
 app.use('/api/fixDeviceHours', require('./routes/fixDeviceHours')); // Fix for offline devices showing hours
+app.use('/api/google-oauth', googleOAuthRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   // Allow up to 8 concurrent file uploads to support driver registration (profile, vehicle, license front/back, OR, CR)

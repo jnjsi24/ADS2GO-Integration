@@ -13,8 +13,7 @@ if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_OAUTH 
   console.log('🔍 OAuth Config:', {
     clientId: GOOGLE_OAUTH_CONFIG.clientId || 'EMPTY',
     redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
-    hasClientSecret: !!process.env.REACT_APP_GOOGLE_CLIENT_SECRET,
-    clientSecretValue: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || 'NOT_FOUND',
+    apiUrl: process.env.REACT_APP_API_URL || process.env.REACT_APP_SERVER_URL || 'NOT_SET',
     allEnvKeys: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
   });
 }
@@ -48,40 +47,59 @@ const generateRandomState = (): string => {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
-// Exchange authorization code for access token
+// Exchange authorization code for access token via server
+// ✅ FIX: Use server-side endpoint to keep client secret secure
 export const exchangeCodeForToken = async (code: string): Promise<{
   access_token: string;
   refresh_token?: string;
   expires_in: number;
   token_type: string;
-}> => {
-  // Debug: Log the parameters being sent
-  const tokenParams = {
-    client_id: GOOGLE_OAUTH_CONFIG.clientId,
-    client_secret: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || '',
-    code,
-    grant_type: 'authorization_code',
-    redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
+  userInfo?: {
+    id: string;
+    email: string;
+    name: string;
+    given_name: string;
+    family_name: string;
+    picture: string;
+    verified_email: boolean;
   };
+}> => {
+  const apiUrl = process.env.REACT_APP_API_URL || process.env.REACT_APP_SERVER_URL || '';
   
-  console.log('🔍 Token exchange parameters:', {
-    ...tokenParams,
-    client_secret: tokenParams.client_secret ? '***HIDDEN***' : 'EMPTY'
-  });
+  if (!apiUrl) {
+    throw new Error('API URL not configured');
+  }
 
-  const response = await fetch(GOOGLE_OAUTH_URLS.token, {
+  console.log('🔄 Exchanging authorization code via server...');
+
+  const response = await fetch(`${apiUrl}/api/google-oauth/exchange-token`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
     },
-    body: new URLSearchParams(tokenParams),
+    body: JSON.stringify({
+      code,
+      redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
+    }),
   });
 
   if (!response.ok) {
-    throw new Error(`Token exchange failed: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({ error: response.statusText }));
+    console.error('❌ Token exchange failed:', errorData);
+    throw new Error(errorData.error || `Token exchange failed: ${response.statusText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Token exchange failed');
+  }
+
+  // Return token data with userInfo if available
+  return {
+    ...data.token,
+    userInfo: data.userInfo
+  };
 };
 
 // Get user info from Google

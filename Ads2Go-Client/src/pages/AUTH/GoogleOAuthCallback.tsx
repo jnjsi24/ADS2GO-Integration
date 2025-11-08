@@ -37,12 +37,20 @@ const GoogleOAuthCallback: React.FC = () => {
 
         console.log('✅ Authorization code received, exchanging for token...');
 
-        // Exchange code for access token
+        // Exchange code for access token (now includes userInfo from server)
         const tokenResponse = await exchangeCodeForToken(code);
         console.log('✅ Token exchange successful');
 
-        // Get user info from Google
-        const userInfo = await getGoogleUserInfo(tokenResponse.access_token);
+        // ✅ FIX: Use userInfo from server response if available, otherwise fetch it
+        let userInfo;
+        if (tokenResponse.userInfo) {
+          console.log('✅ User info included in token response');
+          userInfo = tokenResponse.userInfo;
+        } else {
+          // Fallback: Get user info from Google (shouldn't be needed with server endpoint)
+          console.log('⚠️ User info not in response, fetching from Google...');
+          userInfo = await getGoogleUserInfo(tokenResponse.access_token);
+        }
         console.log('✅ User info retrieved:', userInfo);
 
         // Extract user data from Google response
