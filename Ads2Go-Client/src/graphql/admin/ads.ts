@@ -293,6 +293,7 @@ export const GET_ALL_DEPLOYMENTS = gql`
           paymentStatus
           status
           createdAt
+          isArchived
         }
       }
       startTime
@@ -313,6 +314,7 @@ export const GET_ALL_DEPLOYMENTS = gql`
         adFormat
         mediaFile
         status
+        isArchived
       }
       material {
         id

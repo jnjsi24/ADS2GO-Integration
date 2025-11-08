@@ -113,6 +113,9 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
   const adsInPeriod: Ad[] = useMemo(() => {
     const list: Ad[] = data?.getAllAds ?? [];
     return list.filter((ad) => {
+      // Filter out archived ads
+      if (ad.isArchived === true) return false;
+      
       const s = parseDate(ad.startTime) || parseDate(ad.createdAt);
       const e = parseDate(ad.endTime) || s;
       if (!s) return false;
@@ -124,9 +127,12 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
   }, [data, period.start, period.end]);
 
   const filteredAds = useMemo(() => {
-    let filtered = adsInPeriod.filter(ad => 
-      statusFilter === 'All Status' || ad.status.toLowerCase() === statusFilter.toLowerCase()
-    );
+    let filtered = adsInPeriod.filter(ad => {
+      // Filter out archived ads (double-check, though adsInPeriod should already filter them)
+      if (ad.isArchived === true) return false;
+      
+      return statusFilter === 'All Status' || ad.status.toLowerCase() === statusFilter.toLowerCase();
+    });
 
     // Apply date filter if active (from parent component)
     if (dateFilter) {
@@ -162,7 +168,9 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
 
 
   const groupedByMaterial = useMemo(() => {
-    const source: Ad[] = filteredAds.length > 0 ? filteredAds : (data?.getAllAds ?? []);
+    // Filter out archived ads from source as well (as a safety measure)
+    const allAds = (data?.getAllAds ?? []).filter(ad => ad.isArchived !== true);
+    const source: Ad[] = filteredAds.length > 0 ? filteredAds : allAds;
     const map = new Map<string, Ad[]>();
     const now = new Date();
     const processedAdIds = new Set<string>(); // Track which ads we've already added
@@ -175,11 +183,14 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
         if (slot.status !== 'SCHEDULED') return;
         if (!slot.startTime) return;
         
+        // Filter out archived ads - skip if ad is archived
+        if (slot.ad?.isArchived === true) return;
+        
         const slotStartTime = new Date(slot.startTime);
         if (slotStartTime <= now) return; // Skip slots that already started
         
         const adId = slot.ad?.id || slot.adId;
-        if (processedAdIds.has(adId)) return; // Skip duplicates
+        if (!adId || processedAdIds.has(adId)) return; // Skip duplicates or missing ad IDs
         
         // Create a virtual Ad object from the slot
         const virtualAd: Ad = {
@@ -205,6 +216,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
           updatedAt: '',
           userId: null,
           materialId: null,
+          isArchived: false, // Virtual ads from slots are not archived
         };
         
         processedAdIds.add(adId);
@@ -223,6 +235,11 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
     source.forEach((ad) => {
       // Skip if already added from deployment slots
       if (processedAdIds.has(ad.id)) {
+        return;
+      }
+      
+      // Filter 0: Exclude archived ads
+      if (ad.isArchived === true) {
         return;
       }
       
