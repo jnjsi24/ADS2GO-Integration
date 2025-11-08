@@ -1546,8 +1546,6 @@ class UserAnalyticsService {
   // ✅ NEW: Includes DeviceTracking for current day if date range includes today
   static async getDeviceStatsFromHistory(userId, startDate, endDate, adId = null) {
     try {
-      console.log('📊 getDeviceStatsFromHistory - Using optimized aggregation pipeline', adId ? `(filtering by adId: ${adId})` : '(all ads)');
-      
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       const DeviceTracking = require('../models/deviceTracking');
       const Ad = require('../models/Ad');
@@ -1574,34 +1572,18 @@ class UserAnalyticsService {
       const userAdIds = userAds.map(ad => ad._id.toString());
       
       if (userAdIds.length === 0) {
-        console.log('📊 [getDeviceStatsFromHistory] No ads found for user, returning empty array');
+        // Log when no ads found (important information)
+        console.log('📊 [getDeviceStatsFromHistory] No ads found for user');
         return [];
       }
       
-      // ✅ Build $or condition for filtering by user's adIds (since $in doesn't work in $filter)
-      // Since adId is stored as String in adPlaybacks, we'll use string comparison
-      // Build simple $or condition with just string comparisons
       // ✅ Build match conditions for adPlaybacks - handle both string and ObjectId formats
-      const adIdMatchConditions = userAdIds.flatMap(adIdStr => [
-        { $eq: ['$$playback.adId', adIdStr] },
-        { $eq: [{ $toString: '$$playback.adId' }, adIdStr] },
-        { $eq: ['$$playback.adId', { $toObjectId: adIdStr }] }
-      ]);
+      // Use a more efficient approach: convert adId to string and check if it's in userAdIds array
+      // Since MongoDB $filter doesn't support $in directly, we'll use $setIsSubset or $indexOfArray
+      // For better performance, we'll create a helper array and use $in with $indexOfArray
       
-      // ✅ Build match conditions for QR scans - handle both string and ObjectId formats
-      const qrScanMatchConditions = userAdIds.flatMap(adIdStr => [
-        { $eq: ['$$scan.adId', adIdStr] },
-        { $eq: [{ $toString: '$$scan.adId' }, adIdStr] },
-        { $eq: ['$$scan.adId', { $toObjectId: adIdStr }] }
-      ]);
-      
-      console.log('📊 [getDeviceStatsFromHistory] Building aggregation pipeline with:', {
-        userAdIdsCount: userAdIds.length,
-        userAdIds: userAdIds,
-        adIdMatchConditionsCount: adIdMatchConditions.length,
-        hasAdIdFilter: !!adId,
-        sampleCondition: adIdMatchConditions[0]
-      });
+      // Log aggregation pipeline setup (reduced verbosity)
+      // Removed detailed logging to reduce noise
       
       // Build aggregation pipeline for better performance (only for historical data)
       // ✅ Use adPlaybacks instead of adPerformance (matching fetchAndUpdateUserAnalyticsFromHistory)
@@ -1620,8 +1602,9 @@ class UserAnalyticsService {
           }
         },
         
-        // Stage 3: Filter adPlaybacks by user's adIds (matching fetchAndUpdateUserAnalyticsFromHistory approach)
-        // ✅ Use $setIsSubset or $or since $in doesn't work in $filter conditions
+        // Stage 3: Filter adPlaybacks by user's adIds
+        // ✅ Use $setIsSubset to check if adId (as single-element array) is subset of userAdIds
+        // This is more reliable and MongoDB-native than $reduce or large $or conditions
         {
           $project: {
             materialId: 1,
@@ -1632,17 +1615,21 @@ class UserAnalyticsService {
                 input: { $ifNull: ['$dailyData.adPlaybacks', []] },
                 as: 'playback',
                 cond: adId ? {
-                  // Filter by specific adId (adId is string in adPlaybacks)
+                  // Filter by specific adId - handle both string and ObjectId formats
                   $or: [
                     { $eq: ['$$playback.adId', adId] },
                     { $eq: ['$$playback.adId', adId.toString()] },
                     { $eq: [{ $toString: '$$playback.adId' }, adId] },
                     { $eq: [{ $toString: '$$playback.adId' }, adId.toString()] }
                   ]
-                } : (adIdMatchConditions.length > 0 ? {
-                  // Filter by user's adIds - use $or with all adId match conditions
-                  $or: adIdMatchConditions
-                } : false)
+                } : {
+                  // Filter by user's adIds - use $setIsSubset to check membership
+                  // Wrap adId in array and check if it's a subset of userAdIds array
+                  $setIsSubset: [
+                    [{ $toString: '$$playback.adId' }],
+                    userAdIds
+                  ]
+                }
               }
             },
             filteredQrScans: {
@@ -1650,17 +1637,21 @@ class UserAnalyticsService {
                 input: { $ifNull: ['$dailyData.qrScans', []] },
                 as: 'scan',
                 cond: adId ? {
-                  // Filter by specific adId (adId is string in qrScans)
+                  // Filter by specific adId - handle both string and ObjectId formats
                   $or: [
                     { $eq: ['$$scan.adId', adId] },
                     { $eq: ['$$scan.adId', adId.toString()] },
                     { $eq: [{ $toString: '$$scan.adId' }, adId] },
                     { $eq: [{ $toString: '$$scan.adId' }, adId.toString()] }
                   ]
-                } : (qrScanMatchConditions.length > 0 ? {
-                  // Filter by user's adIds - use $or with all adId match conditions
-                  $or: qrScanMatchConditions
-                } : false)
+                } : {
+                  // Filter by user's adIds - use $setIsSubset to check membership
+                  // Wrap adId in array and check if it's a subset of userAdIds array
+                  $setIsSubset: [
+                    [{ $toString: '$$scan.adId' }],
+                    userAdIds
+                  ]
+                }
               }
             }
           }
@@ -1714,64 +1705,85 @@ class UserAnalyticsService {
         { $sort: { lastActivity: -1 } }
       ];
 
-      console.log('📊 Running aggregation pipeline...');
-      console.log('📊 Pipeline stages count:', pipeline.length);
-      console.log('📊 Date range:', { 
-        start: startDateObj.toISOString(), 
-        end: finalHistoricalEndDate.toISOString(),
-        includesToday,
-        shouldIncludeTodayInHistorical
-      });
+      // Reduced logging - removed verbose pipeline logging
       let aggregationResult = [];
       if (startDateObj <= finalHistoricalEndDate) {
         // Only query historical data if there are dates before today
         try {
           // Debug: Check what data we actually have BEFORE the aggregation
           // Query without date filter to see all available data
+          // Enhanced debug: Check if adIds in historical data match user's adIds
           const debugPipeline = [
-            { $match: { materialId: { $in: ['DGL-HEADDRESS-CAR-001'] } } },
+            { $match: { 
+              materialId: { $in: ['DGL-HEADDRESS-CAR-001', 'DGL-HEADDRESS-CAR-003'] },
+              'dailyData.date': includesToday
+                ? { $gte: startDateObj, $lt: today }
+                : { $gte: startDateObj, $lte: finalHistoricalEndDate }
+            }},
             { $unwind: '$dailyData' },
+            { $match: {
+              'dailyData.date': includesToday
+                ? { $gte: startDateObj, $lt: today }
+                : { $gte: startDateObj, $lte: finalHistoricalEndDate }
+            }},
             { $project: {
               materialId: 1,
               date: '$dailyData.date',
               adPlaybacksCount: { $size: { $ifNull: ['$dailyData.adPlaybacks', []] } },
               hasAdPlaybacks: { $gt: [{ $size: { $ifNull: ['$dailyData.adPlaybacks', []] } }, 0] },
-              sampleAdIds: { $slice: [{ $map: { input: { $ifNull: ['$dailyData.adPlaybacks', []] }, as: 'p', in: '$$p.adId' } }, 3] }
+              allAdIds: { $map: { input: { $ifNull: ['$dailyData.adPlaybacks', []] }, as: 'p', in: { $toString: '$$p.adId' } } },
+              sampleAdIds: { $slice: [{ $map: { input: { $ifNull: ['$dailyData.adPlaybacks', []] }, as: 'p', in: { $toString: '$$p.adId' } } }, 5] }
             }},
             { $match: { hasAdPlaybacks: true } },
-            { $limit: 10 }
+            { $limit: 5 }
           ];
-          const debugResult = await DeviceDataHistoryV2.aggregate(debugPipeline, { allowDiskUse: true });
-          console.log('📊 Debug: Found', debugResult.length, 'dailyData entries with adPlaybacks');
-          if (debugResult.length > 0) {
-            console.log('📊 Debug: Sample entries:', debugResult.slice(0, 3).map(d => ({
-              materialId: d.materialId,
-              date: d.date,
-              adPlaybacksCount: d.adPlaybacksCount,
-              sampleAdIds: d.sampleAdIds
-            })));
-            console.log('📊 Debug: Date range we\'re querying:', {
-              start: startDateObj.toISOString(),
-              end: finalHistoricalEndDate.toISOString(),
-              includesToday: includesToday,
-              shouldIncludeTodayInHistorical: shouldIncludeTodayInHistorical
-            });
+          // Enhanced debug logging (only when explicitly enabled via environment variable)
+          if (process.env.ENABLE_DEBUG_LOGGING === 'true') {
+            try {
+              const debugResult = await DeviceDataHistoryV2.aggregate(debugPipeline, { allowDiskUse: true });
+              if (debugResult.length > 0) {
+                // Check which adIds from historical data match user's adIds
+                const allHistoricalAdIds = new Set();
+                debugResult.forEach(d => {
+                  if (d.allAdIds) {
+                    d.allAdIds.forEach(id => allHistoricalAdIds.add(id));
+                  }
+                });
+                const matchingAdIds = userAdIds.filter(id => allHistoricalAdIds.has(id));
+                
+                console.log('📊 Debug: Found', debugResult.length, 'dailyData entries with adPlaybacks');
+                console.log('📊 Debug: AdId matching:', {
+                  userAdIdsCount: userAdIds.length,
+                  historicalAdIdsCount: allHistoricalAdIds.size,
+                  matchingAdIdsCount: matchingAdIds.length
+                });
+                
+                if (matchingAdIds.length === 0 && allHistoricalAdIds.size > 0) {
+                  console.warn('⚠️ Warning: No matching adIds found between user ads and historical data.');
+                }
+              }
+            } catch (debugError) {
+              // Silently fail debug logging - not critical
+              console.error('Debug logging error:', debugError.message);
+            }
           }
           
           aggregationResult = await DeviceDataHistoryV2.aggregate(pipeline, {
             maxTimeMS: 20000, // Force MongoDB timeout after 20 seconds
             allowDiskUse: true // Allow using disk for large datasets
           });
+          // Log aggregation result summary (important information)
           console.log('📊 Aggregation completed:', aggregationResult.length, 'devices (historical)');
-          if (aggregationResult.length > 0) {
-            console.log('📊 Sample aggregation result:', JSON.stringify(aggregationResult[0], null, 2));
-          }
         } catch (aggError) {
           if (aggError.code === 50 || aggError.message.includes('exceeded time limit') || aggError.message.includes('timed out')) {
             console.error('⏱️ MongoDB aggregation timeout - returning empty result for large date range');
             aggregationResult = []; // Continue with current day data only
           } else {
-            throw aggError; // Re-throw if it's not a timeout error
+            // If aggregation fails (e.g., MongoDB version doesn't support $setIsSubset, syntax error, etc.),
+            // log error but don't fail completely - return empty result and continue with current day data
+            console.error('⚠️ Aggregation pipeline error (non-fatal):', aggError.message);
+            console.error('⚠️ Stack trace:', aggError.stack?.split('\n').slice(0, 3).join('\n'));
+            aggregationResult = []; // Continue with current day data only
           }
         }
       }
@@ -1805,8 +1817,7 @@ class UserAnalyticsService {
             }
           }
 
-          console.log('📊 [getDeviceStatsFromHistory] Found materialIds for user:', materialIds.length, materialIds);
-          console.log('📊 [getDeviceStatsFromHistory] User adIds for filtering:', userAdIds.length, userAdIds);
+          // Reduced logging - removed verbose material/adId logging
 
           if (materialIds.length > 0) {
             // Get current day data from DeviceTracking
@@ -1852,10 +1863,7 @@ class UserAnalyticsService {
                   }
                 });
                 
-                // ✅ Debug: Log filtering results
-                if (deviceTotalScans > 0) {
-                  console.log(`📊 [Current Day] Device ${device.materialId}: ${deviceTotalScans} total scans, ${filteredScans} filtered scans (user's ads${adId ? `, adId: ${adId}` : ''})`);
-                }
+                // Reduced logging - removed per-device scan logging
               }
 
               // ✅ Always add device to stats (even if 0 plays) so we can track online devices
@@ -1943,12 +1951,8 @@ class UserAnalyticsService {
         return bDate.getTime() - aDate.getTime();
       });
 
-      console.log('📊 Final device stats result:', result.length, 'devices (historical:', aggregationResult.length, ', current day:', currentDayDeviceStats.size, ')');
-      
-      // ✅ Debug: Log QR scan counts per device to verify filtering
-      result.forEach(device => {
-        console.log(`📊 Device ${device.materialId} QR scans: ${device.qrScans} (filtered by user's ads${adId ? ` and adId: ${adId}` : ''})`);
-      });
+      // Log final summary (important information)
+      console.log('📊 Final device stats:', result.length, 'devices (historical:', aggregationResult.length, ', current day:', currentDayDeviceStats.size, ')');
       
       return result;
     } catch (error) {

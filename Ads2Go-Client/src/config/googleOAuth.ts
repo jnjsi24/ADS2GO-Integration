@@ -8,6 +8,14 @@ export const GOOGLE_OAUTH_CONFIG = {
   includeGrantedScopes: true
 };
 
+// Log OAuth configuration to help debug redirect URI issues
+console.log('🔍 Google OAuth Config:', {
+  clientId: GOOGLE_OAUTH_CONFIG.clientId ? 'SET' : 'MISSING',
+  redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
+  currentOrigin: window.location.origin,
+  currentUrl: window.location.href
+});
+
 // Debug: Log OAuth configuration (only in verbose mode)
 if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_OAUTH === 'true') {
   console.log('🔍 OAuth Config:', {
@@ -27,9 +35,14 @@ export const GOOGLE_OAUTH_URLS = {
 
 // Generate Google OAuth URL
 export const generateGoogleOAuthURL = (): string => {
+  const redirectUri = GOOGLE_OAUTH_CONFIG.redirectUri;
+  
+  // Log the redirect URI being used
+  console.log('🔗 Generating Google OAuth URL with redirect URI:', redirectUri);
+  
   const params = new URLSearchParams({
     client_id: GOOGLE_OAUTH_CONFIG.clientId,
-    redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
+    redirect_uri: redirectUri,
     scope: GOOGLE_OAUTH_CONFIG.scope,
     response_type: GOOGLE_OAUTH_CONFIG.responseType,
     access_type: GOOGLE_OAUTH_CONFIG.accessType,
@@ -37,7 +50,10 @@ export const generateGoogleOAuthURL = (): string => {
     state: generateRandomState()
   });
 
-  return `${GOOGLE_OAUTH_URLS.auth}?${params.toString()}`;
+  const oauthUrl = `${GOOGLE_OAUTH_URLS.auth}?${params.toString()}`;
+  console.log('🔗 Full OAuth URL (first 100 chars):', oauthUrl.substring(0, 100) + '...');
+  
+  return oauthUrl;
 };
 
 // Generate random state for security

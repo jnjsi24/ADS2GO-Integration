@@ -16,35 +16,56 @@ const NotificationService = require('../services/notifications/NotificationServi
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
+// Cache for admin lookups to prevent redundant database queries
+const adminCache = new Map();
+const ADMIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
 /**
  * Helper function to populate admin from Admin model
  * Only Admins can approve/reject/delete ads, not SuperAdmins
+ * Uses in-memory cache to prevent redundant database queries
  */
 async function populateAdmin(adminId) {
   if (!adminId) {
-    console.log('⚠️ populateAdmin: adminId is null or undefined');
     return null;
   }
   
   try {
     // Convert to string if it's an ObjectId
     const id = adminId.toString ? adminId.toString() : adminId;
-    console.log(`🔍 populateAdmin: Looking up Admin with ID: ${id}`);
+    
+    // Check cache first
+    const cached = adminCache.get(id);
+    if (cached) {
+      const age = Date.now() - cached.timestamp;
+      if (age < ADMIN_CACHE_TTL) {
+        return cached.data;
+      } else {
+        // Cache expired, remove it
+        adminCache.delete(id);
+      }
+    }
     
     // Only check Admin model (SuperAdmins don't approve/reject/delete ads)
     const admin = await Admin.findById(id).select('firstName lastName email isArchived');
     if (admin) {
-      console.log(`✅ populateAdmin: Found Admin - ${admin.firstName} ${admin.lastName} (archived: ${admin.isArchived || false})`);
-      return {
+      const adminData = {
         id: admin._id.toString(),
         firstName: admin.firstName,
         lastName: admin.lastName,
         email: admin.email,
         isArchived: admin.isArchived || false
       };
+      
+      // Cache the result
+      adminCache.set(id, {
+        data: adminData,
+        timestamp: Date.now()
+      });
+      
+      return adminData;
     }
     
-    console.log(`❌ populateAdmin: Admin not found with ID: ${id}`);
     return null;
   } catch (error) {
     console.error('❌ populateAdmin: Error populating admin:', error);
