@@ -3419,12 +3419,17 @@ class UserAnalyticsService {
       const QRScanTracking = require('../models/qrScanTracking');
       const Ad = require('../models/Ad');
       
-      console.log('🔍 [getTotalQRScans] Called with:', {
-        userId: userId,
-        startDate: startDate,
-        endDate: endDate,
-        isAllTime: startDate === null && endDate === null
-      });
+      // ✅ Only log in verbose/debug mode
+      const isVerbose = process.env.VERBOSE_LOGS === 'true' || process.env.DEBUG_QR_SCANS === 'true';
+      
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Called with:', {
+          userId: userId,
+          startDate: startDate,
+          endDate: endDate,
+          isAllTime: startDate === null && endDate === null
+        });
+      }
       
       // Get user's ads to find associated materials (including SCHEDULED ads)
       // ✅ For all-time data, include ALL ads regardless of status
@@ -3435,7 +3440,9 @@ class UserAnalyticsService {
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       }).populate('materialId', 'materialId'); // ✅ Populate Material documents to get materialId strings
       
-      console.log('🔍 [getTotalQRScans] User ads found:', userAds.length, userAds.map(ad => ({ id: ad._id, title: ad.title })));
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] User ads found:', userAds.length, userAds.map(ad => ({ id: ad._id, title: ad.title })));
+      }
       
       if (!userAds || userAds.length === 0) {
         return {
@@ -3447,7 +3454,9 @@ class UserAnalyticsService {
       }
 
       const userAdIds = userAds.map(ad => ad._id.toString());
-      console.log('🔍 [getTotalQRScans] User ad IDs:', userAdIds);
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] User ad IDs:', userAdIds);
+      }
 
       // ✅ If startDate and endDate are both null, fetch ALL-TIME data (no date filtering)
       // Otherwise use the provided date range
@@ -3456,12 +3465,14 @@ class UserAnalyticsService {
       const defaultStartDate = isAllTime ? null : (startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
       const defaultEndDate = isAllTime ? null : (endDate || now);
       
-      console.log('🔍 [getTotalQRScans] Date range:', {
-        isAllTime: isAllTime,
-        startDate: defaultStartDate,
-        endDate: defaultEndDate,
-        message: isAllTime ? 'ALL-TIME (no date filter)' : `Date range: ${defaultStartDate} to ${defaultEndDate}`
-      });
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Date range:', {
+          isAllTime: isAllTime,
+          startDate: defaultStartDate,
+          endDate: defaultEndDate,
+          message: isAllTime ? 'ALL-TIME (no date filter)' : `Date range: ${defaultStartDate} to ${defaultEndDate}`
+        });
+      }
 
       let totalScans = 0;
       const qrScansByAd = {};
@@ -3514,9 +3525,11 @@ class UserAnalyticsService {
       
       const materialIds = Array.from(materialIdStrings);
       
-      console.log('🔍 [getTotalQRScans] Material ID strings extracted:', materialIds.length, materialIds);
-      if (materialObjectIdsToFetch.length > 0) {
-        console.log('🔍 [getTotalQRScans] Fetched', materialObjectIdsToFetch.length, 'materials that were not populated');
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Material ID strings extracted:', materialIds.length, materialIds);
+        if (materialObjectIdsToFetch.length > 0) {
+          console.log('🔍 [getTotalQRScans] Fetched', materialObjectIdsToFetch.length, 'materials that were not populated');
+        }
       }
 
       // Get current day data from DeviceTracking
@@ -3527,30 +3540,36 @@ class UserAnalyticsService {
         date: currentDay
       });
       
-      console.log('🔍 [getTotalQRScans] Current day data found:', currentData.length, 'devices');
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Current day data found:', currentData.length, 'devices');
+      }
 
       // Process current day QR scans
       currentData.forEach((device, index) => {
-        console.log(`🔍 [getTotalQRScans] Processing current day device ${index + 1}/${currentData.length}:`, {
-          materialId: device.materialId,
-          hasQrScansByAd: !!device.qrScansByAd,
-          qrScansByAdLength: device.qrScansByAd?.length || 0,
-          hasQrScans: !!device.qrScans,
-          qrScansLength: device.qrScans?.length || 0
-        });
+        if (isVerbose) {
+          console.log(`🔍 [getTotalQRScans] Processing current day device ${index + 1}/${currentData.length}:`, {
+            materialId: device.materialId,
+            hasQrScansByAd: !!device.qrScansByAd,
+            qrScansByAdLength: device.qrScansByAd?.length || 0,
+            hasQrScans: !!device.qrScans,
+            qrScansLength: device.qrScans?.length || 0
+          });
+        }
         
         // ✅ Method 1: Process qrScansByAd (aggregated data) if available
         if (device.qrScansByAd && device.qrScansByAd.length > 0) {
           device.qrScansByAd.forEach(adScan => {
             // ✅ Normalize adId to string for consistent matching
             const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
-            console.log(`🔍 [getTotalQRScans] Checking QR scan from qrScansByAd:`, {
-              normalizedAdId,
-              adTitle: adScan.adTitle,
-              scanCount: adScan.scanCount,
-              isInUserAdIds: userAdIds.includes(normalizedAdId),
-              userAdIds: userAdIds
-            });
+            
+            if (isVerbose) {
+              console.log(`🔍 [getTotalQRScans] Checking QR scan from qrScansByAd:`, {
+                normalizedAdId,
+                adTitle: adScan.adTitle,
+                scanCount: adScan.scanCount,
+                isInUserAdIds: userAdIds.includes(normalizedAdId)
+              });
+            }
             
             if (normalizedAdId && userAdIds.includes(normalizedAdId)) {
               if (!qrScansByAd[normalizedAdId]) {
@@ -3565,31 +3584,26 @@ class UserAnalyticsService {
               }
               qrScansByAd[normalizedAdId].totalScans += adScan.scanCount || 0;
               totalScans += adScan.scanCount || 0;
-              console.log(`✅ [getTotalQRScans] Current day: Ad "${adScan.adTitle}" (${normalizedAdId}): +${adScan.scanCount || 0} scans (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-            } else {
-              console.log(`⚠️ [getTotalQRScans] Skipping QR scan: adId "${normalizedAdId}" not in user's ads or invalid`);
+              
+              if (isVerbose) {
+                console.log(`✅ [getTotalQRScans] Current day: Ad "${adScan.adTitle}" (${normalizedAdId}): +${adScan.scanCount || 0} scans (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+              }
             }
+            // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
           });
         }
         
         // ✅ Method 2: Process qrScans (individual records) if qrScansByAd is empty
         // This matches how getDeviceStatsFromHistory processes QR scans
         if (device.qrScans && device.qrScans.length > 0) {
-          console.log(`🔍 [getTotalQRScans] Processing ${device.qrScans.length} individual QR scan records`);
+          if (isVerbose) {
+            console.log(`🔍 [getTotalQRScans] Processing ${device.qrScans.length} individual QR scan records`);
+          }
           
           device.qrScans.forEach(qrScan => {
             // ✅ Filter by userId AND check if adId belongs to user's ads
             const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
             const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
-            
-            console.log(`🔍 [getTotalQRScans] Checking individual QR scan:`, {
-              normalizedAdId,
-              userId: qrScan.userId,
-              scanUserId: qrScan.userId,
-              belongsToUser,
-              isInUserAdIds: normalizedAdId && userAdIds.includes(normalizedAdId),
-              userAdIds: userAdIds
-            });
             
             if (belongsToUser && normalizedAdId) {
               if (!qrScansByAd[normalizedAdId]) {
@@ -3618,16 +3632,14 @@ class UserAnalyticsService {
                 }
               }
               
-              console.log(`✅ [getTotalQRScans] Current day (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-            } else {
-              console.log(`⚠️ [getTotalQRScans] Skipping individual QR scan: adId "${normalizedAdId}" not in user's ads or invalid`);
+              if (isVerbose) {
+                console.log(`✅ [getTotalQRScans] Current day (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+              }
             }
+            // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
           });
         }
-        
-        if ((!device.qrScansByAd || device.qrScansByAd.length === 0) && (!device.qrScans || device.qrScans.length === 0)) {
-          console.log(`⚠️ [getTotalQRScans] Device ${device.materialId} has no QR scan data (neither qrScansByAd nor qrScans)`);
-        }
+        // ✅ Removed warning log - empty QR scan data is expected for many devices
       });
 
       // Get historical data from DeviceDataHistoryV2
@@ -3644,18 +3656,24 @@ class UserAnalyticsService {
         };
       }
       
-      console.log('🔍 [getTotalQRScans] Historical query:', JSON.stringify(historicalQuery, null, 2));
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Historical query:', JSON.stringify(historicalQuery, null, 2));
+      }
       
       const historicalData = await DeviceDataHistoryV2.find(historicalQuery);
       
-      console.log('🔍 [getTotalQRScans] Historical data found:', historicalData.length, 'devices');
+      if (isVerbose) {
+        console.log('🔍 [getTotalQRScans] Historical data found:', historicalData.length, 'devices');
+      }
 
       // Process historical QR scans
       historicalData.forEach((archive, archiveIndex) => {
-        console.log(`🔍 [getTotalQRScans] Processing historical archive ${archiveIndex + 1}/${historicalData.length}:`, {
-          materialId: archive.materialId,
-          dailyDataLength: archive.dailyData?.length || 0
-        });
+        if (isVerbose) {
+          console.log(`🔍 [getTotalQRScans] Processing historical archive ${archiveIndex + 1}/${historicalData.length}:`, {
+            materialId: archive.materialId,
+            dailyDataLength: archive.dailyData?.length || 0
+          });
+        }
         
         if (archive.dailyData && archive.dailyData.length > 0) {
           archive.dailyData.forEach((dailyData, dailyIndex) => {
@@ -3680,16 +3698,18 @@ class UserAnalyticsService {
               shouldProcess = dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate);
             }
             
-            console.log(`🔍 [getTotalQRScans] Daily data ${dailyIndex + 1}:`, {
-              date: dailyData.date,
-              isToday: isToday,
-              shouldProcess,
-              reason: isToday ? 'EXCLUDED (today handled by current day data)' : (shouldProcess ? 'INCLUDED' : 'EXCLUDED (outside date range)'),
-              hasQrScansByAd: !!dailyData.qrScansByAd,
-              qrScansByAdLength: dailyData.qrScansByAd?.length || 0,
-              hasQrScans: !!dailyData.qrScans,
-              qrScansLength: dailyData.qrScans?.length || 0
-            });
+            // ✅ Only log daily data processing in verbose mode
+            if (isVerbose && shouldProcess) {
+              console.log(`🔍 [getTotalQRScans] Daily data ${dailyIndex + 1}:`, {
+                date: dailyData.date,
+                isToday: isToday,
+                shouldProcess,
+                hasQrScansByAd: !!dailyData.qrScansByAd,
+                qrScansByAdLength: dailyData.qrScansByAd?.length || 0,
+                hasQrScans: !!dailyData.qrScans,
+                qrScansLength: dailyData.qrScans?.length || 0
+              });
+            }
             
             if (shouldProcess) {
               // ✅ Method 1: Process qrScansByAd (aggregated data) if available
@@ -3697,14 +3717,6 @@ class UserAnalyticsService {
                 dailyData.qrScansByAd.forEach(adScan => {
                   // ✅ Normalize adId to string for consistent matching
                   const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
-                  console.log(`🔍 [getTotalQRScans] Checking historical QR scan from qrScansByAd:`, {
-                    normalizedAdId,
-                    adTitle: adScan.adTitle,
-                    scanCount: adScan.scanCount,
-                    date: dailyData.date,
-                    isInUserAdIds: userAdIds.includes(normalizedAdId),
-                    userAdIds: userAdIds
-                  });
                   
                   if (normalizedAdId && userAdIds.includes(normalizedAdId)) {
                     if (!qrScansByAd[normalizedAdId]) {
@@ -3719,30 +3731,25 @@ class UserAnalyticsService {
                     }
                     qrScansByAd[normalizedAdId].totalScans += adScan.scanCount || 0;
                     totalScans += adScan.scanCount || 0;
-                    console.log(`✅ [getTotalQRScans] Historical: Ad "${adScan.adTitle}" (${normalizedAdId}): +${adScan.scanCount || 0} scans on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-                  } else {
-                    console.log(`⚠️ [getTotalQRScans] Skipping historical QR scan: adId "${normalizedAdId}" not in user's ads or invalid`);
+                    
+                    if (isVerbose) {
+                      console.log(`✅ [getTotalQRScans] Historical: Ad "${adScan.adTitle}" (${normalizedAdId}): +${adScan.scanCount || 0} scans on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+                    }
                   }
+                  // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
                 });
               }
               
               // ✅ Method 2: Process qrScans (individual records) if qrScansByAd is empty
               if (dailyData.qrScans && dailyData.qrScans.length > 0) {
-                console.log(`🔍 [getTotalQRScans] Processing ${dailyData.qrScans.length} individual QR scan records for ${dailyData.date}`);
+                if (isVerbose) {
+                  console.log(`🔍 [getTotalQRScans] Processing ${dailyData.qrScans.length} individual QR scan records for ${dailyData.date}`);
+                }
                 
                 dailyData.qrScans.forEach(qrScan => {
                   // ✅ Filter by userId AND check if adId belongs to user's ads
                   const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
                   const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
-                  
-                  console.log(`🔍 [getTotalQRScans] Checking individual historical QR scan:`, {
-                    normalizedAdId,
-                    userId: qrScan.userId,
-                    belongsToUser,
-                    date: dailyData.date,
-                    isInUserAdIds: normalizedAdId && userAdIds.includes(normalizedAdId),
-                    userAdIds: userAdIds
-                  });
                   
                   if (belongsToUser && normalizedAdId) {
                     if (!qrScansByAd[normalizedAdId]) {
@@ -3771,30 +3778,31 @@ class UserAnalyticsService {
                       }
                     }
                     
-                    console.log(`✅ [getTotalQRScans] Historical (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-                  } else {
-                    console.log(`⚠️ [getTotalQRScans] Skipping individual historical QR scan: adId "${normalizedAdId}" not in user's ads or invalid`);
+                    if (isVerbose) {
+                      console.log(`✅ [getTotalQRScans] Historical (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+                    }
                   }
+                  // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
                 });
               }
-              
-              if ((!dailyData.qrScansByAd || dailyData.qrScansByAd.length === 0) && (!dailyData.qrScans || dailyData.qrScans.length === 0)) {
-                console.log(`⚠️ [getTotalQRScans] Daily data for ${dailyData.date} has no QR scan data (neither qrScansByAd nor qrScans)`);
-              }
+              // ✅ Removed warning log - empty QR scan data is expected for many days
             }
           });
-        } else {
-          console.log(`⚠️ [getTotalQRScans] Archive ${archive.materialId} has no dailyData`);
         }
+        // ✅ Removed warning log - empty dailyData is expected for some archives
       });
 
       const finalAdsArray = Object.values(qrScansByAd);
-      console.log('📊 [getTotalQRScans] Final results:', {
-        totalScans: totalScans,
-        adsCount: finalAdsArray.length,
-        ads: finalAdsArray.map(ad => ({ adId: ad.adId, adTitle: ad.adTitle, totalScans: ad.totalScans })),
-        isAllTime: isAllTime
-      });
+      
+      // ✅ Only log summary in verbose mode, or if there are results to report
+      if (isVerbose || totalScans > 0) {
+        console.log('📊 [getTotalQRScans] Final results:', {
+          totalScans: totalScans,
+          adsCount: finalAdsArray.length,
+          ads: finalAdsArray.map(ad => ({ adId: ad.adId, adTitle: ad.adTitle, totalScans: ad.totalScans })),
+          isAllTime: isAllTime
+        });
+      }
       
       return {
         success: true,

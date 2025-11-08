@@ -181,8 +181,10 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
         // Clear session storage
         sessionStorage.removeItem('googleOAuthData');
 
-        // Navigate to dashboard
-        navigate('/dashboard');
+        // ✅ FIX: Use window.location.href for hard redirect to ensure proper initialization
+        // This ensures the page fully reloads and UserAuthContext initializes correctly
+        console.log('🔄 Redirecting to dashboard...');
+        window.location.href = '/dashboard';
       } else {
         throw new Error('Failed to complete Google OAuth profile');
       }

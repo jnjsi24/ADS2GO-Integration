@@ -166,20 +166,23 @@ const Login: React.FC = () => {
       setError('');
       
       console.log('🔄 Starting Google OAuth login...');
-      const user = await loginWithGoogle();
       
-      if (user) {
-        console.log('✅ Google login successful, user:', user);
-        // The UserAuthContext will handle navigation
-      } else {
-        setError('Google login failed. Please try again.');
-      }
+      // ✅ FIX: loginWithGoogle redirects immediately via window.location.href
+      // Since it redirects, we don't await it and don't check the return value
+      // The redirect will navigate away from this page, so no error handling needed
+      loginWithGoogle();
+      
+      // ✅ Note: Code after this point may not execute due to immediate redirect
+      // If redirect fails, the error will be caught below
     } catch (error: any) {
-      console.error('Google login error:', error);
-      setError(error.message || 'Google login failed');
-    } finally {
+      // ✅ This catch block only handles errors BEFORE the redirect (e.g., invalid OAuth config)
+      // Errors here mean the OAuth URL generation failed, not the redirect itself
+      console.error('Google login error (before redirect):', error);
+      setError(error.message || 'Failed to initiate Google login. Please try again.');
       setIsGoogleLoggingIn(false);
     }
+    // ✅ No finally block needed - if redirect works, we're on a different page
+    // If redirect fails, the error is already handled in the catch block
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {

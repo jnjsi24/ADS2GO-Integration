@@ -7,6 +7,62 @@ import { GET_USER_MATERIALS_WITH_LOCATION } from '../graphql/user/queries/getUse
 import playbackWebSocketService from '../services/playbackWebSocketService';
 import { screenComplianceService } from '../services/screenComplianceService';
 
+// ✨ Client-side reverse geocoding helper with caching
+const geocodingCache = new Map<string, string>();
+const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> => {
+  // Round coordinates to 4 decimal places for caching (about 11m accuracy)
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  
+  // Check cache first
+  if (geocodingCache.has(cacheKey)) {
+    return geocodingCache.get(cacheKey)!;
+  }
+  
+  try {
+    // Use OpenStreetMap Nominatim API (free, no API key required)
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          'User-Agent': 'Ads2Go-UserClient/1.0' // Required by Nominatim
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding failed: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      const addressParts = [];
+      
+      // Build address from most specific to least specific
+      if (addr.house_number) addressParts.push(addr.house_number);
+      if (addr.road) addressParts.push(addr.road);
+      if (addr.neighbourhood || addr.suburb) addressParts.push(addr.neighbourhood || addr.suburb);
+      if (addr.city || addr.town || addr.village) addressParts.push(addr.city || addr.town || addr.village);
+      if (addr.state) addressParts.push(addr.state);
+      if (addr.country) addressParts.push(addr.country);
+      
+      const address = addressParts.join(', ') || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      geocodingCache.set(cacheKey, address); // Cache the result
+      return address;
+    }
+    
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  } catch (error) {
+    console.warn('Client-side geocoding failed:', error);
+    const fallback = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    geocodingCache.set(cacheKey, fallback); // Cache fallback too
+    return fallback;
+  }
+};
+
 interface MaterialLocation {
   lat?: number;
   lng?: number;
@@ -47,6 +103,8 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
   const [zoom, setZoom] = useState(12);
   const mapRef = useRef<L.Map | null>(null);
   const [deviceHoursMap, setDeviceHoursMap] = useState<Map<string, number>>(new Map()); // Map of materialId -> currentHours
+  const [addressCache, setAddressCache] = useState<Map<string, string>>(new Map()); // Map of materialId -> address
+  const [geocodingInProgress, setGeocodingInProgress] = useState<Set<string>>(new Set()); // Track materials being geocoded
 
   // Fetch materials with location
   // 🔄 Changed from 30s to 2s for smooth real-time updates (matches Admin Client)
@@ -355,6 +413,137 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
     return material.lastSeen;
   };
 
+  // Helper function to get address for a material (with geocoding if needed)
+  const getMaterialAddress = useCallback(async (material: MaterialWithLocation): Promise<string | null> => {
+    if (!material.currentLocation?.lat || !material.currentLocation?.lng) {
+      return null;
+    }
+
+    const materialId = material.materialId;
+    const lat = material.currentLocation.lat;
+    const lng = material.currentLocation.lng;
+
+    // Check if we already have an address in the material's currentLocation
+    if (material.currentLocation.address && !material.currentLocation.address.startsWith('Location:')) {
+      // Update cache with the address from server
+      setAddressCache(prev => {
+        const newCache = new Map(prev);
+        newCache.set(materialId, material.currentLocation!.address!);
+        return newCache;
+      });
+      return material.currentLocation.address;
+    }
+
+    // Check cache
+    if (addressCache.has(materialId)) {
+      return addressCache.get(materialId)!;
+    }
+
+    // Check if geocoding is already in progress for this material
+    if (geocodingInProgress.has(materialId)) {
+      return null; // Return null to indicate address is loading
+    }
+
+    // Start geocoding
+    setGeocodingInProgress(prev => new Set(prev).add(materialId));
+    
+    try {
+      const address = await reverseGeocodeClient(lat, lng);
+      setAddressCache(prev => {
+        const newCache = new Map(prev);
+        newCache.set(materialId, address);
+        return newCache;
+      });
+      return address;
+    } catch (error) {
+      console.warn(`Failed to geocode ${materialId}:`, error);
+      return null;
+    } finally {
+      setGeocodingInProgress(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(materialId);
+        return newSet;
+      });
+    }
+  }, [addressCache, geocodingInProgress]);
+
+  // Geocode addresses for materials when they change
+  useEffect(() => {
+    const geocodeMaterials = async () => {
+      const materialsToGeocode: MaterialWithLocation[] = [];
+      
+      // First pass: update cache with server addresses and identify materials that need geocoding
+      setAddressCache(prevCache => {
+        const newCache = new Map(prevCache);
+        
+        for (const material of materials) {
+          if (material.currentLocation?.lat && material.currentLocation?.lng) {
+            const materialId = material.materialId;
+            const serverAddress = material.currentLocation.address;
+            
+            // If server has a valid address, cache it
+            if (serverAddress && !serverAddress.startsWith('Location:')) {
+              if (!newCache.has(materialId)) {
+                newCache.set(materialId, serverAddress);
+              }
+            } else if (!newCache.has(materialId)) {
+              // Need to geocode this material
+              materialsToGeocode.push(material);
+            }
+          }
+        }
+        
+        return newCache;
+      });
+      
+      // Second pass: geocode materials that need it
+      for (const material of materialsToGeocode) {
+        const materialId = material.materialId;
+        
+        // Check if already geocoding
+        setGeocodingInProgress(prev => {
+          if (prev.has(materialId)) {
+            return prev; // Already geocoding
+          }
+          
+          const newProgress = new Set(prev);
+          newProgress.add(materialId);
+          
+          // Start geocoding
+          reverseGeocodeClient(material.currentLocation!.lat!, material.currentLocation!.lng!)
+            .then(address => {
+              setAddressCache(prev => {
+                const updated = new Map(prev);
+                updated.set(materialId, address);
+                return updated;
+              });
+            })
+            .catch(error => {
+              console.warn(`Failed to geocode material ${materialId}:`, error);
+              // Cache coordinates as fallback
+              const fallback = `Location: ${material.currentLocation!.lat!.toFixed(6)}, ${material.currentLocation!.lng!.toFixed(6)}`;
+              setAddressCache(prev => {
+                const updated = new Map(prev);
+                updated.set(materialId, fallback);
+                return updated;
+              });
+            })
+            .finally(() => {
+              setGeocodingInProgress(prev => {
+                const updated = new Set(prev);
+                updated.delete(materialId);
+                return updated;
+              });
+            });
+          
+          return newProgress;
+        });
+      }
+    };
+
+    geocodeMaterials();
+  }, [materials]); // Only depend on materials
+
   if (loading) {
     return (
       <div 
@@ -476,14 +665,22 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
                     <p><strong>Type:</strong> {material.materialType}</p>
                     <p><strong>Vehicle:</strong> {material.vehicleType}</p>
                     
-                    {/* ✅ FIX: Show GPS coordinates (matches marker position exactly) */}
+                    {/* ✅ FIX: Show address instead of GPS coordinates */}
                     {material.currentLocation && (
                       <div className="space-y-1">
-                        <p><strong>GPS Coordinates:</strong> {displayCoords}</p>
-                        <p className="text-xs text-gray-500">Lat: {markerLat.toFixed(6)}, Lng: {markerLng.toFixed(6)}</p>
-                        {material.currentLocation.address && (
-                          <p><strong>Address:</strong> {material.currentLocation.address}</p>
-                        )}
+                        {(() => {
+                          // Get address from cache or material's currentLocation
+                          const cachedAddress = addressCache.get(material.materialId);
+                          const address = cachedAddress || material.currentLocation.address;
+                          
+                          // Show address if available and not just coordinates
+                          if (address && !address.startsWith('Location:')) {
+                            return <p><strong>Address:</strong> {address}</p>;
+                          }
+                          
+                          // Show coordinates as fallback if address is not available
+                          return <p><strong>Location:</strong> {displayCoords}</p>;
+                        })()}
                       </div>
                     )}
                     

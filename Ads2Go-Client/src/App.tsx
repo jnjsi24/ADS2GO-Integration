@@ -506,7 +506,9 @@ const App: React.FC = () => {
                      location.pathname.startsWith('/paymentHistory') || 
                      location.pathname === '/login' ||
                      location.pathname === '/register' ||
-                     location.pathname === '/verify-email';
+                     location.pathname === '/verify-email' ||
+                     location.pathname === '/auth/google/callback' ||
+                     location.pathname === '/auth/google/complete';
   
   // Wrap all routes with DeviceStatusProvider
   const content = (
