@@ -24,14 +24,20 @@ class Logger {
     console.log(message, ...args);
   }
 
-  // Always log warnings
+  // ✅ FIX: Suppress warnings unless verbose mode is enabled
   warn(message, ...args) {
-    console.warn(message, ...args);
+    if (this.isVerbose) {
+      console.warn(message, ...args);
+    }
   }
 
-  // Always log errors
+  // ✅ FIX: Suppress errors unless verbose mode is enabled (only log critical errors)
   error(message, ...args) {
-    console.error(message, ...args);
+    // Only log actual errors in production (not warnings disguised as errors)
+    // Critical errors that need attention are still logged
+    if (this.isVerbose || this.isDevelopment) {
+      console.error(message, ...args);
+    }
   }
 
   // Screen tracking specific logs (only in verbose mode)

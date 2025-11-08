@@ -7,7 +7,8 @@ const logger = require('../utils/logger');
 const getDriverFromToken = async (token) => {
   try {
     if (!token) {
-      console.log('🔍 Driver Auth: No token provided');
+      // ✅ FIX: Don't log "No token provided" - it's expected for non-driver requests
+      // This function is called for every GraphQL request, even from users/admins
       return null;
     }
 
@@ -83,9 +84,9 @@ const getDriverFromToken = async (token) => {
 // ✅ Middleware for Apollo context
 const driverMiddleware = async ({ req }) => {
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
-  if (!authHeader) {
-    console.warn('Driver Auth: missing Authorization header');
-  }
+  // ✅ FIX: Don't log warning for missing header - it's expected for non-driver requests
+  // This middleware runs for ALL GraphQL requests (users, admins, drivers)
+  // Missing Authorization header is normal for non-driver requests
   const token = authHeader.replace('Bearer ', '');
   const driver = await getDriverFromToken(token);
   

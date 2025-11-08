@@ -1147,13 +1147,18 @@ class DeviceStatusService {
    */
   async sendInitialDeviceStatusToAdmin(ws) {
     try {
-      console.log('🔧 [Admin WebSocket] Sending initial device status...');
+      // ✅ FIX: Suppress verbose logs unless VERBOSE_LOGS is enabled
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log('🔧 [Admin WebSocket] Sending initial device status...');
+      }
       
       // Get all device statuses from DeviceStatusManager
       const deviceStatusManager = require('./deviceStatusManager');
       const allStatuses = deviceStatusManager.getAllDeviceStatuses();
       
-      console.log(`📊 [Admin WebSocket] Found ${allStatuses.length} device statuses to send`);
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`📊 [Admin WebSocket] Found ${allStatuses.length} device statuses to send`);
+      }
       
       // Send device list first
       const deviceList = allStatuses.map(status => ({
@@ -1168,7 +1173,9 @@ class DeviceStatusService {
         devices: deviceList
       }));
       
-      console.log(`📋 [Admin WebSocket] Sent device list with ${deviceList.length} devices`);
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`📋 [Admin WebSocket] Sent device list with ${deviceList.length} devices`);
+      }
       
       // Send individual device updates
       for (const status of allStatuses) {
@@ -1181,10 +1188,15 @@ class DeviceStatusService {
         }));
       }
       
-      console.log(`📡 [Admin WebSocket] Sent ${allStatuses.length} individual device updates`);
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`📡 [Admin WebSocket] Sent ${allStatuses.length} individual device updates`);
+      }
       
     } catch (error) {
-      console.error('❌ [Admin WebSocket] Error sending initial device status:', error);
+      // ✅ FIX: Only log errors in verbose mode
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.error('❌ [Admin WebSocket] Error sending initial device status:', error);
+      }
     }
   }
 

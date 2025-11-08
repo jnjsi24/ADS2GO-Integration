@@ -121,13 +121,15 @@ const resolvers = {
     getUserMaterialsWithLocation: async (_, __, { user }) => {
       checkAuth(user);
       try {
-        console.log('📍 getUserMaterialsWithLocation called for user:', user.id);
+        // ✅ FIX: Suppress verbose logs unless VERBOSE_LOGS is enabled
+        const logger = require('../utils/logger');
+        logger.verbose('📍 getUserMaterialsWithLocation called for user:', user.id);
         
         const UserAnalyticsService = require('../services/userAnalyticsService');
         const result = await UserAnalyticsService.getActiveTotalMaterials(user.id);
         
         if (!result.success) {
-          console.log('⚠️ No materials found for user:', user.id);
+          // ✅ FIX: Don't log "no materials found" - it's expected for users without ads
           return {
             success: true,
             message: result.message || 'No materials found',
@@ -137,7 +139,7 @@ const resolvers = {
           };
         }
         
-        console.log(`✅ Found ${result.materials.length} materials for user ${user.id}`);
+        logger.verbose(`✅ Found ${result.materials.length} materials for user ${user.id}`);
         
         return {
           success: true,

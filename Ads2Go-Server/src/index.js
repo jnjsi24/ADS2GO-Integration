@@ -436,7 +436,11 @@ app.use('/api/google-oauth', googleOAuthRoutes);
   
   // Handle timeout errors
   httpServer.on('timeout', (socket) => {
-    console.warn('⚠️ HTTP request timeout - closing connection');
+    // ✅ FIX: Suppress timeout warnings - these are expected for long-polling connections
+    // Only log in verbose mode
+    if (process.env.VERBOSE_LOGS === 'true') {
+      console.warn('⚠️ HTTP request timeout - closing connection');
+    }
     socket.destroy();
   });
   
@@ -446,7 +450,10 @@ app.use('/api/google-oauth', googleOAuthRoutes);
       // These are common and not critical - just close the connection
       socket.destroy();
     } else {
-      console.error('❌ HTTP client error:', err.message);
+      // ✅ FIX: Only log non-common errors in verbose mode
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.error('❌ HTTP client error:', err.message);
+      }
       socket.destroy();
     }
   });

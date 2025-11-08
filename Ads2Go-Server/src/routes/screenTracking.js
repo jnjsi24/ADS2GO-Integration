@@ -1472,7 +1472,7 @@ router.get('/compliance', async (req, res) => {
         device.slots.forEach(slot => {
           // Skip slots without deviceId
           if (!slot.deviceId) {
-            console.log(`⚠️ Skipping slot without deviceId in material ${materialId}`);
+            // ✅ FIX: Don't log - empty slots are expected for materials with only one device
             return;
           }
           
@@ -1647,7 +1647,10 @@ router.get('/compliance', async (req, res) => {
         // Real-time mode - use current DeviceTracking data
         deviceHours = group.totalHoursOnline || 0; // Using currentHoursToday accumulated value
         deviceDistance = group.totalDistanceTraveled || 0;
-        console.log(`⏱️ [REAL-TIME USED] ${materialId}: Hours=${deviceHours.toFixed(2)}h (today), Distance=${deviceDistance.toFixed(2)}km (from DeviceTracking)`);
+        // ✅ FIX: Suppress verbose logs unless VERBOSE_LOGS is enabled
+        if (process.env.VERBOSE_LOGS === 'true') {
+          console.log(`⏱️ [REAL-TIME USED] ${materialId}: Hours=${deviceHours.toFixed(2)}h (today), Distance=${deviceDistance.toFixed(2)}km (from DeviceTracking)`);
+        }
       }
       
       const isDeviceOnline = group.isOnline; // Always use real-time status for online/offline indication
@@ -1892,7 +1895,10 @@ router.get('/compliance', async (req, res) => {
       };
       
       // Log what's being sent to frontend
-      console.log(`📤 [RESPONSE] Sending to frontend for ${materialId}: currentHours=${screenData.currentHours}h, hoursRemaining=${screenData.hoursRemaining}h, totalDistanceToday=${screenData.totalDistanceToday}km`);
+      // ✅ FIX: Suppress verbose logs unless VERBOSE_LOGS is enabled
+      if (process.env.VERBOSE_LOGS === 'true') {
+        console.log(`📤 [RESPONSE] Sending to frontend for ${materialId}: currentHours=${screenData.currentHours}h, hoursRemaining=${screenData.hoursRemaining}h, totalDistanceToday=${screenData.totalDistanceToday}km`);
+      }
       
       individualScreens.push(screenData);
     }
@@ -1975,7 +1981,10 @@ router.get('/compliance', async (req, res) => {
     const requestDuration = Date.now() - requestStartTime;
     // Only log slow requests or when debug mode is enabled
     if (process.env.DEBUG_COMPLIANCE === 'true' || requestDuration > 1000) {
-      logger.info(`[COMPLIANCE] Responded with ${individualScreens.length} screens in ${(requestDuration/1000).toFixed(2)}s`);
+      // ✅ FIX: Only log compliance response in verbose mode
+      if (process.env.VERBOSE_LOGS === 'true') {
+        logger.info(`[COMPLIANCE] Responded with ${individualScreens.length} screens in ${(requestDuration/1000).toFixed(2)}s`);
+      }
     }
     
     res.json({
