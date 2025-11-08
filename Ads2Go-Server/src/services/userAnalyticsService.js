@@ -784,12 +784,13 @@ class UserAnalyticsService {
         // IMPORTANT: Use filteredTotals even if values are 0 (0 is a valid result)
         if (isVerbose()) {
           logger.verbose('📊 [Summary] deviceStats is empty, using filteredTotals from sync (REAL-TIME DATA):', {
-          totalAdPlays: filteredTotals.totalAdPlays,
-          totalQRScans: filteredTotals.totalQRScans,
-          totalDisplayTime: filteredTotals.totalAdPlayTime,
-          totalDevices: filteredTotals.totalDevices,
-          totalMaterials: filteredTotals.totalMaterials
-        });
+            totalAdPlays: filteredTotals.totalAdPlays,
+            totalQRScans: filteredTotals.totalQRScans,
+            totalDisplayTime: filteredTotals.totalAdPlayTime,
+            totalDevices: filteredTotals.totalDevices,
+            totalMaterials: filteredTotals.totalMaterials
+          });
+        }
         
         // Update summary with filteredTotals from sync (real-time data from DeviceTracking/DeviceDataHistoryV2)
         data.summary.totalAdsPlayed = filteredTotals.totalAdPlays !== undefined ? filteredTotals.totalAdPlays : 0;
@@ -842,9 +843,10 @@ class UserAnalyticsService {
         
         if (isVerbose()) {
           logger.verbose('📊 [Summary] Updated from UserAnalytics (real-time synced data):', {
-          totalAdsPlayed: data.summary.totalAdsPlayed,
-          totalQRScans: data.summary.totalQRScans
-        });
+            totalAdsPlayed: data.summary.totalAdsPlayed,
+            totalQRScans: data.summary.totalQRScans
+          });
+        }
       } else if (data.deviceStats && data.deviceStats.length > 0 && !adId) {
         // For non-filtered queries, still calculate from deviceStats if available
         const calculatedSummary = {
@@ -900,7 +902,7 @@ class UserAnalyticsService {
             averageCompletionRate: data.summary.averageCompletionRate,
             qrScanConversionRate: data.summary.qrScanConversionRate
           });
-        };
+        }
         data.dailyStats = [];
         // deviceStats already populated above
       } else if (isAllPeriod || hasCustomDateRange) {
@@ -3979,7 +3981,7 @@ class UserAnalyticsService {
       });
 
       // ✅ FIX: Get all material documents once to avoid repeated queries and fix ObjectId comparison
-      const Material = require('../models/Material');
+      // Material is already declared at the top of this function
       const materialDocsMap = new Map();
       const materialDocs = await Material.find({ materialId: { $in: materialIds } });
       materialDocs.forEach(doc => {

@@ -18,7 +18,7 @@ const getAuthToken = async (): Promise<string | null> => {
 type UploadProgressCallback = (progress: number) => void;
 
 // Get API URL from Expo constants (set via app.config.js from .env)
-const API_BASE_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 'https://ads2go-server-production.up.railway.app';
+const API_BASE_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL || 'https://server-ads2go.up.railway.app';
 
 interface UploadOptions {
   onProgress?: (progress: number) => void;
