@@ -140,7 +140,9 @@ router.post('/updateLocation', async (req, res) => {
     
     if (hasInvalidLocationHistory) {
       console.log(`🔄 Device ${deviceId} has invalid location history - clearing to prevent invalid distance calculation`);
-      deviceTracking.currentSession.locationHistory = [];
+      // ✅ MEMORY OPTIMIZATION: Clear root locationHistory instead of currentSession.locationHistory
+      // We no longer store duplicate locationHistory in currentSession to save memory
+      deviceTracking.locationHistory = [];
       deviceTracking.currentLocation = null;
       deviceTracking.currentSession.totalDistanceTraveled = 0;
       deviceTracking.totalDistanceTraveled = 0;
@@ -1172,15 +1174,40 @@ router.get('/path/:deviceId', async (req, res) => {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
       
+      // ✅ MEMORY OPTIMIZATION: Use root locationHistory instead of currentSession.locationHistory
+      // We no longer store duplicate locationHistory in currentSession to save memory
+      // For past dates, use historical data from DeviceDataHistoryV2
+      // For current date, use root locationHistory filtered by session start time
       const session = deviceTracking.currentSession;
       
       if (session && new Date(session.date).getTime() === targetDate.getTime()) {
-        locationHistory = session.locationHistory;
+        // Use root locationHistory and filter by session start time if available
+        if (deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+          const sessionStartTime = session.startTime;
+          if (sessionStartTime) {
+            locationHistory = deviceTracking.locationHistory.filter(
+              point => point.timestamp && new Date(point.timestamp) >= new Date(sessionStartTime)
+            );
+          } else {
+            locationHistory = deviceTracking.locationHistory;
+          }
+        }
       }
     } else {
       // Get current session history
-      if (deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
-        locationHistory = deviceTracking.currentSession.locationHistory;
+      // ✅ MEMORY OPTIMIZATION: Use root locationHistory instead of currentSession.locationHistory
+      // We no longer store duplicate locationHistory in currentSession to save memory
+      // Filter root locationHistory by session start time if needed
+      if (deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+        const sessionStartTime = deviceTracking.currentSession?.startTime;
+        if (sessionStartTime) {
+          // Filter locationHistory to only include points after session start
+          locationHistory = deviceTracking.locationHistory.filter(
+            point => point.timestamp && new Date(point.timestamp) >= new Date(sessionStartTime)
+          );
+        } else {
+          locationHistory = deviceTracking.locationHistory;
+        }
       }
     }
 

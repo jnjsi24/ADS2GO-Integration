@@ -307,17 +307,52 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
     });
   };
 
-  const formatLastSeen = (lastSeen?: string) => {
-    if (!lastSeen) return 'Never';
+  const formatLastSeen = (timestamp?: string | Date) => {
+    if (!timestamp) return 'Never';
     
-    const now = new Date();
-    const lastSeenDate = new Date(lastSeen);
-    const diffInMinutes = Math.floor((now.getTime() - lastSeenDate.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    try {
+      const now = new Date();
+      // Handle both string and Date objects
+      const lastSeenDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      
+      // Check if date is valid
+      if (isNaN(lastSeenDate.getTime())) {
+        console.warn('Invalid timestamp provided to formatLastSeen:', timestamp);
+        return 'Unknown';
+      }
+      
+      const diffInMilliseconds = now.getTime() - lastSeenDate.getTime();
+      const diffInMinutes = Math.floor(diffInMilliseconds / (1000 * 60));
+      
+      // Handle negative differences (future dates)
+      if (diffInMinutes < 0) return 'Just now';
+      
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+      return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    } catch (error) {
+      console.error('Error formatting last seen:', error, timestamp);
+      return 'Unknown';
+    }
+  };
+  
+  // Helper function to format GPS coordinates
+  const formatCoordinates = (lat?: number, lng?: number): string => {
+    if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+      return 'N/A';
+    }
+    return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  };
+  
+  // Helper function to get the best timestamp for display
+  const getDisplayTimestamp = (material: MaterialWithLocation): string | undefined => {
+    // ✅ FIX: If online and has currentLocation with timestamp, prefer that (most accurate)
+    if (material.isOnline && material.currentLocation?.timestamp) {
+      return material.currentLocation.timestamp;
+    }
+    // Otherwise, use lastSeen
+    return material.lastSeen;
   };
 
   if (loading) {
@@ -402,36 +437,70 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
         }}
         style={{ height: '100%', width: '100%' }}
       >
-        {materialsWithLocation.map((material) => (
-          <Marker
-            key={material.materialId}
-            position={[material.currentLocation!.lat, material.currentLocation!.lng]}
-            icon={createCustomIcon(material.isOnline)}
-          >
-            <Popup>
-              <div className="p-2 min-w-[200px]">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-gray-900">{material.materialName || material.materialId}</h3>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    material.isOnline 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {material.isOnline ? 'ONLINE' : 'OFFLINE'}
-                  </span>
-                </div>
-                
-                <div className="space-y-1 text-sm text-gray-600">
-                  <p><strong>Type:</strong> {material.materialType}</p>
-                  <p><strong>Vehicle:</strong> {material.vehicleType}</p>
-                  {material.currentLocation?.address && (
-                    <p><strong>Location:</strong> {material.currentLocation.address}</p>
-                  )}
-                  <p><strong>Last Seen:</strong> {formatLastSeen(material.lastSeen)}</p>
-                  {material.currentLocation?.speed !== undefined && (
-                    <p><strong>Speed:</strong> {Math.round(material.currentLocation.speed)} km/h</p>
-                  )}
-                </div>
+        {materialsWithLocation.map((material) => {
+          // ✅ VERIFY: Ensure marker position matches displayed coordinates
+          const markerLat = material.currentLocation!.lat;
+          const markerLng = material.currentLocation!.lng;
+          const displayCoords = formatCoordinates(markerLat, markerLng);
+          
+          // Log for debugging (only in development)
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📍 [UserMaterialsMap] Marker for ${material.materialId}:`, {
+              markerPosition: [markerLat, markerLng],
+              displayCoords: displayCoords,
+              isOnline: material.isOnline,
+              timestamp: getDisplayTimestamp(material)
+            });
+          }
+          
+          return (
+            <Marker
+              key={material.materialId}
+              position={[markerLat, markerLng]}
+              icon={createCustomIcon(material.isOnline)}
+            >
+              <Popup>
+                <div className="p-2 min-w-[200px]">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-gray-900">{material.materialName || material.materialId}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      material.isOnline 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {material.isOnline ? 'ONLINE' : 'OFFLINE'}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p><strong>Type:</strong> {material.materialType}</p>
+                    <p><strong>Vehicle:</strong> {material.vehicleType}</p>
+                    
+                    {/* ✅ FIX: Show GPS coordinates (matches marker position exactly) */}
+                    {material.currentLocation && (
+                      <div className="space-y-1">
+                        <p><strong>GPS Coordinates:</strong> {displayCoords}</p>
+                        <p className="text-xs text-gray-500">Lat: {markerLat.toFixed(6)}, Lng: {markerLng.toFixed(6)}</p>
+                        {material.currentLocation.address && (
+                          <p><strong>Address:</strong> {material.currentLocation.address}</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* ✅ FIX: Show "Current Location" if online, "Last Seen" if offline */}
+                    {material.isOnline ? (
+                      <p><strong>Current Location:</strong> {formatLastSeen(getDisplayTimestamp(material))}</p>
+                    ) : (
+                      <p><strong>Last Seen:</strong> {formatLastSeen(getDisplayTimestamp(material))}</p>
+                    )}
+                    
+                    {material.currentLocation?.speed !== undefined && material.currentLocation.speed > 0 && (
+                      <p><strong>Speed:</strong> {Math.round(material.currentLocation.speed)} km/h</p>
+                    )}
+                    {material.currentLocation?.accuracy !== undefined && (
+                      <p><strong>Accuracy:</strong> {Math.round(material.currentLocation.accuracy)}m</p>
+                    )}
+                  </div>
 
                 {material.ads && material.ads.length > 0 && (
                   <div className="mt-3 pt-2 border-t border-gray-200">
@@ -464,7 +533,8 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
               </div>
             </Popup>
           </Marker>
-        ))}
+          );
+        })}
       </MapView>
 
       {/* Legend */}

@@ -121,7 +121,7 @@ class DailyArchiveJobV2 {
         // Location data (keep last 960 entries, filter invalid entries)
         locationHistory: (device.locationHistory || [])
           .filter(loc => loc && loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2)
-          .slice(-14400), // 8 hours at 2s intervals
+          .slice(-3600), // ✅ MEMORY OPTIMIZATION: Reduced to 2 hours at 2s intervals (was 8 hours)
         
         // Ad performance (filter out entries without userId)
         adPerformance: (device.adPerformance || []).filter(perf => perf.userId),
@@ -660,8 +660,8 @@ class DailyArchiveJobV2 {
       }
     });
     
-    // Keep only the last 14400 entries (8 hours at 2s intervals)
-    return merged.slice(-14400);
+    // ✅ MEMORY OPTIMIZATION: Keep only the last 3600 entries (2 hours at 2s intervals, was 8 hours)
+    return merged.slice(-3600);
   }
 
   mergeHourlyStats(existing, newData) {

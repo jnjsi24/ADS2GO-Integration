@@ -162,6 +162,18 @@ const resolvers = {
 
             const location = material.currentStatus?.currentLocation;
             
+            // ✅ FIX: Convert lastSeen Date to ISO string for proper serialization
+            const lastSeenValue = material.currentStatus?.lastSeen;
+            const lastSeenString = lastSeenValue instanceof Date 
+              ? lastSeenValue.toISOString() 
+              : (lastSeenValue || null);
+            
+            // ✅ FIX: Convert timestamp Date to ISO string if it's a Date object
+            const locationTimestamp = location?.timestamp;
+            const timestampString = locationTimestamp instanceof Date
+              ? locationTimestamp.toISOString()
+              : (locationTimestamp || null);
+            
             return {
               materialId: material.materialId,
               materialName: `${material.materialType || 'Material'} - ${material.materialId}`,
@@ -169,11 +181,11 @@ const resolvers = {
               vehicleType: material.vehicleType,
               category: material.category,
               isOnline: material.currentStatus?.isOnline || false,
-              lastSeen: material.currentStatus?.lastSeen,
+              lastSeen: lastSeenString,  // ✅ FIX: Converted to ISO string
               currentLocation: hasValidLocation(location) ? {
                 lat: location.lat,
                 lng: location.lng,
-                timestamp: location.timestamp,
+                timestamp: timestampString,  // ✅ FIX: Converted to ISO string
                 speed: location.speed,
                 heading: location.heading,
                 accuracy: location.accuracy,

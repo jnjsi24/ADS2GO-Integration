@@ -108,7 +108,7 @@ const DailyDataSchema = new mongoose.Schema({
   // Hourly breakdown
   hourlyStats: [HourlyStatsSchema],
   
-  // Location data (limited to 14400 entries for 8 hours at 2s intervals)
+  // ✅ MEMORY OPTIMIZATION: Location data (limited to 3600 entries for 2 hours at 2s intervals, was 8 hours)
   locationHistory: [LocationPointSchema],
   
   // Ad performance
