@@ -235,36 +235,43 @@ const server = new ApolloServer({
 
 const app = express();
 
-async function startServer() {
-  // Register health check endpoint IMMEDIATELY before any async operations
-  // This ensures Railway can check health even during startup
-  app.get('/health', (req, res) => {
-    const mongoStatus = mongoose.connection.readyState;
-    const mongoStates = {
-      0: 'disconnected',
-      1: 'connected',
-      2: 'connecting',
-      3: 'disconnecting'
-    };
-    
-    // Return 200 even if MongoDB is still connecting (state 2) or server is starting
-    // Only return error if MongoDB is explicitly disconnected (state 0) after initial connection attempt
-    const isHealthy = mongoStatus === 1 || mongoStatus === 2;
-    
-    res.status(isHealthy ? 200 : 503).json({
-      success: isHealthy,
-      message: isHealthy ? 'Server is healthy' : 'Server is starting up',
-      timestamp: new Date().toISOString(),
-      status: isHealthy ? 'OK' : 'STARTING',
-      uptime: process.uptime(),
-      mongodb: {
-        status: mongoStates[mongoStatus] || 'unknown',
-        readyState: mongoStatus
-      }
-    });
+// ✅ Register health check endpoint BEFORE startServer() to ensure it's always available
+// This ensures Railway can check health even if Apollo Server fails to start
+app.get('/health', (req, res) => {
+  const mongoStatus = mongoose.connection.readyState;
+  const mongoStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  // Return 200 even if MongoDB is still connecting (state 2) or server is starting
+  // Only return error if MongoDB is explicitly disconnected (state 0) after initial connection attempt
+  const isHealthy = mongoStatus === 1 || mongoStatus === 2;
+  
+  res.status(isHealthy ? 200 : 503).json({
+    success: isHealthy,
+    message: isHealthy ? 'Server is healthy' : 'Server is starting up',
+    timestamp: new Date().toISOString(),
+    status: isHealthy ? 'OK' : 'STARTING',
+    uptime: process.uptime(),
+    mongodb: {
+      status: mongoStates[mongoStatus] || 'unknown',
+      readyState: mongoStatus
+    }
   });
+});
 
-  await server.start();
+async function startServer() {
+  // Start Apollo Server (non-blocking - if it fails, server can still respond to health checks)
+  try {
+    await server.start();
+  } catch (apolloError) {
+    console.error('⚠️ Apollo Server failed to start:', apolloError.message);
+    console.error('⚠️ Server will continue without GraphQL endpoint');
+    // Don't throw - allow server to start for health checks
+  }
 
   // ✅ Global CORS
   app.use(cors({
