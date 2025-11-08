@@ -309,12 +309,14 @@ module.exports = {
               existingDeviceTracking.currentSession = {
                 date: today,
                 startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
+                endTime: null,  // ✅ FIX: Initialize endTime
                 lastOnlineUpdate: new Date(),
                 totalHoursOnline: 0,
                 totalDistanceTraveled: 0,
                 targetHours: 8,
                 complianceStatus: 'PENDING',
-                isActive: true
+                isActive: true,
+                locationHistory: []  // ✅ FIX: Initialize locationHistory
               };
             } else if (!existingDeviceTracking.currentSession || !existingDeviceTracking.currentSession.isActive) {
               // SAME DAY, SESSION ENDED: Reactivate session, keep accumulated hours
@@ -325,12 +327,14 @@ module.exports = {
                 existingDeviceTracking.currentSession = {
                   date: today,
                   startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
+                  endTime: null,  // ✅ FIX: Initialize endTime
                   lastOnlineUpdate: new Date(),
                   totalHoursOnline: 0,
                   totalDistanceTraveled: 0,
                   targetHours: 8,
                   complianceStatus: 'PENDING',
-                  isActive: true
+                  isActive: true,
+                  locationHistory: []  // ✅ FIX: Initialize locationHistory
                 };
               } else {
                 // Reactivate existing session (keeps totalHoursOnline)

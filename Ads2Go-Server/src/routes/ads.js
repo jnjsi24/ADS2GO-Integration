@@ -799,8 +799,11 @@ router.post('/qr-scan', async (req, res) => {
       }).sort({ date: -1 }); // Get the most recent record
       
       if (!deviceTracking) {
-        // Create new device tracking record for October 9th, 2025 (same as existing records)
-        const today = new Date('2025-10-09T00:00:00.000+00:00');
+        // ✅ FIX: Use today's date instead of hardcoded date
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value for offline devices
+        
         deviceTracking = new DeviceTracking({
           materialId: materialId,
           carGroupId: 'GRP-UNKNOWN', // Will be updated when device connects
@@ -826,13 +829,15 @@ router.post('/qr-scan', async (req, res) => {
           },
           currentSession: {
             date: today,
-            startTime: new Date(),
+            startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
+            endTime: null,
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
-            isActive: true,
+            isActive: false,  // ✅ FIX: Set to false since device is offline
             targetHours: 8,
             complianceStatus: 'PENDING',
-            locationHistory: []
+            locationHistory: [],
+            lastOnlineUpdate: null  // ✅ FIX: Initialize to null
           }
         });
       }

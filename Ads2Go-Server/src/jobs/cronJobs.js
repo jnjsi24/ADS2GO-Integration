@@ -585,7 +585,8 @@ class CronJobs {
               isActive: true,
               targetHours: 8,
               complianceStatus: 'PENDING',
-              locationHistory: []
+              locationHistory: [],
+              lastOnlineUpdate: null  // ✅ FIX: Initialize to null - will be set when device comes online
             };
             
             // ✅ FIX: Set all devices to offline at midnight - they'll report online when they connect

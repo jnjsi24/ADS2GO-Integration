@@ -1370,7 +1370,7 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
   // ✅ Use centralized date sync
   syncDeviceDates(this, today);
   
-  // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
+  // ⚠️ IMPORTANT: Use sentinel value for startTime until device actually comes online
   // This prevents counting hours from midnight when devices are offline
   this.currentSession = {
     date: today,
@@ -1381,7 +1381,8 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
     isActive: true,
     targetHours: 8,
     complianceStatus: 'PENDING',
-    locationHistory: []
+    locationHistory: [],
+    lastOnlineUpdate: null  // ✅ FIX: Initialize to null, will be set when device comes online
   };
   
   // Reset daily counters
@@ -1427,16 +1428,19 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
 DeviceTrackingSchema.methods.startDailySession = function() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const now = new Date();
   
   this.currentSession = {
     date: today,
-    startTime: new Date(),
+    startTime: now,  // ✅ FIX: Set to current time when session starts
+    endTime: null,
     totalHoursOnline: 0,
     totalDistanceTraveled: 0,
     locationHistory: [],
     isActive: true,
     targetHours: 8,
-    complianceStatus: 'PENDING'
+    complianceStatus: 'PENDING',
+    lastOnlineUpdate: now  // ✅ FIX: Initialize to now when session starts
   };
   
   return this.save();

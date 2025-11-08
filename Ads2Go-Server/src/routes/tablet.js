@@ -308,12 +308,14 @@ router.post('/registerTablet', async (req, res) => {
           existingDeviceTracking.currentSession = {
             date: today,
             startTime: new Date(),
+            endTime: null,  // ✅ FIX: Initialize endTime
             lastOnlineUpdate: new Date(),
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             targetHours: 8,
             complianceStatus: 'PENDING',
-            isActive: true
+            isActive: true,
+            locationHistory: []  // ✅ FIX: Initialize locationHistory
           };
         } else if (!existingDeviceTracking.currentSession || !existingDeviceTracking.currentSession.isActive) {
           // SAME DAY, SESSION ENDED: Reactivate session, keep accumulated hours
@@ -322,12 +324,14 @@ router.post('/registerTablet', async (req, res) => {
             existingDeviceTracking.currentSession = {
               date: today,
               startTime: new Date(),
+              endTime: null,  // ✅ FIX: Initialize endTime
               lastOnlineUpdate: new Date(),
               totalHoursOnline: 0,
               totalDistanceTraveled: 0,
               targetHours: 8,
               complianceStatus: 'PENDING',
-              isActive: true
+              isActive: true,
+              locationHistory: []  // ✅ FIX: Initialize locationHistory
             };
           } else {
             // Reactivate existing session (keeps totalHoursOnline)

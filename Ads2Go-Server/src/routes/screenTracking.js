@@ -567,7 +567,8 @@ router.get('/route/:deviceId', async (req, res) => {
         isActive: sessionIsActive,
         targetHours: 8,
         complianceStatus: sessionComplianceStatus,
-        locationHistory: []
+        locationHistory: [],  // ✅ FIX: Initialize locationHistory
+        lastOnlineUpdate: routeData[0].timestamp ? new Date(routeData[0].timestamp) : new Date()  // ✅ FIX: Initialize lastOnlineUpdate
       };
       
       await deviceTracking.save();

@@ -321,6 +321,9 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
+        // ✅ FIX: Use sentinel value for startTime since device is offline
+        const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
+        
         deviceTracking = new DeviceTracking({
           materialId,
           carGroupId: driverId, // Use driverId as carGroupId for now
@@ -331,12 +334,15 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
           slots: [], // Will be populated when device connects
           currentSession: {
             date: today,
-            startTime: new Date(),
+            startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
+            endTime: null,
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             targetHours: 8,
             complianceStatus: 'PENDING',
-            isActive: false // Will be true when device connects
+            isActive: false, // Will be true when device connects
+            locationHistory: [],
+            lastOnlineUpdate: null  // ✅ FIX: Initialize to null
           }
         });
         
@@ -519,6 +525,9 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
+        // ✅ FIX: Use sentinel value for startTime since device is offline
+        const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
+        
         deviceTracking = new DeviceTracking({
           materialId,
           carGroupId: driverId, // Use driverId as carGroupId for now
@@ -529,12 +538,15 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
           slots: [], // Will be populated when device connects
           currentSession: {
             date: today,
-            startTime: new Date(),
+            startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
+            endTime: null,
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             targetHours: 8,
             complianceStatus: 'PENDING',
-            isActive: false // Will be true when device connects
+            isActive: false, // Will be true when device connects
+            locationHistory: [],
+            lastOnlineUpdate: null  // ✅ FIX: Initialize to null
           }
         });
         
