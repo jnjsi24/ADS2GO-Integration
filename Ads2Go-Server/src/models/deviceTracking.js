@@ -504,19 +504,23 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
         displayIssues: 0
       };
       
-      // Reset current session for new day
-      // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
+      // ⚠️ IMPORTANT: Use sentinel value (far future date) for startTime until device actually comes online
       // This prevents counting hours from midnight when devices are offline
+      // The sentinel value is checked in setOnlineStatus and currentHoursToday virtual
+      const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
+      
+      // Reset current session for new day
       recentCar.currentSession = {
         date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: null,  // Will be set when device comes online
+        startTime: farFuture,  // Sentinel value - will be set to actual time when device comes online
         endTime: null,
         totalHoursOnline: 0,
         totalDistanceTraveled: 0,
         isActive: true,
         targetHours: 8,
         complianceStatus: 'PENDING',
-        locationHistory: []
+        locationHistory: [],
+        lastOnlineUpdate: null
       };
       
       // ✅ FIX: Set online status to false at midnight - devices will report online when they actually connect
@@ -530,8 +534,46 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
       // Update lastSeen
       recentCar.lastSeen = new Date();
       
-      // Save the updated record
-      await recentCar.save();
+      // Save the updated record with error handling
+      try {
+        await recentCar.save();
+        console.log(`✅ Successfully updated DeviceTracking record for device ${deviceId} to new day`);
+      } catch (saveError) {
+        console.error(`❌ Error saving DeviceTracking record for device ${deviceId}:`, saveError.message);
+        // If save fails due to validation, try to create a new record instead
+        if (saveError.name === 'ValidationError') {
+          console.log(`⚠️ Validation error - creating new record for device ${deviceId} instead of updating`);
+          // Create a new record for today instead
+          const newCar = new this({
+            materialId: recentCar.materialId,
+            carGroupId: recentCar.carGroupId || 'UNKNOWN',
+            screenType: recentCar.screenType || 'HEADDRESS',
+            date: today,
+            isOnline: false,
+            lastSeen: new Date(),
+            slots: recentCar.slots.map(slot => ({
+              ...slot.toObject(),
+              isOnline: false
+            })),
+            currentSession: {
+              date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+              startTime: farFuture,
+              endTime: null,
+              totalHoursOnline: 0,
+              totalDistanceTraveled: 0,
+              isActive: true,
+              targetHours: 8,
+              complianceStatus: 'PENDING',
+              locationHistory: [],
+              lastOnlineUpdate: null
+            }
+          });
+          await newCar.save();
+          console.log(`✅ Created new DeviceTracking record for device ${deviceId}`);
+          return newCar;
+        }
+        throw saveError; // Re-throw if it's not a validation error
+      }
       console.log(`✅ Successfully updated existing DeviceTracking record for device ${deviceId} to today's date`);
       
       return recentCar;
@@ -579,6 +621,11 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
       console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
+      // ⚠️ IMPORTANT: Use sentinel value (far future date) for startTime until device actually comes online
+      // This prevents counting hours from midnight when devices are offline
+      // The sentinel value is checked in setOnlineStatus and currentHoursToday virtual
+      const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
+      
       // Update the existing record to today's date and reset daily data
       recentCar.date = today;
       
@@ -608,18 +655,17 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       };
       
       // Reset current session for new day
-      // ⚠️ IMPORTANT: Don't set startTime yet - wait until device actually comes online
-      // This prevents counting hours from midnight when devices are offline
       recentCar.currentSession = {
         date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: null,  // Will be set when device comes online
+        startTime: farFuture,  // Sentinel value - will be set to actual time when device comes online
         endTime: null,
         totalHoursOnline: 0,
         totalDistanceTraveled: 0,
         isActive: true,
         targetHours: 8,
         complianceStatus: 'PENDING',
-        locationHistory: []
+        locationHistory: [],
+        lastOnlineUpdate: null
       };
       
       // Reset online status for new day
@@ -632,8 +678,46 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       // Update lastSeen
       recentCar.lastSeen = new Date();
       
-      // Save the updated record
-      await recentCar.save();
+      // Save the updated record with error handling
+      try {
+        await recentCar.save();
+        console.log(`✅ Successfully updated DeviceTracking record for ${materialId} to new day`);
+      } catch (saveError) {
+        console.error(`❌ Error saving DeviceTracking record for ${materialId}:`, saveError.message);
+        // If save fails due to validation, try to create a new record instead
+        if (saveError.name === 'ValidationError') {
+          console.log(`⚠️ Validation error - creating new record for ${materialId} instead of updating`);
+          // Create a new record for today instead
+          const newCar = new this({
+            materialId: recentCar.materialId,
+            carGroupId: recentCar.carGroupId || 'UNKNOWN',
+            screenType: recentCar.screenType || 'HEADDRESS',
+            date: today,
+            isOnline: false,
+            lastSeen: new Date(),
+            slots: recentCar.slots.map(slot => ({
+              ...slot.toObject(),
+              isOnline: false
+            })),
+            currentSession: {
+              date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+              startTime: farFuture,
+              endTime: null,
+              totalHoursOnline: 0,
+              totalDistanceTraveled: 0,
+              isActive: true,
+              targetHours: 8,
+              complianceStatus: 'PENDING',
+              locationHistory: [],
+              lastOnlineUpdate: null
+            }
+          });
+          await newCar.save();
+          console.log(`✅ Created new DeviceTracking record for ${materialId}`);
+          return newCar;
+        }
+        throw saveError; // Re-throw if it's not a validation error
+      }
       console.log(`✅ Successfully updated existing DeviceTracking record for ${materialId} to today's date`);
       
       return recentCar;

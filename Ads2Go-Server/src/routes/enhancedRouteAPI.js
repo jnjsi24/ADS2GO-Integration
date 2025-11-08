@@ -217,7 +217,14 @@ router.get('/route/:materialId', async (req, res) => {
           }
         }
       } catch (todayError) {
-        console.error(`❌ [Enhanced Route API] Error fetching today's data:`, todayError);
+        console.error(`❌ [Enhanced Route API] Error fetching today's data:`, todayError.message);
+        console.error(`❌ [Enhanced Route API] Error stack:`, todayError.stack);
+        
+        // If it's a validation error from DeviceTracking, log it but continue
+        if (todayError.name === 'ValidationError') {
+          console.error(`❌ [Enhanced Route API] Validation error - this should be fixed in the model`);
+          // Try to continue with empty data - the route map will show no data
+        }
         // If there's an error, we'll fall through to the empty check below
       }
     } else {
