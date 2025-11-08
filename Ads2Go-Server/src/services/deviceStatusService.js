@@ -128,7 +128,11 @@ class DeviceStatusService {
           this.handlePlaybackConnection(ws, request);
         });
       } else {
-        console.log(`❌ Rejected WebSocket connection to unknown path: ${pathname}`);
+        // ✅ FIX: Only log unknown paths in debug mode to reduce log noise
+        // Many bots/scanners try /ws which is harmless
+        if (process.env.DEBUG_WEBSOCKET === 'true') {
+          console.log(`❌ Rejected WebSocket connection to unknown path: ${pathname}`);
+        }
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
       }
