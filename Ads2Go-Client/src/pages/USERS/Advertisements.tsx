@@ -10,6 +10,7 @@ import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
+import LazyImage from '../../components/LazyImage';
 
 // Form data type
 type FormData = {
@@ -574,14 +575,11 @@ const Advertisements: React.FC = () => {
                 <div className="w-full h-36 relative flex-shrink-0">
                   {ad.mediaFile ? (
                     ad.adFormat === "IMAGE" ? (
-                      <img
+                      <LazyImage
                         src={ad.mediaFile}
                         alt={`${ad.title} image`}
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src =
-                            "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+";
-                        }}
+                        placeholder="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PC9zdmc+"
                       />
                     ) : ad.adFormat === "VIDEO" ? (
                       <video

@@ -21,13 +21,14 @@ import { GET_MY_ADS } from '../graphql/user/queries/getMyAds';
 export const useMyAds = (options = {}) => {
   return useQuery(GET_MY_ADS, {
     // ✅ Use cache first for instant loads, then fetch fresh data in background
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first',
     
     // ✅ After first fetch, use cache for subsequent queries (shares across components)
     nextFetchPolicy: 'cache-first',
     
-    // ✅ Poll every 60 seconds (increased from 30s - ads don't change frequently)
-    pollInterval: 60000,
+    // ✅ OPTIMIZATION: Reduced polling to 5 minutes (ads don't change frequently)
+    // Increased from 60s to reduce server load and improve performance
+    pollInterval: 300000,
     
     // ✅ Don't show loading state during background refresh (better UX)
     notifyOnNetworkStatusChange: false,

@@ -154,17 +154,38 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
 
 const client = new ApolloClient({
   link: ApolloLink.from([errorLink, authLink, httpLink]),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    // Optimize cache configuration
+    typePolicies: {
+      Query: {
+        fields: {
+          // Merge arrays for lists to avoid cache misses
+          getMyAds: {
+            merge(existing = [], incoming) {
+              return incoming;
+            },
+          },
+          getUserAnalytics: {
+            merge(existing, incoming) {
+              return incoming;
+            },
+          },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: {
-      fetchPolicy: 'network-only',
+      // ✅ OPTIMIZATION: Use cache-first to reduce network requests
+      fetchPolicy: 'cache-first',
       errorPolicy: 'all',
-      notifyOnNetworkStatusChange: true,
+      notifyOnNetworkStatusChange: false, // Don't show loading during background refresh
     },
     query: {
-      fetchPolicy: 'network-only',
+      // ✅ OPTIMIZATION: Use cache-first to reduce network requests
+      fetchPolicy: 'cache-first',
       errorPolicy: 'all',
-      notifyOnNetworkStatusChange: true,
+      notifyOnNetworkStatusChange: false,
     },
     mutate: {
       errorPolicy: 'all',

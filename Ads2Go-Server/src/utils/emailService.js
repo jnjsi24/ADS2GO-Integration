@@ -1,35 +1,62 @@
 // server/utils/emailService.js
 
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 class EmailService {
-  static resend = null;
+  static transporter = null;
   static isConfigured = false;
 
-  // Initialize Resend client
+  // Initialize SMTP transporter
   static initializeTransporter() {
-    if (this.resend) {
-      return this.resend;
+    if (this.transporter) {
+      return this.transporter;
     }
 
-    // Debug: Check if RESEND_API_KEY exists (don't log the actual key for security)
-    console.log('🔍 Checking RESEND_API_KEY:', process.env.RESEND_API_KEY ? '✅ Found (hidden)' : '❌ Not found');
-    console.log('🔍 All env vars containing "RESEND":', Object.keys(process.env).filter(k => k.includes('RESEND')).join(', ') || 'None');
+    // Check for SMTP configuration
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = process.env.SMTP_PORT || 587;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPassword = process.env.SMTP_PASSWORD;
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || process.env.SMTP_SECURE === '1';
 
-    // Validate required environment variable
-    if (!process.env.RESEND_API_KEY) {
-      console.error('❌ Email service not configured: Missing RESEND_API_KEY');
-      console.error('💡 Make sure RESEND_API_KEY is added in Railway and the service has been restarted');
+    // Debug: Check if SMTP config exists
+    console.log('🔍 Checking SMTP configuration:');
+    console.log('   SMTP_HOST:', smtpHost ? '✅ Found (hidden)' : '❌ Not found');
+    console.log('   SMTP_PORT:', smtpPort || 'Not set (using default: 587)');
+    console.log('   SMTP_USER:', smtpUser ? '✅ Found (hidden)' : '❌ Not found');
+    console.log('   SMTP_PASSWORD:', smtpPassword ? '✅ Found (hidden)' : '❌ Not found');
+    console.log('   SMTP_SECURE:', smtpSecure);
+
+    // Validate required environment variables
+    if (!smtpHost || !smtpUser || !smtpPassword) {
+      console.error('❌ Email service not configured: Missing SMTP configuration');
+      console.error('💡 Required environment variables: SMTP_HOST, SMTP_USER, SMTP_PASSWORD');
+      console.error('💡 Optional: SMTP_PORT (default: 587), SMTP_SECURE (default: false)');
       this.isConfigured = false;
       return null;
     }
 
     try {
-      this.resend = new Resend(process.env.RESEND_API_KEY);
+      // Create transporter
+      this.transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: parseInt(smtpPort, 10),
+        secure: smtpSecure, // true for 465, false for other ports
+        auth: {
+          user: smtpUser,
+          pass: smtpPassword,
+        },
+        // Add TLS options for better compatibility
+        tls: {
+          rejectUnauthorized: false, // Accept self-signed certificates (set to true in production with valid certs)
+        },
+      });
+
       this.isConfigured = true;
-      console.log('✅ Email service initialized successfully with Resend');
-      return this.resend;
+      console.log('✅ Email service initialized successfully with SMTP');
+      console.log(`   Host: ${smtpHost}, Port: ${smtpPort}, Secure: ${smtpSecure}`);
+      return this.transporter;
     } catch (error) {
       console.error('❌ Failed to initialize email service:', error.message);
       this.isConfigured = false;
@@ -43,14 +70,15 @@ class EmailService {
       this.initializeTransporter();
     }
 
-    if (!this.isConfigured || !this.resend) {
+    if (!this.isConfigured || !this.transporter) {
       console.error('❌ Email service not configured');
       return false;
     }
 
     try {
-      // Resend doesn't need verification like SMTP - just check if API key is set
-      console.log('✅ Email service configuration verified (Resend API)');
+      // Verify SMTP connection
+      await this.transporter.verify();
+      console.log('✅ Email service configuration verified (SMTP)');
       return true;
     } catch (error) {
       console.error('❌ Email service verification failed:', error.message);
@@ -58,70 +86,32 @@ class EmailService {
     }
   }
 
-  // Get Resend instance directly
+  // Get Resend instance directly (stub for backward compatibility)
   static getResendInstance() {
-    if (!this.resend && !this.initializeTransporter()) {
-      console.error('❌ EmailService: Failed to initialize Resend');
-      console.error('❌ EmailService: Check RESEND_API_KEY environment variable');
-      return null;
-    }
-    return this.resend;
+    console.warn('⚠️ getResendInstance() is deprecated - use getTransporter() instead');
+    return null;
   }
 
-  // Get transporter (wrapper for backward compatibility with old nodemailer code)
+  // Get transporter (nodemailer transporter)
   static getTransporter() {
-    if (!this.resend && !this.initializeTransporter()) {
-      console.error('❌ EmailService: Failed to initialize Resend');
-      console.error('❌ EmailService: Check RESEND_API_KEY environment variable');
+    if (!this.transporter && !this.initializeTransporter()) {
+      console.error('❌ EmailService: Failed to initialize SMTP transporter');
+      console.error('❌ EmailService: Check SMTP_HOST, SMTP_USER, SMTP_PASSWORD environment variables');
       return null;
     }
-
-    // Capture resend instance for closure
-    const resend = this.resend;
-
-    // Return a wrapper object with sendMail method for backward compatibility
-    return {
-      sendMail: async (mailOptions) => {
-        try {
-          // Use provided from, or fallback to default
-          const fromEmail = mailOptions.from || this.getFromEmail();
-          
-          const { data, error } = await resend.emails.send({
-            from: fromEmail,
-            to: mailOptions.to,
-            subject: mailOptions.subject,
-            html: mailOptions.html,
-            text: mailOptions.text,
-            cc: mailOptions.cc,
-            bcc: mailOptions.bcc,
-            replyTo: mailOptions.replyTo,
-            attachments: mailOptions.attachments
-          });
-
-          if (error) {
-            throw new Error(error.message || 'Failed to send email');
-          }
-
-          // Return in nodemailer-compatible format
-          return {
-            messageId: data?.id || 'unknown',
-            accepted: [mailOptions.to].flat(),
-            rejected: [],
-            pending: [],
-            response: 'Email sent via Resend API'
-          };
-        } catch (error) {
-          console.error('❌ Error in sendMail wrapper:', error.message);
-          throw error;
-        }
-      }
-    };
+    return this.transporter;
   }
 
   // Get the "from" email address (uses env var or default)
   static getFromEmail() {
-    // Priority: 1. Environment variable, 2. Default Resend domain
-    return process.env.RESEND_FROM_EMAIL || 'Ads2Go <onboarding@resend.dev>';
+    // Priority: 1. Environment variable, 2. SMTP_USER, 3. Default
+    if (process.env.SMTP_FROM_EMAIL) {
+      return process.env.SMTP_FROM_EMAIL;
+    }
+    if (process.env.SMTP_USER) {
+      return `Ads2Go <${process.env.SMTP_USER}>`;
+    }
+    return 'Ads2Go <noreply@ads2go.com>';
   }
 
   // Generate 6-digit verification code
@@ -133,15 +123,15 @@ class EmailService {
   static async sendVerificationEmail(email, code) {
     console.log(`📧 Attempting to send verification email to: ${email}`);
     
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
-      console.error('   Please check your .env file for RESEND_API_KEY');
+      console.error('   Please check your .env file for SMTP configuration');
       return false;
     }
 
     try {
-      const { data, error } = await resend.emails.send({
+      const mailOptions = {
         from: this.getFromEmail(),
         to: email,
         subject: 'Ads2Go Email Verification',
@@ -165,16 +155,13 @@ class EmailService {
               </p>
             </div>
           </div>
-        `
-      });
+        `,
+        text: `Ads2Go Email Verification\n\nYour verification code is: ${code}\n\nThis code will expire in 15 minutes. Do not share this code with anyone.`,
+      };
 
-      if (error) {
-        console.error('❌ Error sending verification email:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Verification email sent successfully to ${email}`);
-      console.log(`   Email ID: ${data?.id || 'N/A'}`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending verification email:', error.message);
@@ -184,8 +171,8 @@ class EmailService {
 
   // Send password reset email
   static async sendPasswordResetEmail(email, resetToken) {
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
     }
@@ -193,7 +180,7 @@ class EmailService {
     const resetLink = `${process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
   
     try {
-      const { data, error } = await resend.emails.send({
+      const mailOptions = {
         from: this.getFromEmail(),
         to: email,
         subject: 'Reset Your Ads2Go Password',
@@ -215,15 +202,13 @@ class EmailService {
               </p>
             </div>
           </div>
-        `
-      });
+        `,
+        text: `Reset Your Ads2Go Password\n\nClick the link below to reset your password:\n${resetLink}\n\nThis link will expire in 1 hour. If you didn't request this, please ignore this email.`,
+      };
 
-      if (error) {
-        console.error('❌ Error sending password reset email:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Password reset email sent to ${email}`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending password reset email:', error.message);
@@ -233,14 +218,14 @@ class EmailService {
 
   // Send newsletter welcome email
   static async sendNewsletterWelcomeEmail(email, subject = 'Welcome to Ads2Go Newsletter!') {
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
     }
 
     try {
-      const { data, error } = await resend.emails.send({
+      const mailOptions = {
         from: this.getFromEmail(),
         to: email,
         subject: subject,
@@ -293,15 +278,12 @@ class EmailService {
               </div>
             </div>
           </div>
-        `
-      });
+        `,
+      };
 
-      if (error) {
-        console.error('❌ Error sending newsletter welcome email:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Newsletter welcome email sent to ${email}`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending newsletter welcome email:', error.message);
@@ -311,30 +293,27 @@ class EmailService {
 
   // Send newsletter email to all subscribers
   static async sendNewsletterEmail(subject, content, subscribers) {
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
     }
 
     try {
-      // Resend supports BCC, send to all subscribers with BCC
       const emails = subscribers.map(sub => sub.email);
       
-      const { data, error } = await resend.emails.send({
+      // Send to all recipients using BCC for privacy
+      const mailOptions = {
         from: this.getFromEmail(),
         to: emails[0], // First email as TO
         bcc: emails.slice(1), // Rest as BCC
         subject: subject,
-        html: content
-      });
+        html: content,
+      };
 
-      if (error) {
-        console.error('❌ Error sending newsletter email:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Newsletter sent to ${subscribers.length} subscribers`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending newsletter email:', error.message);
@@ -344,8 +323,8 @@ class EmailService {
 
   // Send newsletter email with image and styled template
   static async sendNewsletterEmailWithImage(subject, message, imageUrl, subscribers) {
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
     }
@@ -397,20 +376,17 @@ class EmailService {
     try {
       const emails = subscribers.map(sub => sub.email);
       
-      const { data, error } = await resend.emails.send({
+      const mailOptions = {
         from: this.getFromEmail(),
         to: emails[0],
         bcc: emails.slice(1),
         subject: subject,
-        html: htmlContent
-      });
+        html: htmlContent,
+      };
 
-      if (error) {
-        console.error('❌ Error sending newsletter email with image:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Newsletter with image sent to ${subscribers.length} subscribers`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending newsletter email with image:', error.message);
@@ -422,18 +398,19 @@ class EmailService {
   static async sendContactReply(toEmail, toName, subject, message, adminName) {
     console.log(`📧 Sending contact reply to: ${toEmail}`);
     
-    const resend = this.getResendInstance();
-    if (!resend) {
+    const transporter = this.getTransporter();
+    if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
       return false;
     }
 
     try {
-      // Get email address from formatted string or use default
-      const fromEmailMatch = this.getFromEmail().match(/<(.+)>/);
-      const supportEmail = fromEmailMatch ? fromEmailMatch[1] : 'onboarding@resend.dev';
+      // Get email address from formatted string or use SMTP_USER
+      const fromEmail = this.getFromEmail();
+      const fromEmailMatch = fromEmail.match(/<(.+)>/);
+      const supportEmail = fromEmailMatch ? fromEmailMatch[1] : (process.env.SMTP_USER || 'noreply@ads2go.com');
       
-      const { data, error } = await resend.emails.send({
+      const mailOptions = {
         from: `Ads2Go Support <${supportEmail}>`,
         to: toEmail,
         subject: subject,
@@ -470,16 +447,13 @@ class EmailService {
               </div>
             </div>
           </div>
-        `
-      });
+        `,
+        text: `Dear ${toName},\n\n${message}\n\nBest regards,\n${adminName || 'Ads2Go Team'}`,
+      };
 
-      if (error) {
-        console.error('❌ Error sending contact reply:', error.message);
-        return false;
-      }
-
+      const info = await transporter.sendMail(mailOptions);
       console.log(`✅ Contact reply sent successfully to ${toEmail}`);
-      console.log(`   Email ID: ${data?.id || 'N/A'}`);
+      console.log(`   Message ID: ${info.messageId || 'N/A'}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending contact reply:', error.message);

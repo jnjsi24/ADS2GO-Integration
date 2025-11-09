@@ -16,6 +16,99 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 
+// ✅ PERSISTENT CACHE: Module-level cache manager that survives component unmounts
+// This allows instant display when returning to Detailed Analytics page after navigation
+const ANALYTICS_CACHE_KEY = 'detailed-analytics-cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const MAX_CACHE_SIZE = 30; // Limit cache to 30 entries (prevents memory issues with many ads)
+
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  lastAccessed: number;
+}
+
+interface CacheStore {
+  [key: string]: CacheEntry;
+}
+
+// ✅ PERSISTENT CACHE: Load cache from localStorage on module load
+const loadPersistentCache = (): Map<string, CacheEntry> => {
+  try {
+    const cached = localStorage.getItem(ANALYTICS_CACHE_KEY);
+    if (!cached) return new Map();
+    
+    const parsed: CacheStore = JSON.parse(cached);
+    const now = Date.now();
+    const cache = new Map<string, CacheEntry>();
+    
+    // Only load non-expired entries
+    for (const [key, entry] of Object.entries(parsed)) {
+      if (now - entry.timestamp < CACHE_TTL) {
+        cache.set(key, entry);
+      }
+    }
+    
+    if (cache.size > 0) {
+      console.log(`📦 [DetailedAnalytics] Loaded ${cache.size} cached entries from localStorage`);
+    }
+    
+    return cache;
+  } catch (error) {
+    console.warn('⚠️ [DetailedAnalytics] Failed to load persistent cache:', error);
+    return new Map();
+  }
+};
+
+// ✅ PERSISTENT CACHE: Save cache to localStorage
+const savePersistentCache = (cache: Map<string, CacheEntry>) => {
+  try {
+    const now = Date.now();
+    const store: CacheStore = {};
+    
+    // Only save non-expired entries (convert to array for TypeScript compatibility)
+    const entries = Array.from(cache.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.timestamp < CACHE_TTL) {
+        store[key] = entry;
+      }
+    }
+    
+    localStorage.setItem(ANALYTICS_CACHE_KEY, JSON.stringify(store));
+  } catch (error) {
+    // Handle quota exceeded error gracefully
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      console.warn('⚠️ [DetailedAnalytics] localStorage quota exceeded, clearing old cache entries');
+      // Clear cache and try again with fewer entries
+      try {
+        localStorage.removeItem(ANALYTICS_CACHE_KEY);
+        // Retry with only the most recently accessed entries
+        const entries = Array.from(cache.entries());
+        entries.sort((a, b) => b[1].lastAccessed - a[1].lastAccessed); // Most recent first
+        const limitedStore: CacheStore = {};
+        for (let i = 0; i < Math.min(10, entries.length); i++) {
+          limitedStore[entries[i][0]] = entries[i][1];
+        }
+        localStorage.setItem(ANALYTICS_CACHE_KEY, JSON.stringify(limitedStore));
+      } catch (retryError) {
+        console.warn('⚠️ [DetailedAnalytics] Failed to save cache even after clearing:', retryError);
+      }
+    } else {
+      console.warn('⚠️ [DetailedAnalytics] Failed to save persistent cache:', error);
+    }
+  }
+};
+
+// ✅ PERSISTENT CACHE: Clear cache (called on logout)
+export const clearDetailedAnalyticsCache = () => {
+  try {
+    localStorage.removeItem(ANALYTICS_CACHE_KEY);
+    console.log('🗑️ [DetailedAnalytics] Cleared persistent cache');
+  } catch (error) {
+    console.warn('⚠️ [DetailedAnalytics] Failed to clear persistent cache:', error);
+  }
+};
+
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
@@ -31,6 +124,20 @@ const DetailedAnalytics: React.FC = () => {
   // State for direct API data (bypassing GraphQL)
   const [directAnalyticsData, setDirectAnalyticsData] = useState<any>(null);
   const [directAnalyticsLoading, setDirectAnalyticsLoading] = useState(false);
+  
+  // ✅ Track when filters are changing to show loading state
+  const [isFiltersLoading, setIsFiltersLoading] = useState(false);
+  const previousFiltersRef = useRef<{
+    selectedDevice: string;
+    selectedAd: string;
+    selectedPeriod: string;
+    dateRange: { start?: string; end?: string };
+  }>({
+    selectedDevice: 'all',
+    selectedAd: 'all',
+    selectedPeriod: 'all',
+    dateRange: {}
+  });
 
   // Date Picker States
   const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
@@ -51,10 +158,61 @@ const DetailedAnalytics: React.FC = () => {
   const [selectedAdLabel, setSelectedAdLabel] = useState("All Advertisement");
   const [availableAds, setAvailableAds] = useState<Array<{id: string, title: string}>>([]);
 
-  // Refs for debouncing
+  // Refs for debouncing and request cancellation
   const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const deviceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const directFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isRequestInProgressRef = useRef<boolean>(false);
+  
+  // ✅ PERSISTENT CACHE: Initialize cache from localStorage on mount
+  // This allows instant display when returning to Detailed Analytics after navigation
+  const analyticsCacheRef = useRef<Map<string, CacheEntry>>(loadPersistentCache());
+  
+  // Helper function to generate cache key from filters
+  const getCacheKey = useCallback((ad: string, device: string, period: string, dateRange: { start?: string; end?: string }, isCustom: boolean) => {
+    if (isCustom && dateRange.start && dateRange.end) {
+      return `analytics_${ad}_${device}_custom_${dateRange.start}_${dateRange.end}`;
+    }
+    return `analytics_${ad}_${device}_${period}`;
+  }, []);
+  
+  // ✅ MEMORY MANAGEMENT: Clean expired entries and enforce size limit with LRU eviction
+  // ✅ PERSISTENT CACHE: Saves to localStorage after cleanup
+  const manageCache = useCallback(() => {
+    const cache = analyticsCacheRef.current;
+    const now = Date.now();
+    
+    // Step 1: Remove expired entries (convert to array first for TypeScript compatibility)
+    const entries = Array.from(cache.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.timestamp > CACHE_TTL) {
+        cache.delete(key);
+        console.log('🗑️ [DetailedAnalytics] Removed expired cache entry:', key);
+      }
+    }
+    
+    // Step 2: If still over limit, remove least recently used entries (LRU)
+    if (cache.size > MAX_CACHE_SIZE) {
+      const remainingEntries = Array.from(cache.entries());
+      // Sort by lastAccessed (oldest first)
+      remainingEntries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      
+      // Remove oldest entries until under limit
+      const toRemove = cache.size - MAX_CACHE_SIZE;
+      for (let i = 0; i < toRemove; i++) {
+        cache.delete(remainingEntries[i][0]);
+        console.log('🗑️ [DetailedAnalytics] Removed LRU cache entry:', remainingEntries[i][0]);
+      }
+    }
+    
+    if (cache.size > 0) {
+      console.log(`📊 [DetailedAnalytics] Cache size: ${cache.size}/${MAX_CACHE_SIZE} entries`);
+    }
+    
+    // ✅ PERSISTENT CACHE: Save to localStorage after cleanup
+    savePersistentCache(cache);
+  }, []);
 
   const [pos, setPos] = useState({ x: 50, y: 50 });
 
@@ -103,26 +261,30 @@ const DetailedAnalytics: React.FC = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const hasInitiallyLoadedRef = useRef(false);
 
+  // ✅ PERFORMANCE: Check if filters are active (used to skip slow GraphQL queries)
+  const hasActiveFilters = selectedAd !== 'all' || selectedDevice !== 'all' || isCustomDateRange;
+
   // Fetch analytics data with optimized cache policy
   // ✅ Add polling when current date is included (for real-time updates)
   // ✅ Pass date range parameters when custom date range is selected
   // ✅ Skip GraphQL query when using custom date range (use direct API instead)
+  // ✅ PERFORMANCE: Skip GraphQL query when filters are active (use direct API instead)
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: isCustomDateRange ? undefined : selectedPeriod,
       startDate: isCustomDateRange && dateRange.start ? formatDateForAPI(dateRange.start) : undefined,
       endDate: isCustomDateRange && dateRange.end ? formatDateForAPI(dateRange.end) : undefined
     },
-    fetchPolicy: 'cache-first',
-    nextFetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // ✅ Use cache-first to avoid refetching when going back to same period
+    nextFetchPolicy: 'cache-only', // ✅ Don't refetch in background - use cache only
     errorPolicy: 'all',
     // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
-    // ✅ Skip polling when using custom date range to avoid interfering with direct API data
-    pollInterval: (isCurrentDateIncluded && !isCustomDateRange) ? 30000 : 0,
+    // ✅ Skip polling when using custom date range or filters to avoid interfering with direct API data
+    pollInterval: (isCurrentDateIncluded && !isCustomDateRange && !hasActiveFilters) ? 30000 : 0,
     // ✅ Don't trigger loading state during polling (silent background refresh)
     notifyOnNetworkStatusChange: false,
-    // ✅ Skip query when using custom date range to avoid conflicts with direct API
-    skip: isCustomDateRange && dateRange.start && dateRange.end
+    // ✅ Skip query when custom date range OR when filters are active (use direct API instead)
+    skip: Boolean((isCustomDateRange && dateRange.start && dateRange.end) || hasActiveFilters)
   });
 
   // Handle analytics errors using useEffect (replaces deprecated onError callback)
@@ -142,24 +304,25 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [analyticsError, isCustomDateRange, dateRange]);
 
-  // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
-  // This ensures summary metrics (Total Ad Plays, QR Scans, etc.) always show cumulative totals
+  // ✅ Fetch overall analytics data for Summary Metrics (only when NO filters are active)
+  // This ensures summary metrics (Total Ad Plays, QR Scans, etc.) show cumulative totals
   // Performance Over Time chart uses directAnalyticsData which respects filters
+  // ✅ PERFORMANCE: Skip this query when filters are active to avoid slow 'period=all' requests
   const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: 'all', // Always fetch overall data for Summary Metrics
       adId: null // No adId filter - show all ads cumulative totals
     },
-    fetchPolicy: 'cache-first',
-    nextFetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // ✅ Use cache-first to avoid refetching when going back to "all"
+    nextFetchPolicy: 'cache-only', // ✅ Don't refetch in background - use cache only
     errorPolicy: 'all',
     // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
     // ✅ Skip polling when using custom date range to avoid connection errors
-    pollInterval: (isCurrentDateIncluded && !isCustomDateRange) ? 30000 : 0,
+    pollInterval: (isCurrentDateIncluded && !isCustomDateRange && !hasActiveFilters) ? 30000 : 0,
     // ✅ Don't trigger loading state during polling (silent background refresh)
     notifyOnNetworkStatusChange: false,
-    // ✅ Skip query entirely when using custom date range to avoid unnecessary requests
-    skip: isCustomDateRange && dateRange.start && dateRange.end
+    // ✅ Skip query when filters are active OR when using custom date range
+    skip: Boolean(hasActiveFilters || (isCustomDateRange && dateRange.start && dateRange.end))
   });
 
   // ✅ Fetch user's ads with materialId to filter devices
@@ -500,11 +663,57 @@ const DetailedAnalytics: React.FC = () => {
   const fetchDirectAnalytics = useCallback(async (silent: boolean = false) => {
     if (!user?.userId) return;
 
+    // ✅ PERFORMANCE: Check cache first before fetching
+    const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, dateRange, isCustomDateRange);
+    const cache = analyticsCacheRef.current;
+    const cached = cache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      // ✅ Cache hit - update lastAccessed and use cached data immediately
+      cached.lastAccessed = now; // Update LRU timestamp
+      // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
+      savePersistentCache(cache);
+      console.log('⚡ [DetailedAnalytics] Using cached data for:', cacheKey);
+      if (selectedDevice === 'all') {
+        setDirectAnalyticsData(cached.data);
+        setDeviceAnalytics(null);
+      } else {
+        setDeviceAnalytics(cached.data?.deviceAnalytics);
+        setDirectAnalyticsData(null);
+      }
+      setDirectAnalyticsLoading(false);
+      setIsFiltersLoading(false);
+      return; // Skip fetch - use cache
+    }
+
+    // ✅ Cancel previous request if it's still in progress
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      console.log('🚫 [DetailedAnalytics] Cancelled previous request');
+    }
+
+    // ✅ Cancel pending timeout
     if (directFetchTimeoutRef.current) {
       clearTimeout(directFetchTimeoutRef.current);
     }
 
+    // ✅ PERFORMANCE: Increase debounce for rapid filter changes to prevent request spam
+    // When filters change rapidly, wait longer to ensure only the final state triggers a request
+    const debounceDelay = silent ? 300 : 400; // Increased from 100ms to 400ms
+    
     directFetchTimeoutRef.current = setTimeout(async () => {
+      // ✅ Skip if another request is already in progress (prevent overlapping requests)
+      if (isRequestInProgressRef.current) {
+        console.log('⏸️ [DetailedAnalytics] Request already in progress, skipping');
+        return;
+      }
+
+      // ✅ Create new AbortController for this request
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      isRequestInProgressRef.current = true;
+
       try {
         // Only show loading state if not silent (initial load or manual refresh)
         if (!silent) {
@@ -520,6 +729,23 @@ const DetailedAnalytics: React.FC = () => {
           queryParams.append('adId', selectedAd);
         }
 
+        // ✅ PERFORMANCE FIX: Avoid 'period=all' when filters are applied
+        // 'period=all' queries are very slow (1+ minute). Use a reasonable date range instead.
+        let effectivePeriod: string = selectedPeriod;
+        let useDateRange = false;
+        if (selectedPeriod === 'all' && (selectedAd !== 'all' || selectedDevice !== 'all')) {
+          // When filters are applied, use last 90 days instead of 'all' for faster queries
+          // Calculate date range for last 90 days
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 90);
+          
+          queryParams.append('startDate', startDate.toISOString());
+          queryParams.append('endDate', endDate.toISOString());
+          useDateRange = true;
+          console.log('⚡ [DetailedAnalytics] Using 90-day date range instead of "all" for faster filtered query');
+        }
+
         let url;
         if (selectedDevice === 'all') {
           if (isCustomDateRange && dateRange.start && dateRange.end) {
@@ -528,8 +754,11 @@ const DetailedAnalytics: React.FC = () => {
             queryParams.append('startDate', startDateISO);
             queryParams.append('endDate', endDateISO);
             url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+          } else if (useDateRange) {
+            // Already added date range params above
+            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           } else {
-            queryParams.append('period', selectedPeriod);
+            queryParams.append('period', effectivePeriod);
             url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           }
         } else {
@@ -539,12 +768,26 @@ const DetailedAnalytics: React.FC = () => {
             queryParams.append('startDate', startDateISO);
             queryParams.append('endDate', endDateISO);
             url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
+          } else if (useDateRange) {
+            // Already added date range params above
+            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           } else {
+            queryParams.append('period', effectivePeriod);
             url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           }
         }
 
-        const response = await fetch(url);
+        console.log('📡 [DetailedAnalytics] Fetching:', url);
+        const response = await fetch(url, {
+          signal: abortController.signal // ✅ Attach abort signal
+        });
+
+        // ✅ Check if request was aborted
+        if (abortController.signal.aborted) {
+          console.log('🚫 [DetailedAnalytics] Request was aborted');
+          return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -576,6 +819,21 @@ const DetailedAnalytics: React.FC = () => {
             
             // ✅ Only update state if we have data (prevent clearing existing data)
             if (data.data) {
+              // ✅ MEMORY MANAGEMENT: Clean cache before adding new entry
+              manageCache();
+              
+              // ✅ PERFORMANCE: Store in cache for future use (with lastAccessed for LRU)
+              const now = Date.now();
+              analyticsCacheRef.current.set(cacheKey, {
+                data: data.data,
+                timestamp: now,
+                lastAccessed: now
+              });
+              console.log('💾 [DetailedAnalytics] Cached data for:', cacheKey, `(Cache size: ${analyticsCacheRef.current.size}/${MAX_CACHE_SIZE})`);
+              
+              // ✅ PERSISTENT CACHE: Save to localStorage after caching new data
+              savePersistentCache(analyticsCacheRef.current);
+              
               setDirectAnalyticsData(data.data);
               setDeviceAnalytics(null);
               console.log('✅ [DetailedAnalytics] Successfully set directAnalyticsData', {
@@ -592,6 +850,22 @@ const DetailedAnalytics: React.FC = () => {
               console.warn('⚠️ [DetailedAnalytics] API returned success but no data');
             }
           } else {
+            // ✅ MEMORY MANAGEMENT: Clean cache before adding new entry
+            manageCache();
+            
+            // ✅ PERFORMANCE: Store device analytics in cache (use same cache key format)
+            // Store the full response structure for consistency (with lastAccessed for LRU)
+            const now = Date.now();
+            analyticsCacheRef.current.set(cacheKey, {
+              data: { deviceAnalytics: data.data.deviceAnalytics },
+              timestamp: now,
+              lastAccessed: now
+            });
+            console.log('💾 [DetailedAnalytics] Cached device analytics for:', cacheKey, `(Cache size: ${analyticsCacheRef.current.size}/${MAX_CACHE_SIZE})`);
+            
+            // ✅ PERSISTENT CACHE: Save to localStorage after caching new data
+            savePersistentCache(analyticsCacheRef.current);
+            
             setDeviceAnalytics(data.data.deviceAnalytics);
             setDirectAnalyticsData(null);
           }
@@ -604,7 +878,13 @@ const DetailedAnalytics: React.FC = () => {
             console.warn('⚠️ [DetailedAnalytics] API error, keeping existing data');
           }
         }
-      } catch (error) {
+      } catch (error: any) {
+        // ✅ Don't log error if request was aborted (this is expected)
+        if (error.name === 'AbortError') {
+          console.log('🚫 [DetailedAnalytics] Request was cancelled (filter changed)');
+          return;
+        }
+        
         console.error('Error fetching direct analytics:', error);
         // ✅ Don't clear existing data on error - keep previous data visible
         // This prevents the graph from disappearing when there's a network error
@@ -612,27 +892,87 @@ const DetailedAnalytics: React.FC = () => {
           console.warn('⚠️ [DetailedAnalytics] Network error, keeping existing data');
         }
       } finally {
-        // Only hide loading state if it was shown (not silent)
-        if (!silent) {
+        // ✅ Check if request was aborted before clearing flags
+        const wasAborted = abortController.signal.aborted;
+        
+        // ✅ Clear request in progress flag (unless aborted - new request will handle it)
+        if (!wasAborted) {
+          isRequestInProgressRef.current = false;
+        }
+        
+        // ✅ Only hide loading state if it was shown (not silent) and request wasn't aborted
+        if (!silent && !wasAborted) {
           setDirectAnalyticsLoading(false);
+          setIsFiltersLoading(false); // ✅ Also hide filter loading state
+        } else if (wasAborted && !silent) {
+          // ✅ If request was aborted, keep loading state (new request will show it)
+          // But reset the in-progress flag so new request can start
+          isRequestInProgressRef.current = false;
         }
       }
-    }, 300);
-  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDateRange, dateRange]);
+    }, debounceDelay);
+  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDateRange, dateRange, getCacheKey]);
 
   // ✅ Fetch analytics data when device, ad, period, or date range changes
   // ✅ FIX: Ensure this runs immediately on mount with default values
   useEffect(() => {
     // Show loading for initial load or when filters change (user action)
     if (user?.userId) {
-      console.log('📊 [DetailedAnalytics] Fetching direct analytics with filters:', {
-        selectedPeriod,
-        selectedAd,
+      // Check if filters actually changed
+      const filtersChanged = 
+        previousFiltersRef.current.selectedDevice !== selectedDevice ||
+        previousFiltersRef.current.selectedAd !== selectedAd ||
+        previousFiltersRef.current.selectedPeriod !== selectedPeriod ||
+        previousFiltersRef.current.dateRange.start !== dateRange.start ||
+        previousFiltersRef.current.dateRange.end !== dateRange.end;
+      
+      // ✅ PERFORMANCE: Check cache FIRST before showing loading state
+      const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, dateRange, isCustomDateRange);
+      const cache = analyticsCacheRef.current;
+      const cached = cache.get(cacheKey);
+      const now = Date.now();
+      const hasValidCache = cached && (now - cached.timestamp) < CACHE_TTL;
+      
+      if (hasValidCache) {
+        // ✅ Cache hit - update lastAccessed and use cached data immediately (instant display, no loading)
+        cached.lastAccessed = now; // Update LRU timestamp
+        // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
+        savePersistentCache(cache);
+        console.log('⚡ [DetailedAnalytics] Using cached data for filters - instant display:', cacheKey);
+        if (selectedDevice === 'all') {
+          setDirectAnalyticsData(cached.data);
+          setDeviceAnalytics(null);
+        } else {
+          setDeviceAnalytics(cached.data?.deviceAnalytics);
+          setDirectAnalyticsData(null);
+        }
+        setIsFiltersLoading(false);
+        setDirectAnalyticsLoading(false);
+        // Don't fetch - use cached data
+      } else {
+        // ✅ Cache miss or expired - show loading and fetch fresh data
+        if (filtersChanged) {
+          setIsFiltersLoading(true);
+          // ✅ Clear previous data only when cache miss (cache hit will set correct data immediately)
+          // This prevents showing wrong data (e.g., 4 QR scans from overall data when filtered should be 1)
+          if (selectedAd !== 'all' || selectedDevice !== 'all') {
+            setDirectAnalyticsData(null);
+            setDeviceAnalytics(null);
+          }
+        }
+        
+        console.log('📊 [DetailedAnalytics] Cache miss - fetching fresh data for:', cacheKey);
+        // Fetch fresh data (will be cached after fetch)
+        fetchDirectAnalytics(false);
+      }
+      
+      // Update previous filters
+      previousFiltersRef.current = {
         selectedDevice,
-        isCustomDateRange,
-        dateRange
-      });
-      fetchDirectAnalytics(false);
+        selectedAd,
+        selectedPeriod,
+        dateRange: { ...dateRange }
+      };
     }
     
     // Mark initial load as complete after first successful load
@@ -640,7 +980,14 @@ const DetailedAnalytics: React.FC = () => {
       hasInitiallyLoadedRef.current = true;
       setIsInitialLoad(false);
     }
-  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics, user?.userId]);
+  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics, user?.userId, getCacheKey]);
+  
+  // ✅ Hide loading state when data arrives
+  useEffect(() => {
+    if (isFiltersLoading && (directAnalyticsData || deviceAnalytics)) {
+      setIsFiltersLoading(false);
+    }
+  }, [directAnalyticsData, deviceAnalytics, isFiltersLoading]);
   
   // Mark initial load as complete once we have data
   useEffect(() => {
@@ -665,9 +1012,15 @@ const DetailedAnalytics: React.FC = () => {
     return () => clearInterval(pollInterval);
   }, [isCurrentDateIncluded, isCustomDateRange, fetchDirectAnalytics]);
 
-  // Cleanup all pending timeouts on unmount
+  // Cleanup all pending timeouts and abort in-flight requests on unmount
   useEffect(() => {
     return () => {
+      // ✅ Cancel any pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // ✅ Clear all timeouts
       if (refetchTimeoutRef.current) {
         clearTimeout(refetchTimeoutRef.current);
       }
@@ -701,19 +1054,24 @@ const DetailedAnalytics: React.FC = () => {
   // Logic:
   // - Default (no date, ad="all", device="all"): Show cumulative totals
   // - Date selected: Show filtered by date
-  // - Ad selected: Show filtered by ad
+  // - Ad selected: Show filtered by ad (DON'T show overall data - wait for filtered data)
   // - Device selected: Show filtered by device
-  // - Any combination: Show filtered totals
+  // - Any combination: Show filtered totals (DON'T show overall data - wait for filtered data)
   const analyticsSummary = useMemo(() => {
     // Check if any filters are active
     // Date filter is active if: custom date range is set OR period is not 'all' (default '7d' is considered a filter)
     const hasDateFilter = (isCustomDateRange && (dateRange.start || dateRange.end)) || (selectedPeriod !== 'all');
     const hasAdFilter = selectedAd !== 'all';
     const hasDeviceFilter = selectedDevice !== 'all';
+    const hasAnyFilter = hasAdFilter || hasDeviceFilter || hasDateFilter;
+    
+    // ✅ CRITICAL FIX: When ANY filter is active, DON'T use overallAnalyticsData
+    // This prevents showing wrong data (e.g., 4 QR scans) before filtered data (1 QR scan) loads
+    // Only show overall data when NO filters are active
     
     // Default state: no filters applied - use cumulative totals
     // Only show cumulative when: period='all', no custom date range, ad='all', device='all'
-    if (selectedPeriod === 'all' && !isCustomDateRange && !hasAdFilter && !hasDeviceFilter) {
+    if (!hasAnyFilter && selectedPeriod === 'all' && !isCustomDateRange) {
       const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
         totalAdsPlayed: 0,
         totalDisplayTime: 0,
@@ -727,42 +1085,78 @@ const DetailedAnalytics: React.FC = () => {
       return overallSummary;
     }
     
-    // When a specific device is selected, use deviceAnalytics
-    if (hasDeviceFilter && deviceAnalytics) {
-      return {
-        totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
-        totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
-        averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
-        totalAds: 0, // Not applicable for device-specific view
-        activeAds: 0, // Not applicable for device-specific view
-        totalMaterials: 1, // Always 1 when device is selected
-        totalDevices: 1, // Always 1 when device is selected
-        totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
-      };
+    // ✅ When a specific device is selected, use deviceAnalytics (filtered data)
+    // DON'T fallback to overall data - wait for deviceAnalytics to load
+    if (hasDeviceFilter) {
+      if (deviceAnalytics) {
+        return {
+          totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
+          totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
+          averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
+          totalAds: 0, // Not applicable for device-specific view
+          activeAds: 0, // Not applicable for device-specific view
+          totalMaterials: 1, // Always 1 when device is selected
+          totalDevices: 1, // Always 1 when device is selected
+          totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
+        };
+      } else {
+        // ✅ Device filter active but data not loaded yet - return zeros (will show loading state)
+        // This prevents showing overallAnalyticsData which has wrong values
+        return {
+          totalAdsPlayed: 0,
+          totalDisplayTime: 0,
+          averageCompletionRate: 0,
+          totalAds: 0,
+          activeAds: 0,
+          totalMaterials: 0,
+          totalDevices: 0,
+          totalQRScans: 0
+        };
+      }
     }
     
-    // When filters are applied but device is 'all', use filtered data
+    // ✅ When filters are applied (ad or date) but device is 'all', use filtered data
     // Prefer directAnalyticsData (from direct API call) as it respects all filters including adId
-    if (directAnalyticsData?.summary) {
-      return {
-        totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
-        totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
-        averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
-        totalAds: directAnalyticsData.summary.totalAds || 0,
-        activeAds: directAnalyticsData.summary.activeAds || 0,
-        totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
-        totalDevices: directAnalyticsData.summary.totalDevices || 0,
-        totalQRScans: directAnalyticsData.summary.totalQRScans || 0
-      };
+    // DON'T fallback to overallAnalyticsData - wait for directAnalyticsData to load
+    if (hasAnyFilter) {
+      if (directAnalyticsData?.summary) {
+        return {
+          totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
+          totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
+          averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
+          totalAds: directAnalyticsData.summary.totalAds || 0,
+          activeAds: directAnalyticsData.summary.activeAds || 0,
+          totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
+          totalDevices: directAnalyticsData.summary.totalDevices || 0,
+          totalQRScans: directAnalyticsData.summary.totalQRScans || 0
+        };
+      } else {
+        // ✅ Filters active but data not loaded yet - return zeros (will show loading state)
+        // This prevents showing overallAnalyticsData which has wrong values (e.g., 4 QR scans when filtered should be 1)
+        return {
+          totalAdsPlayed: 0,
+          totalDisplayTime: 0,
+          averageCompletionRate: 0,
+          totalAds: 0,
+          activeAds: 0,
+          totalMaterials: 0,
+          totalDevices: 0,
+          totalQRScans: 0
+        };
+      }
     }
     
-    // Fallback to GraphQL analyticsData (respects date/period but not adId)
-    if (analyticsData?.getUserAnalytics?.summary) {
+    // ✅ Fallback to GraphQL analyticsData only if no ad/device filters are active
+    // (GraphQL analyticsData respects date/period but NOT adId, so only use when ad='all' and device='all')
+    // Note: hasAdFilter and hasDeviceFilter are already declared at the top of this useMemo
+    if (!hasAdFilter && !hasDeviceFilter && analyticsData?.getUserAnalytics?.summary) {
       return analyticsData.getUserAnalytics.summary;
     }
     
-    // Final fallback: cumulative totals
-    return overallAnalyticsData?.getUserAnalytics?.summary || {
+    // ✅ Final fallback: Return zeros (will show loading state)
+    // This ensures we NEVER show wrong overall data when filters are active
+    // The loading spinner will be shown because directAnalyticsLoading or isFiltersLoading is true
+    return {
       totalAdsPlayed: 0,
       totalDisplayTime: 0,
       averageCompletionRate: 0,
@@ -938,6 +1332,7 @@ const DetailedAnalytics: React.FC = () => {
   }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDateRange, dateRange.start, dateRange.end]);
 
   // Top performing ads with proper QR scan calculation - ALWAYS use overall data regardless of device/date selection
+  // ✅ RANKING: Sorted by QR scans (descending) - ads with highest QR scans are ranked first
   const topPerformingAds = useMemo(() => {
     // Always use the overall ad performance data (not filtered by device or date)
     // Use overallAnalyticsData.getUserAnalytics.adPerformance which always contains overall data
@@ -954,7 +1349,7 @@ const DetailedAnalytics: React.FC = () => {
     
     // ✅ Trust backend data - backend now always fetches fresh QR scan data
     // The backend's getUserAnalytics already fetches fresh QR scans and populates ad.totalQRScans
-    return ads.map((ad: any) => {
+    const mappedAds = ads.map((ad: any) => {
       // Use the QR scans directly from backend (already fresh data)
       const qrScans = ad.totalQRScans || 0;
       
@@ -984,7 +1379,29 @@ const DetailedAnalytics: React.FC = () => {
         totalQRScans: qrScans, // ✅ Use QR scans directly from backend (fresh data)
         assignedDevicesCount: assignedDevicesCount // Use this instead of totalMaterials for device count
       };
-    }).slice(0, 5);
+    });
+    
+    // ✅ RANKING: Sort by QR scans (descending), then by ad plays (descending) as tiebreaker
+    // Ads with highest QR scans are ranked #1, #2, #3, etc.
+    const sortedAds = mappedAds.sort((a: any, b: any) => {
+      // Primary sort: QR scans (descending)
+      if (b.totalQRScans !== a.totalQRScans) {
+        return (b.totalQRScans || 0) - (a.totalQRScans || 0);
+      }
+      // Secondary sort: Total ad plays (descending) as tiebreaker
+      const aPlays = a.totalPlays || a.totalAdsPlayed || 0;
+      const bPlays = b.totalPlays || b.totalAdsPlayed || 0;
+      return bPlays - aPlays;
+    });
+    
+    console.log('🏆 [TopPerformingAds] Sorted ads by QR scans:', sortedAds.map((ad: any) => ({
+      title: ad.adTitle,
+      qrScans: ad.totalQRScans,
+      plays: ad.totalPlays || ad.totalAdsPlayed || 0
+    })));
+    
+    // Return top 5 performing ads (highest QR scans)
+    return sortedAds.slice(0, 5);
   }, [overallAnalyticsData, myAdsData]);
 
   return (
@@ -1600,8 +2017,14 @@ const DetailedAnalytics: React.FC = () => {
             </div>
           )}
 
-          {/* Empty State */}
-          {!analyticsLoading && !isInitialLoad && (!analyticsData?.getUserAnalytics && !directAnalyticsData) && (
+          {/* Empty State - Only show when ALL loading is complete AND there's actually no data */}
+          {!analyticsLoading && 
+           !directAnalyticsLoading && 
+           !isFiltersLoading && 
+           !isInitialLoad && 
+           !analyticsData?.getUserAnalytics && 
+           !directAnalyticsData && 
+           !deviceAnalytics && (
             <div className="text-center mb-16">
               <div>
                 <div className="flex items-center justify-center space-x-3 mb-2">
@@ -1626,9 +2049,13 @@ const DetailedAnalytics: React.FC = () => {
                   {/* Left side: Label and Value */}
                   <div>
                     <p className="text-sm text-black/70">Total Ad Plays</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading && isInitialLoad ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
+                      {/* ✅ Show loading state when filters change or initial load */}
+                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
+                        <>
+                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
+                        </>
                       ) : (
                         (analyticsSummary.totalAdsPlayed || 0).toLocaleString()
                       )}
@@ -1646,9 +2073,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm text-black/70">QR Scans</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading && isInitialLoad ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
+                      {/* ✅ Show loading state when filters change or initial load */}
+                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
+                        <>
+                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
+                        </>
                       ) : (
                         (analyticsSummary.totalQRScans || 0).toLocaleString()
                       )}
@@ -1665,9 +2096,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm text-black/70">Active Devices</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading && isInitialLoad ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
+                      {/* ✅ Show loading state when filters change or initial load */}
+                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
+                        <>
+                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
+                        </>
                       ) : (
                         (analyticsSummary.totalMaterials || 0).toLocaleString()
                       )}
@@ -1684,9 +2119,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm text-black/70">Online Devices</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading && isInitialLoad ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
+                      {/* ✅ Show loading state when filters change or initial load */}
+                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
+                        <>
+                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
+                        </>
                       ) : (
                         // ✅ Use onlineDevicesCount which respects filters
                         // When device is selected: shows 1 if online, 0 if offline
@@ -1706,9 +2145,13 @@ const DetailedAnalytics: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm text-black/70">Completion Rate</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">
-                      {analyticsLoading && isInitialLoad ? (
-                        <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
+                      {/* ✅ Show loading state when filters change or initial load */}
+                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
+                        <>
+                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
+                        </>
                       ) : (
                         `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
                       )}
@@ -1733,28 +2176,17 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
               </div>
               <div className="h-80">
-                {/* ✅ Loading State */}
-                {(analyticsLoading && isInitialLoad) || (directAnalyticsLoading && isInitialLoad) ? (
+                {/* ✅ Loading State - Show when initial load OR filters change */}
+                {(analyticsLoading && isInitialLoad) || (directAnalyticsLoading && (isInitialLoad || isFiltersLoading)) || isFiltersLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <LoaderCircle className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
-                      <p className="text-sm text-gray-600">Loading chart data...</p>
-                    </div>
-                  </div>
-                ) : dailyStats.length === 0 ? (
-                  /* ✅ Empty State */
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-sm font-medium text-gray-700 mb-1">No Chart Data Available</p>
-                      <p className="text-xs text-gray-500">
-                        {isInitialLoad 
-                          ? "Loading your analytics data..." 
-                          : "No performance data found for the selected period. Data will appear once your ads start playing."}
+                      <p className="text-sm text-gray-600">
+                        {isFiltersLoading ? 'Loading filtered data...' : 'Loading chart data...'}
                       </p>
                     </div>
                   </div>
-                ) : (
+                ) : dailyStats.length > 0 ? (
                   /* ✅ Chart with Data */
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={dailyStats}>
@@ -1802,6 +2234,25 @@ const DetailedAnalytics: React.FC = () => {
                       />
                     </AreaChart>
                   </ResponsiveContainer>
+                ) : !directAnalyticsLoading && !isFiltersLoading && !analyticsLoading && !isInitialLoad ? (
+                  /* ✅ Empty State - Only show when loading is complete and no data */
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <BarChart3 className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-700 mb-1">No Chart Data Available</p>
+                      <p className="text-xs text-gray-500">
+                        No performance data found for the selected period. Data will appear once your ads start playing.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* ✅ Still loading - show loading state */
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <LoaderCircle className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">Loading chart data...</p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

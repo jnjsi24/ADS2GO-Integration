@@ -1,14 +1,4 @@
-import React, { useState, useEffect, useRef, ChangeEvent, useMemo } from 'react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-} from 'recharts';
+import React, { useState, useEffect, useRef, ChangeEvent, useMemo, useCallback, Suspense, lazy } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
@@ -18,11 +8,33 @@ import playbackWebSocketService from '../../services/playbackWebSocketService';
 import RealtimeMetrics from '../../components/RealtimeMetrics';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
-import UserMaterialsMap from '../../components/UserMaterialsMap';
-import MultiMaterialRouteMap from '../../components/MultiMaterialRouteMap';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import AdProgressBar from '../../components/AdProgressBar';
 import CalendarWidget from '../../components/CalendarWidget';
+
+// ✅ PERFORMANCE OPTIMIZATION: Lazy load heavy components
+// Recharts is ~200KB - only load when charts are actually rendered
+const AnalyticsChart = lazy(() => import('../../components/lazy/AnalyticsChart'));
+
+// Map components are heavy (~300KB) - only load when map tab is active
+const UserMaterialsMap = lazy(() => import('../../components/UserMaterialsMap'));
+const MultiMaterialRouteMap = lazy(() => import('../../components/MultiMaterialRouteMap'));
+
+// Loading component for lazy-loaded components
+const ChartLoader = () => (
+  <div className="flex items-center justify-center h-[210px]">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3674B5]"></div>
+  </div>
+);
+
+const MapLoader = () => (
+  <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3674B5] mx-auto mb-4"></div>
+      <p className="text-gray-600">Loading map...</p>
+    </div>
+  </div>
+);
 
 // NotificationList Component
 const transition: Transition = {
@@ -165,6 +177,10 @@ const Dashboard = () => {
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   
+  // ✅ REAL-TIME UPDATE: Track last analytics refresh to prevent too many rapid refreshes
+  const lastAnalyticsRefreshRef = useRef<number>(0);
+  const analyticsRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // ✅ FIX: Calculate if auto-refresh should be enabled (enable for today's date, disable for past dates)
   const shouldDisableAutoRefresh = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -190,35 +206,47 @@ const Dashboard = () => {
   
   const [currentlyPlayingAds, setCurrentlyPlayingAds] = useState<Map<string, CurrentlyPlayingAd>>(new Map());
 
-  // Fetch analytics data (for charts - filtered by period)
+  // ✅ PERFORMANCE OPTIMIZATION: Stagger query loading to reduce initial blocking
+  // Priority 1: Load user ads first (needed for route selection, lightweight)
+  const { data: myAdsData } = useQuery(GET_MY_ADS, {
+    fetchPolicy: 'cache-first',
+    nextFetchPolicy: 'cache-first',
+    errorPolicy: 'all',
+  });
+
+  // Priority 2: Load analytics data after initial render (heavier query)
   // ✅ OPTIMIZATION: Increased poll interval from 30s to 5 minutes (analytics don't change that frequently)
   // Reduces queries by 90% while maintaining fresh data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { period: analyticsPeriod, adId: selectedAdId },
     fetchPolicy: 'cache-first', // Use cache first for instant loads
-    nextFetchPolicy: 'cache-first', // Subsequent queries use cache
-    pollInterval: 300000, // Auto-refresh every 5 minutes (increased from 30s)
+    nextFetchPolicy: 'cache-and-network', // ✅ Always check for updates in background (ensures fresh data)
+    pollInterval: 120000, // ✅ REAL-TIME: Reduced to 2 minutes for faster updates (was 10 minutes)
     errorPolicy: 'all', // Allow partial data even with errors
     notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
+    // Skip query if no user data yet (prevents unnecessary queries)
+    skip: !myAdsData,
   });
 
   // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
   // This ensures "Total Ad Played" and other summary metrics always show cumulative totals
-  const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
+  // ✅ PERFORMANCE OPTIMIZATION: Load immediately but use cache-first (non-blocking)
+  // - If cache exists: Shows data instantly (return visits)
+  // - If no cache: Query runs in background without blocking page render (first visit)
+  // - Page renders first, then metrics update when query completes
+  // ✅ REAL-TIME UPDATE: Reduced poll interval to 2 minutes for faster data updates
+  const { data: overallAnalyticsData, loading: overallAnalyticsLoading, refetch: refetchOverallAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: 'all', // Always fetch overall data for Summary Metrics
       adId: null // No adId filter - show all ads cumulative totals
     },
-    fetchPolicy: 'cache-first',
-    nextFetchPolicy: 'cache-and-network',
+    fetchPolicy: 'cache-first', // ✅ Use cache immediately if available (instant on return visits)
+    nextFetchPolicy: 'cache-and-network', // ✅ Always check for updates in background (ensures fresh data)
     errorPolicy: 'all',
-    pollInterval: 300000, // Auto-refresh every 5 minutes
-    notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
-  });
-
-  // Fetch user's ads for route history
-  const { data: myAdsData } = useQuery(GET_MY_ADS, {
-    fetchPolicy: 'cache-and-network',
+    pollInterval: 120000, // ✅ REAL-TIME: Reduced to 2 minutes for faster QR scan and ad play updates
+    notifyOnNetworkStatusChange: false, // ✅ Don't show loading during background refresh (silent update)
+    // Skip query only if no user data yet (allows cache to load immediately)
+    skip: !myAdsData,
   });
 
   // Handle analytics errors using useEffect (Apollo v3.14 recommended approach)
@@ -299,18 +327,56 @@ const Dashboard = () => {
     return materialIds;
   }, [myAdsData]);
 
+  // ✅ REAL-TIME UPDATE: Debounced function to refresh analytics when ad plays occur
+  // This ensures QR scans and ad play counts update quickly when new data arrives
+  const triggerAnalyticsRefresh = useCallback(() => {
+    const now = Date.now();
+    const timeSinceLastRefresh = now - lastAnalyticsRefreshRef.current;
+    const MIN_REFRESH_INTERVAL = 30000; // 30 seconds minimum between refreshes
+    
+    // Clear any pending refresh
+    if (analyticsRefreshTimeoutRef.current) {
+      clearTimeout(analyticsRefreshTimeoutRef.current);
+    }
+    
+    // If enough time has passed, refresh immediately
+    if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
+      lastAnalyticsRefreshRef.current = now;
+      // Refresh both analytics queries silently (background update)
+      refetchOverallAnalytics().catch(err => {
+        console.warn('Failed to refresh overall analytics:', err);
+      });
+      refetchAnalytics().catch(err => {
+        console.warn('Failed to refresh analytics:', err);
+      });
+    } else {
+      // Schedule refresh after minimum interval
+      const delay = MIN_REFRESH_INTERVAL - timeSinceLastRefresh;
+      analyticsRefreshTimeoutRef.current = setTimeout(() => {
+        lastAnalyticsRefreshRef.current = Date.now();
+        refetchOverallAnalytics().catch(err => {
+          console.warn('Failed to refresh overall analytics:', err);
+        });
+        refetchAnalytics().catch(err => {
+          console.warn('Failed to refresh analytics:', err);
+        });
+      }, delay);
+    }
+  }, [refetchOverallAnalytics, refetchAnalytics]);
+
   // WebSocket subscription for real-time ad playback updates
   useEffect(() => {
     if (!playbackWebSocketService) return;
 
-    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+    const unsubscribe = playbackWebSocketService.subscribe((update: any) => {
       // Only process adPlaybackUpdate and displayData updates
-      if (update.type === 'adPlaybackUpdate' || update.type === 'displayData') {
+      const updateType = update.type;
+      if (updateType === 'adPlaybackUpdate' || updateType === 'displayData') {
         // Extract materialId and slotNumber from update
         // For adPlaybackUpdate, materialId and slotNumber are now included in the update
         // For displayData, materialId is in the update data
-        const materialId = (update as any).materialId || null;
-        const slotNumber = (update as any).slotNumber || (update.type === 'displayData' ? (update as any).sourceSlot : 1); // Default to slot 1 if not specified
+        const materialId = update.materialId || null;
+        const slotNumber = update.slotNumber || (updateType === 'displayData' ? update.sourceSlot : 1); // Default to slot 1 if not specified
         const deviceId = update.deviceId;
         
         // Skip if we don't have materialId (can't properly track)
@@ -329,10 +395,23 @@ const Dashboard = () => {
         
         // Only process if it's the user's ad OR if it's on the user's device (but not user's ad)
         if (isUserAd || isUserDevice) {
+          // ✅ REAL-TIME UPDATE: Trigger analytics refresh when ad plays end or start
+          // This ensures QR scans and ad play counts update quickly when new data arrives
+          if (updateType === 'adPlaybackUpdate') {
+            const adState = update.state || 'playing';
+            // Refresh analytics when ad ends (when play count increments) or starts (new play)
+            if (adState === 'ended' || adState === 'playing') {
+              triggerAnalyticsRefresh();
+            }
+          } else if (updateType === 'displayData' && update.data?.adDetails) {
+            // New ad started via displayData
+            triggerAnalyticsRefresh();
+          }
+          
           setCurrentlyPlayingAds(prev => {
             const newMap = new Map(prev);
             
-            if (update.type === 'adPlaybackUpdate') {
+            if (updateType === 'adPlaybackUpdate') {
               // Handle adPlaybackUpdate
               const adData: CurrentlyPlayingAd = {
                 adId: update.adId || '',
@@ -350,10 +429,10 @@ const Dashboard = () => {
               };
               
               newMap.set(key, adData);
-            } else if (update.type === 'displayData') {
+            } else if (updateType === 'displayData') {
               // Handle displayData (similar to admin client)
-              const displayData = (update as any).data;
-              const adDetails = displayData.adDetails;
+              const displayData = update.data;
+              const adDetails = displayData?.adDetails;
               
               if (adDetails) {
                 // New ad started
@@ -375,7 +454,7 @@ const Dashboard = () => {
                 };
                 
                 newMap.set(key, adData);
-              } else if (displayData.currentTime !== undefined) {
+              } else if (displayData?.currentTime !== undefined) {
                 // Just update progress/time for existing ad
                 const existing = prev.get(key);
                 if (existing) {
@@ -399,11 +478,14 @@ const Dashboard = () => {
       }
     });
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription and timeout on unmount
     return () => {
       unsubscribe();
+      if (analyticsRefreshTimeoutRef.current) {
+        clearTimeout(analyticsRefreshTimeoutRef.current);
+      }
     };
-  }, [userAdIds, userMaterialIds]);
+  }, [userAdIds, userMaterialIds, triggerAnalyticsRefresh]);
 
   // Clean up stale entries (no update in last 10 seconds)
   useEffect(() => {
@@ -647,6 +729,8 @@ const Dashboard = () => {
 
   // ✅ Analytics summary - use overallAnalyticsData for summary metrics (all-time totals)
   // Charts use analyticsData (filtered by period)
+  // ✅ Show loading state for overall analytics (separate from period-filtered analytics)
+  const isOverallAnalyticsLoading = overallAnalyticsLoading && !overallAnalyticsData;
   const analyticsSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
     totalAdsPlayed: 0,
     totalDisplayTime: 0,
@@ -837,37 +921,9 @@ const Dashboard = () => {
                   </AnimatePresence>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={210}>
-                <AreaChart data={analyticsData?.getUserAnalytics?.dailyStats || []} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
-                  <XAxis
-                    dataKey="date"
-                    axisLine={false}
-                    tickLine={false}
-                    stroke="white"
-                    tick={{ fontSize: 10 }}
-                    interval="preserveStartEnd"
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#2D3748', border: 'none', borderRadius: '8px' }}
-                    labelStyle={{ color: '#E2E8F0' }}
-                    itemStyle={{ color: '#A8FF35' }}
-                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                    formatter={(value, name) => [
-                      name === 'adsPlayed' ? value.toLocaleString() : value,
-                      name === 'adsPlayed' ? 'Ads Played' : 'Display Time'
-                    ]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="adsPlayed"
-                    stroke="#4FD1C7"
-                    fill="#2876c7"
-                    fillOpacity={0.6}
-                    name="adsPlayed"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartLoader />}>
+                <AnalyticsChart data={analyticsData?.getUserAnalytics?.dailyStats || []} />
+              </Suspense>
               {/* Currently Playing Ads - Real-time from WebSocket */}
               <div className="mt-6 mb-4">
                 <div className="p-5">
@@ -998,15 +1054,20 @@ const Dashboard = () => {
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-black text-lg font-semibold">QR Scans</span>
-                  {analyticsLoading && (
+                  {/* ✅ Show loading spinner for overall analytics query (these metrics come from overallAnalyticsData) */}
+                  {isOverallAnalyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
                 </div>
 
                 {/* Content */}
-                <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                <div className={isOverallAnalyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
                   <p className="text-3xl font-bold text-[#1b5087]">
-                    {analyticsSummary.totalQRScans?.toLocaleString() || 0}
+                    {isOverallAnalyticsLoading ? (
+                      <span className="text-gray-400 animate-pulse">...</span>
+                    ) : (
+                      analyticsSummary.totalQRScans?.toLocaleString() || 0
+                    )}
                   </p>
                   <p className="text-xs pt-3 text-gray-500">
                     All-time total (all ads)
@@ -1029,15 +1090,20 @@ const Dashboard = () => {
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-black text-lg font-semibold">Total Ad Played</span>
-                  {analyticsLoading && (
+                  {/* ✅ Show loading spinner for overall analytics query (these metrics come from overallAnalyticsData) */}
+                  {isOverallAnalyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
                 </div>
 
                 {/* Content */}
-                <div className={analyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
+                <div className={isOverallAnalyticsLoading ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
                   <p className="text-3xl font-bold text-[#1b5087]">
-                    {analyticsSummary.totalAdsPlayed.toLocaleString()}
+                    {isOverallAnalyticsLoading ? (
+                      <span className="text-gray-400 animate-pulse">...</span>
+                    ) : (
+                      analyticsSummary.totalAdsPlayed.toLocaleString()
+                    )}
                   </p>
                   <p className="text-xs pt-3 text-gray-500">
                     All-time total (all ads)
@@ -1205,7 +1271,9 @@ const Dashboard = () => {
             {/* Map Content */}
             <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }} className="relative z-0">
               {mapActiveTab === 'today' ? (
-                <UserMaterialsMap height="100%" className="rounded-b-lg" />
+                <Suspense fallback={<MapLoader />}>
+                  <UserMaterialsMap height="100%" className="rounded-b-lg" />
+                </Suspense>
               ) : (
                 <div className="h-full w-full relative z-0">
                   {!selectedAdForRoute ? (
@@ -1235,17 +1303,19 @@ const Dashboard = () => {
                       </div>
                     </div>
                   ) : (
-                    <MultiMaterialRouteMap
-                      key={`route-${selectedAdForRoute}-${selectedRouteDate}`}
-                      materialIds={selectedMaterialIds}
-                      date={selectedRouteDate}
-                      className="h-full w-full"
-                      style={{ height: '100%', position: 'relative', zIndex: 0 }}
-                      snapToRoads={true}
-                      disableAutoRefresh={shouldDisableAutoRefresh}
-                      adStartTime={selectedAdStartTime}
-                      adId={selectedAdIdForRoute}
-                    />
+                    <Suspense fallback={<MapLoader />}>
+                      <MultiMaterialRouteMap
+                        key={`route-${selectedAdForRoute}-${selectedRouteDate}`}
+                        materialIds={selectedMaterialIds}
+                        date={selectedRouteDate}
+                        className="h-full w-full"
+                        style={{ height: '100%', position: 'relative', zIndex: 0 }}
+                        snapToRoads={true}
+                        disableAutoRefresh={shouldDisableAutoRefresh}
+                        adStartTime={selectedAdStartTime}
+                        adId={selectedAdIdForRoute}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}

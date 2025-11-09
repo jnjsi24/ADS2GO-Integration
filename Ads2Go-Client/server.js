@@ -27,11 +27,29 @@ if (!fs.existsSync(indexPath)) {
 
 console.log('✅ Build directory and files found');
 
-// Serve static files from the build directory
-app.use(express.static(buildPath));
+// Serve static files from the build directory with proper caching headers
+app.use(express.static(buildPath, {
+  // Cache static assets (JS, CSS, images) for 1 year
+  maxAge: '1y',
+  // Enable ETag for better caching
+  etag: true,
+  // Don't cache index.html (always serve fresh version for code splitting)
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Handle React routing - return index.html for all non-API routes
+// This is critical for code splitting - all routes must serve index.html
 app.get('*', (req, res) => {
+  // Skip API routes and static file requests
+  if (req.path.startsWith('/api/') || req.path.startsWith('/static/')) {
+    return res.status(404).send('Not found');
+  }
   res.sendFile(path.join(buildPath, 'index.html'));
 });
 

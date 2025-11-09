@@ -4,6 +4,28 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// ✅ Load environment variables from .env files BEFORE checking them
+// React Scripts loads these automatically, but we need them here for the check
+// Load in priority order: .env.local overrides .env, .env.production overrides both in production
+try {
+  // Load .env first (lowest priority)
+  if (fs.existsSync(path.join(__dirname, '.env'))) {
+    require('dotenv').config({ path: path.join(__dirname, '.env') });
+  }
+  // Load .env.local (higher priority, overrides .env)
+  if (fs.existsSync(path.join(__dirname, '.env.local'))) {
+    require('dotenv').config({ path: path.join(__dirname, '.env.local') });
+  }
+  // In production build, .env.production takes highest precedence
+  // React Scripts sets NODE_ENV=production during build
+  if (fs.existsSync(path.join(__dirname, '.env.production'))) {
+    require('dotenv').config({ path: path.join(__dirname, '.env.production') });
+  }
+} catch (error) {
+  // dotenv might not be installed, but React Scripts will load .env files anyway
+  console.log('⚠️  Note: Could not load .env files in build script (React Scripts will load them)');
+}
+
 console.log('🚀 Starting optimized build process...');
 
 // Set memory limit for build process
@@ -53,9 +75,15 @@ try {
   // Run the build command
   console.log('📦 Building React app...');
   console.log('   Environment variables will be embedded in the build at this step.');
+  // ✅ Pass environment variables to react-scripts build
+  // React Scripts will also load .env files, but we've already loaded them above
   execSync('npx react-scripts build', { 
     stdio: 'inherit',
-    env: { ...process.env, CI: 'false' }
+    env: { 
+      ...process.env, 
+      CI: 'false',
+      NODE_ENV: 'production' // React Scripts sets this, but ensure it's set
+    }
   });
 
   // Verify build was successful

@@ -17,6 +17,8 @@ import {
 import { jwtDecode } from 'jwt-decode';
 import { NewsletterService } from '../services/newsletterService';
 import { generateGoogleOAuthURL } from '../config/googleOAuth';
+import { clearApolloCache } from '../services/apolloClient';
+import { clearDetailedAnalyticsCache } from '../pages/USERS/DetailedAnalytics';
 
 // Types
 type UserRole = 'USER';
@@ -411,6 +413,10 @@ export const UserAuthProvider: React.FC<{
 
       // Clear Apollo store AFTER clearing tokens and state (no refetch)
       await apolloClient.clearStore();
+      
+      // ✅ Clear persistent cache from localStorage
+      clearApolloCache();
+      clearDetailedAnalyticsCache();
       
       // Navigate to login
       navigate('/login');

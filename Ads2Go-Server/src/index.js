@@ -130,11 +130,12 @@ EmailService.initializeTransporter();
 EmailService.verifyConfiguration()
   .then(isConfigured => {
     if (isConfigured) {
-      logger.info('✅ Email Service: Ready and configured (Resend API)');
+      logger.info('✅ Email Service: Ready and configured (SMTP)');
     } else {
       logger.warn('⚠️  Email Service: Configuration issues detected');
-      logger.warn('   Check your .env file for RESEND_API_KEY');
-      logger.warn('   Sign up at https://resend.com and add your API key to Railway');
+      logger.warn('   Check your .env file for SMTP configuration');
+      logger.warn('   Required: SMTP_HOST, SMTP_USER, SMTP_PASSWORD');
+      logger.warn('   Optional: SMTP_PORT (default: 587), SMTP_SECURE (default: false), SMTP_FROM_EMAIL');
     }
   })
   .catch(err => {
