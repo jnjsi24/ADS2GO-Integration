@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
+import { AnalyticsProvider, AnalyticsErrorBoundary } from './contexts/AnalyticsContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
 import { NotificationProvider } from './contexts/NotificationContext';
