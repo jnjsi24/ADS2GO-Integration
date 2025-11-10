@@ -197,4 +197,31 @@ const client = new ApolloClient({
   },
 });
 
+/**
+ * Clear any Apollo cache-related data from localStorage
+ * This function is called during logout to ensure all cached data is cleared
+ */
+export const clearApolloCache = (): void => {
+  try {
+    // Clear any Apollo-related localStorage keys if they exist
+    // Apollo Client with InMemoryCache doesn't persist by default,
+    // but this function provides a hook for clearing any custom cache-related storage
+    const apolloCacheKeys = Object.keys(localStorage).filter(key => 
+      key.toLowerCase().includes('apollo') || 
+      key.toLowerCase().includes('apollo-client') ||
+      key.startsWith('apollo:')
+    );
+    
+    apolloCacheKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    if (apolloCacheKeys.length > 0) {
+      console.log(`🗑️ [Apollo Client] Cleared ${apolloCacheKeys.length} cache-related localStorage entries`);
+    }
+  } catch (error) {
+    console.error('Error clearing Apollo cache from localStorage:', error);
+  }
+};
+
 export default client;

@@ -91,7 +91,6 @@ const typeDefs = gql`
     totalMaterials: Int!
     totalDevices: Int!
     totalQRScans: Int!
-    qrScanConversionRate: Float!
   }
 
   type UserAdPerformance {
@@ -102,7 +101,6 @@ const typeDefs = gql`
     totalAdPlayTime: Float!
     totalQRScans: Int!
     averageAdCompletionRate: Float!
-    qrScanConversionRate: Float!
     lastUpdated: String!
     materials: [UserMaterialPerformance!]!
   }

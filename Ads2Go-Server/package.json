@@ -16,7 +16,9 @@
     "script:create-admin": "node scripts/createSuperAdmin.js",
     "script:verify-ads": "node scripts/verifyAdPlays.js",
     "script:migrate-newsletter": "node scripts/migrateNewsletterSources.js",
-    "script:recalculate-distances": "node scripts/recalculateDistances.js"
+    "script:recalculate-distances": "node scripts/recalculateDistances.js",
+    "script:rebuild-user-analytics": "node scripts/rebuildUserAnalytics.js",
+    "script:rebuild-user-analytics:clean": "node scripts/rebuildUserAnalytics.js --delete"
   },
   "author": "",
   "license": "ISC",

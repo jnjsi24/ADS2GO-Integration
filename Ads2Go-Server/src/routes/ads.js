@@ -994,53 +994,14 @@ router.get('/qr-redirect', async (req, res) => {
     console.log(`Redirect URL: ${redirectUrl}`);
     console.log('=====================================\n');
 
-    // Track the QR scan using new ad-based structure
+    // ⚠️ DEPRECATED: Analytics collection writes removed
+    // QR scans are now tracked via DeviceTracking/DeviceDataHistoryV2 when devices report them
+    // QR scan tracking happens automatically when Android players send QR scan events
     if (adId && adTitle && materialId && slotNumber) {
       try {
-        const Analytics = require('../models/analytics');
-        const Material = require('../models/Material');
-        
-        // Get material type
-        const material = await Material.findOne({ materialId: materialId });
-        const materialType = material ? material.materialType : 'HEADDRESS';
-        
-        // Create or update analytics for this ad
-        const analytics = await Analytics.createOrUpdateAdAnalytics(
-          adId,
-          adTitle || `Ad ${adId}`,
-          materialId,
-          parseInt(slotNumber),
-          `QR-REDIRECT-${materialId}-${slotNumber}-${Date.now()}`,
-          {
-            materialType: materialType,
-            deviceInfo: null,
-            currentLocation: null,
-            networkStatus: { isOnline: false, lastSeen: new Date() }
-          }
-        );
-
-        // Add QR scan to the specific material
-        const qrScanData = {
-          adId: adId,
-          adTitle: adTitle || `Ad ${adId}`,
-          scanTimestamp: new Date(),
-          qrCodeUrl: redirectUrl || website,
-          userAgent: req.get('User-Agent') || 'QR Scanner',
-          deviceType: 'mobile',
-          browser: 'QR Scanner',
-          operatingSystem: 'Unknown',
-          ipAddress: req.ip || req.connection.remoteAddress,
-          country: 'Unknown',
-          city: 'Unknown',
-          location: null,
-          timeOnPage: 0,
-          converted: false,
-          conversionType: null,
-          conversionValue: 0
-        };
-
-        await analytics.addQRScan(materialId, parseInt(slotNumber), qrScanData);
-        console.log(`✅ QR scan tracked for ad: ${adTitle}`);
+        // QR scan is logged but not written to Analytics collection
+        // Real QR scan tracking happens via device tracking system
+        console.log(`ℹ️ QR scan logged for ad: ${adTitle} (tracked via DeviceTracking/DeviceDataHistoryV2)`);
       } catch (trackingError) {
         console.error('❌ Error tracking QR scan:', trackingError);
       }

@@ -432,8 +432,10 @@ module.exports = {
                     networkStatus: true
                   };
                   
-                  await AnalyticsService.updateAnalytics(deviceId, materialId, slotNumber, analyticsData);
-                  console.log(`✅ Analytics updated for tablet device: ${deviceId} -> Slot ${slotNumber} -> Ad ${slot.adId}`);
+                  // ⚠️ DEPRECATED: Analytics collection writes removed
+                  // Analytics data is now tracked via DeviceTracking/DeviceDataHistoryV2
+                  // Tablet registration data will be captured when device sends tracking data
+                  console.log(`ℹ️ Tablet registered: ${deviceId} -> Slot ${slotNumber} -> Ad ${slot.adId} (Analytics tracking via DeviceTracking)`);
                 }
               }
             }

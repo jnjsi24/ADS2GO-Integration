@@ -12,7 +12,6 @@ export const GET_USER_ANALYTICS = gql`
         totalMaterials
         totalDevices
         totalQRScans
-        qrScanConversionRate
       }
       adPerformance {
         adId
@@ -22,7 +21,6 @@ export const GET_USER_ANALYTICS = gql`
         totalAdPlayTime
         totalQRScans
         averageAdCompletionRate
-        qrScanConversionRate
         lastUpdated
         materials {
           materialId

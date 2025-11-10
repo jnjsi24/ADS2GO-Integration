@@ -664,12 +664,15 @@ const DetailedAnalytics: React.FC = () => {
     if (!user?.userId) return;
 
     // ✅ PERFORMANCE: Check cache first before fetching
+    // ✅ IMPORTANT: For "All Advertisement" with period="all", always fetch fresh data to ensure accuracy
     const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, dateRange, isCustomDateRange);
     const cache = analyticsCacheRef.current;
     const cached = cache.get(cacheKey);
     const now = Date.now();
+    const isAllAdsAllPeriod = selectedAd === 'all' && selectedPeriod === 'all' && selectedDevice === 'all' && !isCustomDateRange;
     
-    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+    // ✅ Skip cache for "All Advertisement" + "All Time" to ensure fresh data from UserAnalytics collection
+    if (!isAllAdsAllPeriod && cached && (now - cached.timestamp) < CACHE_TTL) {
       // ✅ Cache hit - update lastAccessed and use cached data immediately
       cached.lastAccessed = now; // Update LRU timestamp
       // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
@@ -685,6 +688,8 @@ const DetailedAnalytics: React.FC = () => {
       setDirectAnalyticsLoading(false);
       setIsFiltersLoading(false);
       return; // Skip fetch - use cache
+    } else if (isAllAdsAllPeriod) {
+      console.log('🔄 [DetailedAnalytics] Skipping cache for "All Advertisement" + "All Time" to fetch fresh data from UserAnalytics collection');
     }
 
     // ✅ Cancel previous request if it's still in progress
@@ -1065,13 +1070,27 @@ const DetailedAnalytics: React.FC = () => {
     const hasDeviceFilter = selectedDevice !== 'all';
     const hasAnyFilter = hasAdFilter || hasDeviceFilter || hasDateFilter;
     
-    // ✅ CRITICAL FIX: When ANY filter is active, DON'T use overallAnalyticsData
-    // This prevents showing wrong data (e.g., 4 QR scans) before filtered data (1 QR scan) loads
-    // Only show overall data when NO filters are active
+    // ✅ CRITICAL FIX: Always prefer directAnalyticsData (from UserAnalytics collection) when available
+    // This ensures we use the most up-to-date data from the UserAnalytics collection
+    // Only fallback to GraphQL data if directAnalyticsData is not available
     
-    // Default state: no filters applied - use cumulative totals
-    // Only show cumulative when: period='all', no custom date range, ad='all', device='all'
+    // ✅ When no filters are active (period='all', ad='all', device='all'), prefer directAnalyticsData
     if (!hasAnyFilter && selectedPeriod === 'all' && !isCustomDateRange) {
+      // First, try directAnalyticsData (from UserAnalytics collection - most accurate)
+      if (directAnalyticsData?.summary) {
+        console.log('✅ [DetailedAnalytics] Using directAnalyticsData summary for "all" period (from UserAnalytics collection):', directAnalyticsData.summary);
+        return {
+          totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
+          totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
+          averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
+          totalAds: directAnalyticsData.summary.totalAds || 0,
+          activeAds: directAnalyticsData.summary.activeAds || 0,
+          totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
+          totalDevices: directAnalyticsData.summary.totalDevices || 0,
+          totalQRScans: directAnalyticsData.summary.totalQRScans || 0
+        };
+      }
+      // Fallback to overallAnalyticsData from GraphQL if directAnalyticsData is not available
       const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
         totalAdsPlayed: 0,
         totalDisplayTime: 0,
@@ -1082,6 +1101,7 @@ const DetailedAnalytics: React.FC = () => {
         totalDevices: 0,
         totalQRScans: 0
       };
+      console.log('⚠️ [DetailedAnalytics] Falling back to overallAnalyticsData (GraphQL) for "all" period:', overallSummary);
       return overallSummary;
     }
     
@@ -1166,7 +1186,7 @@ const DetailedAnalytics: React.FC = () => {
       totalDevices: 0,
       totalQRScans: 0
     };
-  }, [overallAnalyticsData, directAnalyticsData, analyticsData, deviceAnalytics, selectedAd, selectedDevice, selectedPeriod, isCustomDateRange, dateRange]);
+  }, [overallAnalyticsData, directAnalyticsData, analyticsData, deviceAnalytics, selectedAd, selectedDevice, selectedPeriod, isCustomDateRange, dateRange, directAnalyticsLoading]);
 
   // Format display time helper
   const formatDisplayTime = useCallback((seconds: number) => {

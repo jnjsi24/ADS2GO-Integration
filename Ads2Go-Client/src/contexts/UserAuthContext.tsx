@@ -63,6 +63,7 @@ export const UserAuthProvider: React.FC<{
   navigate: (path: string) => void;
 }> = ({ children, navigate }) => {
   const hasRedirectedRef = useRef(false);
+  const justLoggedInRef = useRef(false); // Track if we just logged in to prevent initializeAuth from overwriting
   const [user, setUser] = useState<User | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -146,7 +147,23 @@ export const UserAuthProvider: React.FC<{
           throw new Error('Invalid user token');
         }
 
-        const { data } = await fetchUserDetails();
+        // If we just logged in, skip fetching (user state is already set from login response)
+        // This prevents overwriting fresh login data with potentially stale cache
+        // The flag is set in login() before setting user state, so if it's true, we just logged in
+        if (justLoggedInRef.current) {
+          // Skip fetching - user state is already set from login response
+          // The login() function already set the user state and initialized flags
+          setIsLoading(false);
+          setIsInitialized(true);
+          // Don't reset the flag here - let login() reset it after navigation
+          return;
+        }
+
+        // Use cache-first for performance on initial load, but verify user matches token
+        // For app reloads, this will use cache if available (faster)
+        const { data } = await fetchUserDetails({
+          fetchPolicy: 'cache-and-network', // Use cache if available, but fetch fresh in background
+        });
         const freshUserRaw = data?.getOwnUserDetails;
         
         if (!freshUserRaw) {
@@ -186,16 +203,33 @@ export const UserAuthProvider: React.FC<{
           contactNumber: freshUserRaw.contactNumber,
           profilePicture: getImageUrl(freshUserRaw.profilePicture),
         };
-        setUser(freshUser);
-        setUserEmail(freshUser.email);
+        
+        // Only update state if the user email matches the token (prevent showing wrong user)
+        // Also, don't overwrite if we already have the correct user (prevents unnecessary updates)
+        if (freshUser.email === decoded.email) {
+          // Only update if user is null or email doesn't match (prevents overwriting fresh login data)
+          if (!user || user.email !== freshUser.email) {
+            setUser(freshUser);
+            setUserEmail(freshUser.email);
+          }
+        } else {
+          // Token email doesn't match fetched user - clear everything
+          console.error('Token email does not match user email');
+          localStorage.removeItem('userToken');
+          localStorage.removeItem('keepLoggedIn');
+          localStorage.removeItem('loginTimestamp');
+          setUser(null);
+          setUserEmail('');
+        }
+        
         setIsLoading(false);
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-          if (!freshUser.isEmailVerified) {
+          if (freshUser.email === decoded.email && !freshUser.isEmailVerified) {
             hasRedirectedRef.current = true;
             navigate('/verify-email');
-          } else if (publicPages.includes(window.location.pathname)) {
+          } else if (freshUser.email === decoded.email && publicPages.includes(window.location.pathname)) {
             hasRedirectedRef.current = true;
             console.log('🔄 Redirecting from public page to dashboard');
             navigate('/dashboard');
@@ -204,6 +238,8 @@ export const UserAuthProvider: React.FC<{
       } catch (err) {
         console.error('Error initializing user auth:', err);
         localStorage.removeItem('userToken');
+        localStorage.removeItem('keepLoggedIn');
+        localStorage.removeItem('loginTimestamp');
         setUser(null);
         setUserEmail('');
         setIsLoading(false);
@@ -216,10 +252,23 @@ export const UserAuthProvider: React.FC<{
       setIsLoading(false);
       setIsInitialized(true);
     });
-  }, [fetchUserDetails, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchUserDetails, navigate]); // Intentionally not including user to avoid re-running on user state changes
 
   const login = async (email: string, password: string, keepLoggedIn: boolean = false): Promise<User | null> => {
     try {
+      // Clear previous user state and Apollo cache to prevent stale data
+      setUser(null);
+      setUserEmail('');
+      
+      // Clear Apollo cache for user queries to prevent showing previous user's cached data
+      try {
+        await apolloClient.cache.evict({ fieldName: 'getOwnUserDetails' });
+        await apolloClient.cache.gc();
+      } catch (cacheError) {
+        console.warn('Error clearing cache:', cacheError);
+      }
+      
       const deviceInfo = {
         deviceId: 'web-client',
         deviceType: 'web',
@@ -254,6 +303,27 @@ export const UserAuthProvider: React.FC<{
           localStorage.removeItem('loginTimestamp');
         }
 
+        // Helper function to construct full image URL (same as in initializeAuth)
+        const getImageUrl = (imagePath: string | undefined | null) => {
+          if (!imagePath) return null;
+          // If it's already a full URL, return as is
+          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+          }
+          // If it starts with /uploads, prepend server URL
+          if (imagePath.startsWith('/uploads')) {
+            const serverUrl = process.env.REACT_APP_SERVER_URL;
+            if (!serverUrl) {
+              console.error('REACT_APP_SERVER_URL not configured');
+              return imagePath; // Return original path as fallback
+            }
+            return `${serverUrl}${imagePath}`;
+          }
+          return imagePath;
+        };
+
+        // Use login response data directly - it's already fresh from the server
+        // No need for an extra network request, which speeds up login significantly
         const user: User = {
           userId: userRaw.id,
           email: userRaw.email,
@@ -266,25 +336,43 @@ export const UserAuthProvider: React.FC<{
           companyName: userRaw.companyName,
           companyAddress: userRaw.companyAddress,
           contactNumber: userRaw.contactNumber,
-          profilePicture: userRaw.profilePicture,
+          profilePicture: getImageUrl(userRaw.profilePicture),
         };
+        
+        // Set flag to prevent initializeAuth from overwriting this fresh data
+        justLoggedInRef.current = true;
+        
+        // Update state immediately with fresh login data
         setUser(user);
         setUserEmail(user.email);
+        setIsLoading(false);
+        setIsInitialized(true);
 
         if (!user.isEmailVerified) {
           navigate('/verify-email');
+          // Reset flag after a delay to allow initializeAuth to see it
+          setTimeout(() => {
+            justLoggedInRef.current = false;
+          }, 2000);
           return user;
         }
 
+        // Navigate immediately - no delay needed
+        navigate('/dashboard');
+        
+        // Reset flag after navigation (initializeAuth won't overwrite now)
         setTimeout(() => {
-          navigate('/dashboard');
-        }, 0);
+          justLoggedInRef.current = false;
+        }, 2000);
 
         return user;
       } else {
         throw new Error('Invalid login response or user type');
       }
     } catch (error: any) {
+      // Reset flag on error
+      justLoggedInRef.current = false;
+      
       // Extract GraphQL or network error message for UI
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;

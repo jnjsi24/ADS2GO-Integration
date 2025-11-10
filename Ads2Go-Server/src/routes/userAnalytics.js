@@ -294,6 +294,75 @@ router.post('/:userId/sync-from-history', async (req, res) => {
   }
 });
 
+// 🔄 POST /api/userAnalytics/:userId/force-refresh
+// Force full refresh of UserAnalytics for a specific user (ignores lastSyncTimestamp)
+router.post('/:userId/force-refresh', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.body; // Optional: custom date range
+    
+    console.log(`🔄 [API] Force refresh requested for user ${userId}`);
+    
+    const result = await UserAnalyticsService.forceFullSyncUser(userId, startDate, endDate);
+    
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.message || 'Failed to force refresh user analytics',
+        error: result.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User analytics force refreshed successfully',
+      data: result.data || result
+    });
+  } catch (error) {
+    console.error('Error forcing refresh of user analytics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to force refresh user analytics',
+      message: error.message
+    });
+  }
+});
+
+// 🔄 POST /api/userAnalytics/force-refresh-all
+// Force full refresh of UserAnalytics for ALL users (ignores lastSyncTimestamp)
+// WARNING: This can be resource-intensive. Use with caution.
+router.post('/force-refresh-all', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body; // Optional: custom date range
+    
+    console.log('🔄 [API] Force refresh all users requested');
+    
+    // Return immediately and process in background
+    res.json({
+      success: true,
+      message: 'Force refresh all users started in background. Check server logs for progress.',
+      note: 'This operation may take several minutes. Monitor server logs for completion status.'
+    });
+    
+    // Process in background (don't block response)
+    UserAnalyticsService.forceFullSyncAllUsers(startDate, endDate)
+      .then(result => {
+        console.log('🎉 [API] Force refresh all users completed:', result);
+      })
+      .catch(error => {
+        console.error('❌ [API] Force refresh all users failed:', error);
+      });
+    
+  } catch (error) {
+    console.error('Error starting force refresh all users:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to start force refresh all users',
+      message: error.message
+    });
+  }
+});
+
 // GET /api/userAnalytics
 // Get all user analytics (for admin purposes)
 router.get('/', async (req, res) => {

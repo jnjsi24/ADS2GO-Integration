@@ -112,7 +112,6 @@ const AdAnalyticsSchema = new mongoose.Schema({
       startTime: { type: Date }
     },
     totalQRScans: { type: Number, default: 0 },
-    qrScanConversionRate: { type: Number, default: 0 },
     lastQRScan: { type: Date },
     qrScansByAd: [{
       adId: { type: String, required: true },
@@ -207,7 +206,6 @@ const AdAnalyticsSchema = new mongoose.Schema({
   totalAdImpressions: { type: Number, default: 0 },
   totalQRScans: { type: Number, default: 0 },
   averageAdCompletionRate: { type: Number, default: 0 },
-  qrScanConversionRate: { type: Number, default: 0 },
   
   // Ad performance by material
   materialPerformance: [{
@@ -260,26 +258,49 @@ const UserAnalyticsSchema = new mongoose.Schema({
     unique: true // Unique constraint automatically creates an index
   },
   
+  // User name for easy identification in MongoDB Compass
+  userName: {
+    type: String,
+    default: null,
+    index: true // Index for easy searching
+  },
+  
   // Array of ads for this user
   ads: [AdAnalyticsSchema],
-  
-  // Lean summary structure for fast dashboards
-  summary: {
-    totalAdImpressions: { type: Number, default: 0 },
-    totalAdPlays: { type: Number, default: 0 },
-    totalAdPlayTime: { type: Number, default: 0 },
-    totalQRScans: { type: Number, default: 0 },
-    totalDevices: { type: Number, default: 0 }
-  },
 
   // Daily buckets (optional, populated by sync job)
+  // ✅ RESTRUCTURED: Grouped by date (like DeviceDataHistoryV2), with nested ads and materials
   dailyStats: [{
     date: { type: String, required: true },
-    impressions: { type: Number, default: 0 },
-    adsPlayed: { type: Number, default: 0 },
-    displayTime: { type: Number, default: 0 },
-    qrScans: { type: Number, default: 0 },
-    completionRate: { type: Number, default: 0 }
+    ads: [{
+      adId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Ad',
+        required: true
+      },
+      materials: [{
+        materialId: { type: String, required: true },
+        impressions: { type: Number, default: 0 },
+        adsPlayed: { type: Number, default: 0 },
+        displayTime: { type: Number, default: 0 },
+        qrScans: { type: Number, default: 0 },
+        completionRate: { type: Number, default: 0 }
+      }],
+      totals: {
+        impressions: { type: Number, default: 0 },
+        adsPlayed: { type: Number, default: 0 },
+        displayTime: { type: Number, default: 0 },
+        qrScans: { type: Number, default: 0 },
+        completionRate: { type: Number, default: 0 }
+      }
+    }],
+    totals: {
+      impressions: { type: Number, default: 0 },
+      adsPlayed: { type: Number, default: 0 },
+      displayTime: { type: Number, default: 0 },
+      qrScans: { type: Number, default: 0 },
+      completionRate: { type: Number, default: 0 }
+    }
   }],
 
   // User-level aggregated analytics
@@ -291,21 +312,7 @@ const UserAnalyticsSchema = new mongoose.Schema({
   totalAdImpressions: { type: Number, default: 0 },
   totalQRScans: { type: Number, default: 0 },
   averageAdCompletionRate: { type: Number, default: 0 },
-  qrScanConversionRate: { type: Number, default: 0 },
   
-  // User performance by ad
-  adPerformance: [{
-    adId: { type: mongoose.Schema.Types.ObjectId, ref: 'Ad', required: true },
-    adTitle: { type: String, required: true },
-    totalMaterials: { type: Number, default: 0 },
-    totalDevices: { type: Number, default: 0 },
-    totalAdPlayTime: { type: Number, default: 0 },
-    totalAdImpressions: { type: Number, default: 0 },
-    totalQRScans: { type: Number, default: 0 },
-    averageCompletionRate: { type: Number, default: 0 },
-    lastActivity: { type: Date }
-  }],
-
   // Material breakdown - shows which data comes from which material
   materialBreakdown: [{
     materialId: { type: String, required: true },
@@ -337,11 +344,137 @@ const UserAnalyticsSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   lastUpdated: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+  
+  // ⚡ PERFORMANCE OPTIMIZATION: Track last sync timestamp for incremental updates
+  lastSyncTimestamp: { 
+    type: Date, 
+    default: Date.now,
+    index: true // Index for fast queries
+  },
+  
+  // ⚡ PERFORMANCE OPTIMIZATION: Track when user last accessed analytics
+  lastAnalyticsAccess: { 
+    type: Date, 
+    default: null,
+    index: true // Index for smart background sync
+  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+});
+
+// Pre-save hook to remove redundant fields if they exist
+UserAnalyticsSchema.pre('save', function(next) {
+  // Always remove summary field if it exists (it's redundant with individual total fields)
+  if (this.summary !== undefined) {
+    delete this.summary;
+    this.summary = undefined;
+  }
+  // Always remove qrScanConversionRate field (no longer needed)
+  if (this.qrScanConversionRate !== undefined) {
+    delete this.qrScanConversionRate;
+    this.qrScanConversionRate = undefined;
+  }
+  // Always remove adPerformance field (redundant with ads array)
+  if (this.adPerformance !== undefined) {
+    delete this.adPerformance;
+    this.adPerformance = undefined;
+  }
+  // Also ensure it's marked as unset
+  this.$unset = this.$unset || {};
+  this.$unset.summary = '';
+  this.$unset.qrScanConversionRate = '';
+  this.$unset.adPerformance = '';
+  next();
+});
+
+// Post-init hook to remove redundant fields when documents are loaded from database
+UserAnalyticsSchema.post('init', function(doc) {
+  if (doc.summary !== undefined) {
+    delete doc.summary;
+    doc.summary = undefined;
+  }
+  if (doc.qrScanConversionRate !== undefined) {
+    delete doc.qrScanConversionRate;
+    doc.qrScanConversionRate = undefined;
+  }
+  if (doc.adPerformance !== undefined) {
+    delete doc.adPerformance;
+    doc.adPerformance = undefined;
+  }
+});
+
+// Pre-update hooks to remove redundant fields from update operations and ensure they're unset
+UserAnalyticsSchema.pre('updateOne', function(next) {
+  const update = this.getUpdate();
+  if (update && typeof update === 'object') {
+    // Remove summary from $set if present
+    if (update.$set && update.$set.summary) {
+      delete update.$set.summary;
+    }
+    if (update.summary) {
+      delete update.summary;
+    }
+    // Remove qrScanConversionRate from $set if present
+    if (update.$set && update.$set.qrScanConversionRate) {
+      delete update.$set.qrScanConversionRate;
+    }
+    if (update.qrScanConversionRate) {
+      delete update.qrScanConversionRate;
+    }
+    // Remove adPerformance from $set if present
+    if (update.$set && update.$set.adPerformance) {
+      delete update.$set.adPerformance;
+    }
+    if (update.adPerformance) {
+      delete update.adPerformance;
+    }
+    // Ensure $unset includes all redundant fields to remove them from database
+    if (!update.$unset) {
+      update.$unset = {};
+    }
+    update.$unset.summary = '';
+    update.$unset.qrScanConversionRate = '';
+    update.$unset.adPerformance = '';
+  }
+  next();
+});
+
+UserAnalyticsSchema.pre('findOneAndUpdate', function(next) {
+  const update = this.getUpdate();
+  if (update && typeof update === 'object') {
+    // Remove summary from $set if present
+    if (update.$set && update.$set.summary) {
+      delete update.$set.summary;
+    }
+    if (update.summary) {
+      delete update.summary;
+    }
+    // Remove qrScanConversionRate from $set if present
+    if (update.$set && update.$set.qrScanConversionRate) {
+      delete update.$set.qrScanConversionRate;
+    }
+    if (update.qrScanConversionRate) {
+      delete update.qrScanConversionRate;
+    }
+    // Remove adPerformance from $set if present
+    if (update.$set && update.$set.adPerformance) {
+      delete update.$set.adPerformance;
+    }
+    if (update.adPerformance) {
+      delete update.adPerformance;
+    }
+    // Ensure $unset includes all redundant fields to remove them from database
+    if (!update.$unset) {
+      update.$unset = {};
+    }
+    update.$unset.summary = '';
+    update.$unset.qrScanConversionRate = '';
+    update.$unset.adPerformance = '';
+  }
+  next();
 });
 
 // Add virtual for display label
@@ -378,8 +511,6 @@ UserAnalyticsSchema.statics.createOrUpdateUserAnalytics = async function(userId,
       totalAdImpressions: 0,
       totalQRScans: 0,
       averageAdCompletionRate: 0,
-      qrScanConversionRate: 0,
-      adPerformance: [],
       isActive: true
     });
   }
@@ -400,7 +531,6 @@ UserAnalyticsSchema.statics.createOrUpdateUserAnalytics = async function(userId,
       totalAdImpressions: 0,
       totalQRScans: 0,
       averageAdCompletionRate: 0,
-      qrScanConversionRate: 0,
       materialPerformance: [],
       errorLogs: [],
       isActive: true,
@@ -495,10 +625,6 @@ UserAnalyticsSchema.methods.updateUserTotals = function() {
   // Calculate averages
   this.averageAdCompletionRate = this.ads.length > 0 
     ? this.ads.reduce((sum, ad) => sum + ad.averageAdCompletionRate, 0) / this.ads.length 
-    : 0;
-  
-  this.qrScanConversionRate = this.totalAdImpressions > 0 
-    ? (this.totalQRScans / this.totalAdImpressions) * 100 
     : 0;
 };
 

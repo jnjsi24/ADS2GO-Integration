@@ -11,22 +11,32 @@ class UserAnalyticsSyncJob {
     this.isSyncing = false; // Track if a sync operation is currently running
   }
 
-  // ✨ OPTIMIZATION: Reduced from 3 minutes to 10 minutes to reduce memory pressure
-  // Start the sync job - runs every 10 minutes
+  // ⚡ PERFORMANCE OPTIMIZATION: Smart sync with active/inactive user separation
+  // Start the sync job - runs smart sync (active users frequently, inactive users rarely)
   start() {
     if (this.isRunning) {
       console.log('⚠️ UserAnalyticsSyncJob is already running');
       return;
     }
 
-    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 10 minutes');
+    console.log('🚀 Starting UserAnalyticsSyncJob - Smart sync mode');
+    console.log('   - Active users: Every 5 minutes');
+    console.log('   - Inactive users: Every hour');
     
     // Run immediately on start
-    this.syncAllUsers();
+    this.syncActiveUsers();
     
-    // Schedule to run every 10 minutes (reduced from 3 minutes to reduce memory pressure)
-    this.cronJob = cron.schedule('*/10 * * * *', () => {
-      this.syncAllUsers();
+    // ⚡ PERFORMANCE OPTIMIZATION: Sync active users frequently (5 minutes)
+    this.activeUsersCronJob = cron.schedule('*/5 * * * *', () => {
+      this.syncActiveUsers();
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+    
+    // ⚡ PERFORMANCE OPTIMIZATION: Sync inactive users less frequently (hourly)
+    this.inactiveUsersCronJob = cron.schedule('0 * * * *', () => {
+      this.syncInactiveUsers();
     }, {
       scheduled: true,
       timezone: 'Asia/Manila'
@@ -37,81 +47,176 @@ class UserAnalyticsSyncJob {
 
   // Stop the sync job
   stop() {
-    if (this.cronJob) {
-      this.cronJob.destroy();
-      this.cronJob = null;
+    if (this.activeUsersCronJob) {
+      this.activeUsersCronJob.destroy();
+      this.activeUsersCronJob = null;
+    }
+    if (this.inactiveUsersCronJob) {
+      this.inactiveUsersCronJob.destroy();
+      this.inactiveUsersCronJob = null;
     }
     this.isRunning = false;
     console.log('🛑 UserAnalyticsSyncJob stopped');
   }
 
-  // Sync all users with fresh data from DeviceDataHistoryV2
-  async syncAllUsers() {
-    // ✨ OPTIMIZATION: Prevent concurrent executions to avoid memory crashes
+  // ⚡ PERFORMANCE OPTIMIZATION: Sync active users (accessed analytics in last 24 hours)
+  async syncActiveUsers() {
     if (this.isSyncing) {
-      console.log('⏭️ Skipping sync - previous sync still running');
+      console.log('⏭️ Skipping active users sync - previous sync still running');
       return;
     }
 
     this.isSyncing = true;
     
     try {
-      console.log('🔄 Starting UserAnalytics sync with DeviceDataHistoryV2...');
+      console.log('⚡ [ACTIVE] Starting active users sync...');
       const startTime = new Date();
       
-      // Get all users
-      const users = await User.find({}).select('_id firstName lastName');
-      logger.database(`👥 Found ${users.length} users to sync`);
+      // Get active users (accessed analytics in last 24 hours)
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      
+      const activeUsers = await User.find({
+        $or: [
+          { lastAnalyticsAccess: { $gte: twentyFourHoursAgo } },
+          { 'lastAnalyticsAccess': { $exists: false } } // Include users who never accessed (new users)
+        ]
+      }).select('_id firstName lastName lastAnalyticsAccess').limit(100); // Limit to prevent overload
+      
+      logger.database(`👥 [ACTIVE] Found ${activeUsers.length} active users to sync`);
 
-      if (users.length === 0) {
-        console.log('❌ No users found for sync');
+      if (activeUsers.length === 0) {
+        console.log('ℹ️ [ACTIVE] No active users found for sync');
         return;
       }
 
-      // Calculate date range (last 7 days)
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
+      // Use incremental sync for active users (faster)
+      await this.syncUsersBatch(activeUsers, true); // true = incremental sync
+      
+      const endTime = new Date();
+      const duration = (endTime - startTime) / 1000;
+      logger.database(`✅ [ACTIVE] Active users sync completed in ${duration.toFixed(2)}s`);
+      
+      this.lastSync = endTime;
 
-      let successCount = 0;
-      let errorCount = 0;
+    } catch (error) {
+      console.error('❌ [ACTIVE] Error in active users sync:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
 
-      // Sync each user
-      for (const user of users) {
+  // ⚡ PERFORMANCE OPTIMIZATION: Sync inactive users (haven't accessed analytics recently)
+  async syncInactiveUsers() {
+    if (this.isSyncing) {
+      console.log('⏭️ Skipping inactive users sync - previous sync still running');
+      return;
+    }
+
+    this.isSyncing = true;
+    
+    try {
+      console.log('⏰ [INACTIVE] Starting inactive users sync...');
+      const startTime = new Date();
+      
+      // Get inactive users (haven't accessed analytics in last 24 hours)
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      
+      const inactiveUsers = await User.find({
+        lastAnalyticsAccess: { $lt: twentyFourHoursAgo }
+      }).select('_id firstName lastName lastAnalyticsAccess').limit(50); // Limit inactive users
+      
+      logger.database(`👥 [INACTIVE] Found ${inactiveUsers.length} inactive users to sync`);
+
+      if (inactiveUsers.length === 0) {
+        console.log('ℹ️ [INACTIVE] No inactive users found for sync');
+        return;
+      }
+
+      // Use incremental sync for inactive users too (still faster than full sync)
+      await this.syncUsersBatch(inactiveUsers, true); // true = incremental sync
+      
+      const endTime = new Date();
+      const duration = (endTime - startTime) / 1000;
+      logger.database(`✅ [INACTIVE] Inactive users sync completed in ${duration.toFixed(2)}s`);
+      
+      this.lastSync = endTime;
+
+    } catch (error) {
+      console.error('❌ [INACTIVE] Error in inactive users sync:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // ⚡ PERFORMANCE OPTIMIZATION: Sync users in batch with parallel processing
+  async syncUsersBatch(users, useIncrementalSync = true) {
+    const startTime = new Date();
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Calculate date range (last 7 days for incremental, all time for full)
+    const endDate = new Date();
+    const startDate = useIncrementalSync 
+      ? null // Will use lastSyncTimestamp from UserAnalytics (incremental)
+      : new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
+
+    // ⚡ PERFORMANCE OPTIMIZATION: Process users in parallel (batches of 5)
+    const batchSize = 5;
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize);
+      
+      // Process batch in parallel
+      const batchPromises = batch.map(async (user) => {
         try {
           logger.database(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
           
-          // New: Sync using userId-based aggregations (no material mapping)
-          const result = await this.syncUserByUserId(user._id.toString(), startDate, endDate);
-          
-          if (result.success) {
-            successCount++;
-            logger.database(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
+          // Use incremental sync via UserAnalyticsService
+          if (useIncrementalSync) {
+            const result = await UserAnalyticsService.syncUserAnalyticsFromHistory(
+              user._id.toString(), 
+              startDate, 
+              endDate,
+              null, // adId
+              false // forceFullSync = false (use incremental)
+            );
+            
+            if (result.success) {
+              successCount++;
+              logger.database(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
+            } else {
+              errorCount++;
+              console.log(`❌ Failed to sync user ${user.firstName}: ${result.message}`);
+            }
           } else {
-            errorCount++;
-            console.log(`❌ Failed to sync user ${user.firstName}: ${result.message}`);
+            // Fallback to old method for full sync
+            const result = await this.syncUserByUserId(user._id.toString(), startDate, endDate);
+            
+            if (result.success) {
+              successCount++;
+              logger.database(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
+            } else {
+              errorCount++;
+              console.log(`❌ Failed to sync user ${user.firstName}: ${result.message}`);
+            }
           }
         } catch (error) {
           errorCount++;
           console.error(`❌ Error syncing user ${user.firstName}:`, error.message);
         }
-      }
-
-      const endTime = new Date();
-      const duration = (endTime - startTime) / 1000;
-
-      logger.database(`🎉 UserAnalytics sync completed in ${duration.toFixed(2)}s`);
-      logger.database(`   ✅ Success: ${successCount} users`);
-      logger.database(`   ❌ Errors: ${errorCount} users`);
+      });
       
-      this.lastSync = endTime;
-
-    } catch (error) {
-      console.error('❌ Error in UserAnalyticsSyncJob:', error);
-    } finally {
-      // ✨ OPTIMIZATION: Always reset isSyncing flag to allow next execution
-      this.isSyncing = false;
+      // Wait for batch to complete before starting next batch
+      await Promise.all(batchPromises);
     }
+
+    const endTime = new Date();
+    const duration = (endTime - startTime) / 1000;
+
+    logger.database(`🎉 Batch sync completed in ${duration.toFixed(2)}s`);
+    logger.database(`   ✅ Success: ${successCount} users`);
+    logger.database(`   ❌ Errors: ${errorCount} users`);
   }
 
   // Sync a specific user with their own materials only
@@ -308,6 +413,7 @@ class UserAnalyticsSyncJob {
                         totalPlays: 0,
                         totalViewTime: 0,
                         totalImpressions: 0,
+                        totalQRScans: 0,  // ✅ Initialize QR scans counter
                         materials: []
                       };
                     }
@@ -330,7 +436,51 @@ class UserAnalyticsSyncJob {
                 
                 if (userOwnedQrScans.length > 0) {
                   processedData.materials[materialId].qrScans.push(...userOwnedQrScans);
+                  
+                  // ✅ Aggregate QR scans per ad
+                  userOwnedQrScans.forEach(qrScan => {
+                    const adId = qrScan.adId;
+                    if (!processedData.ads[adId]) {
+                      processedData.ads[adId] = {
+                        adId,
+                        adTitle: qrScan.adTitle || 'Unknown',
+                        totalPlays: 0,
+                        totalViewTime: 0,
+                        totalImpressions: 0,
+                        totalQRScans: 0,
+                        materials: []
+                      };
+                    }
+                    if (!processedData.ads[adId].totalQRScans) {
+                      processedData.ads[adId].totalQRScans = 0;
+                    }
+                    processedData.ads[adId].totalQRScans += 1;
+                  });
                 }
+              }
+              
+              // ✅ Also process qrScansByAd if available (aggregated format)
+              if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
+                dailyData.qrScansByAd.forEach(adScan => {
+                  const adId = adScan.adId;
+                  if (validAdIds.includes(adId)) {
+                    if (!processedData.ads[adId]) {
+                      processedData.ads[adId] = {
+                        adId,
+                        adTitle: adScan.adTitle || 'Unknown',
+                        totalPlays: 0,
+                        totalViewTime: 0,
+                        totalImpressions: 0,
+                        totalQRScans: 0,
+                        materials: []
+                      };
+                    }
+                    if (!processedData.ads[adId].totalQRScans) {
+                      processedData.ads[adId].totalQRScans = 0;
+                    }
+                    processedData.ads[adId].totalQRScans += (adScan.scanCount || 0);
+                  }
+                });
               }
               
               // Collect location history
@@ -352,7 +502,8 @@ class UserAnalyticsSyncJob {
         ...ad,
         totalMaterials: ad.materials.length,
         averageViewTime: ad.totalPlays > 0 ? ad.totalViewTime / ad.totalPlays : 0,
-        completionRate: ad.totalViewTime > 0 ? (ad.totalViewTime / (ad.totalViewTime + (ad.totalPlays * 30))) * 100 : 0
+        completionRate: ad.totalViewTime > 0 ? (ad.totalViewTime / (ad.totalViewTime + (ad.totalPlays * 30))) * 100 : 0,
+        totalQRScans: ad.totalQRScans || 0  // ✅ Include QR scan count per ad
       }));
 
       // Calculate overall averages
@@ -360,9 +511,7 @@ class UserAnalyticsSyncJob {
         ? adsArray.reduce((sum, ad) => sum + ad.completionRate, 0) / adsArray.length 
         : 0;
       
-      const qrScanConversionRate = processedData.totalAdImpressions > 0 
-        ? (processedData.totalQRScans / processedData.totalAdImpressions) * 100 
-        : 0;
+      // qrScanConversionRate removed - no longer needed
 
       // Update or create UserAnalytics document
       let userAnalytics = await UserAnalytics.findOne({ userId });
@@ -378,8 +527,7 @@ class UserAnalyticsSyncJob {
           totalAdImpressions: 0,
           totalQRScans: 0,
           averageAdCompletionRate: 0,
-          qrScanConversionRate: 0,
-          adPerformance: [],
+          // qrScanConversionRate removed
           errorLogs: [],
           isActive: true
         });
@@ -391,15 +539,10 @@ class UserAnalyticsSyncJob {
         const originalAdsCount = userAnalytics.ads.length;
         userAnalytics.ads = userAnalytics.ads.filter(ad => validAdIds.includes(ad.adId.toString()));
         
-        // Filter adPerformance array
-        const originalPerformanceCount = userAnalytics.adPerformance.length;
-        userAnalytics.adPerformance = userAnalytics.adPerformance.filter(ad => validAdIds.includes(ad.adId.toString()));
-        
         const cleanedAds = originalAdsCount - userAnalytics.ads.length;
-        const cleanedPerformance = originalPerformanceCount - userAnalytics.adPerformance.length;
         
-        if (cleanedAds > 0 || cleanedPerformance > 0) {
-          console.log(`🧹 Cleaned up stale ad data for user ${userId}: ${cleanedAds} ads, ${cleanedPerformance} performance entries`);
+        if (cleanedAds > 0) {
+          console.log(`🧹 Cleaned up stale ad data for user ${userId}: ${cleanedAds} ads removed`);
         }
       }
 
@@ -411,7 +554,6 @@ class UserAnalyticsSyncJob {
       userAnalytics.totalAdImpressions = processedData.totalAdImpressions;
       userAnalytics.totalQRScans = processedData.totalQRScans;
       userAnalytics.averageAdCompletionRate = averageAdCompletionRate;
-      userAnalytics.qrScanConversionRate = qrScanConversionRate;
       userAnalytics.lastUpdated = new Date();
       userAnalytics.updatedAt = new Date();
 
@@ -431,15 +573,23 @@ class UserAnalyticsSyncJob {
         qrScanRate: material.totalAdImpressions > 0 ? ((material.totalQRScans / material.totalAdImpressions) * 100).toFixed(2) : 0
       }));
 
-      // Update ads array with complete data structure
-      userAnalytics.ads = adsArray.map(ad => {
+      // ✅ Include ALL user's ads, even those without data (for consistency with service)
+      // Create a map of ads with data for quick lookup
+      const adsWithDataMap = new Map();
+      adsArray.forEach(ad => {
+        adsWithDataMap.set(ad.adId, ad);
+      });
+      
+      // Update ads array with complete data structure - include ALL user's ads
+      userAnalytics.ads = userAds.map(userAd => {
+        const adId = userAd._id.toString();
+        const ad = adsWithDataMap.get(adId);
+        
         // Get materials for this ad from targetDevices
         const adMaterials = [];
         const adMaterialPerformance = [];
         
-        // Find the ad in userAds to get targetDevices
-        const userAd = userAds.find(ua => ua._id.toString() === ad.adId);
-        if (userAd && userAd.targetDevices && userAd.targetDevices.length > 0) {
+        if (userAd.targetDevices && userAd.targetDevices.length > 0) {
           // Get material details for each target device
           userAd.targetDevices.forEach((materialId, index) => {
             const material = materials.find(m => m._id.toString() === materialId.toString());
@@ -462,7 +612,7 @@ class UserAnalyticsSyncJob {
                 currentAd: null,
                 qrScans: [],
                 totalQRScans: 0,
-                qrScanConversionRate: 0,
+                // qrScanConversionRate removed
                 lastQRScan: null,
                 qrScansByAd: [],
                 totalDistanceTraveled: 0,
@@ -499,17 +649,20 @@ class UserAnalyticsSyncJob {
           });
         }
         
+        // ✅ Use QR scan data from aggregated processedData if available
+        const totalQRScans = ad ? (ad.totalQRScans || 0) : 0;
+        
         return {
-          adId: ad.adId,
-          adTitle: ad.adTitle,
+          adId: adId,
+          adTitle: userAd.title || ad?.adTitle || 'Unknown',
           adDeploymentId: null,
           totalMaterials: adMaterials.length,
           totalDevices: adMaterials.length,
-          totalAdPlayTime: ad.totalViewTime,
-          totalAdImpressions: ad.totalImpressions,
-          totalQRScans: 0, // Will be calculated from materials
-          averageAdCompletionRate: ad.completionRate,
-          qrScanConversionRate: 0, // Will be calculated from materials
+          totalAdPlayTime: ad ? ad.totalViewTime : 0,
+          totalAdImpressions: ad ? ad.totalImpressions : 0,
+          totalQRScans: totalQRScans, // ✅ Use aggregated QR scan count
+          averageAdCompletionRate: ad ? ad.completionRate : 0,
+          // qrScanConversionRate removed
           materials: adMaterials,
           materialPerformance: adMaterialPerformance,
           errorLogs: [],
@@ -519,6 +672,47 @@ class UserAnalyticsSyncJob {
           updatedAt: new Date()
         };
       });
+      
+      // ✅ FIX: Fetch QR scan data using getTotalQRScans (includes both DeviceTracking and DeviceDataHistoryV2)
+      // This ensures we get complete QR scan data, including current day data from DeviceTracking
+      try {
+        const UserAnalyticsService = require('../services/userAnalyticsService');
+        const qrScanData = await UserAnalyticsService.getTotalQRScans(userId, startDate, endDate);
+        
+        if (qrScanData.success && qrScanData.ads && qrScanData.ads.length > 0) {
+          // Create a map of QR scan data by adId
+          const qrScanMap = new Map();
+          qrScanData.ads.forEach(qrAd => {
+            const adId = qrAd.adId ? (qrAd.adId.toString ? qrAd.adId.toString() : String(qrAd.adId)) : '';
+            if (adId) {
+              qrScanMap.set(adId, qrAd.totalScans || 0);
+            }
+          });
+          
+          // Update ads array with QR scan data from getTotalQRScans
+          userAnalytics.ads = userAnalytics.ads.map(ad => {
+            const adId = ad.adId.toString ? ad.adId.toString() : String(ad.adId);
+            const qrScans = qrScanMap.get(adId);
+            if (qrScans !== undefined && qrScans > 0) {
+              // Use QR scan data from getTotalQRScans (more complete, includes current day)
+              ad.totalQRScans = qrScans;
+            }
+            return ad;
+          });
+          
+          console.log(`✅ [SYNC-JOB] Updated QR scans from getTotalQRScans: ${qrScanData.totalScans} total scans across ${qrScanData.ads.length} ads`);
+        }
+      } catch (qrScanError) {
+        console.warn(`⚠️ [SYNC-JOB] Error fetching QR scan data: ${qrScanError.message}`);
+        // Continue with existing data if QR scan fetch fails
+      }
+      
+      // ✅ Calculate user-level totalQRScans from ads array to ensure consistency
+      const calculatedTotalQRScans = userAnalytics.ads.reduce((sum, ad) => sum + (ad.totalQRScans || 0), 0);
+      if (calculatedTotalQRScans > 0) {
+        userAnalytics.totalQRScans = calculatedTotalQRScans;
+        console.log(`✅ [SYNC-JOB] Calculated totalQRScans from ads array: ${calculatedTotalQRScans}`);
+      }
 
       userAnalytics.totalAds = userAnalytics.ads.length;
 
@@ -537,7 +731,7 @@ class UserAnalyticsSyncJob {
           totalAdImpressions: processedData.totalAdImpressions,
           totalQRScans: processedData.totalQRScans,
           averageAdCompletionRate,
-          qrScanConversionRate,
+          // qrScanConversionRate removed
           ads: adsArray.length,
           lastUpdated: new Date()
         }
@@ -674,18 +868,17 @@ class UserAnalyticsSyncJob {
         materials: []
       }));
 
-      // Upsert summary AND ads array into UserAnalytics
+      // Upsert ads array and totals into UserAnalytics
+      // Note: summary field has been removed - using individual total fields instead
       const summaryUpdate = {
         $set: {
-          summary: {
-            totalAdImpressions: adPerf.totalImpressions || 0,
-            totalAdPlays: adPerf.totalAdsPlayed || 0,
-            totalAdPlayTime: adPerf.totalPlayTime || 0,
-            totalQRScans: totalQRScans || 0,
-            totalDevices: deviceStats.length
-          },
           ads: adsArray,  // ← Now includes ALL active paid ads
           totalAds: adsArray.length,
+          totalAdImpressions: adPerf.totalImpressions || 0,
+          totalAdPlays: adPerf.totalAdsPlayed || 0,
+          totalAdPlayTime: adPerf.totalPlayTime || 0,
+          totalQRScans: totalQRScans || 0,
+          totalDevices: deviceStats.length,
           dailyStats: dailyStats,
           lastUpdated: new Date(),
           updatedAt: new Date(),
@@ -694,9 +887,11 @@ class UserAnalyticsSyncJob {
         $setOnInsert: {
           totalMaterials: 0,
           averageAdCompletionRate: 0,
-          qrScanConversionRate: 0,
-          adPerformance: [],
           errorLogs: []
+        },
+        $unset: {
+          summary: '',  // Explicitly remove summary field if it exists
+          qrScanConversionRate: ''  // Explicitly remove qrScanConversionRate field if it exists
         }
       };
 
@@ -725,7 +920,8 @@ class UserAnalyticsSyncJob {
     return {
       isRunning: this.isRunning,
       lastSync: this.lastSync,
-      nextSync: this.cronJob ? this.cronJob.nextDate() : null
+      nextActiveSync: this.activeUsersCronJob ? this.activeUsersCronJob.nextDate() : null,
+      nextInactiveSync: this.inactiveUsersCronJob ? this.inactiveUsersCronJob.nextDate() : null
     };
   }
 }

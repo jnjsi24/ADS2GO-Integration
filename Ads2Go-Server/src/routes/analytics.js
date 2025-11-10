@@ -708,35 +708,401 @@ router.post('/cache/clear-all', async (req, res) => {
   }
 });
 
-// GET /analytics/user/:userId/direct - Direct API endpoint bypassing GraphQL
-// ✅ Updated to accept adId query parameter for filtering by specific ad
+// GET /analytics/user/:userId/direct - Direct API endpoint that fetches from UserAnalytics collection
+// ✅ NEW: Fetches directly from UserAnalytics collection for the logged-in user
+// ✅ Supports filtering by date range, period, adId, and deviceId
 router.get('/user/:userId/direct', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { startDate, endDate, period, adId } = req.query;
+    const { startDate, endDate, period, adId, deviceId, realtime } = req.query;
     
-    console.log('🔍 Direct API call for user:', userId, 'period:', period, 'adId:', adId || 'all');
+    // ✅ NEW: Check for real-time mode parameter (overrides environment variable)
+    const forceRealtime = realtime === 'true' || realtime === '1';
     
-    const analytics = await UserAnalyticsService.getUserAnalytics(
-      userId,
-      startDate,
-      endDate,
-      period,
-      adId || null
-    );
+    console.log('🔍 [UserAnalytics] Direct API call for user:', userId, 'period:', period, 'adId:', adId || 'all', 'deviceId:', deviceId || 'all', forceRealtime ? '(REALTIME MODE)' : '(FROM USERANALYTICS COLLECTION)');
     
-    if (!analytics.success) {
-      return res.status(400).json({ success: false, message: analytics.message });
+    // ✅ If real-time mode is disabled, fetch directly from UserAnalytics collection
+    if (!forceRealtime) {
+      const UserAnalytics = require('../models/userAnalytics');
+      const mongoose = require('mongoose');
+      
+      // Find UserAnalytics document for this user (or initialize if it doesn't exist)
+      let userAnalytics = await UserAnalytics.findOne({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+      
+      if (!userAnalytics) {
+        // ✅ Initialize UserAnalytics if it doesn't exist
+        console.log('⚠️ [UserAnalytics] UserAnalytics not found, initializing...');
+        await UserAnalyticsService.initializeUserAnalytics(userId);
+        userAnalytics = await UserAnalytics.findOne({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+        
+        if (!userAnalytics) {
+          return res.status(404).json({ 
+            success: false, 
+            message: 'UserAnalytics not found and could not be initialized' 
+          });
+        }
+      }
+      
+      // ✅ Log UserAnalytics document structure for debugging
+      console.log('📊 [UserAnalytics] Found document:', {
+        userId,
+        hasDailyStats: !!userAnalytics.dailyStats,
+        dailyStatsCount: userAnalytics.dailyStats?.length || 0,
+        totalAdPlays: userAnalytics.totalAdPlays,
+        totalQRScans: userAnalytics.totalQRScans,
+        totalAds: userAnalytics.totalAds,
+        adsCount: userAnalytics.ads?.length || 0,
+        sampleDailyStats: userAnalytics.dailyStats?.slice(0, 1).map((ds) => ({
+          date: ds.date,
+          hasTotals: !!ds.totals,
+          totals: ds.totals,
+          adsCount: ds.ads?.length || 0
+        }))
+      });
+      
+      // Calculate date range
+      let defaultStartDate, defaultEndDate;
+      const now = new Date();
+      
+      if (startDate && endDate) {
+        defaultStartDate = new Date(startDate);
+        defaultEndDate = new Date(endDate);
+      } else if (period) {
+        switch (period) {
+          case '1d':
+            defaultStartDate = new Date(now);
+            defaultStartDate.setUTCHours(0, 0, 0, 0);
+            defaultEndDate = now;
+            break;
+          case '7d':
+            defaultStartDate = new Date(now);
+            defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 6);
+            defaultStartDate.setUTCHours(0, 0, 0, 0);
+            defaultEndDate = now;
+            break;
+          case '30d':
+            defaultStartDate = new Date(now);
+            defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 29);
+            defaultStartDate.setUTCHours(0, 0, 0, 0);
+            defaultEndDate = now;
+            break;
+          case 'all':
+          default:
+            // For 'all', use all available dailyStats (no date filtering)
+            // Set dates to cover all possible data (but we won't filter by them)
+            defaultStartDate = null;
+            defaultEndDate = null;
+            break;
+        }
+      } else {
+        // Default to last 7 days
+        defaultStartDate = new Date(now);
+        defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 6);
+        defaultStartDate.setUTCHours(0, 0, 0, 0);
+        defaultEndDate = now;
+      }
+      
+      // Filter dailyStats by date range if provided
+      // ✅ When period='all', use ALL dailyStats (no date filtering)
+      let filteredDailyStats = userAnalytics.dailyStats || [];
+      if (defaultStartDate && defaultEndDate) {
+        const startDateStr = defaultStartDate.toISOString().split('T')[0];
+        const endDateStr = defaultEndDate.toISOString().split('T')[0];
+        
+        filteredDailyStats = filteredDailyStats.filter(dateEntry => {
+          return dateEntry.date >= startDateStr && dateEntry.date <= endDateStr;
+        });
+      }
+      // When period='all' (defaultStartDate and defaultEndDate are null), use all dailyStats
+      
+      console.log('📊 [UserAnalytics] Processing dailyStats:', {
+        totalDailyStats: userAnalytics.dailyStats?.length || 0,
+        filteredCount: filteredDailyStats.length,
+        period: period || 'all',
+        hasDateFilter: !!(defaultStartDate && defaultEndDate),
+        adId: adId || 'all'
+      });
+      
+      // Filter by adId if provided
+      if (adId && adId !== 'all') {
+        filteredDailyStats = filteredDailyStats.map(dateEntry => {
+          const matchingAd = dateEntry.ads?.find(ad => 
+            ad.adId && ad.adId.toString() === adId
+          );
+          
+          if (matchingAd) {
+            return {
+              date: dateEntry.date,
+              ads: [matchingAd],
+              totals: matchingAd.totals || dateEntry.totals
+            };
+          }
+          return {
+            date: dateEntry.date,
+            ads: [],
+            totals: {
+              impressions: 0,
+              adsPlayed: 0,
+              displayTime: 0,
+              qrScans: 0,
+              completionRate: 0
+            }
+          };
+        }).filter(dateEntry => dateEntry.ads.length > 0);
+      }
+      // When adId='all', use all ads (no filtering needed)
+      
+      // Format dailyStats for frontend (convert nested structure to flat array)
+      const formattedDailyStats = filteredDailyStats.flatMap(dateEntry => {
+        if (adId && adId !== 'all') {
+          // Return per-ad stats for the selected ad
+          return dateEntry.ads.map(ad => ({
+            date: dateEntry.date,
+            adsPlayed: ad.totals?.adsPlayed || 0,
+            displayTime: ad.totals?.displayTime || 0,
+            qrScans: ad.totals?.qrScans || 0,
+            completionRate: ad.totals?.completionRate || 0,
+            impressions: ad.totals?.impressions || 0
+          }));
+        } else {
+          // Return aggregated daily stats (sum across all ads for this date)
+          // ✅ This is correct for "all" ads - uses dateEntry.totals which is the sum of all ads
+          return [{
+            date: dateEntry.date,
+            adsPlayed: dateEntry.totals?.adsPlayed || 0,
+            displayTime: dateEntry.totals?.displayTime || 0,
+            qrScans: dateEntry.totals?.qrScans || 0,
+            completionRate: dateEntry.totals?.completionRate || 0,
+            impressions: dateEntry.totals?.impressions || 0
+          }];
+        }
+      });
+      
+      // Filter ads array by adId if provided
+      let filteredAds = userAnalytics.ads || [];
+      if (adId && adId !== 'all') {
+        filteredAds = filteredAds.filter(ad => 
+          ad.adId && ad.adId.toString() === adId
+        );
+      }
+      
+      // Calculate summary from UserAnalytics data
+      // ✅ Always prefer dailyStats totals when available (more accurate)
+      // ✅ For "all" period, sum ALL dailyStats totals (no date filtering)
+      // ✅ For date-filtered periods, sum only filtered dailyStats totals
+      let summary = {
+        totalAdsPlayed: 0,
+        totalDisplayTime: 0,
+        totalQRScans: 0,
+        totalAds: userAnalytics.totalAds || 0,
+        activeAds: filteredAds.length,
+        totalMaterials: userAnalytics.totalMaterials || 0,
+        totalDevices: userAnalytics.totalDevices || 0,
+        averageCompletionRate: userAnalytics.averageAdCompletionRate || 0
+      };
+      
+      // ✅ Calculate summary from formattedDailyStats (aggregated from nested structure)
+      // This works for both date-filtered and "all" period queries
+      if (formattedDailyStats.length > 0) {
+        const calculatedTotals = formattedDailyStats.reduce((acc, stat) => ({
+          adsPlayed: acc.adsPlayed + (stat.adsPlayed || 0),
+          displayTime: acc.displayTime + (stat.displayTime || 0),
+          qrScans: acc.qrScans + (stat.qrScans || 0),
+          impressions: acc.impressions + (stat.impressions || 0)
+        }), { adsPlayed: 0, displayTime: 0, qrScans: 0, impressions: 0 });
+        
+        // ✅ ALWAYS use calculated totals from dailyStats when available (more accurate)
+        // This ensures we get the correct totals even if top-level totals are outdated
+        summary.totalAdsPlayed = calculatedTotals.adsPlayed;
+        summary.totalDisplayTime = calculatedTotals.displayTime;
+        summary.totalQRScans = calculatedTotals.qrScans;
+        
+        console.log('✅ [UserAnalytics] Using calculated totals from dailyStats:', {
+          dailyStatsEntries: formattedDailyStats.length,
+          calculatedTotals: {
+            adsPlayed: calculatedTotals.adsPlayed,
+            displayTime: calculatedTotals.displayTime,
+            qrScans: calculatedTotals.qrScans,
+            impressions: calculatedTotals.impressions
+          },
+          period: period || 'all',
+          adId: adId || 'all',
+          topLevelTotals: {
+            totalAdPlays: userAnalytics.totalAdPlays,
+            totalAdPlayTime: userAnalytics.totalAdPlayTime,
+            totalQRScans: userAnalytics.totalQRScans
+          },
+          sampleDailyStats: formattedDailyStats.slice(0, 3).map(stat => ({
+            date: stat.date,
+            adsPlayed: stat.adsPlayed,
+            qrScans: stat.qrScans
+          }))
+        });
+      } else {
+        // Fallback to top-level totals if no dailyStats available
+        // This happens when UserAnalytics has no dailyStats data yet
+        summary.totalAdsPlayed = userAnalytics.totalAdPlays || 0;
+        summary.totalDisplayTime = userAnalytics.totalAdPlayTime || 0;
+        summary.totalQRScans = userAnalytics.totalQRScans || 0;
+        
+        console.log('⚠️ [UserAnalytics] No dailyStats entries found, using top-level totals:', {
+          totalAdPlays: userAnalytics.totalAdPlays,
+          totalAdPlayTime: userAnalytics.totalAdPlayTime,
+          totalQRScans: userAnalytics.totalQRScans,
+          dailyStatsCount: userAnalytics.dailyStats?.length || 0,
+          period: period || 'all',
+          adId: adId || 'all'
+        });
+      }
+      
+      // ✅ If adId filter is applied, ensure we're using the correct ad data
+      if (adId && adId !== 'all') {
+        const adData = filteredAds[0];
+        if (adData) {
+          // Use calculated totals from formattedDailyStats (already filtered by adId)
+          // If formattedDailyStats is empty, fallback to ad totals
+          if (formattedDailyStats.length === 0) {
+            summary.totalAdsPlayed = adData.totalAdPlayTime ? Math.round((adData.totalAdPlayTime || 0) / 35) : 0;
+            summary.totalDisplayTime = adData.totalAdPlayTime || 0;
+            summary.totalQRScans = adData.totalQRScans || 0;
+          }
+          // formattedDailyStats already has the correct totals for this ad
+          summary.activeAds = 1;
+        }
+      }
+      
+      // ✅ If deviceId filter is applied, calculate from deviceStats
+      if (deviceId && deviceId !== 'all') {
+        const deviceData = filteredDeviceStats[0];
+        if (deviceData) {
+          summary.totalAdsPlayed = deviceData.adsPlayed || 0;
+          summary.totalDisplayTime = deviceData.displayTime || 0;
+          summary.totalQRScans = deviceData.qrScans || 0;
+          summary.totalMaterials = 1;
+          summary.totalDevices = 1;
+        }
+      }
+      
+      // Format adPerformance from ads array
+      // ✅ Calculate totalPlays from nested dailyStats structure for each ad
+      const adPerformance = filteredAds.map(ad => {
+        // Calculate totalPlays from nested dailyStats for this specific ad
+        let totalPlays = 0;
+        if (filteredDailyStats.length > 0) {
+          // Sum adsPlayed from all dailyStats entries for this ad
+          filteredDailyStats.forEach(dateEntry => {
+            const adEntry = dateEntry.ads?.find(a => 
+              a.adId && a.adId.toString() === ad.adId.toString()
+            );
+            if (adEntry && adEntry.totals) {
+              totalPlays += adEntry.totals.adsPlayed || 0;
+            }
+          });
+        }
+        
+        // Fallback to estimate from play time if no dailyStats data
+        if (totalPlays === 0) {
+          totalPlays = ad.totalAdPlayTime ? Math.round(ad.totalAdPlayTime / 35) : 0;
+        }
+        
+        return {
+          adId: ad.adId,
+          adTitle: ad.adTitle,
+          totalPlays: totalPlays,
+          totalViewTime: ad.totalAdPlayTime || 0,
+          averageViewTime: totalPlays > 0 ? (ad.totalAdPlayTime || 0) / totalPlays : 0,
+          completionRate: ad.averageAdCompletionRate || 0,
+          impressions: ad.totalAdImpressions || 0,
+          totalQRScans: ad.totalQRScans || 0
+        };
+      });
+      
+      // Format deviceStats from materialBreakdown
+      const deviceStats = (userAnalytics.materialBreakdown || []).map(material => ({
+        deviceId: material.materialId,
+        materialId: material.materialId,
+        deviceName: material.materialId,
+        adsPlayed: material.totalAdPlays || 0,
+        displayTime: material.totalAdPlayTime || 0,
+        qrScans: material.totalQRScans || 0,
+        impressions: material.totalAdImpressions || 0,
+        isOnline: material.isOnline || false,
+        lastSeen: material.lastActivity || null
+      }));
+      
+      // Filter deviceStats by deviceId if provided
+      let filteredDeviceStats = deviceStats;
+      if (deviceId && deviceId !== 'all') {
+        filteredDeviceStats = deviceStats.filter(device => 
+          device.deviceId === deviceId || device.materialId === deviceId
+        );
+      }
+      
+      console.log('✅ [UserAnalytics] Returning data from UserAnalytics collection:', {
+        userId,
+        period: period || 'all',
+        adId: adId || 'all',
+        summary: {
+          totalAdsPlayed: summary.totalAdsPlayed,
+          totalDisplayTime: summary.totalDisplayTime,
+          totalQRScans: summary.totalQRScans,
+          totalAds: summary.totalAds,
+          activeAds: summary.activeAds,
+          totalMaterials: summary.totalMaterials,
+          totalDevices: summary.totalDevices
+        },
+        dailyStatsCount: formattedDailyStats.length,
+        adsCount: filteredAds.length,
+        deviceStatsCount: filteredDeviceStats.length,
+        hasDateFilter: !!(defaultStartDate && defaultEndDate),
+        dateRange: defaultStartDate && defaultEndDate ? {
+          start: defaultStartDate.toISOString(),
+          end: defaultEndDate.toISOString()
+        } : 'all dates'
+      });
+      
+      return res.json({
+        success: true,
+        data: {
+          summary,
+          dailyStats: formattedDailyStats,
+          adPerformance,
+          deviceStats: filteredDeviceStats,
+          ads: filteredAds,
+          period: period || 'all',
+          startDate: defaultStartDate?.toISOString(),
+          endDate: defaultEndDate?.toISOString(),
+          lastUpdated: userAnalytics.lastUpdated || userAnalytics.updatedAt
+        }
+      });
+    } else {
+      // Real-time mode: Use the service method (queries DeviceDataHistoryV2 directly)
+      console.log('⚡ [REALTIME] Using real-time mode - querying DeviceDataHistoryV2 directly');
+      const analytics = await UserAnalyticsService.getUserAnalytics(
+        userId,
+        startDate,
+        endDate,
+        period,
+        adId || null,
+        forceRealtime
+      );
+      
+      if (!analytics.success) {
+        return res.status(400).json({ success: false, message: analytics.message });
+      }
+      
+      return res.json({ 
+        success: true, 
+        data: analytics.data
+      });
     }
-    
-    
-    res.json({ 
-      success: true, 
-      data: analytics.data
-    });
   } catch (error) {
-    console.error('Error in direct API:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error('❌ Error in direct API:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -745,13 +1111,75 @@ router.get('/user/:userId/direct', async (req, res) => {
 // ===========================================
 
 // GET /analytics/user/:userId/device/:deviceId - Get detailed analytics for a specific device
-// ✅ Updated to accept adId query parameter for filtering by specific ad
+// ✅ Updated to accept adId and period query parameters for filtering
 router.get('/user/:userId/device/:deviceId', async (req, res) => {
   try {
     const { userId, deviceId } = req.params;
-    const { startDate, endDate, adId } = req.query;
+    const { startDate, endDate, adId, period } = req.query;
     
-    const analytics = await UserAnalyticsService.getDeviceSpecificAnalytics(userId, deviceId, startDate, endDate, adId || null);
+    // ✅ Calculate date range from period if dates are not provided
+    // Query parameters are strings, so check for truthy values and 'undefined'
+    let calculatedStartDate = null;
+    let calculatedEndDate = null;
+    
+    // If explicit dates are provided, use them (they take priority over period)
+    if (startDate && endDate && startDate !== 'undefined' && endDate !== 'undefined') {
+      calculatedStartDate = new Date(startDate);
+      calculatedEndDate = new Date(endDate);
+    } 
+    // If period is provided and dates are not, calculate dates from period
+    else if (period) {
+      const now = new Date();
+      
+      switch (period) {
+        case '1d':
+          calculatedStartDate = new Date(now);
+          calculatedStartDate.setUTCHours(0, 0, 0, 0);
+          calculatedEndDate = now;
+          break;
+        case '7d':
+          calculatedStartDate = new Date(now);
+          calculatedStartDate.setUTCDate(calculatedStartDate.getUTCDate() - 6);
+          calculatedStartDate.setUTCHours(0, 0, 0, 0);
+          calculatedEndDate = now;
+          break;
+        case '30d':
+          calculatedStartDate = new Date(now);
+          calculatedStartDate.setUTCDate(calculatedStartDate.getUTCDate() - 29);
+          calculatedStartDate.setUTCHours(0, 0, 0, 0);
+          calculatedEndDate = now;
+          break;
+        case 'all':
+          // For 'all' period, explicitly pass null to get all available data
+          calculatedStartDate = null;
+          calculatedEndDate = null;
+          console.log('📅 [Device Route] Period=all, using all available data (no date filter)');
+          break;
+        default:
+          // Default to last 30 days if period is invalid
+          calculatedStartDate = new Date(now);
+          calculatedStartDate.setUTCDate(calculatedStartDate.getUTCDate() - 29);
+          calculatedStartDate.setUTCHours(0, 0, 0, 0);
+          calculatedEndDate = now;
+          break;
+      }
+    }
+    // If neither dates nor period are provided, default to last 30 days
+    else {
+      const now = new Date();
+      calculatedStartDate = new Date(now);
+      calculatedStartDate.setUTCDate(calculatedStartDate.getUTCDate() - 29);
+      calculatedStartDate.setUTCHours(0, 0, 0, 0);
+      calculatedEndDate = now;
+    }
+    
+    const analytics = await UserAnalyticsService.getDeviceSpecificAnalytics(
+      userId, 
+      deviceId, 
+      calculatedStartDate, 
+      calculatedEndDate, 
+      adId || null
+    );
     
     res.json({
       success: true,

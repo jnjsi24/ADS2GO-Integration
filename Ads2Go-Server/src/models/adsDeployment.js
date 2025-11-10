@@ -360,6 +360,7 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
     try {
       const UserAnalytics = require('./userAnalytics');
       const Ad = require('./Ad');
+      const User = require('./User');
       
       // Get the ad to find the userId
       const ad = await Ad.findById(adId);
@@ -367,10 +368,15 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
         let userAnalytics = await UserAnalytics.findOne({ userId: ad.userId });
         
         if (!userAnalytics) {
+          // Fetch user to get userName
+          const user = await User.findById(ad.userId).select('firstName lastName').lean();
+          const userName = user ? `${user.firstName} ${user.lastName}`.trim() : null;
+          
           console.log(`📊 Creating UserAnalytics record for user ${ad.userId} during ad deployment`);
           
           userAnalytics = new UserAnalytics({
             userId: ad.userId,
+            userName: userName,
             ads: [],
             totalAds: 0,
             totalMaterials: 0,
@@ -388,8 +394,17 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
           });
           
           await userAnalytics.save();
-          console.log(`✅ Created UserAnalytics record for user ${ad.userId}`);
+          console.log(`✅ Created UserAnalytics record for user ${ad.userId}${userName ? ` (${userName})` : ''}`);
         } else {
+          // Update userName if it's missing
+          if (!userAnalytics.userName) {
+            const user = await User.findById(ad.userId).select('firstName lastName').lean();
+            const userName = user ? `${user.firstName} ${user.lastName}`.trim() : null;
+            if (userName) {
+              userAnalytics.userName = userName;
+              await userAnalytics.save();
+            }
+          }
           console.log(`ℹ️ UserAnalytics already exists for user ${ad.userId}`);
         }
       }
@@ -738,126 +753,10 @@ AdsDeploymentSchema.post('save', async function (doc) {
     }
     // ====== END SYNC ======
     
-    const Analytics = require('./analytics');
-    const Ad = require('./Ad');
-    const Material = require('./Material');
-
-    console.log(`🔄 Creating analytics records for deployment ${doc._id}`);
-
-    // Get material and ad information
-    const material = await Material.findOne({ materialId: doc.materialId });
-    if (!material) {
-      console.error(`❌ Material not found for analytics creation: ${doc.materialId}`);
-      return;
-    }
-
-    // For LCD materials - create analytics for each slot
-    if (doc.lcdSlots && doc.lcdSlots.length > 0) {
-      for (const slot of doc.lcdSlots) {
-        if (slot.adId) {
-          const ad = await Ad.findById(slot.adId);
-          if (ad) {
-            // Create analytics record for this slot
-            const analyticsData = {
-              deviceId: `DEPLOYMENT-${doc._id}-${slot.slotNumber}`, // Placeholder until device connects
-              materialId: doc.materialId,
-              slotNumber: slot.slotNumber,
-              carGroupId: material.carGroupId,
-              driverId: material.driverId,
-              adId: slot.adId,
-              userId: ad.userId,
-              adDeploymentId: doc._id,
-              deviceInfo: {
-                deviceId: `DEPLOYMENT-${doc._id}-${slot.slotNumber}`,
-                deviceName: 'Deployment Placeholder',
-                deviceType: 'Deployment',
-                osName: 'Unknown',
-                osVersion: 'Unknown',
-                platform: 'Unknown',
-                brand: 'Unknown',
-                modelName: 'Unknown',
-                screenWidth: 0,
-                screenHeight: 0,
-                screenScale: 1
-              },
-              isOnline: false,
-              currentLocation: null,
-              networkStatus: {
-                isOnline: false,
-                lastSeen: new Date()
-              }
-            };
-
-            // Check if analytics record already exists
-            let analytics = await Analytics.findOne({ 
-              deviceId: analyticsData.deviceId, 
-              materialId: doc.materialId, 
-              slotNumber: slot.slotNumber 
-            });
-
-            if (!analytics) {
-              analytics = new Analytics(analyticsData);
-              await analytics.save();
-              console.log(`✅ Created analytics record for LCD slot ${slot.slotNumber} - Ad ${slot.adId}`);
-            } else {
-              console.log(`ℹ️ Analytics record already exists for LCD slot ${slot.slotNumber}`);
-            }
-          }
-        }
-      }
-    }
-    // For non-LCD materials - create single analytics record
-    else if (doc.adId) {
-      const ad = await Ad.findById(doc.adId);
-      if (ad) {
-        const analyticsData = {
-          deviceId: `DEPLOYMENT-${doc._id}`, // Placeholder until device connects
-          materialId: doc.materialId,
-          slotNumber: 1, // Default slot for non-LCD
-          carGroupId: material.carGroupId,
-          driverId: material.driverId,
-          adId: doc.adId,
-          userId: ad.userId,
-          adDeploymentId: doc._id,
-          deviceInfo: {
-            deviceId: `DEPLOYMENT-${doc._id}`,
-            deviceName: 'Deployment Placeholder',
-            deviceType: 'Deployment',
-            osName: 'Unknown',
-            osVersion: 'Unknown',
-            platform: 'Unknown',
-            brand: 'Unknown',
-            modelName: 'Unknown',
-            screenWidth: 0,
-            screenHeight: 0,
-            screenScale: 1
-          },
-          isOnline: false,
-          currentLocation: null,
-          networkStatus: {
-            isOnline: false,
-            lastSeen: new Date()
-          }
-        };
-
-        // Check if analytics record already exists
-        let analytics = await Analytics.findOne({ 
-          deviceId: analyticsData.deviceId, 
-          materialId: doc.materialId, 
-          slotNumber: 1 
-        });
-
-        if (!analytics) {
-          analytics = new Analytics(analyticsData);
-          await analytics.save();
-          console.log(`✅ Created analytics record for non-LCD deployment - Ad ${doc.adId}`);
-        } else {
-          console.log(`ℹ️ Analytics record already exists for non-LCD deployment`);
-        }
-      }
-    }
-
-    console.log(`✅ Analytics creation completed for deployment ${doc._id}`);
+    // ⚠️ DEPRECATED: Analytics collection writes removed
+    // Analytics data is now tracked via DeviceTracking/DeviceDataHistoryV2
+    // Deployment data will be captured when devices connect and send tracking data
+    console.log(`ℹ️ Deployment created: ${doc._id} (Analytics tracking via DeviceTracking/DeviceDataHistoryV2)`);
   } catch (error) {
     console.error(`❌ Error creating analytics for deployment ${doc._id}:`, error.message);
     // Don't throw error to prevent deployment failure

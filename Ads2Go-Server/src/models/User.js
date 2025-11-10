@@ -119,6 +119,12 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // ⚡ PERFORMANCE OPTIMIZATION: Track when user last accessed analytics for smart sync
+  lastAnalyticsAccess: {
+    type: Date,
+    default: null,
+    index: true // Index for smart background sync queries
+  },
   tokenVersion: {
     type: Number,
     default: 0
