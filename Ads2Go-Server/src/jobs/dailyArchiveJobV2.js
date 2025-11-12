@@ -208,6 +208,51 @@ class DailyArchiveJobV2 {
             await existingDocument.save();
             logger.database(`✅ Updated daily data for material ${device.materialId} on ${dateStr}`);
           } catch (saveError) {
+            // Handle VersionError (concurrency conflict) - reload and retry
+            if (saveError.name === 'VersionError') {
+              console.log(`⚠️ VersionError on save for ${device.materialId}, reloading document and retrying...`);
+              try {
+                // Reload the document to get the latest version
+                const freshDocument = await DeviceDataHistoryV2.findOne({
+                  materialId: device.materialId
+                });
+                if (!freshDocument) {
+                  throw new Error(`Document ${device.materialId} not found after VersionError`);
+                }
+                
+                // Reapply the changes to the fresh document
+                const freshDailyIndex = freshDocument.dailyData.findIndex(d => 
+                  d.date.toDateString() === targetDate.toDateString()
+                );
+                
+                if (freshDailyIndex >= 0) {
+                  const freshDaily = freshDocument.dailyData[freshDailyIndex];
+                  const cleanedExistingQrScans = this.cleanQRScanData(freshDaily.qrScans);
+                  const cleanedNewQrScans = this.cleanQRScanData(dailyData.qrScans);
+                  
+                  dailyData.locationHistory = this.mergeLocationHistory(freshDaily.locationHistory, dailyData.locationHistory);
+                  dailyData.adPlaybacks = this.mergeAdPlaybacks(freshDaily.adPlaybacks, dailyData.adPlaybacks);
+                  dailyData.qrScans = this.mergeQrScans(cleanedExistingQrScans, cleanedNewQrScans);
+                  dailyData.hourlyStats = this.mergeHourlyStats(freshDaily.hourlyStats, dailyData.hourlyStats);
+                  dailyData.adPerformance = this.mergeAdPerformance(freshDaily.adPerformance, dailyData.adPerformance);
+                  dailyData.qrScansByAd = this.mergeQrScansByAd(freshDaily.qrScansByAd, dailyData.qrScansByAd);
+                  dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+                  dailyData.totalQRScans = dailyData.qrScans.length;
+                  
+                  freshDocument.dailyData[freshDailyIndex] = dailyData;
+                  freshDocument.lastArchiveUpdate = new Date();
+                  freshDocument.totalUpdates += 1;
+                  freshDocument.updateLifetimeTotals();
+                  
+                  await freshDocument.save();
+                  logger.database(`✅ Updated daily data for material ${device.materialId} on ${dateStr} (after VersionError retry)`);
+                  return; // Success, exit the function
+                }
+              } catch (retryError) {
+                console.error(`❌ Failed to retry after VersionError for ${device.materialId}:`, retryError.message);
+                throw retryError;
+              }
+            }
             // If save fails due to validation errors, clean the existing data and retry
             if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
               console.log(`🧹 Validation error detected for ${device.materialId}, deep cleaning existing data...`);
@@ -260,6 +305,58 @@ class DailyArchiveJobV2 {
             await existingDocument.save();
             console.log(`✅ Added new daily data for material ${device.materialId} on ${dateStr}`);
           } catch (saveError) {
+            // Handle VersionError (concurrency conflict) - reload and retry
+            if (saveError.name === 'VersionError') {
+              console.log(`⚠️ VersionError on save for ${device.materialId}, reloading document and retrying...`);
+              try {
+                // Reload the document to get the latest version
+                const freshDocument = await DeviceDataHistoryV2.findOne({
+                  materialId: device.materialId
+                });
+                if (!freshDocument) {
+                  throw new Error(`Document ${device.materialId} not found after VersionError`);
+                }
+                
+                // Check if daily data for this date already exists (might have been added by another process)
+                const freshDailyIndex = freshDocument.dailyData.findIndex(d => 
+                  d.date.toDateString() === targetDate.toDateString()
+                );
+                
+                if (freshDailyIndex >= 0) {
+                  // Date already exists, update instead
+                  const freshDaily = freshDocument.dailyData[freshDailyIndex];
+                  const cleanedExistingQrScans = this.cleanQRScanData(freshDaily.qrScans);
+                  const cleanedNewQrScans = this.cleanQRScanData(dailyData.qrScans);
+                  
+                  dailyData.locationHistory = this.mergeLocationHistory(freshDaily.locationHistory, dailyData.locationHistory);
+                  dailyData.adPlaybacks = this.mergeAdPlaybacks(freshDaily.adPlaybacks, dailyData.adPlaybacks);
+                  dailyData.qrScans = this.mergeQrScans(cleanedExistingQrScans, cleanedNewQrScans);
+                  dailyData.hourlyStats = this.mergeHourlyStats(freshDaily.hourlyStats, dailyData.hourlyStats);
+                  dailyData.adPerformance = this.mergeAdPerformance(freshDaily.adPerformance, dailyData.adPerformance);
+                  dailyData.qrScansByAd = this.mergeQrScansByAd(freshDaily.qrScansByAd, dailyData.qrScansByAd);
+                  dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+                  dailyData.totalQRScans = dailyData.qrScans.length;
+                  
+                  freshDocument.dailyData[freshDailyIndex] = dailyData;
+                } else {
+                  // Add new daily data
+                  dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+                  dailyData.totalQRScans = dailyData.qrScans.length;
+                  freshDocument.addDailyData(dailyData);
+                }
+                
+                freshDocument.lastArchiveUpdate = new Date();
+                freshDocument.totalUpdates += 1;
+                freshDocument.updateLifetimeTotals();
+                
+                await freshDocument.save();
+                console.log(`✅ Added/Updated daily data for material ${device.materialId} on ${dateStr} (after VersionError retry)`);
+                return; // Success, exit the function
+              } catch (retryError) {
+                console.error(`❌ Failed to retry after VersionError for ${device.materialId}:`, retryError.message);
+                throw retryError;
+              }
+            }
             // If save fails due to validation errors, clean the existing data and retry
             if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
               console.log(`🧹 Validation error detected for ${device.materialId}, deep cleaning existing data...`);

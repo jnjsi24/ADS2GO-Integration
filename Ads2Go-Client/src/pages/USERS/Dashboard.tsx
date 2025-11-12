@@ -11,6 +11,87 @@ import { formatDistanceToNow } from 'date-fns';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import AdProgressBar from '../../components/AdProgressBar';
 import CalendarWidget from '../../components/CalendarWidget';
+import { useUserAuth } from '../../contexts/UserAuthContext';
+
+// ✅ PERFORMANCE OPTIMIZATION: Persistent cache for Dashboard analytics (same as Detailed Analytics)
+const DASHBOARD_CACHE_KEY = 'dashboard-analytics-cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const MAX_CACHE_SIZE = 20; // Limit cache to 20 entries
+
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+  lastAccessed: number;
+}
+
+interface CacheStore {
+  [key: string]: CacheEntry;
+}
+
+// ✅ PERSISTENT CACHE: Load cache from localStorage on module load
+const loadPersistentCache = (): Map<string, CacheEntry> => {
+  try {
+    const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!cached) return new Map();
+    
+    const parsed: CacheStore = JSON.parse(cached);
+    const now = Date.now();
+    const cache = new Map<string, CacheEntry>();
+    
+    // Only load non-expired entries
+    for (const [key, entry] of Object.entries(parsed)) {
+      if (now - entry.timestamp < CACHE_TTL) {
+        cache.set(key, entry);
+      }
+    }
+    
+    if (cache.size > 0) {
+      console.log(`📦 [Dashboard] Loaded ${cache.size} cached entries from localStorage`);
+    }
+    
+    return cache;
+  } catch (error) {
+    console.warn('⚠️ [Dashboard] Failed to load persistent cache:', error);
+    return new Map();
+  }
+};
+
+// ✅ PERSISTENT CACHE: Save cache to localStorage
+const savePersistentCache = (cache: Map<string, CacheEntry>) => {
+  try {
+    const now = Date.now();
+    const store: CacheStore = {};
+    
+    // Only save non-expired entries
+    const entries = Array.from(cache.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.timestamp < CACHE_TTL) {
+        store[key] = entry;
+      }
+    }
+    
+    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(store));
+  } catch (error) {
+    // Handle quota exceeded error gracefully
+    if (error instanceof Error && error.name === 'QuotaExceededError') {
+      console.warn('⚠️ [Dashboard] localStorage quota exceeded, clearing old cache entries');
+      try {
+        localStorage.removeItem(DASHBOARD_CACHE_KEY);
+        const entries = Array.from(cache.entries());
+        entries.sort((a, b) => b[1].lastAccessed - a[1].lastAccessed);
+        const limitedStore: CacheStore = {};
+        for (let i = 0; i < Math.min(10, entries.length); i++) {
+          limitedStore[entries[i][0]] = entries[i][1];
+        }
+        localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(limitedStore));
+      } catch (retryError) {
+        console.warn('⚠️ [Dashboard] Failed to save cache even after clearing:', retryError);
+      }
+    } else {
+      console.warn('⚠️ [Dashboard] Failed to save persistent cache:', error);
+    }
+  }
+};
 
 // ✅ PERFORMANCE OPTIMIZATION: Lazy load heavy components
 // Recharts is ~200KB - only load when charts are actually rendered
@@ -155,6 +236,7 @@ function NotificationList() {
 
 // Dashboard Component
 const Dashboard = () => {
+  const { user } = useUserAuth();
   const [selectedOption, setSelectedOption] = useState('Drivers');
   const [selectedPeriod, setSelectedPeriod] = useState<'Monthly' | 'Weekly' | 'Daily'>('Monthly');
   const [qrSelectedPeriod, setQrSelectedPeriod] = useState<'Weekly' | 'Daily' | 'Monthly'>('Daily');
@@ -169,6 +251,22 @@ const Dashboard = () => {
   const [showQrAdDropdown, setShowQrAdDropdown] = useState(false);
   const [showAnalyticsPeriodDropdown, setShowAnalyticsPeriodDropdown] = useState(false);
 
+  // ✅ PERFORMANCE OPTIMIZATION: Direct API data state (replaces GraphQL)
+  const [periodAnalyticsData, setPeriodAnalyticsData] = useState<any>(null);
+  const [overallAnalyticsData, setOverallAnalyticsData] = useState<any>(null);
+  const [periodAnalyticsLoading, setPeriodAnalyticsLoading] = useState(false);
+  const [overallAnalyticsLoading, setOverallAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<any>(null);
+  
+  // ✅ PERSISTENT CACHE: Initialize cache from localStorage on mount
+  const analyticsCacheRef = useRef<Map<string, CacheEntry>>(loadPersistentCache());
+  
+  // Refs for request management
+  const periodFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const overallFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isRequestInProgressRef = useRef<boolean>(false);
+
   // Map tab states
   const [mapActiveTab, setMapActiveTab] = useState<'today' | 'history'>('today');
   const [selectedAdForRoute, setSelectedAdForRoute] = useState<string | null>(null);
@@ -180,6 +278,217 @@ const Dashboard = () => {
   // ✅ REAL-TIME UPDATE: Track last analytics refresh to prevent too many rapid refreshes
   const lastAnalyticsRefreshRef = useRef<number>(0);
   const analyticsRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Helper function to generate cache key
+  const getCacheKey = useCallback((period: string, adId: string | null, type: 'period' | 'overall') => {
+    return `dashboard_${type}_${period}_${adId || 'all'}`;
+  }, []);
+  
+  // ✅ PERFORMANCE OPTIMIZATION: Manage cache (clean expired entries, enforce size limit)
+  const manageCache = useCallback(() => {
+    const cache = analyticsCacheRef.current;
+    const now = Date.now();
+    
+    // Remove expired entries
+    const entries = Array.from(cache.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.timestamp > CACHE_TTL) {
+        cache.delete(key);
+      }
+    }
+    
+    // If still over limit, remove least recently used entries (LRU)
+    if (cache.size > MAX_CACHE_SIZE) {
+      const remainingEntries = Array.from(cache.entries());
+      remainingEntries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+      
+      const toRemove = cache.size - MAX_CACHE_SIZE;
+      for (let i = 0; i < toRemove; i++) {
+        cache.delete(remainingEntries[i][0]);
+      }
+    }
+    
+    // Save to localStorage
+    savePersistentCache(cache);
+  }, []);
+  
+  // ✅ PERFORMANCE OPTIMIZATION: Fetch period-filtered analytics via direct API
+  const fetchPeriodAnalytics = useCallback(async (silent: boolean = false) => {
+    if (!user?.userId) return;
+    
+    const cacheKey = getCacheKey(analyticsPeriod, selectedAdId, 'period');
+    const cache = analyticsCacheRef.current;
+    const cached = cache.get(cacheKey);
+    const now = Date.now();
+    
+    // Check cache first
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      cached.lastAccessed = now;
+      savePersistentCache(cache);
+      console.log('⚡ [Dashboard] Using cached period analytics:', cacheKey);
+      setPeriodAnalyticsData(cached.data);
+      setPeriodAnalyticsLoading(false);
+      return;
+    }
+    
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (periodFetchTimeoutRef.current) {
+      clearTimeout(periodFetchTimeoutRef.current);
+    }
+    
+    // Debounce rapid changes
+    periodFetchTimeoutRef.current = setTimeout(async () => {
+      if (isRequestInProgressRef.current) {
+        console.log('⏸️ [Dashboard] Request already in progress, skipping');
+        return;
+      }
+      
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      isRequestInProgressRef.current = true;
+      
+      try {
+        if (!silent) {
+          setPeriodAnalyticsLoading(true);
+        }
+        
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+        const queryParams = new URLSearchParams();
+        queryParams.append('period', analyticsPeriod);
+        if (selectedAdId) {
+          queryParams.append('adId', selectedAdId);
+        }
+        
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+        console.log('📡 [Dashboard] Fetching period analytics:', url);
+        
+        const response = await fetch(url, {
+          signal: abortController.signal
+        });
+        
+        if (abortController.signal.aborted) {
+          console.log('🚫 [Dashboard] Period analytics request aborted');
+          return;
+        }
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          // Format data to match GraphQL structure for compatibility
+          const formattedData = {
+            getUserAnalytics: result.data
+          };
+          
+          setPeriodAnalyticsData(formattedData);
+          setAnalyticsError(null);
+          
+          // Cache the result
+          cache.set(cacheKey, {
+            data: formattedData,
+            timestamp: now,
+            lastAccessed: now
+          });
+          manageCache();
+          
+          console.log('✅ [Dashboard] Period analytics fetched successfully');
+        } else {
+          throw new Error(result.message || 'Failed to fetch analytics');
+        }
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('🚫 [Dashboard] Period analytics request aborted');
+          return;
+        }
+        console.error('❌ [Dashboard] Error fetching period analytics:', error);
+        setAnalyticsError(error);
+      } finally {
+        setPeriodAnalyticsLoading(false);
+        isRequestInProgressRef.current = false;
+        abortControllerRef.current = null;
+      }
+    }, silent ? 300 : 400);
+  }, [user?.userId, analyticsPeriod, selectedAdId, getCacheKey, manageCache]);
+  
+  // ✅ PERFORMANCE OPTIMIZATION: Fetch overall analytics via direct API
+  const fetchOverallAnalytics = useCallback(async (silent: boolean = false) => {
+    if (!user?.userId) return;
+    
+    const cacheKey = getCacheKey('all', null, 'overall');
+    const cache = analyticsCacheRef.current;
+    const cached = cache.get(cacheKey);
+    const now = Date.now();
+    
+    // Check cache first
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      cached.lastAccessed = now;
+      savePersistentCache(cache);
+      console.log('⚡ [Dashboard] Using cached overall analytics:', cacheKey);
+      setOverallAnalyticsData(cached.data);
+      setOverallAnalyticsLoading(false);
+      return;
+    }
+    
+    // Cancel previous request
+    if (overallFetchTimeoutRef.current) {
+      clearTimeout(overallFetchTimeoutRef.current);
+    }
+    
+    // Debounce rapid changes
+    overallFetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!silent) {
+          setOverallAnalyticsLoading(true);
+        }
+        
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+        const queryParams = new URLSearchParams();
+        queryParams.append('period', 'all');
+        
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+        console.log('📡 [Dashboard] Fetching overall analytics:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          // Format data to match GraphQL structure for compatibility
+          const formattedData = {
+            getUserAnalytics: result.data
+          };
+          
+          setOverallAnalyticsData(formattedData);
+          
+          // Cache the result
+          cache.set(cacheKey, {
+            data: formattedData,
+            timestamp: now,
+            lastAccessed: now
+          });
+          manageCache();
+          
+          console.log('✅ [Dashboard] Overall analytics fetched successfully');
+        } else {
+          throw new Error(result.message || 'Failed to fetch analytics');
+        }
+      } catch (error: any) {
+        console.error('❌ [Dashboard] Error fetching overall analytics:', error);
+      } finally {
+        setOverallAnalyticsLoading(false);
+      }
+    }, silent ? 300 : 400);
+  }, [user?.userId, getCacheKey, manageCache]);
   
   // ✅ FIX: Calculate if auto-refresh should be enabled (enable for today's date, disable for past dates)
   const shouldDisableAutoRefresh = useMemo(() => {
@@ -214,42 +523,48 @@ const Dashboard = () => {
     errorPolicy: 'all',
   });
 
-  // Priority 2: Load analytics data after initial render (heavier query)
-  // ✅ OPTIMIZATION: Increased poll interval from 30s to 5 minutes (analytics don't change that frequently)
-  // Reduces queries by 90% while maintaining fresh data
-  const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
-    variables: { period: analyticsPeriod, adId: selectedAdId },
-    fetchPolicy: 'cache-first', // Use cache first for instant loads
-    nextFetchPolicy: 'cache-and-network', // ✅ Always check for updates in background (ensures fresh data)
-    pollInterval: 120000, // ✅ REAL-TIME: Reduced to 2 minutes for faster updates (was 10 minutes)
-    errorPolicy: 'all', // Allow partial data even with errors
-    notifyOnNetworkStatusChange: false, // Don't show loading state during background refresh (silent update)
-    // Skip query if no user data yet (prevents unnecessary queries)
-    skip: !myAdsData,
-  });
+  // ✅ PERFORMANCE OPTIMIZATION: Initial fetch on mount and when dependencies change
+  useEffect(() => {
+    if (user?.userId && myAdsData) {
+      // Fetch both analytics on mount
+      fetchPeriodAnalytics(false);
+      fetchOverallAnalytics(false);
+    }
+  }, [user?.userId, myAdsData]); // Only fetch once on mount or when user changes
 
-  // ✅ Fetch overall analytics data for Summary Metrics (always uses 'all' period, no adId filter)
-  // This ensures "Total Ad Played" and other summary metrics always show cumulative totals
-  // ✅ PERFORMANCE OPTIMIZATION: Load immediately but use cache-first (non-blocking)
-  // - If cache exists: Shows data instantly (return visits)
-  // - If no cache: Query runs in background without blocking page render (first visit)
-  // - Page renders first, then metrics update when query completes
-  // ✅ REAL-TIME UPDATE: Reduced poll interval to 2 minutes for faster data updates
-  const { data: overallAnalyticsData, loading: overallAnalyticsLoading, refetch: refetchOverallAnalytics } = useQuery(GET_USER_ANALYTICS, {
-    variables: { 
-      period: 'all', // Always fetch overall data for Summary Metrics
-      adId: null // No adId filter - show all ads cumulative totals
-    },
-    fetchPolicy: 'cache-first', // ✅ Use cache immediately if available (instant on return visits)
-    nextFetchPolicy: 'cache-and-network', // ✅ Always check for updates in background (ensures fresh data)
-    errorPolicy: 'all',
-    pollInterval: 120000, // ✅ REAL-TIME: Reduced to 2 minutes for faster QR scan and ad play updates
-    notifyOnNetworkStatusChange: false, // ✅ Don't show loading during background refresh (silent update)
-    // Skip query only if no user data yet (allows cache to load immediately)
-    skip: !myAdsData,
-  });
+  // ✅ PERFORMANCE OPTIMIZATION: Refetch period analytics when period or adId changes
+  useEffect(() => {
+    if (user?.userId && myAdsData) {
+      fetchPeriodAnalytics(false);
+    }
+  }, [analyticsPeriod, selectedAdId, user?.userId, myAdsData]);
 
-  // Handle analytics errors using useEffect (Apollo v3.14 recommended approach)
+  // ✅ PERFORMANCE OPTIMIZATION: Polling for background refresh (every 2 minutes)
+  useEffect(() => {
+    if (!user?.userId || !myAdsData) return;
+    
+    const pollInterval = setInterval(() => {
+      console.log('🔄 [Dashboard] Background refresh triggered');
+      fetchPeriodAnalytics(true); // Silent refresh
+      fetchOverallAnalytics(true); // Silent refresh
+    }, 120000); // 2 minutes
+    
+    return () => {
+      clearInterval(pollInterval);
+      // Cleanup timeouts on unmount
+      if (periodFetchTimeoutRef.current) {
+        clearTimeout(periodFetchTimeoutRef.current);
+      }
+      if (overallFetchTimeoutRef.current) {
+        clearTimeout(overallFetchTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [user?.userId, myAdsData, fetchPeriodAnalytics, fetchOverallAnalytics]);
+
+  // Handle analytics errors
   useEffect(() => {
     if (analyticsError && 
         analyticsError.message !== 'Failed to fetch analytics data' &&
@@ -343,26 +658,26 @@ const Dashboard = () => {
     if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
       lastAnalyticsRefreshRef.current = now;
       // Refresh both analytics queries silently (background update)
-      refetchOverallAnalytics().catch(err => {
+      fetchOverallAnalytics(true).catch(err => {
         console.warn('Failed to refresh overall analytics:', err);
       });
-      refetchAnalytics().catch(err => {
-        console.warn('Failed to refresh analytics:', err);
+      fetchPeriodAnalytics(true).catch(err => {
+        console.warn('Failed to refresh period analytics:', err);
       });
     } else {
       // Schedule refresh after minimum interval
       const delay = MIN_REFRESH_INTERVAL - timeSinceLastRefresh;
       analyticsRefreshTimeoutRef.current = setTimeout(() => {
         lastAnalyticsRefreshRef.current = Date.now();
-        refetchOverallAnalytics().catch(err => {
+        fetchOverallAnalytics(true).catch(err => {
           console.warn('Failed to refresh overall analytics:', err);
         });
-        refetchAnalytics().catch(err => {
-          console.warn('Failed to refresh analytics:', err);
+        fetchPeriodAnalytics(true).catch(err => {
+          console.warn('Failed to refresh period analytics:', err);
         });
       }, delay);
     }
-  }, [refetchOverallAnalytics, refetchAnalytics]);
+  }, [fetchOverallAnalytics, fetchPeriodAnalytics]);
 
   // WebSocket subscription for real-time ad playback updates
   useEffect(() => {
@@ -541,8 +856,8 @@ const Dashboard = () => {
     { day: 'Sunday', profit: 200, loss: 70 },
   ];
 
-  // Get real QR scan data from analytics
-  const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+  // Get real QR scan data from analytics (use period data, fallback to overall)
+  const dailyStats = periodAnalyticsData?.getUserAnalytics?.dailyStats || overallAnalyticsData?.getUserAnalytics?.dailyStats || [];
 
   // Generate QR chart data based on period
   const generateQrChartData = () => {
@@ -566,7 +881,7 @@ const Dashboard = () => {
 
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         return last7Days.map(date => {
-          const stat = dailyStats.find(s => {
+          const stat = dailyStats.find((s: any) => {
             const statDate = new Date(s.date);
             return statDate.toDateString() === date.toDateString();
           });
@@ -587,11 +902,11 @@ const Dashboard = () => {
           weekEnd.setDate(weekEnd.getDate() + 6);
 
           const weekScans = dailyStats
-            .filter(stat => {
+            .filter((stat: any) => {
               const statDate = new Date(stat.date);
               return statDate >= weekStart && statDate <= weekEnd;
             })
-            .reduce((sum, stat) => sum + (stat.qrScans || 0), 0);
+            .reduce((sum: number, stat: any) => sum + (stat.qrScans || 0), 0);
 
           weeklyData.push({
             name: `Week ${4 - i}`,
@@ -628,11 +943,11 @@ const Dashboard = () => {
           }
 
           const weekScans = dailyStats
-            .filter(stat => {
+            .filter((stat: any) => {
               const statDate = new Date(stat.date);
               return statDate >= weekStart && statDate <= weekEnd;
             })
-            .reduce((sum, stat) => sum + (stat.qrScans || 0), 0);
+            .reduce((sum: number, stat: any) => sum + (stat.qrScans || 0), 0);
 
           monthlyData.push({
             name: `${monthName} W${week + 1}`,
@@ -724,11 +1039,11 @@ const Dashboard = () => {
   const handleAnalyticsPeriodChange = (period: '1d' | '7d' | '30d') => {
     setAnalyticsPeriod(period);
     setShowAnalyticsPeriodDropdown(false);
-    // ⚡ No need to manually refetch! Apollo's useQuery automatically refetches when analyticsPeriod changes
+    // Period change will trigger useEffect to refetch data
   };
 
   // ✅ Analytics summary - use overallAnalyticsData for summary metrics (all-time totals)
-  // Charts use analyticsData (filtered by period)
+  // Charts use periodAnalyticsData (filtered by period)
   // ✅ Show loading state for overall analytics (separate from period-filtered analytics)
   const isOverallAnalyticsLoading = overallAnalyticsLoading && !overallAnalyticsData;
   const analyticsSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
@@ -743,7 +1058,7 @@ const Dashboard = () => {
   // Get list of user's ads from analytics data
   // Use a ref to keep the last valid ad list (so dropdown doesn't disappear during loading)
   const lastValidAds = useRef<any[]>([]);
-  const currentAds = analyticsData?.getUserAnalytics?.adPerformance || [];
+  const currentAds = periodAnalyticsData?.getUserAnalytics?.adPerformance || overallAnalyticsData?.getUserAnalytics?.adPerformance || [];
   
   // Update ref when we get new data
   if (currentAds.length > 0) {
@@ -862,7 +1177,10 @@ const Dashboard = () => {
                   <p className="mt-1">Once you create and deploy ads, your analytics will appear here.</p>
                   <div className="mt-3">
                     <button
-                      onClick={() => refetchAnalytics()}
+                      onClick={() => {
+                        fetchPeriodAnalytics(false);
+                        fetchOverallAnalytics(false);
+                      }}
                       className="inline-flex items-center px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
                     >
                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -922,7 +1240,7 @@ const Dashboard = () => {
                 </div>
               </div>
               <Suspense fallback={<ChartLoader />}>
-                <AnalyticsChart data={analyticsData?.getUserAnalytics?.dailyStats || []} />
+                <AnalyticsChart data={periodAnalyticsData?.getUserAnalytics?.dailyStats || []} />
               </Suspense>
               {/* Currently Playing Ads - Real-time from WebSocket */}
               <div className="mt-6 mb-4">
@@ -1019,21 +1337,21 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
                 <div className="bg-[#1b5087]/60 p-3">
                   <p className="text-xl sm:text-2xl font-bold">
-                    {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
+                    {periodAnalyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300">Total Airtime (Minutes)</p>
                   <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
                 </div>
                 <div className="bg-[#2876c7]/60 p-3">
                   <p className="text-xl sm:text-2xl font-bold">
-                    {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
+                    {overallAnalyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
                   <p className="text-xs text-gray-400">All-time total</p>
                 </div>
                 <div className="bg-[#1b5087]/60 p-3">
                   <p className="text-xl sm:text-2xl font-bold">
-                    {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
+                    {overallAnalyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
                   </p>
                   <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
                   <p className="text-xs text-gray-400">All-time total</p>

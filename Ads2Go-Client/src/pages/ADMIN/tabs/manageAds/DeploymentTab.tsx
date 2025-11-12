@@ -5,7 +5,10 @@ import {
   Activity,
   Settings,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  Move,
+  X
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import {
@@ -13,9 +16,12 @@ import {
   GET_ACTIVE_DEPLOYMENTS,
   UPDATE_LCD_SLOT_STATUS,
   REMOVE_ADS_FROM_LCD,
+  CREATE_DEPLOYMENT,
   type AdDeployment,
   type LCDSlot
 } from '../../../../graphql/admin/ads';
+import { GET_ALL_MATERIALS } from '../../../../graphql/admin/queries/materials';
+import ConfirmationModal from '../../../../components/ConfirmationModal';
 
 type DeploymentTabProps = {
   statusFilter: string; // or stricter union type
@@ -33,6 +39,70 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Edit mode state - track which deployments are in edit mode
+  const [editModeDeployments, setEditModeDeployments] = useState<Set<string>>(new Set());
+  
+  // Drag and drop state
+  const [draggedSlot, setDraggedSlot] = useState<{
+    slot: LCDSlot;
+    sourceMaterialId: string;
+    sourceDeploymentId: string;
+  } | null>(null);
+  const [dragOverDeployment, setDragOverDeployment] = useState<string | null>(null);
+
+  // Confirmation modals state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    slot: LCDSlot | null;
+    materialId: string;
+    adName: string;
+  }>({
+    isOpen: false,
+    slot: null,
+    materialId: '',
+    adName: ''
+  });
+
+  const [moveConfirmation, setMoveConfirmation] = useState<{
+    isOpen: boolean;
+    slot: LCDSlot | null;
+    sourceMaterialId: string;
+    sourceDeviceName: string;
+    targetMaterialId: string;
+    targetDeviceName: string;
+    sourceSlots: number;
+    targetSlots: number;
+  }>({
+    isOpen: false,
+    slot: null,
+    sourceMaterialId: '',
+    sourceDeviceName: '',
+    targetMaterialId: '',
+    targetDeviceName: '',
+    sourceSlots: 0,
+    targetSlots: 0
+  });
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Error state for showing error modal
+  const [errorModal, setErrorModal] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({
+    isOpen: false,
+    message: ''
+  });
+
+  // Success state for showing success modal
+  const [successModal, setSuccessModal] = useState<{
+    isOpen: boolean;
+    message: string;
+  }>({
+    isOpen: false,
+    message: ''
+  });
 
   // Handle resize
   useEffect(() => {
@@ -59,6 +129,12 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     fetchPolicy: 'cache-and-network'
   });
 
+  // Fetch materials to get Material _id from materialId string
+  const { data: materialsData } = useQuery(GET_ALL_MATERIALS, {
+    errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network'
+  });
+
   // Deployment mutations
   const [updateLCDSlotStatus] = useMutation(UPDATE_LCD_SLOT_STATUS, {
     onCompleted: () => {
@@ -72,9 +148,54 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   const [removeAdsFromLCD] = useMutation(REMOVE_ADS_FROM_LCD, {
     onCompleted: () => {
       refetchDeployments();
+      setIsProcessing(false);
     },
     onError: (error) => {
       console.error('Error removing ads from LCD:', error);
+      setIsProcessing(false);
+      alert(`Error removing ad: ${error.message}`);
+    }
+  });
+
+  const [createDeployment] = useMutation(CREATE_DEPLOYMENT, {
+    onCompleted: () => {
+      // Store device names before clearing the confirmation state
+      const sourceDevice = moveConfirmation.sourceDeviceName;
+      const targetDevice = moveConfirmation.targetDeviceName;
+      
+      refetchDeployments();
+      setIsProcessing(false);
+      setMoveConfirmation({
+        isOpen: false,
+        slot: null,
+        sourceMaterialId: '',
+        sourceDeviceName: '',
+        targetMaterialId: '',
+        targetDeviceName: '',
+        sourceSlots: 0,
+        targetSlots: 0
+      });
+      // Show success message
+      setSuccessModal({
+        isOpen: true,
+        message: `Ad successfully moved from ${sourceDevice} to ${targetDevice}!`
+      });
+    },
+    onError: (error) => {
+      console.error('Error creating deployment:', error);
+      setIsProcessing(false);
+      // Even if there's an error, refetch to check if the operation actually succeeded
+      // (sometimes GraphQL parsing errors occur but the backend operation succeeds)
+      refetchDeployments();
+      
+      // Show error in modal instead of alert
+      const errorMessage = error.message || 'Unknown error occurred';
+      setErrorModal({
+        isOpen: true,
+        message: errorMessage.includes('ID cannot represent value') 
+          ? 'There was an issue with the ad data format, but the ad may have been moved successfully. Please refresh to verify.'
+          : `Error moving ad: ${errorMessage}`
+      });
     }
   });
 
@@ -90,6 +211,286 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       });
     } catch (error) {
       console.error('Error updating LCD slot:', error);
+    }
+  };
+
+  // Toggle edit mode for a specific deployment
+  const toggleEditMode = (deploymentId: string) => {
+    setEditModeDeployments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deploymentId)) {
+        newSet.delete(deploymentId);
+        // Clear dragged slot when exiting edit mode
+        if (draggedSlot && draggedSlot.sourceDeploymentId === deploymentId) {
+          setDraggedSlot(null);
+        }
+      } else {
+        newSet.add(deploymentId);
+      }
+      return newSet;
+    });
+  };
+
+  // Cancel move operation
+  const handleCancelMove = () => {
+    setDraggedSlot(null);
+  };
+
+  // Check if a deployment is in edit mode
+  const isEditMode = (deploymentId: string) => {
+    return editModeDeployments.has(deploymentId);
+  };
+
+  // Get Material _id from materialId string
+  const getMaterialIdFromString = (materialIdString: string): string | null => {
+    const materials = materialsData?.getAllMaterials || [];
+    const material = materials.find((m: any) => m.materialId === materialIdString);
+    return material?.id || null;
+  };
+
+  // Get available slots count for a deployment
+  const getAvailableSlots = (deployment: AdDeployment): number => {
+    const activeSlots = deployment.lcdSlots?.filter(slot => 
+      ['SCHEDULED', 'RUNNING'].includes(slot.status)
+    ).length || 0;
+    return 5 - activeSlots;
+  };
+
+  // Handle delete icon click
+  const handleDeleteClick = (slot: LCDSlot, materialId: string, adName: string) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      slot,
+      materialId,
+      adName
+    });
+  };
+
+  // Confirm delete
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmation.slot || !deleteConfirmation.materialId) return;
+    
+    setIsProcessing(true);
+    try {
+      // Extract adId - handle both string and populated object cases
+      const slot = deleteConfirmation.slot;
+      let adId: string;
+      if (typeof slot.adId === 'string') {
+        adId = slot.adId;
+      } else if (slot.adId && typeof slot.adId === 'object') {
+        adId = (slot.adId as any)._id || (slot.adId as any).id || String(slot.adId);
+      } else if (slot.ad?.id) {
+        adId = slot.ad.id;
+      } else {
+        alert('Error: Could not determine ad ID');
+        setIsProcessing(false);
+        return;
+      }
+
+      await removeAdsFromLCD({
+        variables: {
+          materialId: deleteConfirmation.materialId,
+          adIds: [adId],
+          reason: 'Admin removed ad from device'
+        }
+      });
+      setDeleteConfirmation({ isOpen: false, slot: null, materialId: '', adName: '' });
+    } catch (error) {
+      console.error('Error deleting ad:', error);
+    }
+  };
+
+  // Handle move icon click - make slot draggable
+  const handleMoveClick = (slot: LCDSlot, materialId: string, deploymentId: string) => {
+    setDraggedSlot({
+      slot,
+      sourceMaterialId: materialId,
+      sourceDeploymentId: deploymentId
+    });
+  };
+
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent, slot: LCDSlot, materialId: string, deploymentId: string) => {
+    if (!draggedSlot || draggedSlot.slot.id !== slot.id) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ''); // Required for Firefox
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetDeploymentId: string, targetMaterialId: string) => {
+    e.preventDefault();
+    if (!draggedSlot) return;
+
+    // Don't allow drop on same device
+    if (draggedSlot.sourceDeploymentId === targetDeploymentId) {
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    // Check if target has available slots
+    const targetDeployment = filteredDeployments.find((d: AdDeployment) => d.id === targetDeploymentId);
+    if (!targetDeployment) {
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    const availableSlots = getAvailableSlots(targetDeployment);
+    if (availableSlots <= 0) {
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDeployment(targetDeploymentId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverDeployment(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDeployment: AdDeployment) => {
+    e.preventDefault();
+    setDragOverDeployment(null);
+
+    if (!draggedSlot) return;
+
+    // Don't allow drop on same device
+    if (draggedSlot.sourceDeploymentId === targetDeployment.id) {
+      setDraggedSlot(null);
+      return;
+    }
+
+    // Check if target has available slots
+    const availableSlots = getAvailableSlots(targetDeployment);
+    if (availableSlots <= 0) {
+      alert('Target device is full (5/5 slots). Cannot move ad.');
+      setDraggedSlot(null);
+      return;
+    }
+
+    // Get source deployment for display
+    const sourceDeployment = filteredDeployments.find((d: AdDeployment) => d.id === draggedSlot.sourceDeploymentId);
+    const sourceSlots = sourceDeployment?.lcdSlots?.filter((s: LCDSlot) => 
+      ['SCHEDULED', 'RUNNING'].includes(s.status)
+    ).length || 0;
+    const targetSlots = targetDeployment.lcdSlots?.filter((s: LCDSlot) => 
+      ['SCHEDULED', 'RUNNING'].includes(s.status)
+    ).length || 0;
+
+    // Show confirmation dialog
+    setMoveConfirmation({
+      isOpen: true,
+      slot: draggedSlot.slot,
+      sourceMaterialId: draggedSlot.sourceMaterialId,
+      sourceDeviceName: sourceDeployment?.materialId || 'Unknown Device',
+      targetMaterialId: targetDeployment.materialId || '',
+      targetDeviceName: targetDeployment.materialId || 'Unknown Device',
+      sourceSlots,
+      targetSlots
+    });
+
+    setDraggedSlot(null);
+  };
+
+  // Confirm move
+  const handleConfirmMove = async () => {
+    if (!moveConfirmation.slot || !moveConfirmation.sourceMaterialId || !moveConfirmation.targetMaterialId) return;
+
+    setIsProcessing(true);
+
+    try {
+      // Get target deployment to find driverId
+      // Use the string materialId directly (e.g., "DGL-HEADDRESS-CAR-003")
+      const targetDeployment = filteredDeployments.find((d: AdDeployment) => 
+        d.materialId === moveConfirmation.targetMaterialId
+      );
+      if (!targetDeployment || !targetDeployment.driverId) {
+        alert('Error: Target device does not have a driver assigned');
+        setIsProcessing(false);
+        return;
+      }
+
+      const slot = moveConfirmation.slot;
+      const startTime = slot.startTime || new Date().toISOString();
+      const endTime = slot.endTime || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Extract adId - handle both string and populated object cases
+      let adId: string;
+      if (typeof slot.adId === 'string') {
+        adId = slot.adId;
+      } else if (slot.adId && typeof slot.adId === 'object') {
+        // If adId is populated as an object, extract the ID
+        // Try _id first (MongoDB format), then id, then string conversion
+        const adIdObj = slot.adId as any;
+        adId = adIdObj._id?.toString() || adIdObj.id?.toString() || (typeof adIdObj.toString === 'function' ? adIdObj.toString() : String(adIdObj));
+        
+        // If still an object, try to get the _id from the nested object
+        if (typeof adId === 'object' || !adId || adId === '[object Object]') {
+          // Last resort: try to get from ad.id
+          if (slot.ad?.id) {
+            adId = slot.ad.id;
+          } else {
+            console.error('Failed to extract adId from slot:', slot);
+            throw new Error('Could not determine ad ID from slot. Please refresh and try again.');
+          }
+        }
+      } else if (slot.ad?.id) {
+        // Fallback to ad.id if available
+        adId = slot.ad.id;
+      } else {
+        console.error('Slot data:', slot);
+        throw new Error('Could not determine ad ID from slot. Please refresh and try again.');
+      }
+      
+      // Ensure adId is a string
+      if (typeof adId !== 'string' || !adId) {
+        console.error('Invalid adId extracted:', adId, 'from slot:', slot);
+        throw new Error('Invalid ad ID format. Please refresh and try again.');
+      }
+      
+      console.log('Extracted adId for move:', adId);
+
+      // Step 1: Remove from source device
+      await removeAdsFromLCD({
+        variables: {
+          materialId: moveConfirmation.sourceMaterialId,
+          adIds: [adId],
+          reason: `Moved to ${moveConfirmation.targetDeviceName}`
+        }
+      });
+
+      // Step 2: Add to target device
+      // Pass the string materialId directly (backend expects string, not ObjectId)
+      await createDeployment({
+        variables: {
+          input: {
+            adId: adId,
+            materialId: moveConfirmation.targetMaterialId,
+            driverId: targetDeployment.driverId,
+            startTime,
+            endTime
+          }
+        }
+      });
+
+      // Note: onCompleted will handle closing the modal and refetching
+    } catch (error: any) {
+      console.error('Error moving ad:', error);
+      setIsProcessing(false);
+      
+      // Refetch to check if operation actually succeeded despite the error
+      refetchDeployments();
+      
+      // Show error in modal instead of alert
+      const errorMessage = error.message || 'Unknown error occurred';
+      setErrorModal({
+        isOpen: true,
+        message: errorMessage.includes('ID cannot represent value')
+          ? 'There was an issue with the ad data format, but the ad may have been moved successfully. Please refresh to verify.'
+          : `Error moving ad: ${errorMessage}`
+      });
     }
   };
 
@@ -246,7 +647,17 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       ) : (
         <div className="space-y-4">
           {paginatedDeployments.map((deployment: AdDeployment) => (
-            <div key={deployment.id} className={`border border-gray-200 rounded-lg ${isMobile ? 'p-4' : 'p-6'} bg-white shadow-sm hover:shadow-md transition-shadow`}>
+            <div 
+              key={deployment.id} 
+              className={`border rounded-lg ${isMobile ? 'p-4' : 'p-6'} bg-white shadow-sm hover:shadow-md transition-all ${
+                dragOverDeployment === deployment.id 
+                  ? 'border-blue-500 border-2 bg-blue-50' 
+                  : 'border-gray-200'
+              }`}
+              onDragOver={(e) => handleDragOver(e, deployment.id, deployment.materialId || '')}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, deployment)}
+            >
               {/* Header with Material ID and Status */}
               <div className={`flex ${isMobile ? 'flex-col gap-3' : 'justify-between items-start'} mb-4`}>
                 <div className={`${isMobile ? 'w-full' : 'flex-1'}`}>
@@ -326,7 +737,7 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                     <span className="font-medium text-purple-700">Total Slots</span>
                   </div>
                   <p className="text-purple-900 font-bold text-base">
-                    {deployment.lcdSlots?.length || 0}
+                    {deployment.lcdSlots?.filter(s => s.status !== 'REMOVED').length || 0}
                   </p>
                   <p className="text-purple-600 text-xs">ad slots used</p>
                 </div>
@@ -344,17 +755,81 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               </div>
               
               {/* Ad Slots Section */}
-              {deployment.lcdSlots && deployment.lcdSlots.length > 0 && (
+              {deployment.lcdSlots && deployment.lcdSlots.filter(s => s.status !== 'REMOVED').length > 0 && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Settings className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} text-gray-600`} />
-                    <h4 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>Ad Slots ({deployment.lcdSlots.length})</h4>
+                    <button
+                      onClick={() => toggleEditMode(deployment.id)}
+                      className={`p-1 rounded hover:bg-gray-100 transition-colors ${
+                        isEditMode(deployment.id) ? 'bg-blue-100 text-blue-600' : 'text-gray-600'
+                      }`}
+                      title={isEditMode(deployment.id) ? 'Exit edit mode' : 'Edit slots'}
+                    >
+                      <Settings className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'}`} />
+                    </button>
+                    <h4 className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-700`}>Ad Slots ({deployment.lcdSlots.filter(s => s.status !== 'REMOVED').length})</h4>
                   </div>
                   <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'} gap-3`}>
-                    {deployment.lcdSlots.map((slot: LCDSlot, index: number) => (
-                      <div key={slot.id || index} className={`bg-gray-50 border border-gray-200 rounded-lg ${isMobile ? 'p-2' : 'p-3'}`}>
+                    {deployment.lcdSlots
+                      .filter((slot: LCDSlot) => slot.status !== 'REMOVED') // Filter out REMOVED slots - they're not active
+                      .map((slot: LCDSlot, index: number) => {
+                      const isDraggable = draggedSlot?.slot.id === slot.id;
+                      const isDragging = draggedSlot !== null && draggedSlot.slot.id === slot.id;
+                      return (
+                      <div 
+                        key={slot.id || index} 
+                        className={`bg-gray-50 border rounded-lg ${isMobile ? 'p-2' : 'p-3'} transition-all ${
+                          isDragging 
+                            ? 'border-blue-500 border-2 opacity-50 cursor-move' 
+                            : isDraggable
+                            ? 'border-blue-300 border-2 cursor-move hover:shadow-md'
+                            : 'border-gray-200'
+                        }`}
+                        draggable={isDraggable}
+                        onDragStart={(e) => handleDragStart(e, slot, deployment.materialId || '', deployment.id)}
+                        style={isDraggable ? { cursor: 'move' } : {}}
+                      >
                         <div className={`flex items-center ${isMobile ? 'flex-col gap-2 items-start' : 'justify-between'} mb-2`}>
-                          <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-800`}>Slot {slot.slotNumber}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium text-gray-800`}>Slot {slot.slotNumber}</span>
+                            {isEditMode(deployment.id) && (
+                              <div className="flex gap-1">
+                                {!isDraggable && (
+                                  <>
+                                    {/* Show delete icon for active slots */}
+                                    {['SCHEDULED', 'RUNNING'].includes(slot.status) && (
+                                      <button
+                                        onClick={() => handleDeleteClick(slot, deployment.materialId || '', slot.ad?.title || 'Unknown Ad')}
+                                        className="p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                                        title="Delete ad"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                    {/* Show move icon only for active slots (SCHEDULED or RUNNING) */}
+                                    {['SCHEDULED', 'RUNNING'].includes(slot.status) && (
+                                      <button
+                                        onClick={() => handleMoveClick(slot, deployment.materialId || '', deployment.id)}
+                                        className="p-1 rounded hover:bg-blue-100 text-blue-600 transition-colors"
+                                        title="Move ad to another device"
+                                      >
+                                        <Move className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                {isDraggable && (
+                                  <button
+                                    onClick={handleCancelMove}
+                                    className="p-1 rounded hover:bg-gray-100 text-gray-600 transition-colors"
+                                    title="Cancel move"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className={`flex gap-1 flex-wrap ${isMobile ? 'justify-start' : 'justify-end'}`}>
                             {/* Show RUNNING badge if ad is currently playing */}
                             {(() => {
@@ -386,7 +861,7 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                               const endTime = slot.endTime ? new Date(slot.endTime) : null;
                               const isEnded = endTime && now > endTime;
                               
-                              if (isEnded || slot.status === 'COMPLETED' || slot.status === 'ENDED') {
+                              if (isEnded || slot.status === 'COMPLETED') {
                                 return (
                                   <span className="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-700">
                                     ENDED
@@ -403,12 +878,6 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                               </span>
                             )}
                             
-                            {slot.status === 'REMOVED' && (
-                              <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 text-red-700">
-                                REMOVED
-                              </span>
-                            )}
-                            
                             {slot.status === 'CANCELLED' && (
                               <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
                                 CANCELLED
@@ -419,6 +888,11 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                         {slot.ad?.title && (
                           <p className="text-xs font-medium text-gray-700 truncate mb-2" title={slot.ad.title}>
                             {slot.ad.title}
+                          </p>
+                        )}
+                        {isDraggable && (
+                          <p className="text-xs text-blue-600 font-medium mt-2">
+                            Drag to another device to move
                           </p>
                         )}
                         
@@ -488,7 +962,8 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                           }
                         })()}
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               )}
@@ -563,6 +1038,72 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmation.isOpen}
+        onClose={() => setDeleteConfirmation({ isOpen: false, slot: null, materialId: '', adName: '' })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Ad"
+        message={`Are you sure you want to remove "${deleteConfirmation.adName}" from ${deleteConfirmation.materialId || 'this device'}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={isProcessing}
+      />
+
+      {/* Move Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={moveConfirmation.isOpen}
+        onClose={() => setMoveConfirmation({
+          isOpen: false,
+          slot: null,
+          sourceMaterialId: '',
+          sourceDeviceName: '',
+          targetMaterialId: '',
+          targetDeviceName: '',
+          sourceSlots: 0,
+          targetSlots: 0
+        })}
+        onConfirm={handleConfirmMove}
+        title="Move Ad to Another Device"
+        message={`Are you sure you want to move "${moveConfirmation.slot?.ad?.title || 'this ad'}"?\n\nFrom: ${moveConfirmation.sourceDeviceName} (${moveConfirmation.sourceSlots}/5 → ${moveConfirmation.sourceSlots - 1}/5)\nTo: ${moveConfirmation.targetDeviceName} (${moveConfirmation.targetSlots}/5 → ${moveConfirmation.targetSlots + 1}/5)`}
+        confirmText="Move"
+        cancelText="Cancel"
+        confirmButtonClass="bg-blue-600 hover:bg-blue-700"
+        isProcessing={isProcessing}
+      />
+
+      {/* Error Modal */}
+      <ConfirmationModal
+        isOpen={errorModal.isOpen}
+        onClose={() => setErrorModal({ isOpen: false, message: '' })}
+        onConfirm={() => {
+          setErrorModal({ isOpen: false, message: '' });
+          refetchDeployments(); // Refetch after closing error modal
+        }}
+        title="Error"
+        message={errorModal.message}
+        confirmText="OK"
+        cancelText=""
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+        isProcessing={false}
+      />
+
+      {/* Success Modal */}
+      <ConfirmationModal
+        isOpen={successModal.isOpen}
+        onClose={() => setSuccessModal({ isOpen: false, message: '' })}
+        onConfirm={() => {
+          setSuccessModal({ isOpen: false, message: '' });
+        }}
+        title="Success"
+        message={successModal.message}
+        confirmText="OK"
+        cancelText=""
+        confirmButtonClass="bg-green-600 hover:bg-green-700"
+        isProcessing={false}
+      />
     </div>
   );
 };

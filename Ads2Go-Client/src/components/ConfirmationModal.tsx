@@ -35,14 +35,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <p className="text-gray-600 mb-6">
             {message}
           </p>
-          <div className="flex justify-between space-x-3">
-            <button
-              onClick={onClose}
-              disabled={isProcessing}
-              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {cancelText}
-            </button>
+          <div className={`flex ${cancelText ? 'justify-between' : 'justify-end'} space-x-3`}>
+            {cancelText && (
+              <button
+                onClick={onClose}
+                disabled={isProcessing}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelText}
+              </button>
+            )}
             <button
               onClick={onConfirm}
               disabled={isProcessing}

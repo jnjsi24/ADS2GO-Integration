@@ -116,6 +116,24 @@ async function assignMaterialToDriver(driver) {
     await session.commitTransaction();
     session.endSession();
 
+    // Create deployment record for LCD and HEADDRESS materials (if not exists)
+    // This ensures devices appear in Deployment tab even without paid ads
+    try {
+      const AdsDeployment = require('../models/adsDeployment');
+      const materialTypesNeedingDeployment = ['LCD', 'HEADDRESS'];
+      if (materialTypesNeedingDeployment.includes(materialToAssign.materialType)) {
+        console.log(`🔄 Creating deployment record for ${materialToAssign.materialType} material ${materialToAssign.materialId}`);
+        await AdsDeployment.createOrGetDeployment(
+          materialToAssign.materialId,
+          driver.driverId
+        );
+        console.log(`✅ Deployment record created/updated for material ${materialToAssign.materialId}`);
+      }
+    } catch (deploymentError) {
+      console.error(`⚠️ Warning: Could not create deployment record for material ${materialToAssign.materialId}:`, deploymentError.message);
+      // Don't fail the assignment if deployment creation fails - log warning only
+    }
+
     return materialToAssign;
   } catch (error) {
     await session.abortTransaction();

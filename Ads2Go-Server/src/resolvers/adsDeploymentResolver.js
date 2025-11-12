@@ -689,7 +689,10 @@ const adsDeploymentResolvers = {
 
       const ad = await Ad.findById(adId);
       if (!ad) throw new Error('Ad not found');
-      if (ad.status !== 'APPROVED') throw new Error('Ad must be approved before deployment');
+      // Allow APPROVED or RUNNING status - if ad is running, it must have been approved
+      if (ad.status !== 'APPROVED' && ad.status !== 'RUNNING') {
+        throw new Error('Ad must be approved before deployment');
+      }
 
       /*
       const payment = await Payment.findOne({ adsId: adId, paymentStatus: 'PAID' });
@@ -700,11 +703,21 @@ const adsDeploymentResolvers = {
       const deployEndTime = new Date(endTime);
       if (deployStartTime >= deployEndTime) throw new Error('End time must be after start time');
 
-      const material = await Material.findById(materialId);
+      // materialId is a string (e.g., "DGL-HEADDRESS-CAR-003"), not an ObjectId
+      const material = await Material.findOne({ materialId: materialId });
       if (!material) throw new Error('Material not found');
 
-      if (material.materialType?.toUpperCase() === 'LCD') {
-        const deployment = await AdsDeployment.addToLCD(materialId, driverId, adId, startTime, endTime);
+      // Use material.materialId (string) for deployment methods, not the ObjectId _id
+      const materialIdString = material.materialId;
+
+      if (material.materialType?.toUpperCase() === 'LCD' || material.materialType?.toUpperCase() === 'HEADDRESS') {
+        // Use addToLCD for LCD materials, addToHEADDRESS for HEADDRESS materials
+        let deployment;
+        if (material.materialType?.toUpperCase() === 'HEADDRESS') {
+          deployment = await AdsDeployment.addToHEADDRESS(materialIdString, driverId, adId, startTime, endTime);
+        } else {
+          deployment = await AdsDeployment.addToLCD(materialIdString, driverId, adId, startTime, endTime);
+        }
 
         await deployment.populate([
           'lcdSlots.adId',
@@ -712,13 +725,42 @@ const adsDeploymentResolvers = {
           'driverId'
         ]);
 
+        // Convert populated adId objects back to ID strings (GraphQL expects ID, not object)
+        if (deployment.lcdSlots && Array.isArray(deployment.lcdSlots)) {
+          deployment.lcdSlots.forEach(slot => {
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object for the response
+              slot.ad = {
+                id: slot.adId._id.toString(),
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || '',
+                paymentStatus: slot.adId.paymentStatus || '',
+                status: slot.adId.status || '',
+                createdAt: slot.adId.createdAt ? slot.adId.createdAt.toISOString() : null
+              };
+              // Keep adId as just the ID string (required by GraphQL schema)
+              slot.adId = slot.adId._id.toString();
+            } else if (slot.adId && typeof slot.adId === 'object' && slot.adId.toString) {
+              // Handle direct ObjectId case
+              slot.adId = slot.adId.toString();
+            }
+            // Add id field for each slot (from _id)
+            if (slot._id) {
+              slot.id = slot._id.toString();
+            }
+          });
+        }
+
         if (deployment.driverId && typeof deployment.driverId === 'object') deployment.driverId = deployment.driverId._id;
         return deployment;
       } else {
+        // For non-LCD/HEADDRESS materials, use string materialId
         const deployment = new AdsDeployment({
           adDeploymentId: uuidv4(),
           adId,
-          materialId,
+          materialId: materialIdString,
           driverId,
           startTime: deployStartTime,
           endTime: deployEndTime,
@@ -770,9 +812,12 @@ const adsDeploymentResolvers = {
 
     removeAdsFromLCD: async (_, { materialId, adIds, reason }, { user }) => {
       checkAdmin(user);
-      const material = await Material.findById(materialId);
+      // materialId is a string (e.g., "DGL-HEADDRESS-CAR-003"), not an ObjectId
+      const material = await Material.findOne({ materialId: materialId });
       if (!material) throw new Error('Material not found');
-      if (material.materialType.toUpperCase() !== 'LCD') throw new Error('This function is only for LCD materials');
+      if (material.materialType.toUpperCase() !== 'LCD' && material.materialType.toUpperCase() !== 'HEADDRESS') {
+        throw new Error('This function is only for LCD and HEADDRESS materials');
+      }
 
       const result = await AdsDeployment.removeFromLCD(materialId, adIds, user.id, reason);
       return result;
@@ -780,9 +825,12 @@ const adsDeploymentResolvers = {
 
     reassignLCDSlots: async (_, { materialId }, { user }) => {
       checkAdmin(user);
-      const material = await Material.findById(materialId);
+      // materialId is a string (e.g., "DGL-HEADDRESS-CAR-003"), not an ObjectId
+      const material = await Material.findOne({ materialId: materialId });
       if (!material) throw new Error('Material not found');
-      if (material.materialType.toUpperCase() !== 'LCD') throw new Error('This function is only for LCD materials');
+      if (material.materialType.toUpperCase() !== 'LCD' && material.materialType.toUpperCase() !== 'HEADDRESS') {
+        throw new Error('This function is only for LCD and HEADDRESS materials');
+      }
 
       const result = await AdsDeployment.reassignLCDSlots(materialId);
       return result;

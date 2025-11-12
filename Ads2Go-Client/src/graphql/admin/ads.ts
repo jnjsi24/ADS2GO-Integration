@@ -581,7 +581,7 @@ export interface Ad {
 
 export interface LCDSlot {
   id: string;
-  adId: string;
+  adId: string | { _id?: string; id?: string } | any; // Can be string ID or populated object
   slotNumber: number;
   status: 'SCHEDULED' | 'RUNNING' | 'COMPLETED' | 'PAUSED' | 'CANCELLED' | 'REMOVED';
   startTime?: string;

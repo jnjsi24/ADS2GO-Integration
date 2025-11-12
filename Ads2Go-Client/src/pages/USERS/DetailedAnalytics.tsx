@@ -806,7 +806,6 @@ const DetailedAnalytics: React.FC = () => {
                 totalDisplayTime: data.data.summary.totalDisplayTime,
                 totalQRScans: data.data.summary.totalQRScans,
                 totalDevices: data.data.summary.totalDevices,
-                totalMaterials: data.data.summary.totalMaterials
               } : null,
               hasAdPerformance: !!data.data?.adPerformance,
               adPerformanceCount: data.data?.adPerformance?.length || 0,
@@ -1085,7 +1084,6 @@ const DetailedAnalytics: React.FC = () => {
           averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
           totalAds: directAnalyticsData.summary.totalAds || 0,
           activeAds: directAnalyticsData.summary.activeAds || 0,
-          totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
           totalDevices: directAnalyticsData.summary.totalDevices || 0,
           totalQRScans: directAnalyticsData.summary.totalQRScans || 0
         };
@@ -1097,7 +1095,6 @@ const DetailedAnalytics: React.FC = () => {
         averageCompletionRate: 0,
         totalAds: 0,
         activeAds: 0,
-        totalMaterials: 0,
         totalDevices: 0,
         totalQRScans: 0
       };
@@ -1115,7 +1112,6 @@ const DetailedAnalytics: React.FC = () => {
           averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
           totalAds: 0, // Not applicable for device-specific view
           activeAds: 0, // Not applicable for device-specific view
-          totalMaterials: 1, // Always 1 when device is selected
           totalDevices: 1, // Always 1 when device is selected
           totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
         };
@@ -1146,7 +1142,6 @@ const DetailedAnalytics: React.FC = () => {
           averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
           totalAds: directAnalyticsData.summary.totalAds || 0,
           activeAds: directAnalyticsData.summary.activeAds || 0,
-          totalMaterials: directAnalyticsData.summary.totalMaterials || 0,
           totalDevices: directAnalyticsData.summary.totalDevices || 0,
           totalQRScans: directAnalyticsData.summary.totalQRScans || 0
         };
@@ -1375,7 +1370,7 @@ const DetailedAnalytics: React.FC = () => {
       
       // ✅ Get actual device count from myAdsData (devices assigned to the ad)
       // Find the corresponding ad in myAdsData to get the actual materialId array
-      let assignedDevicesCount = ad.totalMaterials || 0; // Fallback to analytics data
+      let assignedDevicesCount = ad.totalDevices || 0; // Fallback to analytics data
       if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
         const adFromMyAds = myAdsData.getMyAds.find((myAd: any) => {
           // Match by adId (could be string or ObjectId)
@@ -2124,7 +2119,7 @@ const DetailedAnalytics: React.FC = () => {
                           <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
                         </>
                       ) : (
-                        (analyticsSummary.totalMaterials || 0).toLocaleString()
+                        (analyticsSummary.totalDevices || 0).toLocaleString()
                       )}
                     </div>
                   </div>
@@ -2321,7 +2316,7 @@ const DetailedAnalytics: React.FC = () => {
                         {/* Plays / Devices */}
                         <div className="w-20"> 
                           <p className="text-base font-bold text-black/70">
-                            {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.assignedDevicesCount || ad.totalMaterials || 0).toLocaleString()}
+                            {selectedDevice !== 'all' ? (ad.totalPlays || 0).toLocaleString() : (ad.assignedDevicesCount || ad.totalDevices || 0).toLocaleString()}
                           </p>
                           <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
                             {selectedDevice !== 'all' ? 'Plays' : 'Devices'}

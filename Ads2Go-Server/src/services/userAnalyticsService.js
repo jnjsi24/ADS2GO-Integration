@@ -320,7 +320,6 @@ class UserAnalyticsService {
               totalAdPlays: syncResult.data.totalAdPlays,
               totalAdPlayTime: syncResult.data.totalAdPlayTime,
               totalQRScans: syncResult.data.totalQRScans,
-              totalMaterials: syncResult.data.totalMaterials,
               totalDevices: syncResult.data.totalDevices,
               dataKeys: Object.keys(syncResult.data || {})
             });
@@ -330,7 +329,6 @@ class UserAnalyticsService {
             totalAdPlays: syncResult.data.totalAdPlays || 0,
             totalAdPlayTime: syncResult.data.totalAdPlayTime || 0,
             totalQRScans: syncResult.data.totalQRScans || 0,
-            totalMaterials: syncResult.data.totalMaterials || 0,
             totalDevices: syncResult.data.totalDevices || 0
           };
           
@@ -354,7 +352,6 @@ class UserAnalyticsService {
             totalAdPlays: userAnalytics.totalAdPlays || 0,
             totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
             totalQRScans: userAnalytics.totalQRScans || 0,
-            totalMaterials: userAnalytics.totalMaterials || 0,
             totalDevices: userAnalytics.totalDevices || 0
           };
           if (isVerbose()) logger.verbose('⚠️ Fallback to UserAnalytics data:', filteredTotals);
@@ -460,7 +457,6 @@ class UserAnalyticsService {
               totalAdPlays: syncResult.data?.totalAdPlays,
               totalAdPlayTime: syncResult.data?.totalAdPlayTime,
               totalQRScans: syncResult.data?.totalQRScans,
-              totalMaterials: syncResult.data?.totalMaterials,
               totalDevices: syncResult.data?.totalDevices,
               adsCount: syncResult.data?.ads?.length,
               hasData: !!syncResult.data,
@@ -472,7 +468,6 @@ class UserAnalyticsService {
             totalAdPlays: syncResult.data?.totalAdPlays || 0,
             totalAdPlayTime: syncResult.data?.totalAdPlayTime || 0,
             totalQRScans: syncResult.data?.totalQRScans || 0,
-            totalMaterials: syncResult.data?.totalMaterials || 0,
             totalDevices: syncResult.data?.totalDevices || 0
           };
           
@@ -489,7 +484,6 @@ class UserAnalyticsService {
                 totalAdPlays: deviceStats.calculatedSummary.totalAdPlays || 0,
                 totalAdPlayTime: deviceStats.calculatedSummary.totalAdPlayTime || 0,
                 totalQRScans: deviceStats.calculatedSummary.totalQRScans || 0,
-                totalMaterials: deviceStats.calculatedSummary.totalMaterials || 0,
                 totalDevices: deviceStats.calculatedSummary.totalDevices || 0
               };
               if (isVerbose()) logger.verbose('✅ Fallback aggregation succeeded:', filteredTotals);
@@ -499,20 +493,18 @@ class UserAnalyticsService {
                 totalAdPlays: userAnalytics.totalAdPlays || 0,
                 totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
                 totalQRScans: userAnalytics.totalQRScans || 0,
-                totalMaterials: userAnalytics.totalMaterials || 0,
                 totalDevices: userAnalytics.totalDevices || 0
               };
             }
           } catch (fallbackError) {
             if (isVerbose()) logger.verbose('❌ Fallback aggregation failed:', fallbackError.message);
             // Final fallback: use existing userAnalytics data
-            filteredTotals = {
-              totalAdPlays: userAnalytics.totalAdPlays || 0,
-              totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
-              totalQRScans: userAnalytics.totalQRScans || 0,
-              totalMaterials: userAnalytics.totalMaterials || 0,
-              totalDevices: userAnalytics.totalDevices || 0
-            };
+              filteredTotals = {
+                totalAdPlays: userAnalytics.totalAdPlays || 0,
+                totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
+                totalQRScans: userAnalytics.totalQRScans || 0,
+                totalDevices: userAnalytics.totalDevices || 0
+              };
           }
         }
       }
@@ -537,7 +529,6 @@ class UserAnalyticsService {
             totalAdPlays: userAnalytics.totalAdPlays || 0,
             totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
             totalQRScans: userAnalytics.totalQRScans || 0,
-            totalMaterials: userAnalytics.totalMaterials || 0,
             totalDevices: userAnalytics.totalDevices || 0
           };
           
@@ -570,7 +561,7 @@ class UserAnalyticsService {
               // ✅ Validate that syncResult.data has actual play data (not all zeros)
               // This prevents using failed syncs that return success but with empty data
               const hasValidData = syncResult.data.totalAdPlays > 0 || 
-                                  (syncResult.data.totalMaterials > 0 && syncResult.data.totalDevices > 0);
+                                  (syncResult.data.totalDevices > 0);
               
               if (hasValidData) {
                 // ✅ Extract filteredTotals from syncResult.data (real-time data from DeviceDataHistoryV2)
@@ -580,7 +571,6 @@ class UserAnalyticsService {
                     totalAdPlays: syncResult.data.totalAdPlays,
                     totalAdPlayTime: syncResult.data.totalAdPlayTime,
                     totalQRScans: syncResult.data.totalQRScans,
-                    totalMaterials: syncResult.data.totalMaterials,
                     totalDevices: syncResult.data.totalDevices,
                     dataKeys: Object.keys(syncResult.data || {})
                   });
@@ -591,7 +581,6 @@ class UserAnalyticsService {
                   totalAdPlays: syncResult.data.totalAdPlays || 0,
                   totalAdPlayTime: syncResult.data.totalAdPlayTime || 0,
                   totalQRScans: syncResult.data.totalQRScans || 0,
-                  totalMaterials: syncResult.data.totalMaterials || 0,
                   totalDevices: syncResult.data.totalDevices || 0
                 };
                 
@@ -607,13 +596,12 @@ class UserAnalyticsService {
               } else {
                 if (isVerbose()) logger.verbose('⚠️ Sync returned success but with no valid play data (all zeros), using UserAnalytics data');
                 // Use UserAnalytics data as fallback
-                filteredTotals = {
-                  totalAdPlays: userAnalytics.totalAdPlays || 0,
-                  totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
-                  totalQRScans: userAnalytics.totalQRScans || 0,
-                  totalMaterials: userAnalytics.totalMaterials || 0,
-                  totalDevices: userAnalytics.totalDevices || 0
-                };
+              filteredTotals = {
+                totalAdPlays: userAnalytics.totalAdPlays || 0,
+                totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
+                totalQRScans: userAnalytics.totalQRScans || 0,
+                totalDevices: userAnalytics.totalDevices || 0
+              };
               }
             } else {
               if (isVerbose()) logger.verbose('⚠️ Sync failed or returned no data, using UserAnalytics data');
@@ -622,7 +610,6 @@ class UserAnalyticsService {
                 totalAdPlays: userAnalytics.totalAdPlays || 0,
                 totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
                 totalQRScans: userAnalytics.totalQRScans || 0,
-                totalMaterials: userAnalytics.totalMaterials || 0,
                 totalDevices: userAnalytics.totalDevices || 0
               };
             }
@@ -633,13 +620,12 @@ class UserAnalyticsService {
             }
             // Continue with existing userAnalytics data
             // ✅ Use UserAnalytics data if sync failed - provides fallback data
-            filteredTotals = {
-              totalAdPlays: userAnalytics.totalAdPlays || 0,
-              totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
-              totalQRScans: userAnalytics.totalQRScans || 0,
-              totalMaterials: userAnalytics.totalMaterials || 0,
-              totalDevices: userAnalytics.totalDevices || 0
-            };
+              filteredTotals = {
+                totalAdPlays: userAnalytics.totalAdPlays || 0,
+                totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
+                totalQRScans: userAnalytics.totalQRScans || 0,
+                totalDevices: userAnalytics.totalDevices || 0
+              };
           }
         }
       }
@@ -684,7 +670,6 @@ class UserAnalyticsService {
           filteredAds.push({
             adId: ad._id.toString(),
             adTitle: ad.title,
-            totalMaterials: 0,
             totalDevices: 0,
             totalAdPlayTime: 0,
             totalQRScans: 0,
@@ -766,9 +751,6 @@ class UserAnalyticsService {
           averageCompletionRate: userAnalytics.averageAdCompletionRate || 0,
           totalAds: filteredAds ? filteredAds.length : 0,
           activeAds: filteredAds ? filteredAds.filter(ad => ad.isActive).length : 0,
-          totalMaterials: (filteredTotals && filteredTotals.totalMaterials !== undefined)
-            ? filteredTotals.totalMaterials
-            : (userAnalytics.totalMaterials || 0),
           totalDevices: (filteredTotals && filteredTotals.totalDevices !== undefined)
             ? filteredTotals.totalDevices
             : (userAnalytics.totalDevices || 0),
@@ -810,7 +792,6 @@ class UserAnalyticsService {
           return {
             adId: adIdStr,
             adTitle: ad.adTitle || '',
-            totalMaterials: ad.totalMaterials || 0,
             totalDevices: ad.totalDevices || 0,
             totalAdPlayTime: ad.totalAdPlayTime || 0,
             totalQRScans: freshQRScans, // ✅ Use fresh QR scan data
@@ -859,7 +840,6 @@ class UserAnalyticsService {
           totalDisplayTime: data.deviceStats.reduce((sum, device) => sum + (device.displayTime || 0), 0),
           totalQRScans: data.deviceStats.reduce((sum, device) => sum + (device.qrScans || 0), 0),
           totalDevices: data.deviceStats.length,
-          totalMaterials: data.deviceStats.length,
           totalAds: data.adPerformance ? data.adPerformance.length : 0,
           activeAds: data.adPerformance ? data.adPerformance.length : 0
         };
@@ -877,7 +857,6 @@ class UserAnalyticsService {
           totalAdPlayTime: calculatedSummary.totalDisplayTime,
           totalQRScans: calculatedSummary.totalQRScans,
           totalDevices: calculatedSummary.totalDevices,
-          totalMaterials: calculatedSummary.totalMaterials
         };
         
         // Update summary with calculated values from deviceStats for accuracy
@@ -885,7 +864,6 @@ class UserAnalyticsService {
         data.summary.totalDisplayTime = calculatedSummary.totalDisplayTime;
         data.summary.totalQRScans = calculatedSummary.totalQRScans;
         data.summary.totalDevices = calculatedSummary.totalDevices;
-        data.summary.totalMaterials = calculatedSummary.totalMaterials;
         data.summary.totalAds = calculatedSummary.totalAds;
         data.summary.activeAds = calculatedSummary.activeAds;
         
@@ -914,8 +892,7 @@ class UserAnalyticsService {
             totalAdPlays: filteredTotals.totalAdPlays,
             totalQRScans: filteredTotals.totalQRScans,
             totalDisplayTime: filteredTotals.totalAdPlayTime,
-            totalDevices: filteredTotals.totalDevices,
-            totalMaterials: filteredTotals.totalMaterials
+            totalDevices: filteredTotals.totalDevices
           });
         }
         
@@ -924,7 +901,6 @@ class UserAnalyticsService {
         data.summary.totalDisplayTime = filteredTotals.totalAdPlayTime !== undefined ? filteredTotals.totalAdPlayTime : 0;
         data.summary.totalQRScans = filteredTotals.totalQRScans !== undefined ? filteredTotals.totalQRScans : 0;
         data.summary.totalDevices = filteredTotals.totalDevices !== undefined ? filteredTotals.totalDevices : 0;
-        data.summary.totalMaterials = filteredTotals.totalMaterials !== undefined ? filteredTotals.totalMaterials : 0;
         
         // Calculate average completion rate from sync data based on 8-hour daily requirement
         // Formula: (totalAdPlayTime in hours / (numberOfDays × 8 hours)) × 100
@@ -941,7 +917,6 @@ class UserAnalyticsService {
             totalQRScans: data.summary.totalQRScans,
             totalDisplayTime: data.summary.totalDisplayTime,
             totalDevices: data.summary.totalDevices,
-            totalMaterials: data.summary.totalMaterials,
             note: '✅ QR scans are filtered by user\'s ads only (not all device scans)'
           });
         }
@@ -960,7 +935,6 @@ class UserAnalyticsService {
         data.summary.totalDisplayTime = userAnalytics.totalAdPlayTime || 0;
         data.summary.totalQRScans = userAnalytics.totalQRScans || 0;
         data.summary.totalDevices = userAnalytics.totalDevices || 0;
-        data.summary.totalMaterials = userAnalytics.totalMaterials || 0;
         data.summary.averageCompletionRate = userAnalytics.averageAdCompletionRate || 0;
         // qrScanConversionRate removed - no longer needed
         
@@ -977,7 +951,6 @@ class UserAnalyticsService {
           totalDisplayTime: data.deviceStats.reduce((sum, device) => sum + (device.displayTime || 0), 0),
           totalQRScans: data.deviceStats.reduce((sum, device) => sum + (device.qrScans || 0), 0),
           totalDevices: data.deviceStats.length,
-          totalMaterials: data.deviceStats.length,
           totalAds: data.adPerformance ? data.adPerformance.length : 0,
           activeAds: data.adPerformance ? data.adPerformance.length : 0
         };
@@ -991,7 +964,6 @@ class UserAnalyticsService {
         data.summary.totalDisplayTime = calculatedSummary.totalDisplayTime;
         data.summary.totalQRScans = calculatedSummary.totalQRScans;
         data.summary.totalDevices = calculatedSummary.totalDevices;
-        data.summary.totalMaterials = calculatedSummary.totalMaterials;
         data.summary.totalAds = calculatedSummary.totalAds;
         data.summary.activeAds = calculatedSummary.activeAds;
         
@@ -1018,7 +990,6 @@ class UserAnalyticsService {
             totalAdsPlayed: data.summary.totalAdsPlayed,
             totalDisplayTime: data.summary.totalDisplayTime,
             totalQRScans: data.summary.totalQRScans,
-            totalMaterials: data.summary.totalMaterials,
             totalDevices: data.summary.totalDevices,
             averageCompletionRate: data.summary.averageCompletionRate,
             // qrScanConversionRate removed from response
@@ -1213,7 +1184,6 @@ class UserAnalyticsService {
               averageCompletionRate: 0,
               totalAds: 0,
               activeAds: 0,
-              totalMaterials: 0,
               totalDevices: 0,
               totalQRScans: 0,
               // qrScanConversionRate removed
@@ -2093,7 +2063,6 @@ class UserAnalyticsService {
         adPerformanceMap.set(ad._id.toString(), {
           adId: ad._id.toString(),
           adTitle: ad.title || ad.adTitle || 'Unknown Ad',
-          totalMaterials: 0,
           totalDevices: 0,
           totalAdPlayTime: 0,
           totalQRScans: 0,
@@ -2121,7 +2090,6 @@ class UserAnalyticsService {
                   const adPerf = adPerformanceMap.get(adId);
                   
                   // Aggregate totals
-                  adPerf.totalMaterials += 1; // Each device counts as one material
                   adPerf.totalDevices += 1;
                   adPerf.totalAdPlayTime += deviceAd.totalViewTime || 0;
                   
@@ -3101,10 +3069,10 @@ class UserAnalyticsService {
       }
 
       // Process the historical data
+      // ✅ NOTE: totalDevices should NOT be set here - it will be calculated from active deployments in syncUserAnalyticsFromHistory
       const processedData = {
         userId,
-        totalMaterials: materialIds.length,
-        totalDevices: historicalData.length,
+        totalDevices: 0, // ✅ Will be calculated from active deployments, not historical data length
         totalAdPlays: 0,
         totalAdPlayTime: 0,
         totalQRScans: 0,
@@ -3202,10 +3170,10 @@ class UserAnalyticsService {
       });
 
       // Convert Maps to objects for final processing
+      // ✅ NOTE: totalDevices should NOT be set here - it will be calculated from active deployments in syncUserAnalyticsFromHistory
       const finalProcessedData = {
         userId,
-        totalMaterials: materialIds.length,
-        totalDevices: historicalData.length,
+        totalDevices: 0, // ✅ Will be calculated from active deployments, not historical data length
         totalAdPlays: 0,
         totalAdPlayTime: 0,
         totalQRScans: 0,
@@ -3232,7 +3200,6 @@ class UserAnalyticsService {
       // Convert ads object to array
       const adsArray = Object.values(finalProcessedData.ads).map(ad => ({
         ...ad,
-        totalMaterials: ad.materials.length,
         averageViewTime: ad.totalPlays > 0 ? ad.totalViewTime / ad.totalPlays : 0,
         completionRate: 0 // Individual ad completion rate not used in summary - overall completion rate is calculated below
       }));
@@ -3248,7 +3215,6 @@ class UserAnalyticsService {
       // qrScanConversionRate removed - no longer needed
 
       console.log('📊 Processed data summary:', {
-        totalMaterials: finalProcessedData.totalMaterials,
         totalDevices: finalProcessedData.totalDevices,
         totalAdPlays: finalProcessedData.totalAdPlays,
         totalAdPlayTime: finalProcessedData.totalAdPlayTime,
@@ -3261,7 +3227,6 @@ class UserAnalyticsService {
         success: true,
         userId,
         dateRange: { startDate: defaultStartDate, endDate: defaultEndDate },
-        totalMaterials: finalProcessedData.totalMaterials,
         totalDevices: finalProcessedData.totalDevices,
         totalAdPlays: finalProcessedData.totalAdPlays,
         totalAdPlayTime: finalProcessedData.totalAdPlayTime,
@@ -3344,7 +3309,6 @@ class UserAnalyticsService {
         totalAdPlays: freshData.totalAdPlays,
         totalAdPlayTime: freshData.totalAdPlayTime,
         totalQRScans: freshData.totalQRScans,
-        totalMaterials: freshData.totalMaterials,
         totalDevices: freshData.totalDevices,
         dateRange: freshData.dateRange,
         dataKeys: Object.keys(freshData || {})
@@ -3367,7 +3331,6 @@ class UserAnalyticsService {
           userName: userName,
           ads: [],
           totalAds: 0,
-          totalMaterials: 0,
           totalDevices: 0,
           totalAdPlayTime: 0,
           totalQRScans: 0,
@@ -3386,7 +3349,6 @@ class UserAnalyticsService {
 
       // Update with fresh data - but DON'T overwrite cumulative totals
       // The useranalytics database should maintain cumulative totals, not filtered totals
-      // userAnalytics.totalMaterials = freshData.totalMaterials;
       // userAnalytics.totalDevices = freshData.totalDevices;
       // userAnalytics.totalAdPlays = freshData.totalAdPlays; // Ensure totalAdPlays is set
       // userAnalytics.totalAdPlayTime = freshData.totalAdPlayTime;
@@ -3437,6 +3399,62 @@ class UserAnalyticsService {
           });
         }
         
+        // ✅ Get active deployments to populate materials array
+        const AdsDeployment = require('../models/adsDeployment');
+        const Material = require('../models/Material');
+        
+        // ✅ Always build adToActiveDevicesMap, even if allUserAds is empty (for else block)
+        const adToActiveDevicesMap = new Map();
+        const allActiveMaterialIds = new Set();
+        let activeMaterials = [];
+        
+        if (allUserAds.length > 0) {
+          const userAdIds = allUserAds.map(ad => ad._id);
+          console.log(`🔍 [SYNC] Querying active deployments for ${allUserAds.length} ads:`, userAdIds.map(id => id.toString()));
+          
+          const activeDeployments = await AdsDeployment.find({
+            'lcdSlots.adId': { $in: userAdIds },
+            'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] }
+          }).select('materialId lcdSlots');
+          
+          console.log(`🔍 [SYNC] Found ${activeDeployments.length} active deployments`);
+          
+          // ✅ Build a map of adId -> Map of materialId -> slotNumber for each ad
+          const userAdIdSet = new Set(allUserAds.map(ad => ad._id.toString()));
+          
+          activeDeployments.forEach(deployment => {
+            deployment.lcdSlots.forEach(slot => {
+              if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
+                const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
+                if (userAdIdSet.has(adIdStr)) {
+                  if (!adToActiveDevicesMap.has(adIdStr)) {
+                    adToActiveDevicesMap.set(adIdStr, new Map());
+                  }
+                  adToActiveDevicesMap.get(adIdStr).set(deployment.materialId, slot.slotNumber || 1);
+                  allActiveMaterialIds.add(deployment.materialId);
+                  console.log(`✅ [SYNC] Added device ${deployment.materialId} to ad ${adIdStr} (slot ${slot.slotNumber || 1})`);
+                } else {
+                  console.log(`⚠️ [SYNC] Skipping device ${deployment.materialId} - ad ${adIdStr} not in user's ads`);
+                }
+              }
+            });
+          });
+          
+          console.log(`🔍 [SYNC] Built adToActiveDevicesMap:`, Array.from(adToActiveDevicesMap.entries()).map(([adId, devices]) => 
+            `${adId}: ${devices.size} devices`
+          ));
+          
+          // ✅ Get Material documents for actively deployed devices
+          if (allActiveMaterialIds.size > 0) {
+            activeMaterials = await Material.find({ 
+              materialId: { $in: Array.from(allActiveMaterialIds) } 
+            });
+            console.log(`🔍 [SYNC] Found ${activeMaterials.length} Material documents for ${allActiveMaterialIds.size} unique materialIds`);
+          } else {
+            console.log(`⚠️ [SYNC] No active material IDs found - materials array will be empty`);
+          }
+        }
+        
         // Include ALL active paid ads, even those with no data
         userAnalytics.ads = allUserAds.map(ad => {
           const adIdStr = ad._id.toString();
@@ -3461,29 +3479,294 @@ class UserAnalyticsService {
             totalQRScans = qrScansFromDailyStats[adIdStr];
           }
           
-          console.log(`🔍 Ad ${adIdStr} (${ad.title}) data:`, {
+          // ✅ Get actively deployed devices for this ad from AdsDeployment
+          const activeDeviceMap = adToActiveDevicesMap.get(adIdStr) || new Map();
+          const activeDeviceEntries = Array.from(activeDeviceMap.entries());
+          
+          console.log(`🔍 [SYNC] Ad ${adIdStr} (${ad.title}): ${activeDeviceEntries.length} active devices from deployments`);
+          
+          // Build materials array for this ad
+          const adMaterials = [];
+          const adMaterialPerformance = [];
+          
+          activeDeviceEntries.forEach(([materialIdStr, slotNumber]) => {
+            const material = activeMaterials.find(m => m.materialId === materialIdStr);
+            if (material) {
+              console.log(`✅ [SYNC] Adding material ${materialIdStr} to ad ${adIdStr}`);
+              adMaterials.push({
+                materialId: material.materialId,
+                materialType: material.materialType || 'HEADDRESS',
+                slotNumber: slotNumber,
+                deviceId: material.materialId,
+                carGroupId: material.carGroupId || 'UNKNOWN',
+                driverId: material.driverId || null,
+                isOnline: false,
+                currentLocation: null,
+                networkStatus: { isOnline: false, lastSeen: new Date() },
+                deviceInfo: null,
+                adPlaybacks: [],
+                totalAdPlayTime: 0,
+                totalAdImpressions: 0,
+                averageAdCompletionRate: 0,
+                currentAd: null,
+                qrScans: [],
+                totalQRScans: 0,
+                lastQRScan: null,
+                qrScansByAd: [],
+                totalDistanceTraveled: 0,
+                averageSpeed: 0,
+                maxSpeed: 0,
+                uptimePercentage: 0,
+                complianceRate: 0,
+                averageDailyHours: 0,
+                totalInteractions: 0,
+                totalScreenTaps: 0,
+                totalDebugActivations: 0,
+                dailySessions: [],
+                locationHistory: [],
+                isActive: true,
+                lastSeen: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+              
+              adMaterialPerformance.push({
+                materialId: material.materialId,
+                slotNumber: slotNumber,
+                materialName: material.materialId,
+                totalDevices: 1,
+                onlineDevices: 0,
+                totalAdPlayTime: 0,
+                totalAdImpressions: 0,
+                totalQRScans: 0,
+                averageCompletionRate: 0,
+                lastActivity: new Date()
+              });
+            }
+          });
+          
+          // ✅ Preserve existing material data if available (merge with new data)
+          const existingAd = userAnalytics.ads?.find(a => a.adId?.toString() === adIdStr);
+          if (existingAd && existingAd.materials && existingAd.materials.length > 0) {
+            // Merge existing materials with new ones (preserve performance data)
+            const existingMaterialsMap = new Map();
+            existingAd.materials.forEach(mat => {
+              if (mat.materialId) {
+                existingMaterialsMap.set(mat.materialId, mat);
+              }
+            });
+            
+            // Update with new materials, preserving existing performance data
+            adMaterials.forEach(newMat => {
+              const existingMat = existingMaterialsMap.get(newMat.materialId);
+              if (existingMat) {
+                // Preserve existing performance data
+                newMat.totalAdPlayTime = existingMat.totalAdPlayTime || 0;
+                newMat.totalAdImpressions = existingMat.totalAdImpressions || 0;
+                newMat.averageAdCompletionRate = existingMat.averageAdCompletionRate || 0;
+                newMat.totalQRScans = existingMat.totalQRScans || 0;
+                newMat.createdAt = existingMat.createdAt || new Date();
+              }
+            });
+          }
+          
+          console.log(`🔍 [SYNC] Ad ${adIdStr} (${ad.title}) data:`, {
             hasPerformance: !!adPerformance,
             hasQRScansFromAPI: !!adQRScans,
             qrScansFromAPI: adQRScans?.totalScans || 0,
             qrScansFromDailyStats: qrScansFromDailyStats[adIdStr] || 0,
-            finalTotalQRScans: totalQRScans
+            finalTotalQRScans: totalQRScans,
+            materialsCount: adMaterials.length,
+            activeDeviceEntriesCount: activeDeviceEntries.length,
+            activeMaterialsCount: activeMaterials.length
           });
           
-          return {
+          // ✅ If adMaterials is empty but totalDevices > 0, try to preserve existing materials
+          // This handles the case where active deployments aren't found but devices exist
+          let finalMaterials = adMaterials;
+          let finalMaterialPerformance = adMaterialPerformance;
+          
+          if (adMaterials.length === 0 && activeDeviceEntries.length === 0) {
+            // No active deployments found - try to preserve existing materials if they exist
+            const existingAd = userAnalytics.ads?.find(a => a.adId?.toString() === adIdStr);
+            if (existingAd && existingAd.materials && existingAd.materials.length > 0) {
+              console.log(`⚠️ [SYNC] No active deployments found for ad ${adIdStr}, preserving existing ${existingAd.materials.length} materials`);
+              finalMaterials = existingAd.materials;
+              finalMaterialPerformance = existingAd.materialPerformance || [];
+            } else {
+              console.log(`⚠️ [SYNC] No active deployments found for ad ${adIdStr} and no existing materials to preserve`);
+            }
+          }
+          
+          const newAd = {
             adId: adIdStr,
             adTitle: ad.title,
-            totalMaterials: adPerformance ? 1 : 0,
-            totalDevices: adPerformance ? 1 : 0,
+            totalDevices: finalMaterials.length > 0 ? finalMaterials.length : (adMaterials.length || 0),
             totalAdPlayTime: adPerformance?.totalViewTime || 0,
             totalQRScans: totalQRScans,
             averageAdCompletionRate: adPerformance?.completionRate || 0,
+            materials: finalMaterials, // ✅ Populate materials array from active deployments (or preserve existing)
+            materialPerformance: finalMaterialPerformance,
             // qrScanConversionRate removed
-            lastUpdated: new Date().toISOString(),
-            materials: [] // Will be populated separately
+            lastUpdated: new Date().toISOString()
           };
+          
+          // ✅ Explicitly remove totalMaterials if it exists (shouldn't, but be safe)
+          if (newAd.totalMaterials !== undefined) {
+            delete newAd.totalMaterials;
+          }
+          
+          console.log(`✅ [SYNC] Final ad ${adIdStr}: ${finalMaterials.length} materials, totalDevices=${newAd.totalDevices}`);
+          
+          return newAd;
         });
       } else {
-        userAnalytics.ads = [];
+        // ✅ No active ads - preserve existing ads array but filter materials to only active deployments
+        // Don't clear ads array - just update materials arrays
+        if (userAnalytics.ads && Array.isArray(userAnalytics.ads) && userAnalytics.ads.length > 0) {
+          // Get active deployments for existing ads
+          const existingAdIds = userAnalytics.ads.map(ad => {
+            const adId = ad.adId?.toString ? ad.adId.toString() : String(ad.adId || '');
+            return adId;
+          }).filter(id => id);
+          
+          if (existingAdIds.length > 0) {
+            const Ad = require('../models/Ad');
+            const existingAds = await Ad.find({
+              _id: { $in: existingAdIds.map(id => {
+                try {
+                  return new require('mongoose').Types.ObjectId(id);
+                } catch {
+                  return null;
+                }
+              }).filter(id => id) }
+            }).select('_id userId paymentStatus adStatus status');
+            
+            // Filter to only user's ads that are active and paid
+            const validExistingAds = existingAds.filter(ad => 
+              ad.userId.toString() === userId.toString() &&
+              ad.paymentStatus === 'PAID' &&
+              ad.adStatus === 'ACTIVE' &&
+              ['RUNNING', 'APPROVED', 'SCHEDULED'].includes(ad.status)
+            );
+            
+            if (validExistingAds.length > 0) {
+              const activeDeploymentsForExisting = await AdsDeployment.find({
+                'lcdSlots.adId': { $in: validExistingAds.map(ad => ad._id) },
+                'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] }
+              }).select('materialId lcdSlots');
+              
+              const existingAdIdSet = new Set(validExistingAds.map(ad => ad._id.toString()));
+              activeDeploymentsForExisting.forEach(deployment => {
+                deployment.lcdSlots.forEach(slot => {
+                  if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
+                    const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
+                    if (existingAdIdSet.has(adIdStr)) {
+                      if (!adToActiveDevicesMap.has(adIdStr)) {
+                        adToActiveDevicesMap.set(adIdStr, new Map());
+                      }
+                      adToActiveDevicesMap.get(adIdStr).set(deployment.materialId, slot.slotNumber || 1);
+                      allActiveMaterialIds.add(deployment.materialId);
+                    }
+                  }
+                });
+              });
+              
+              if (allActiveMaterialIds.size > 0) {
+                activeMaterials = await Material.find({ 
+                  materialId: { $in: Array.from(allActiveMaterialIds) } 
+                });
+              }
+            }
+          }
+          
+          // Update existing ads with materials from active deployments
+          userAnalytics.ads = userAnalytics.ads.map(existingAd => {
+            const adIdStr = existingAd.adId?.toString ? existingAd.adId.toString() : String(existingAd.adId || '');
+            const activeDeviceMap = adToActiveDevicesMap.get(adIdStr) || new Map();
+            const activeDeviceEntries = Array.from(activeDeviceMap.entries());
+            
+            // Build materials array only from active deployments
+            const adMaterials = [];
+            const adMaterialPerformance = [];
+            
+            // Preserve existing materials data
+            const existingMaterialsMap = new Map();
+            if (existingAd.materials && Array.isArray(existingAd.materials)) {
+              existingAd.materials.forEach(mat => {
+                if (mat.materialId) {
+                  existingMaterialsMap.set(mat.materialId, mat);
+                }
+              });
+            }
+            
+            activeDeviceEntries.forEach(([materialIdStr, slotNumber]) => {
+              const material = activeMaterials.find(m => m.materialId === materialIdStr);
+              if (material) {
+                const existingMat = existingMaterialsMap.get(materialIdStr);
+                adMaterials.push({
+                  materialId: material.materialId,
+                  materialType: material.materialType || 'HEADDRESS',
+                  slotNumber: slotNumber,
+                  deviceId: material.materialId,
+                  carGroupId: material.carGroupId || 'UNKNOWN',
+                  driverId: material.driverId || null,
+                  isOnline: false,
+                  currentLocation: null,
+                  networkStatus: { isOnline: false, lastSeen: new Date() },
+                  deviceInfo: null,
+                  adPlaybacks: [],
+                  totalAdPlayTime: existingMat?.totalAdPlayTime || 0,
+                  totalAdImpressions: existingMat?.totalAdImpressions || 0,
+                  averageAdCompletionRate: existingMat?.averageAdCompletionRate || 0,
+                  currentAd: null,
+                  qrScans: [],
+                  totalQRScans: existingMat?.totalQRScans || 0,
+                  lastQRScan: null,
+                  qrScansByAd: [],
+                  totalDistanceTraveled: 0,
+                  averageSpeed: 0,
+                  maxSpeed: 0,
+                  uptimePercentage: 0,
+                  complianceRate: 0,
+                  averageDailyHours: 0,
+                  totalInteractions: 0,
+                  totalScreenTaps: 0,
+                  totalDebugActivations: 0,
+                  dailySessions: [],
+                  locationHistory: [],
+                  isActive: true,
+                  lastSeen: new Date(),
+                  createdAt: existingMat?.createdAt || new Date(),
+                  updatedAt: new Date()
+                });
+                
+                adMaterialPerformance.push({
+                  materialId: material.materialId,
+                  slotNumber: slotNumber,
+                  materialName: material.materialId,
+                  totalDevices: 1,
+                  onlineDevices: 0,
+                  totalAdPlayTime: existingMat?.totalAdPlayTime || 0,
+                  totalAdImpressions: existingMat?.totalAdImpressions || 0,
+                  totalQRScans: existingMat?.totalQRScans || 0,
+                  averageCompletionRate: existingMat?.averageAdCompletionRate || 0,
+                  lastActivity: new Date()
+                });
+              }
+            });
+            
+            return {
+              ...existingAd,
+              totalDevices: adMaterials.length,
+              materials: adMaterials, // ✅ Only include actively deployed devices
+              materialPerformance: adMaterialPerformance
+            };
+          });
+        } else {
+          // No existing ads and no active ads - clear array
+          userAnalytics.ads = [];
+        }
       }
       
       // ✅ ENHANCED SYNC: Populate dailyStats and materialBreakdown for fast queries
@@ -3750,29 +4033,133 @@ class UserAnalyticsService {
         const totalAdPlayTime = freshData.totalAdPlayTime > 0 ? freshData.totalAdPlayTime : totalTimeFromDailyStats;
         const totalQRScans = freshData.totalQRScans > 0 ? freshData.totalQRScans : totalQRFromDailyStats;
         
-        if (totalAdPlays > 0 || totalAdPlayTime > 0 || totalQRScans > 0) {
-          userAnalytics.totalAdPlays = Math.max(userAnalytics.totalAdPlays || 0, totalAdPlays);
-          userAnalytics.totalAdPlayTime = Math.max(userAnalytics.totalAdPlayTime || 0, totalAdPlayTime);
-          userAnalytics.totalQRScans = Math.max(userAnalytics.totalQRScans || 0, totalQRScans);
-          userAnalytics.totalMaterials = Math.max(userAnalytics.totalMaterials || 0, freshData.totalMaterials || 0);
-          userAnalytics.totalDevices = Math.max(userAnalytics.totalDevices || 0, freshData.totalDevices || 0);
-          userAnalytics.averageAdCompletionRate = freshData.averageAdCompletionRate || userAnalytics.averageAdCompletionRate || 0;
-          // qrScanConversionRate removed - no longer needed
+        // ✅ Always update totals (even if 0) - don't require data to exist
+        userAnalytics.totalAdPlays = Math.max(userAnalytics.totalAdPlays || 0, totalAdPlays);
+        userAnalytics.totalAdPlayTime = Math.max(userAnalytics.totalAdPlayTime || 0, totalAdPlayTime);
+        userAnalytics.totalQRScans = Math.max(userAnalytics.totalQRScans || 0, totalQRScans);
+        
+        // ✅ ALWAYS calculate totalDevices from active deployments (source of truth)
+        // This must run regardless of whether there's data, because totalDevices should reflect current deployments
+        try {
+          const AdsDeployment = require('../models/adsDeployment');
+          const Ad = require('../models/Ad');
           
-          console.log(`✅ [SYNC] Updated totals: totalAdPlays=${userAnalytics.totalAdPlays}, totalQRScans=${userAnalytics.totalQRScans}`);
+          // Get user's active ads
+          const userAds = await Ad.find({
+            userId: userId,
+            paymentStatus: 'PAID',
+            adStatus: 'ACTIVE',
+            status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+          }).select('_id');
+          
+          if (userAds.length > 0) {
+            // Get active deployments for user's ads
+            const activeDeployments = await AdsDeployment.find({
+              'lcdSlots.adId': { $in: userAds.map(ad => ad._id) },
+              'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] }
+            }).select('materialId lcdSlots');
+            
+            // Count unique actively deployed devices (only for user's ads)
+            const allUniqueDeviceIds = new Set();
+            const userAdIdSet = new Set(userAds.map(ad => ad._id.toString()));
+            
+            activeDeployments.forEach(deployment => {
+              deployment.lcdSlots.forEach(slot => {
+                if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
+                  const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
+                  // ✅ Only count devices for slots that belong to this user's ads
+                  if (userAdIdSet.has(adIdStr)) {
+                    allUniqueDeviceIds.add(deployment.materialId);
+                  }
+                }
+              });
+            });
+            
+            userAnalytics.totalDevices = allUniqueDeviceIds.size;
+            console.log(`✅ [SYNC] Calculated totalDevices from active deployments: ${userAnalytics.totalDevices} unique devices`);
+          } else {
+            // No active ads - set to 0
+            userAnalytics.totalDevices = 0;
+            console.log(`✅ [SYNC] No active ads found - set totalDevices to 0`);
+          }
+        } catch (deviceCountError) {
+          console.warn(`⚠️ [SYNC] Error calculating totalDevices from deployments, using fallback: ${deviceCountError.message}`);
+          // Fallback: try to calculate from materials array if available
+          if (userAnalytics.ads && userAnalytics.ads.length > 0) {
+            const allUniqueDeviceIds = new Set();
+            userAnalytics.ads.forEach(ad => {
+              if (ad.materials && Array.isArray(ad.materials)) {
+                ad.materials.forEach(material => {
+                  if (material && material.materialId) {
+                    allUniqueDeviceIds.add(material.materialId.toString());
+                  }
+                });
+              }
+            });
+            userAnalytics.totalDevices = allUniqueDeviceIds.size;
+            console.log(`✅ [SYNC] Fallback: Calculated totalDevices from materials array: ${userAnalytics.totalDevices} unique devices`);
+          } else {
+            // Final fallback: keep existing value (don't use freshData.totalDevices as it's from historical data length)
+            console.log(`⚠️ [SYNC] Final fallback: Keeping existing totalDevices: ${userAnalytics.totalDevices || 0}`);
+          }
         }
+        userAnalytics.averageAdCompletionRate = freshData.averageAdCompletionRate || userAnalytics.averageAdCompletionRate || 0;
+        // qrScanConversionRate removed - no longer needed
+        
+        console.log(`✅ [SYNC] Updated totals: totalAdPlays=${userAnalytics.totalAdPlays}, totalQRScans=${userAnalytics.totalQRScans}, totalDevices=${userAnalytics.totalDevices}`);
       }
       
       // 3. Populate materialBreakdown from freshData.materials (device-level stats)
+      // ✅ IMPORTANT: Only add/update materials that are actively deployed
+      // First, get the set of actively deployed materialIds
+      let activeMaterialIdsSet = new Set();
+      try {
+        const AdsDeployment = require('../models/adsDeployment');
+        const Ad = require('../models/Ad');
+        
+        const userAds = await Ad.find({
+          userId: userId,
+          paymentStatus: 'PAID',
+          adStatus: 'ACTIVE',
+          status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+        }).select('_id');
+        
+        if (userAds.length > 0) {
+          const activeDeployments = await AdsDeployment.find({
+            'lcdSlots.adId': { $in: userAds.map(ad => ad._id) },
+            'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] }
+          }).select('materialId lcdSlots');
+          
+          const userAdIdSet = new Set(userAds.map(ad => ad._id.toString()));
+          activeDeployments.forEach(deployment => {
+            deployment.lcdSlots.forEach(slot => {
+              if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
+                const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
+                if (userAdIdSet.has(adIdStr)) {
+                  activeMaterialIdsSet.add(deployment.materialId);
+                }
+              }
+            });
+          });
+        }
+      } catch (activeError) {
+        console.warn(`⚠️ [SYNC] Error getting active deployments for materialBreakdown: ${activeError.message}`);
+      }
+      
       if (freshData.materials && Array.isArray(freshData.materials) && freshData.materials.length > 0) {
-        console.log(`📊 [SYNC] Processing ${freshData.materials.length} materials for materialBreakdown...`);
-        const existingMaterials = new Map(userAnalytics.materialBreakdown.map(mat => [mat.materialId, mat]));
+        console.log(`📊 [SYNC] Processing ${freshData.materials.length} materials for materialBreakdown (only actively deployed)...`);
+        const existingMaterials = new Map((userAnalytics.materialBreakdown || []).map(mat => [mat.materialId, mat]));
         
         freshData.materials.forEach(newMaterial => {
           const materialId = newMaterial.materialId;
           if (!materialId) {
             console.warn(`⚠️ [SYNC] Material missing materialId:`, newMaterial);
             return;
+          }
+          
+          // ✅ Only add/update materials that are actively deployed
+          if (!activeMaterialIdsSet.has(materialId)) {
+            return; // Skip materials that are not actively deployed
           }
           
           if (existingMaterials.has(materialId)) {
@@ -3787,7 +4174,8 @@ class UserAnalyticsService {
               existing.isOnline = newMaterial.isOnline;
             }
           } else {
-            // Add new material
+            // Add new material (only if actively deployed)
+            userAnalytics.materialBreakdown = userAnalytics.materialBreakdown || [];
             userAnalytics.materialBreakdown.push({
               materialId: materialId,
               carGroupId: newMaterial.carGroupId || 'UNKNOWN',
@@ -3800,9 +4188,75 @@ class UserAnalyticsService {
             });
           }
         });
-        console.log(`✅ [SYNC] Updated materialBreakdown: ${userAnalytics.materialBreakdown.length} materials`);
+        console.log(`✅ [SYNC] Updated materialBreakdown: ${userAnalytics.materialBreakdown.length} materials (only actively deployed)`);
+        
+        // ✅ Filter materialBreakdown to only include actively deployed devices (matching totalDevices)
+        // Use the same activeMaterialIdsSet that was used for adding materials
+        const beforeCount = userAnalytics.materialBreakdown?.length || 0;
+        if (activeMaterialIdsSet.size > 0) {
+          userAnalytics.materialBreakdown = (userAnalytics.materialBreakdown || []).filter(
+            material => activeMaterialIdsSet.has(material.materialId)
+          );
+        } else {
+          // ✅ No active deployments - clear materialBreakdown
+          userAnalytics.materialBreakdown = [];
+        }
+        const afterCount = userAnalytics.materialBreakdown.length;
+        console.log(`✅ [SYNC] Filtered materialBreakdown: ${beforeCount} → ${afterCount} active devices (matches totalDevices: ${userAnalytics.totalDevices || 0})`);
       } else {
         console.log(`⚠️ [SYNC] No materials in freshData: materials=${freshData.materials ? (Array.isArray(freshData.materials) ? freshData.materials.length : 'not array') : 'null/undefined'}`);
+        // ✅ If no materials in freshData, still filter materialBreakdown based on active deployments
+        try {
+          const AdsDeployment = require('../models/adsDeployment');
+          const Ad = require('../models/Ad');
+          
+          const userAds = await Ad.find({
+            userId: userId,
+            paymentStatus: 'PAID',
+            adStatus: 'ACTIVE',
+            status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+          }).select('_id');
+          
+          if (userAds.length === 0) {
+            // No active ads - clear materialBreakdown
+            const beforeCount = userAnalytics.materialBreakdown?.length || 0;
+            userAnalytics.materialBreakdown = [];
+            console.log(`✅ [SYNC] No active ads - cleared materialBreakdown: ${beforeCount} → 0`);
+          } else {
+            // Get active deployments and filter
+            const activeDeployments = await AdsDeployment.find({
+              'lcdSlots.adId': { $in: userAds.map(ad => ad._id) },
+              'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] }
+            }).select('materialId lcdSlots');
+            
+            const activeMaterialIds = new Set();
+            const userAdIdSet = new Set(userAds.map(ad => ad._id.toString()));
+            
+            activeDeployments.forEach(deployment => {
+              deployment.lcdSlots.forEach(slot => {
+                if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
+                  const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
+                  if (userAdIdSet.has(adIdStr)) {
+                    activeMaterialIds.add(deployment.materialId);
+                  }
+                }
+              });
+            });
+            
+            const beforeCount = userAnalytics.materialBreakdown?.length || 0;
+            if (activeMaterialIds.size > 0) {
+              userAnalytics.materialBreakdown = (userAnalytics.materialBreakdown || []).filter(
+                material => activeMaterialIds.has(material.materialId)
+              );
+            } else {
+              userAnalytics.materialBreakdown = [];
+            }
+            const afterCount = userAnalytics.materialBreakdown.length;
+            console.log(`✅ [SYNC] Filtered materialBreakdown (no freshData): ${beforeCount} → ${afterCount} active devices`);
+          }
+        } catch (filterError) {
+          console.warn(`⚠️ [SYNC] Error filtering materialBreakdown (no freshData): ${filterError.message}`);
+        }
       }
       
       // Update sync timestamp for incremental updates
@@ -3829,6 +4283,24 @@ class UserAnalyticsService {
       userAnalytics.lastUpdated = new Date();
       userAnalytics.updatedAt = new Date();
       userAnalytics.totalAds = userAnalytics.ads.length;
+      
+      // ✅ Remove summary.totalMaterials if it exists (deprecated field)
+      if (userAnalytics.summary && userAnalytics.summary.totalMaterials !== undefined) {
+        delete userAnalytics.summary.totalMaterials;
+        // If summary is now empty, remove it entirely
+        if (Object.keys(userAnalytics.summary).length === 0) {
+          userAnalytics.summary = undefined;
+        }
+      }
+      
+      // ✅ Remove totalMaterials from all ad objects
+      if (userAnalytics.ads && Array.isArray(userAnalytics.ads)) {
+        userAnalytics.ads.forEach(ad => {
+          if (ad.totalMaterials !== undefined) {
+            delete ad.totalMaterials;
+          }
+        });
+      }
 
       // ✅ Save the updated userAnalytics document with VersionError handling
       // Retry logic for concurrent modification conflicts
@@ -3885,7 +4357,6 @@ class UserAnalyticsService {
           totalAdPlays: freshData.totalAdPlays || 0,
           totalAdPlayTime: freshData.totalAdPlayTime || 0,
           totalQRScans: freshData.totalQRScans || 0,
-          totalMaterials: freshData.totalMaterials || 0,
           totalDevices: freshData.totalDevices || 0,
           averageAdCompletionRate: freshData.averageAdCompletionRate || 0,
           // qrScanConversionRate removed
@@ -3897,7 +4368,6 @@ class UserAnalyticsService {
         userAnalytics: {
           userId: userAnalytics.userId,
           totalAds: userAnalytics.totalAds,
-          totalMaterials: userAnalytics.totalMaterials,
           totalDevices: userAnalytics.totalDevices,
           totalAdPlayTime: userAnalytics.totalAdPlayTime,
           totalQRScans: userAnalytics.totalQRScans,
@@ -3929,7 +4399,6 @@ class UserAnalyticsService {
           userName: userName,
           ads: [],
           totalAds: 0,
-          totalMaterials: 0,
           totalDevices: 0,
           totalAdPlays: 0, // Ensure this field is initialized
           totalAdPlayTime: 0,
@@ -4492,7 +4961,6 @@ class UserAnalyticsService {
             totalAdPlays: userAnalytics.totalAdPlays || 0,
             totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
             totalQRScans: userAnalytics.totalQRScans || 0,
-            totalMaterials: userAnalytics.totalMaterials || 0,
             totalDevices: userAnalytics.totalDevices || 0,
             averageCompletionRate: userAnalytics.averageAdCompletionRate || 0,
             // qrScanConversionRate removed from API response
@@ -4807,7 +5275,6 @@ class UserAnalyticsService {
         },
         summary: {
           totalAds: Object.keys(adPlaysByAd).length,
-          totalMaterials: Object.keys(adPlaysByMaterial).length,
           averagePlaysPerAd: Object.keys(adPlaysByAd).length > 0 ? totalPlays / Object.keys(adPlaysByAd).length : 0
         }
       };
@@ -5222,7 +5689,6 @@ class UserAnalyticsService {
         },
         summary: {
           totalAds: Object.keys(qrScansByAd).length,
-          totalMaterials: Object.keys(qrScansByMaterial).length,
           averageScansPerAd: Object.keys(qrScansByAd).length > 0 ? totalScans / Object.keys(qrScansByAd).length : 0
         }
       };
@@ -5251,7 +5717,6 @@ class UserAnalyticsService {
         return {
           success: false,
           message: 'No active ads found for this user',
-          totalMaterials: 0,
           materials: []
         };
       }
@@ -5416,7 +5881,6 @@ class UserAnalyticsService {
       return {
         success: true,
         userId,
-        totalMaterials: materialDetails.length,
         activeMaterials: activeMaterials.length,
         materials: materialDetails,
         summary: {
@@ -5632,7 +6096,6 @@ class UserAnalyticsService {
         },
         summary: {
           totalAds: Object.keys(displayTimeByAd).length,
-          totalMaterials: Object.keys(displayTimeByMaterial).length,
           averageDisplayTimePerAd: Object.keys(displayTimeByAd).length > 0 ? totalDisplayTimeHours / Object.keys(displayTimeByAd).length : 0,
           averageDisplayTimePerMaterial: Object.keys(displayTimeByMaterial).length > 0 ? totalDisplayTimeHours / Object.keys(displayTimeByMaterial).length : 0
         }
@@ -5960,7 +6423,6 @@ class UserAnalyticsService {
           totalAdPlays: adPlaysData.totalPlays || 0,
           totalQRScans: qrScansData.totalScans || 0,
           totalDisplayTimeHours: totalDisplayTimeHours,
-          totalMaterials: materialsData.totalMaterials || 0,
           activeMaterials: materialsData.activeMaterials || 0,
           totalAds: adPlaysData.summary?.totalAds || 0
         },

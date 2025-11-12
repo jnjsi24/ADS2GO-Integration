@@ -5,7 +5,6 @@ export const GET_USER_MATERIALS_WITH_LOCATION = gql`
     getUserMaterialsWithLocation {
       success
       message
-      totalMaterials
       activeMaterials
       materials {
         materialId

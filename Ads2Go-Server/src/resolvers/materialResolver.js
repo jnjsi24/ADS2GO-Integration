@@ -5,6 +5,7 @@ const Tablet = require('../models/Tablet');
 const DeviceCompliance = require('../models/deviceCompliance');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const MaterialAvailability = require('../models/MaterialAvailability');
+const AdsDeployment = require('../models/adsDeployment');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const NotificationService = require('../services/notifications/NotificationService');
@@ -953,6 +954,23 @@ const materialResolvers = {
         usageEntry.mountedAt = availableMaterial.mountedAt;
         await usageEntry.save();
         console.log(`✅ Synced existing mountedAt date to usage history for material ${availableMaterial.materialId}, driver ${driver.driverId}: ${usageEntry.mountedAt}`);
+      }
+
+      // Create deployment record for LCD and HEADDRESS materials (if not exists)
+      // This ensures devices appear in Deployment tab even without paid ads
+      try {
+        const materialTypesNeedingDeployment = ['LCD', 'HEADDRESS'];
+        if (materialTypesNeedingDeployment.includes(availableMaterial.materialType)) {
+          console.log(`🔄 Creating deployment record for ${availableMaterial.materialType} material ${availableMaterial.materialId}`);
+          await AdsDeployment.createOrGetDeployment(
+            availableMaterial.materialId,
+            driver.driverId
+          );
+          console.log(`✅ Deployment record created/updated for material ${availableMaterial.materialId}`);
+        }
+      } catch (deploymentError) {
+        console.error(`⚠️ Warning: Could not create deployment record for material ${availableMaterial.materialId}:`, deploymentError.message);
+        // Don't fail the assignment if deployment creation fails - log warning only
       }
 
       // Send notification to admins about material assignment

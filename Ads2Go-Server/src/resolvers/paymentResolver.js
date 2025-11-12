@@ -657,7 +657,6 @@ const paymentResolvers = {
                   userId: ad.userId,
                   ads: [],
                   totalAds: 0,
-                  totalMaterials: 0,
                   totalDevices: 0,
                   totalAdPlays: 0,
                   totalAdPlayTime: 0,

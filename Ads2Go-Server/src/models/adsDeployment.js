@@ -89,12 +89,11 @@ const AdsDeploymentSchema = new mongoose.Schema({
   },
 
   // For non-LCD materials - single ad deployment
+  // Note: adId is optional - deployments can exist with empty lcdSlots and no adId
   adId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Ad',
-    required: function() {
-      return this.lcdSlots.length === 0;
-    }
+    required: false
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -209,6 +208,50 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, dr
   }
   
   return null;
+};
+
+// Static method to create or get deployment for a material (without requiring an ad)
+AdsDeploymentSchema.statics.createOrGetDeployment = async function(materialId, driverId) {
+  try {
+    if (!materialId || typeof materialId !== 'string') {
+      throw new Error('Invalid materialId - must be a string');
+    }
+    if (!driverId) {
+      throw new Error('driverId is required');
+    }
+
+    // Find existing deployment for this material
+    let deployment = await this.findOne({ materialId });
+    
+    // If no deployment exists, create a new one with empty slots
+    if (!deployment) {
+      console.log(`ℹ️  Creating new deployment for material ${materialId} with driver ${driverId}`);
+      deployment = new this({
+        materialId,
+        driverId,
+        lcdSlots: [],
+        currentStatus: 'RUNNING'
+      });
+      await deployment.save();
+      console.log(`✅ Created deployment ${deployment.adDeploymentId || deployment._id} for material ${materialId}`);
+    } else {
+      // If deployment exists but has different driverId, update it
+      if (deployment.driverId.toString() !== driverId.toString()) {
+        console.log(`ℹ️  Updating driverId from ${deployment.driverId} to ${driverId} for material ${materialId}`);
+        deployment.driverId = driverId;
+        await deployment.save();
+      }
+    }
+    
+    return deployment;
+  } catch (error) {
+    console.error(`❌ Error in createOrGetDeployment: ${error.message}`, {
+      materialId,
+      driverId,
+      error: error.stack
+    });
+    throw error;
+  }
 };
 
 // Static method to add ad to HEADDRESS material (shared across tablet slots)
@@ -379,7 +422,6 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
             userName: userName,
             ads: [],
             totalAds: 0,
-            totalMaterials: 0,
             totalDevices: 0,
             totalAdPlays: 0,
             totalAdPlayTime: 0,
@@ -592,7 +634,6 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
             userId: ad.userId,
             ads: [],
             totalAds: 0,
-            totalMaterials: 0,
             totalDevices: 0,
             totalAdPlays: 0,
             totalAdPlayTime: 0,
@@ -642,16 +683,30 @@ AdsDeploymentSchema.statics.removeFromLCD = async function(materialId, adIds, re
 
   const removedSlots = [];
   
-  // Mark specified ads as removed
-  deployment.lcdSlots.forEach(slot => {
-    if (adIds.includes(slot.adId.toString()) && ['SCHEDULED', 'RUNNING'].includes(slot.status)) {
-      slot.status = 'REMOVED';
-      slot.removedAt = new Date();
-      slot.removedBy = removedBy;
-      slot.removalReason = reason || 'Admin override';
+  // Always completely remove slots from the array (never mark as REMOVED)
+  deployment.lcdSlots = deployment.lcdSlots.filter(slot => {
+    const shouldRemove = adIds.includes(slot.adId.toString()) && ['SCHEDULED', 'RUNNING'].includes(slot.status);
+    if (shouldRemove) {
       removedSlots.push(slot);
     }
+    return !shouldRemove; // Keep slots that shouldn't be removed
   });
+  
+  // Reassign slot numbers after removal to fill gaps
+  if (removedSlots.length > 0) {
+    // Get active slots and renumber them sequentially
+    const activeSlots = deployment.lcdSlots
+      .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
+      .sort((a, b) => {
+        const dateA = a.deployedAt || a.createdAt || new Date(0);
+        const dateB = b.deployedAt || b.createdAt || new Date(0);
+        return new Date(dateA) - new Date(dateB);
+      });
+    
+    activeSlots.forEach((slot, index) => {
+      slot.slotNumber = index + 1;
+    });
+  }
 
   await deployment.save();
   

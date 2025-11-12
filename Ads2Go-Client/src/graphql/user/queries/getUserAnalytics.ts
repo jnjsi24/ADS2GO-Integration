@@ -9,14 +9,12 @@ export const GET_USER_ANALYTICS = gql`
         averageCompletionRate
         totalAds
         activeAds
-        totalMaterials
         totalDevices
         totalQRScans
       }
       adPerformance {
         adId
         adTitle
-        totalMaterials
         totalDevices
         totalAdPlayTime
         totalQRScans

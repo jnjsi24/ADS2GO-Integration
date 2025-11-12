@@ -303,7 +303,6 @@ router.get('/user-analytics/:userId', async (req, res) => {
         totalAdImpressions: userAnalytics.totalAdImpressions,
         totalAdPlayTime: userAnalytics.totalAdPlayTime,
         totalQRScans: userAnalytics.totalQRScans,
-        totalMaterials: userAnalytics.totalMaterials,
         adsCount: userAnalytics.ads?.length || 0,
         materialBreakdownCount: userAnalytics.materialBreakdown?.length || 0,
         lastUpdated: userAnalytics.updatedAt,
@@ -896,7 +895,6 @@ router.get('/user/:userId/direct', async (req, res) => {
         totalQRScans: 0,
         totalAds: userAnalytics.totalAds || 0,
         activeAds: filteredAds.length,
-        totalMaterials: userAnalytics.totalMaterials || 0,
         totalDevices: userAnalytics.totalDevices || 0,
         averageCompletionRate: userAnalytics.averageAdCompletionRate || 0
       };
@@ -978,7 +976,6 @@ router.get('/user/:userId/direct', async (req, res) => {
           summary.totalAdsPlayed = deviceData.adsPlayed || 0;
           summary.totalDisplayTime = deviceData.displayTime || 0;
           summary.totalQRScans = deviceData.qrScans || 0;
-          summary.totalMaterials = 1;
           summary.totalDevices = 1;
         }
       }
@@ -1048,7 +1045,6 @@ router.get('/user/:userId/direct', async (req, res) => {
           totalQRScans: summary.totalQRScans,
           totalAds: summary.totalAds,
           activeAds: summary.activeAds,
-          totalMaterials: summary.totalMaterials,
           totalDevices: summary.totalDevices
         },
         dailyStatsCount: formattedDailyStats.length,

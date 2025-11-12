@@ -18,7 +18,14 @@
     "script:migrate-newsletter": "node scripts/migrateNewsletterSources.js",
     "script:recalculate-distances": "node scripts/recalculateDistances.js",
     "script:rebuild-user-analytics": "node scripts/rebuildUserAnalytics.js",
-    "script:rebuild-user-analytics:clean": "node scripts/rebuildUserAnalytics.js --delete"
+    "script:rebuild-user-analytics:clean": "node scripts/rebuildUserAnalytics.js --delete",
+    "script:fix-total-devices": "node src/scripts/fixUserAnalyticsTotalDevices.js",
+    "script:fix-materials-and-devices": "node src/scripts/fixUserAnalyticsMaterialsAndDevices.js",
+    "script:fix-material-breakdown": "node src/scripts/fixMaterialBreakdown.js",
+    "script:remove-total-materials": "node src/scripts/removeTotalMaterials.js",
+    "script:remove-total-materials-from-ads": "node src/scripts/removeTotalMaterialsFromAds.js",
+    "script:fix-materials-and-remove-total-materials": "node src/scripts/fixMaterialsAndRemoveTotalMaterials.js",
+    "script:comprehensive-fix": "node src/scripts/comprehensiveFixUserAnalytics.js"
   },
   "author": "",
   "license": "ISC",

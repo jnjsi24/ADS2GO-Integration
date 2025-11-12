@@ -200,7 +200,6 @@ const AdAnalyticsSchema = new mongoose.Schema({
   }],
   
   // Ad-level aggregated analytics
-  totalMaterials: { type: Number, default: 0 },
   totalDevices: { type: Number, default: 0 },
   totalAdPlayTime: { type: Number, default: 0 },
   totalAdImpressions: { type: Number, default: 0 },
@@ -240,12 +239,12 @@ const AdAnalyticsSchema = new mongoose.Schema({
 
 // Add virtual for display label
 AdAnalyticsSchema.virtual('displayLabel').get(function() {
-  return `${this.adTitle} (${this.totalMaterials} materials, ${this.totalAdImpressions} impressions)`;
+  return `${this.adTitle} (${this.totalDevices} devices, ${this.totalAdImpressions} impressions)`;
 });
 
 // Add toString method for better console display
 AdAnalyticsSchema.methods.toString = function() {
-  return `${this.adTitle} (${this.totalMaterials} materials, ${this.totalAdImpressions} impressions)`;
+  return `${this.adTitle} (${this.totalDevices} devices, ${this.totalAdImpressions} impressions)`;
 };
 
 // Main UserAnalytics Schema - groups all ads by user
@@ -305,7 +304,6 @@ const UserAnalyticsSchema = new mongoose.Schema({
 
   // User-level aggregated analytics
   totalAds: { type: Number, default: 0 },
-  totalMaterials: { type: Number, default: 0 },
   totalDevices: { type: Number, default: 0 },
   totalAdPlays: { type: Number, default: 0 },
   totalAdPlayTime: { type: Number, default: 0 },
@@ -382,11 +380,31 @@ UserAnalyticsSchema.pre('save', function(next) {
     delete this.adPerformance;
     this.adPerformance = undefined;
   }
+  // ✅ Always remove totalMaterials field (deprecated - use totalDevices only)
+  if (this.totalMaterials !== undefined) {
+    delete this.totalMaterials;
+    this.totalMaterials = undefined;
+  }
+  // ✅ Remove totalMaterials from summary if it exists
+  if (this.summary && this.summary.totalMaterials !== undefined) {
+    delete this.summary.totalMaterials;
+  }
+  // ✅ Remove totalMaterials from all ad objects
+  if (this.ads && Array.isArray(this.ads)) {
+    this.ads.forEach(ad => {
+      if (ad.totalMaterials !== undefined) {
+        delete ad.totalMaterials;
+      }
+    });
+  }
   // Also ensure it's marked as unset
   this.$unset = this.$unset || {};
   this.$unset.summary = '';
   this.$unset.qrScanConversionRate = '';
   this.$unset.adPerformance = '';
+  this.$unset.totalMaterials = '';
+  this.$unset['summary.totalMaterials'] = '';
+  this.$unset['ads.$[].totalMaterials'] = '';
   next();
 });
 
@@ -403,6 +421,23 @@ UserAnalyticsSchema.post('init', function(doc) {
   if (doc.adPerformance !== undefined) {
     delete doc.adPerformance;
     doc.adPerformance = undefined;
+  }
+  // ✅ Remove totalMaterials field (deprecated - use totalDevices only)
+  if (doc.totalMaterials !== undefined) {
+    delete doc.totalMaterials;
+    doc.totalMaterials = undefined;
+  }
+  // ✅ Remove totalMaterials from summary if it exists
+  if (doc.summary && doc.summary.totalMaterials !== undefined) {
+    delete doc.summary.totalMaterials;
+  }
+  // ✅ Remove totalMaterials from all ad objects
+  if (doc.ads && Array.isArray(doc.ads)) {
+    doc.ads.forEach(ad => {
+      if (ad.totalMaterials !== undefined) {
+        delete ad.totalMaterials;
+      }
+    });
   }
 });
 
@@ -431,6 +466,25 @@ UserAnalyticsSchema.pre('updateOne', function(next) {
     if (update.adPerformance) {
       delete update.adPerformance;
     }
+    // ✅ Remove totalMaterials from $set if present
+    if (update.$set && update.$set.totalMaterials !== undefined) {
+      delete update.$set.totalMaterials;
+    }
+    if (update.totalMaterials !== undefined) {
+      delete update.totalMaterials;
+    }
+    // ✅ Remove totalMaterials from summary if present
+    if (update.$set && update.$set.summary && update.$set.summary.totalMaterials !== undefined) {
+      delete update.$set.summary.totalMaterials;
+    }
+    // ✅ Remove totalMaterials from ads array if present
+    if (update.$set && update.$set.ads && Array.isArray(update.$set.ads)) {
+      update.$set.ads.forEach(ad => {
+        if (ad.totalMaterials !== undefined) {
+          delete ad.totalMaterials;
+        }
+      });
+    }
     // Ensure $unset includes all redundant fields to remove them from database
     if (!update.$unset) {
       update.$unset = {};
@@ -438,6 +492,9 @@ UserAnalyticsSchema.pre('updateOne', function(next) {
     update.$unset.summary = '';
     update.$unset.qrScanConversionRate = '';
     update.$unset.adPerformance = '';
+    update.$unset.totalMaterials = '';
+    update.$unset['summary.totalMaterials'] = '';
+    update.$unset['ads.$[].totalMaterials'] = '';
   }
   next();
 });
@@ -466,6 +523,25 @@ UserAnalyticsSchema.pre('findOneAndUpdate', function(next) {
     if (update.adPerformance) {
       delete update.adPerformance;
     }
+    // ✅ Remove totalMaterials from $set if present
+    if (update.$set && update.$set.totalMaterials !== undefined) {
+      delete update.$set.totalMaterials;
+    }
+    if (update.totalMaterials !== undefined) {
+      delete update.totalMaterials;
+    }
+    // ✅ Remove totalMaterials from summary if present
+    if (update.$set && update.$set.summary && update.$set.summary.totalMaterials !== undefined) {
+      delete update.$set.summary.totalMaterials;
+    }
+    // ✅ Remove totalMaterials from ads array if present
+    if (update.$set && update.$set.ads && Array.isArray(update.$set.ads)) {
+      update.$set.ads.forEach(ad => {
+        if (ad.totalMaterials !== undefined) {
+          delete ad.totalMaterials;
+        }
+      });
+    }
     // Ensure $unset includes all redundant fields to remove them from database
     if (!update.$unset) {
       update.$unset = {};
@@ -473,6 +549,9 @@ UserAnalyticsSchema.pre('findOneAndUpdate', function(next) {
     update.$unset.summary = '';
     update.$unset.qrScanConversionRate = '';
     update.$unset.adPerformance = '';
+    update.$unset.totalMaterials = '';
+    update.$unset['summary.totalMaterials'] = '';
+    update.$unset['ads.$[].totalMaterials'] = '';
   }
   next();
 });
@@ -505,7 +584,6 @@ UserAnalyticsSchema.statics.createOrUpdateUserAnalytics = async function(userId,
       userId,
       ads: [],
       totalAds: 0,
-      totalMaterials: 0,
       totalDevices: 0,
       totalAdPlayTime: 0,
       totalAdImpressions: 0,
@@ -525,7 +603,6 @@ UserAnalyticsSchema.statics.createOrUpdateUserAnalytics = async function(userId,
       adTitle,
       adDeploymentId: additionalData.adDeploymentId || null,
       materials: [],
-      totalMaterials: 0,
       totalDevices: 0,
       totalAdPlayTime: 0,
       totalAdImpressions: 0,
@@ -603,21 +680,63 @@ UserAnalyticsSchema.methods.addMaterial = async function(adId, materialData) {
     }
     
     // Update ad totals
-    this.ads[adIndex].totalMaterials = this.ads[adIndex].materials.length;
+    // ✅ Calculate totalDevices: count of devices assigned to this ad
+    this.ads[adIndex].totalDevices = this.ads[adIndex].materials.length;
     this.ads[adIndex].updatedAt = new Date();
   }
   
-  // Update user totals
+  // Update user totals (but preserve totalDevices - let sync jobs handle it)
   this.updateUserTotals();
   this.updatedAt = new Date();
   
+  // ✅ Remove totalMaterials if it exists (shouldn't, but be safe)
+  if (this.totalMaterials !== undefined) {
+    this.totalMaterials = undefined;
+  }
+  
+  // ✅ Remove totalMaterials from ad object if it exists
+  if (adIndex >= 0 && this.ads[adIndex].totalMaterials !== undefined) {
+    delete this.ads[adIndex].totalMaterials;
+  }
+  
   await this.save();
+  
+  // ✅ Force remove totalMaterials using direct MongoDB update
+  await this.constructor.updateOne(
+    { _id: this._id },
+    {
+      $unset: {
+        totalMaterials: '',
+        'summary.totalMaterials': '',
+        'ads.$[].totalMaterials': ''
+      }
+    },
+    { arrayFilters: [{ 'ad.totalMaterials': { $exists: true } }] }
+  );
 };
 
 UserAnalyticsSchema.methods.updateUserTotals = function() {
   this.totalAds = this.ads.length;
-  this.totalMaterials = this.ads.reduce((sum, ad) => sum + ad.totalMaterials, 0);
-  this.totalDevices = this.ads.reduce((sum, ad) => sum + ad.totalDevices, 0);
+  // ✅ DO NOT calculate totalDevices here - let sync jobs handle it from active deployments
+  // The materials array might contain stale data (devices no longer actively deployed)
+  // Sync jobs will calculate totalDevices correctly from AdsDeployment (source of truth)
+  // Only calculate if totalDevices is not set (for new documents)
+  if (this.totalDevices === undefined || this.totalDevices === null) {
+    // Fallback: count unique devices from materials array (only for new documents)
+    const allUniqueDeviceIds = new Set();
+    this.ads.forEach(ad => {
+      if (ad.materials && Array.isArray(ad.materials)) {
+        ad.materials.forEach(material => {
+          if (material && material.materialId) {
+            allUniqueDeviceIds.add(material.materialId.toString());
+          }
+        });
+      }
+    });
+    this.totalDevices = allUniqueDeviceIds.size;
+  }
+  // Otherwise, preserve existing totalDevices (calculated by sync jobs from active deployments)
+  
   this.totalAdPlayTime = this.ads.reduce((sum, ad) => sum + ad.totalAdPlayTime, 0);
   this.totalAdImpressions = this.ads.reduce((sum, ad) => sum + ad.totalAdImpressions, 0);
   this.totalQRScans = this.ads.reduce((sum, ad) => sum + ad.totalQRScans, 0);

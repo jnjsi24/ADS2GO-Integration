@@ -924,26 +924,28 @@ DeviceTrackingSchema.post('save', async function(doc) {
           console.log(`✅ Real-time salary update triggered for ${this.materialId}`);
           
           // ⚡ PERFORMANCE OPTIMIZATION: Event-driven UserAnalytics incremental update
-          // Update UserAnalytics for all affected users (non-blocking, background)
-          if (affectedUserIds.size > 0) {
-            const UserAnalyticsService = require('../services/userAnalyticsService');
-            const updatePromises = Array.from(affectedUserIds).map(userId => 
-              UserAnalyticsService.incrementalUpdateUser(userId, this.materialId, dateStr)
-                .catch(error => {
-                  // Don't fail if incremental update fails - background sync will handle it
-                  console.warn(`⚠️ [INCREMENTAL] Failed to update user ${userId}: ${error.message}`);
-                })
-            );
-            
-            // Execute all updates in parallel (non-blocking)
-            Promise.all(updatePromises).then(() => {
-              console.log(`✅ [INCREMENTAL] Updated ${affectedUserIds.size} users incrementally`);
-            }).catch(error => {
-              console.warn(`⚠️ [INCREMENTAL] Some incremental updates failed: ${error.message}`);
-            });
-            
-            console.log(`⚡ [INCREMENTAL] Triggered incremental updates for ${affectedUserIds.size} users`);
-          }
+          // ✅ DISABLED: incrementalUpdateUser method doesn't exist - sync jobs will handle updates
+          // The sync job runs every 5 minutes and will update UserAnalytics correctly
+          // Removing this call prevents errors and ensures sync jobs are the single source of truth
+          // if (affectedUserIds.size > 0) {
+          //   const UserAnalyticsService = require('../services/userAnalyticsService');
+          //   const updatePromises = Array.from(affectedUserIds).map(userId => 
+          //     UserAnalyticsService.incrementalUpdateUser(userId, this.materialId, dateStr)
+          //       .catch(error => {
+          //         // Don't fail if incremental update fails - background sync will handle it
+          //         console.warn(`⚠️ [INCREMENTAL] Failed to update user ${userId}: ${error.message}`);
+          //       })
+          //   );
+          //   
+          //   // Execute all updates in parallel (non-blocking)
+          //   Promise.all(updatePromises).then(() => {
+          //     console.log(`✅ [INCREMENTAL] Updated ${affectedUserIds.size} users incrementally`);
+          //   }).catch(error => {
+          //     console.warn(`⚠️ [INCREMENTAL] Some incremental updates failed: ${error.message}`);
+          //   });
+          //   
+          //   console.log(`⚡ [INCREMENTAL] Triggered incremental updates for ${affectedUserIds.size} users`);
+          // }
         } catch (error) {
           console.error(`❌ Auto-archive/salary update failed for ${this.materialId}:`, error.message);
         }
