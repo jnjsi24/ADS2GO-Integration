@@ -3284,12 +3284,56 @@ class UserAnalyticsService {
     try {
       // Validate and set default date ranges
       const now = new Date();
-      const defaultStartDate = startDate && !isNaN(new Date(startDate).getTime()) 
-        ? new Date(startDate) 
-        : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
-      const defaultEndDate = endDate && !isNaN(new Date(endDate).getTime()) 
-        ? new Date(endDate) 
-        : now;
+      
+      // ✅ ENHANCEMENT: For dailyStats, we want to store ALL historical data
+      // Check if we need to fetch all historical data for dailyStats
+      let userAnalytics = await UserAnalytics.findOne({ userId });
+      const hasExistingDailyStats = userAnalytics && userAnalytics.dailyStats && userAnalytics.dailyStats.length > 0;
+      
+      // ✅ STRATEGY: 
+      // 1. If dailyStats is empty, fetch ALL historical data (from first ad to now)
+      // 2. If dailyStats exists but no startDate provided, fetch ALL historical data to ensure completeness
+      // 3. If startDate is explicitly provided, use that range (for specific queries)
+      let defaultStartDate, defaultEndDate;
+      
+      if (!hasExistingDailyStats || !startDate) {
+        // Fetch all historical data - get user's first ad creation date
+        // This ensures dailyStats contains ALL daily data from history
+        try {
+          const Ad = require('../models/Ad');
+          const firstAd = await Ad.findOne({ userId: userId })
+            .sort({ createdAt: 1 })
+            .select('createdAt')
+            .lean();
+          
+          if (firstAd && firstAd.createdAt) {
+            defaultStartDate = new Date(firstAd.createdAt);
+            defaultStartDate.setUTCHours(0, 0, 0, 0); // Start of day
+            console.log(`📅 [SYNC] Fetching ALL historical data for dailyStats from first ad date: ${defaultStartDate.toISOString()}`);
+          } else {
+            // No ads found - use 2 years ago as default
+            defaultStartDate = new Date(now);
+            defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 2);
+            defaultStartDate.setUTCHours(0, 0, 0, 0);
+            console.log(`📅 [SYNC] No ads found, using 2-year default: ${defaultStartDate.toISOString()}`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Error fetching first ad date, using 2-year default:', error.message);
+          defaultStartDate = new Date(now);
+          defaultStartDate.setFullYear(defaultStartDate.getFullYear() - 2);
+          defaultStartDate.setUTCHours(0, 0, 0, 0);
+        }
+        defaultEndDate = now;
+      } else {
+        // Use provided date range (for specific queries, but still merge into dailyStats)
+        defaultStartDate = startDate && !isNaN(new Date(startDate).getTime()) 
+          ? new Date(startDate) 
+          : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
+        defaultEndDate = endDate && !isNaN(new Date(endDate).getTime()) 
+          ? new Date(endDate) 
+          : now;
+        console.log(`📅 [SYNC] Using provided date range: ${defaultStartDate.toISOString()} to ${defaultEndDate.toISOString()}`);
+      }
 
       // Fetch fresh data from history (pass adId for filtering)
       const freshData = await this.fetchAndUpdateUserAnalyticsFromHistory(userId, defaultStartDate, defaultEndDate, adId);
@@ -3315,9 +3359,7 @@ class UserAnalyticsService {
       const user = await User.findById(userId).select('firstName lastName').lean();
       const userName = user ? `${user.firstName} ${user.lastName}`.trim() : null;
       
-      // Update or create UserAnalytics document
-      let userAnalytics = await UserAnalytics.findOne({ userId });
-      
+      // Update or create UserAnalytics document (reuse the one we fetched earlier)
       if (!userAnalytics) {
         // Create new user analytics
         userAnalytics = new UserAnalytics({
@@ -3586,7 +3628,8 @@ class UserAnalyticsService {
             };
           });
           
-          // Merge with existing dailyStats (update existing dates, add new ones)
+          // ✅ ENHANCEMENT: Merge with existing dailyStats (update existing dates, add new ones)
+          // This ensures we preserve all historical data and automatically create new daily entries
           const existingStatsByDate = new Map();
           (userAnalytics.dailyStats || []).forEach(stat => {
             if (stat.date) {
@@ -3597,13 +3640,68 @@ class UserAnalyticsService {
           // Update or add date entries
           newDailyStats.forEach(newDateEntry => {
             if (existingStatsByDate.has(newDateEntry.date)) {
-              // Update existing date entry
+              // ✅ ENHANCEMENT: Merge existing date entry instead of replacing
+              // This preserves data from previous syncs and merges new data
               const existing = existingStatsByDate.get(newDateEntry.date);
-              existing.ads = newDateEntry.ads;
-              existing.totals = newDateEntry.totals;
+              
+              // Merge ads - update existing ads or add new ones
+              const existingAdsByAdId = new Map();
+              (existing.ads || []).forEach(ad => {
+                const adIdStr = ad.adId?.toString ? ad.adId.toString() : String(ad.adId);
+                existingAdsByAdId.set(adIdStr, ad);
+              });
+              
+              // Process new ads
+              (newDateEntry.ads || []).forEach(newAd => {
+                const adIdStr = newAd.adId?.toString ? newAd.adId.toString() : String(newAd.adId);
+                
+                if (existingAdsByAdId.has(adIdStr)) {
+                  // Merge existing ad - merge materials
+                  const existingAd = existingAdsByAdId.get(adIdStr);
+                  const existingMaterialsByMaterialId = new Map();
+                  (existingAd.materials || []).forEach(mat => {
+                    existingMaterialsByMaterialId.set(mat.materialId, mat);
+                  });
+                  
+                  // Merge materials - update existing or add new
+                  (newAd.materials || []).forEach(newMat => {
+                    existingMaterialsByMaterialId.set(newMat.materialId, newMat);
+                  });
+                  
+                  // Update ad totals (sum of all materials)
+                  existingAd.materials = Array.from(existingMaterialsByMaterialId.values());
+                  existingAd.totals = {
+                    impressions: existingAd.materials.reduce((sum, m) => sum + (m.impressions || 0), 0),
+                    adsPlayed: existingAd.materials.reduce((sum, m) => sum + (m.adsPlayed || 0), 0),
+                    displayTime: existingAd.materials.reduce((sum, m) => sum + (m.displayTime || 0), 0),
+                    qrScans: existingAd.materials.reduce((sum, m) => sum + (m.qrScans || 0), 0),
+                    completionRate: existingAd.materials.length > 0 
+                      ? existingAd.materials.reduce((sum, m) => sum + (m.completionRate || 0), 0) / existingAd.materials.length
+                      : 0
+                  };
+                } else {
+                  // Add new ad
+                  existingAdsByAdId.set(adIdStr, newAd);
+                }
+              });
+              
+              // Update existing date entry with merged ads
+              existing.ads = Array.from(existingAdsByAdId.values());
+              
+              // Recalculate date totals (sum across all ads)
+              existing.totals = {
+                impressions: existing.ads.reduce((sum, ad) => sum + (ad.totals?.impressions || 0), 0),
+                adsPlayed: existing.ads.reduce((sum, ad) => sum + (ad.totals?.adsPlayed || 0), 0),
+                displayTime: existing.ads.reduce((sum, ad) => sum + (ad.totals?.displayTime || 0), 0),
+                qrScans: existing.ads.reduce((sum, ad) => sum + (ad.totals?.qrScans || 0), 0),
+                completionRate: existing.ads.length > 0
+                  ? existing.ads.reduce((sum, ad) => sum + (ad.totals?.completionRate || 0), 0) / existing.ads.length
+                  : 0
+              };
             } else {
-              // Add new date entry
+              // ✅ AUTOMATIC: Add new date entry (automatically creates new day in array)
               userAnalytics.dailyStats.push(newDateEntry);
+              console.log(`📅 [SYNC] Auto-created new daily entry for date: ${newDateEntry.date}`);
             }
           });
           
