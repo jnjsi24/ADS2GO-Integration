@@ -583,6 +583,7 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if ((isImage && isSupportedImage) || (isVideo && isSupportedVideo)) {
       handleInputChange('mediaFile', file);
       setUploadProgress(100); // Set to 100% when file is selected
+      e.target.value = ''; // Allow re-selecting the same file later
     } else {
       setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, MOV');
       // Clear the file input
@@ -714,14 +715,10 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 ? 'border-blue-500'
                 : mediaFileError
                 ? 'border-red-500'
-                : 'border-gray-300'}
+                : 'border-black/70'}
             `}
             style={{
-              background: isDragging 
-                ? 'linear-gradient(to bottom, #dbeafe, #ffffff)'
-                : mediaFileError
-                ? 'linear-gradient(to bottom, #fee2e2, #ffffff)'
-                : 'linear-gradient(to bottom, #e0f2fe, #ffffff)'
+              backgroundColor: 'transparent'
             }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -763,7 +760,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
 
             {/* File Preview Section */}
           {formData.mediaFile && !mediaFileError && !isDetectingDuration && (
-            <div className="mt-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center gap-4">
+            <div className="mt-10 w-full max-w-md flex items-center gap-4 px-5 py-4">
               {/* Thumbnail */}
               <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0 bg-gray-100">
                 {formData.mediaFile.type.startsWith('image/') ? (
@@ -773,20 +770,49 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                    <Play className="w-6 h-6 text-gray-400" />
-                  </div>
+                  <video
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  >
+                    <source src={URL.createObjectURL(formData.mediaFile)} />
+                  </video>
                 )}
               </div>
 
               {/* File Info */}
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-black text-sm truncate">
-                  {formData.mediaFile.name}
-                </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  {(formData.mediaFile.size / 1024).toFixed(0)} KB
-                </p>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-black text-sm truncate text-left">
+                      {formData.mediaFile.name}
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1 text-left">
+                      {formData.mediaFile.type.startsWith('video/')
+                        ? detectedVideoDuration !== null
+                          ? `${detectedVideoDuration}s`
+                          : 'Detecting duration...'
+                        : `${(formData.mediaFile.size / 1024).toFixed(0)} KB`}
+                    </p>
+                  </div>
+                  {/* Action Icons */}
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <X
+                      className="w-5 h-5 text-red-600 cursor-pointer hover:text-red-600 transition-colors"
+                      onClick={() => {
+                        setFormData({ ...formData, mediaFile: null });
+                        setDetectedVideoDuration(null);
+                        setUploadProgress(0);
+                        setMediaFileError('');
+                        const input = document.getElementById('media-upload') as HTMLInputElement | null;
+                        if (input) {
+                          input.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
                 
                 {/* Progress Bar */}
                 <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
@@ -797,20 +823,6 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     style={{ width: isUploading ? `${uploadProgress}%` : '100%' }}
                   ></div>
                 </div>
-              </div>
-
-              {/* Action Icons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {!isUploading && (
-                  <Check className="w-5 h-5 text-gray-600 cursor-pointer hover:text-green-600" />
-                )}
-                <X
-                  className="w-5 h-5 text-gray-600 cursor-pointer hover:text-red-600"
-                  onClick={() => {
-                    setFormData({ ...formData, mediaFile: null });
-                    setUploadProgress(0);
-                  }}
-                />
               </div>
             </div>
           )}

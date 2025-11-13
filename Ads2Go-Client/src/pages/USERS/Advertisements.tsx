@@ -79,6 +79,7 @@ const Advertisements: React.FC = () => {
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
+  const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
   
   // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed)
   const { data, loading, error } = useMyAdsStatic();
@@ -572,7 +573,25 @@ const Advertisements: React.FC = () => {
                 className="overflow-hidden backdrop-blur-sm cursor-pointer flex flex-col hover:scale-[1.02] transition-transform duration-300"
               >
                 {/* Media Section */}
-                <div className="w-full h-36 relative flex-shrink-0">
+                <div
+                  className="w-full h-36 relative flex-shrink-0"
+                  tabIndex={0}
+                  onMouseEnter={() => setHoveredVideoId(ad.id)}
+                  onMouseLeave={() =>
+                    setHoveredVideoId((current) => (current === ad.id ? null : current))
+                  }
+                  onFocus={() => setHoveredVideoId(ad.id)}
+                  onBlur={() =>
+                    setHoveredVideoId((current) => (current === ad.id ? null : current))
+                  }
+                  onTouchStart={() => setHoveredVideoId(ad.id)}
+                  onTouchEnd={() =>
+                    setHoveredVideoId((current) => (current === ad.id ? null : current))
+                  }
+                  onTouchCancel={() =>
+                    setHoveredVideoId((current) => (current === ad.id ? null : current))
+                  }
+                >
                   {ad.mediaFile ? (
                     ad.adFormat === "IMAGE" ? (
                       <LazyImage
@@ -582,21 +601,47 @@ const Advertisements: React.FC = () => {
                         placeholder="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PC9zdmc+"
                       />
                     ) : ad.adFormat === "VIDEO" ? (
-                      <video
-                        className="w-full h-full object-cover"
-                        controls
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                          const errorDiv = document.createElement("div");
-                          errorDiv.className =
-                            "w-full h-full bg-gray-500 flex items-center justify-center text-white";
-                          errorDiv.innerHTML = "Video not available";
-                          e.currentTarget.parentNode?.appendChild(errorDiv);
-                        }}
-                      >
-                        <source src={ad.mediaFile} />
-                        Your browser does not support the video tag.
-                      </video>
+                      hoveredVideoId === ad.id ? (
+                        <video
+                          className="w-full h-full object-cover"
+                          controls
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const errorDiv = document.createElement("div");
+                            errorDiv.className =
+                              "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                            errorDiv.innerHTML = "Video not available";
+                            e.currentTarget.parentNode?.appendChild(errorDiv);
+                          }}
+                        >
+                          <source src={ad.mediaFile} />
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : (
+                        <video
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                          preload="metadata"
+                          controls={false}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const errorDiv = document.createElement("div");
+                            errorDiv.className =
+                              "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                            errorDiv.innerHTML = "Video not available";
+                            e.currentTarget.parentNode?.appendChild(errorDiv);
+                          }}
+                        >
+                          <source src={ad.mediaFile} />
+                          Your browser does not support the video tag.
+                        </video>
+                      )
                     ) : (
                       <div className="w-full h-full bg-gray-500 flex items-center justify-center">
                         <a
@@ -738,7 +783,25 @@ const Advertisements: React.FC = () => {
                   key={ad.id}
                   className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:shadow-lg"
                 >
-                  <div className="w-full h-44 flex-shrink-0 relative">
+                  <div
+                    className="w-full h-44 flex-shrink-0 relative"
+                    tabIndex={0}
+                    onMouseEnter={() => setHoveredVideoId(ad.id)}
+                    onMouseLeave={() =>
+                      setHoveredVideoId((current) => (current === ad.id ? null : current))
+                    }
+                    onFocus={() => setHoveredVideoId(ad.id)}
+                    onBlur={() =>
+                      setHoveredVideoId((current) => (current === ad.id ? null : current))
+                    }
+                    onTouchStart={() => setHoveredVideoId(ad.id)}
+                    onTouchEnd={() =>
+                      setHoveredVideoId((current) => (current === ad.id ? null : current))
+                    }
+                    onTouchCancel={() =>
+                      setHoveredVideoId((current) => (current === ad.id ? null : current))
+                    }
+                  >
                     {ad.mediaFile ? (
                       ad.adFormat === "IMAGE" ? (
                         <img
@@ -751,21 +814,47 @@ const Advertisements: React.FC = () => {
                           }}
                         />
                       ) : ad.adFormat === "VIDEO" ? (
-                        <video
-                          className="w-full h-full object-cover"
-                          controls
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            const errorDiv = document.createElement("div");
-                            errorDiv.className =
-                              "w-full h-full bg-gray-500 flex items-center justify-center text-white";
-                            errorDiv.innerHTML = "Video not available";
-                            e.currentTarget.parentNode?.appendChild(errorDiv);
-                          }}
-                        >
-                          <source src={ad.mediaFile} />
-                          Your browser does not support the video tag.
-                        </video>
+                        hoveredVideoId === ad.id ? (
+                          <video
+                            className="w-full h-full object-cover"
+                            controls
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const errorDiv = document.createElement("div");
+                              errorDiv.className =
+                                "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                              errorDiv.innerHTML = "Video not available";
+                              e.currentTarget.parentNode?.appendChild(errorDiv);
+                            }}
+                          >
+                            <source src={ad.mediaFile} />
+                            Your browser does not support the video tag.
+                          </video>
+                        ) : (
+                          <video
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                            controls={false}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const errorDiv = document.createElement("div");
+                              errorDiv.className =
+                                "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                              errorDiv.innerHTML = "Video not available";
+                              e.currentTarget.parentNode?.appendChild(errorDiv);
+                            }}
+                          >
+                            <source src={ad.mediaFile} />
+                            Your browser does not support the video tag.
+                          </video>
+                        )
                       ) : (
                         <div className="w-full h-full bg-gray-500 flex items-center justify-center">
                           <a

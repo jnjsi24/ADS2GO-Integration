@@ -453,7 +453,7 @@ const Payment: React.FC<PaymentProps> = ({
             </h3>
             <div className="flex items-center">
               <p className="text-md font-semibold text-gray-900">
-                ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
+                ₱ {parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
               </p>
               <span className="text-gray-400 mx-2">|</span>
               <span
@@ -511,7 +511,7 @@ const Payment: React.FC<PaymentProps> = ({
               <div className="mt-6 flex justify-between text-base font-semibold">
                 <span>Due today</span>
                 <span className="text-gray-900 font-bold text-xl">
-                  ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
+                  ₱ {parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
                 </span>
               </div>
             )}

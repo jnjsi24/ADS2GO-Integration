@@ -1,7 +1,7 @@
 // src/pages/AdDetailsPage.tsx
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useMutation } from '@apollo/client';
+import { useMutation, useQuery } from '@apollo/client';
 import { 
   ChevronLeft, 
   ChevronDown, 
@@ -20,7 +20,8 @@ import {
   Edit,
   MoreVertical,
   Trash2,
-  CreditCard
+  CreditCard,
+  WalletCards
 } from 'lucide-react';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,7 @@ import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { useMyAdsStatic } from '../../hooks/useMyAds';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { GET_USER_ADS_WITH_PAYMENTS } from '../../graphql/user/queries/getUserAdsWithPayments';
 import { screenComplianceService } from '../../services/screenComplianceService';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
 
@@ -120,6 +122,7 @@ type DeviceLocation = {
   currentHours: number;
   slotNumber?: number; // Slot number (1-5)
   isMasterDevice?: boolean; // Is this the master device for its material
+  source?: 'websocket' | 'polling' | string;
 };
 
 type MaterialSlotInfo = {
@@ -154,6 +157,7 @@ const AdDetailsPage: React.FC = () => {
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showPaymentTooltip, setShowPaymentTooltip] = useState(false);
   
   // Delete success tracking
   const [deleteSuccess, setDeleteSuccess] = useState(false);
@@ -273,6 +277,19 @@ const AdDetailsPage: React.FC = () => {
   // Mobile tab visibility rules by status - Analytics only shows for PAID ads
   const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
   const showDevicesTab = adStatus === 'RUNNING';
+
+  const shouldFetchPaymentDetails = paymentStatus === 'PAID';
+  const { data: paymentsData } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
+    skip: !shouldFetchPaymentDetails,
+    fetchPolicy: 'cache-first',
+  });
+
+  const paymentDetails = React.useMemo(() => {
+    if (!shouldFetchPaymentDetails) return null;
+    const entries = paymentsData?.getUserAdsWithPayments || [];
+    const match = entries.find((entry: any) => entry?.ad?.id === ad?.id);
+    return match?.payment || null;
+  }, [paymentsData, shouldFetchPaymentDetails, ad?.id]);
   
   // Ensure mobile active tab is valid for current status
   // mobile tab guard effect is declared after activeTab state
@@ -306,7 +323,7 @@ const AdDetailsPage: React.FC = () => {
       });
       
       // Add "All Materials" option at the beginning
-      const newOptions = [`All Materials (${materials.length} total)`, ...materialOptions];
+      const newOptions = [`All Materials`, ...materialOptions];
       
       setAdOptions(newOptions);
       setSelectedAd(newOptions[0]); // Default to "All Materials"
@@ -1131,7 +1148,7 @@ const AdDetailsPage: React.FC = () => {
         <div className="flex items-start justify-between px-2 mb-2 p-2">
           <div>
             <h2 className="text-lg text-black/90 font-bold leading-tight">{ad.title}</h2>
-            <p className="text-[13px] text-black/70">${ad.price.toFixed(2)}</p>
+            <p className="text-[13px] text-black/70"> ₱ {ad.price.toFixed(2)}</p>
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -1204,31 +1221,52 @@ const AdDetailsPage: React.FC = () => {
           </div>
         </div>
 
+
         {/* Tabs (status-aligned) */}
         <div className="flex items-center gap-3 text-[13px] px-1 mb-2">
+          {/* Details Tab */}
+          <div className="relative">
           <button
             onClick={() => setActiveTab('Details')}
-            className={`px-1 py-1 ${activeTab === 'Details' ? 'text-black/90 font-semibold underline' : 'text-black/70'}`}
+              className={`relative px-1 py-1 font-medium transition-colors ${
+                activeTab === 'Details' ? 'text-black/90 font-semibold' : 'text-black/70 hover:text-black/90'
+              }`}
           >
             Details
+              <motion.span
+                className="absolute left-0 bottom-0 h-[2px] rounded-full"
+                style={{ background: '#FF9D3D' }}
+                initial={{ width: 0 }}
+                animate={{ width: activeTab === 'Details' ? '100%' : 0 }}
+                whileHover={{ width: '100%' }}
+                transition={{ duration: 0.3 }}
+              />
           </button>
-          {showAnalyticsTab && (
-            <button
-              onClick={() => navigate(`/detailed-analytics?adId=${id}`)}
-              className={`px-1 py-1 text-black/70`}
-            >
-              Analytics
-            </button>
-          )}
+          </div>
+
+          {/* Device Tab (only if visible) */}
           {showDevicesTab && (
+            <div className="relative">
             <button
               onClick={() => setActiveTab('TabletActivity')}
-              className={`px-1 py-1 ${activeTab === 'TabletActivity' ? 'text-black/90 font-semibold underline' : 'text-black/70'}`}
+                className={`relative px-1 py-1 font-medium transition-colors ${
+                  activeTab === 'TabletActivity' ? 'text-black/90 font-semibold' : 'text-black/70 hover:text-black/90'
+                }`}
             >
               Device
+                <motion.span
+                  className="absolute left-0 bottom-0 h-[2px] rounded-full"
+                  style={{ background: '#FF9D3D' }}
+                  initial={{ width: 0 }}
+                  animate={{ width: activeTab === 'TabletActivity' ? '100%' : 0 }}
+                  whileHover={{ width: '100%' }}
+                  transition={{ duration: 0.3 }}
+                />
             </button>
+            </div>
           )}
         </div>
+
 
         {/* Details (mobile) */}
         {activeTab === 'Details' && (
@@ -1492,6 +1530,17 @@ const AdDetailsPage: React.FC = () => {
 
       {/* Top Row: Media (Left) + Info (Right) */}
       <div className="hidden lg:grid grid-cols-2 gap-8">
+          {adStatus === 'PENDING' && (
+            <div className="col-span-2">
+              <div className="flex justify-end">
+                <div className="flex items-center gap-2 rounded-full bg-yellow-100/90 px-4 py-2 text-sm font-medium text-yellow-800 shadow-sm">
+                  <span className="inline-flex h-2 w-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                  <span>Your advertisement is under admin review</span>
+                </div>
+              </div>
+            </div>
+          )}
+
         {/* Left: Media */}
         <div className="overflow-hidden bg-white/60 flex items-center justify-center h-96">
           {ad.mediaFile ? (
@@ -1573,7 +1622,7 @@ const AdDetailsPage: React.FC = () => {
             </div>
 
             <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
-            <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
+            <p className="text-2xl text-black/90 font-semibold mb-5"> ₱ {ad.price.toFixed(2)}</p>
             <p className="text-black/70">{ad.description}</p>
             
             {/* Timestamp Display */}
@@ -1665,7 +1714,10 @@ const AdDetailsPage: React.FC = () => {
 
                   {/* Hover underline with framer-motion */}
                   <motion.div
-                    className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                    className="absolute left-0 bottom-0 h-1 rounded-full"
+                    style={{
+                      background: '#FF9D3D',
+                    }}
                     initial={{ width: 0 }}
                     animate={{ width: activeTab === 'Details' ? '100%' : 0 }}
                     whileHover={{ width: '100%' }}
@@ -1687,29 +1739,12 @@ const AdDetailsPage: React.FC = () => {
 
                     {/* Hover underline with framer-motion */}
                     <motion.div
-                      className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                      className="absolute left-0 bottom-0 h-1 rounded-full"
+                      style={{
+                        background: '#FF9D3D',
+                      }}
                       initial={{ width: 0 }}
                       animate={{ width: activeTab === 'AdActivity' ? '100%' : 0 }}
-                      whileHover={{ width: '100%' }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                    />
-                  </button>
-                </div>
-              )}
-              
-              {/* Analytics button - show only if paid and approved/running */}
-              {showAnalyticsTab && (
-                <div className="relative">
-                  <button
-                    onClick={() => navigate(`/detailed-analytics?adId=${id}`)}
-                    className="whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden text-black/60 hover:text-black/90"
-                  >
-                    Analytics
-
-                    {/* Hover underline with framer-motion */}
-                    <motion.div
-                      className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
-                      initial={{ width: 0 }}
                       whileHover={{ width: '100%' }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
@@ -1721,103 +1756,136 @@ const AdDetailsPage: React.FC = () => {
 
           {/* Tab Content */}
           {activeTab === 'Details' && (
-            <div className="grid grid-cols-2 bg-white/60 p-4 rounded-lg shadow-md min-h-[200px]">
-              {/* Left: Table-style info */}
-              <div className="flex flex-col justify-start">
-                <table className="w-full text-sm mt-5 text-black/80">
-                  <tbody>
-                    <tr>
-                      <td className="py-2">Start Date:</td>
-                      <td className="py-2 font-semibold text-right">{formatDate(ad.startTime)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2">End Date:</td>
-                      <td className="py-2 font-semibold text-right">{formatDate(ad.endTime)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2">Duration:</td>
-                      <td className="py-2 font-semibold text-right">{calculateDuration(ad.startTime, ad.endTime)} days</td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div className="space-y-6 min-h-[200px]">
+              {/* TOP: Device Name + Status Badge */}
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center gap-2">
+                  <span className="text-md font-medium text-gray-800">
+                    {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
+                      ? ad.materialId[0].materialId || 'N/A'
+                      : 'No Device'}
+                  </span>
               </div>
 
-              {/* Right: Devices (upper right), Plan, Duration, Format (lower right) */}
-              <div className="flex flex-col justify-between h-full">
-                {/* Upper right: Devices section */}
-                <div className="flex justify-end">
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-black/90 mb-2">
-                      {isFullyPaidAndApproved ? 'Devices:' : 'Initial Devices:'}
-                    </p>
-                    {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 ? (
-                      <div className="space-y-1">
-                        {ad.materialId.map((material: any, index: number) => {
-                          // Only show device status for fully paid and approved ads
-                          const shouldShowStatus = isFullyPaidAndApproved;
-                          
-                          // Find the online status for this material from ALL locations (not just those with GPS)
-                          const deviceLocation = allDeviceLocations.find(
-                            (loc) => loc.materialId === material.materialId
-                          );
-                          
-                          const isOnline = deviceLocation?.isOnline || false;
-                          const lastSeen = deviceLocation?.lastSeen;
-                          
-                          // Format last seen time
-                          const getLastSeenText = () => {
-                            if (!lastSeen) return 'Unknown';
-                            const now = new Date();
-                            const lastSeenDate = new Date(lastSeen);
-                            const diffMs = now.getTime() - lastSeenDate.getTime();
-                            const diffMins = Math.floor(diffMs / 60000);
-                            
-                            if (diffMins < 1) return 'Just now';
-                            if (diffMins < 60) return `${diffMins}m ago`;
-                            const diffHours = Math.floor(diffMins / 60);
-                            if (diffHours < 24) return `${diffHours}h ago`;
-                            return `${Math.floor(diffHours / 24)}d ago`;
-                          };
-                          
-                          return (
-                            <div 
-                              key={material.id || index} 
-                              className="text-sm flex items-center justify-end space-x-2"
-                              title={shouldShowStatus ? (isOnline ? 'Online' : `Offline - Last seen: ${getLastSeenText()}`) : 'Initial device assignment (subject to change)'}
-                            >
-                              <span className="text-black/70">
-                                🚗 {material.materialId || 'N/A'}
+                {/* Show status only if fully paid & approved */}
+                {isFullyPaidAndApproved && ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 && (
+                  (() => {
+                    const firstMaterial = ad.materialId[0];
+                    const device = allDeviceLocations.find(loc => loc.materialId === firstMaterial.materialId);
+                    const isOnline = device?.isOnline || false;
+
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                          isOnline
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        <span className="relative flex h-2 w-2">
+                          <span
+                            className={`absolute inline-flex h-full w-full rounded-full ${
+                              isOnline ? 'animate-ping bg-green-400 opacity-75' : 'bg-red-400'
+                            }`}
+                          ></span>
+                          <span
+                            className={`relative inline-flex h-2 w-2 rounded-full ${
+                              isOnline ? 'bg-green-500' : 'bg-red-500'
+                            }`}
+                          ></span>
+                        </span>
+                        {isOnline ? 'Online' : 'Offline'}
+                      </span>
+                    );
+                  })()
+                )}
+
+                {paymentStatus === 'PAID' && (
+                  <div
+                    className="relative ml-auto"
+                    onMouseEnter={() => setShowPaymentTooltip(true)}
+                    onMouseLeave={() => setShowPaymentTooltip(false)}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentTooltip((prev) => !prev)}
+                      onFocus={() => setShowPaymentTooltip(true)}
+                      onBlur={() => setShowPaymentTooltip(false)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow hover:shadow-md transition"
+                      aria-label="View payment information"
+                    >
+                      <WalletCards className="h-4 w-4" />
+                    </button>
+
+                    {showPaymentTooltip && (
+                      <div className="absolute right-0 top-10 z-50 w-64 rounded-lg border border-white/80 bg-white/95 p-3 text-left shadow-xl">
+                        <p className="text-xs font-semibold text-gray-800 mb-2">Payment Details</p>
+                        <div className="space-y-1 text-xs text-gray-600">
+                          <div className="flex justify-between">
+                            <span>Method</span>
+                            <span className="font-medium text-gray-800">
+                              {paymentDetails?.paymentType || 'N/A'}
                               </span>
-                              {/* Only show online/offline status for fully paid and approved ads */}
-                              {shouldShowStatus && (
-                                <>
-                                  {isOnline ? (
-                                    <span className="flex items-center text-green-600 font-medium">
-                                      <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
-                                      Online
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Receipt ID</span>
+                            <span className="font-medium text-gray-800">
+                              {paymentDetails?.receiptId || 'N/A'}
                                     </span>
-                                  ) : (
-                                    <span className="flex items-center text-red-600 font-medium">
-                                      <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
-                                      Offline
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Status</span>
+                            <span className="font-semibold text-green-500">
+                              {(paymentDetails?.paymentStatus || paymentStatus || 'N/A').toString().toUpperCase()}
                                     </span>
+                          </div>
+                        </div>
+                      </div>
                                   )}
-                                </>
+                  </div>
                               )}
                             </div>
-                          );
-                        })}
+
+              {/* MIDDLE: Start Date | End Date | Duration */}
+              <div className="grid grid-cols-3 gap-6 text-center">
+                <div>
+                  <p className="mt-1 text-md text-black">
+                    {formatDate(ad.startTime)}
+                  </p>
+                  <p className="text-xs text-gray-600">Start Date</p>
+
                       </div>
-                    ) : (
-                      <p className="text-sm text-black/70">No devices assigned</p>
-                    )}
+                <div>
+                  <p className="mt-1 text-md text-black">
+                    {formatDate(ad.endTime)}
+                  </p>
+                  <p className="text-xs text-gray-600">End Date</p>
+
+                </div>
+                <div>
+                  <p className="mt-1 text-md text-black">
+                    {calculateDuration(ad.startTime, ad.endTime)} days
+                  </p>
+                  <p className="text-xs text-gray-600">Duration</p>
+
                   </div>
                 </div>
 
-                {/* Lower right: Duration, Format */}
-                <div className="flex flex-col items-end space-y-2 mt-4">
-                  <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
-                  <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
+              {/* BOTTOM: Format | Runtime */}
+              <div className="grid grid-cols-3 gap-6 text-center">
+                <div>
+                  <p className="mt-1 text-md text-black">
+                    {ad.adFormat || 'N/A'}
+                  </p>
+                  <p className="text-xs text-gray-600">Format</p>
+
+                </div>
+                <div>
+                  <p className="mt-1 text-md text-black">
+                    {ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}
+                  </p>
+                  <p className="text-xs text-gray-600">Runtime</p>
+
                 </div>
               </div>
             </div>
@@ -1825,23 +1893,9 @@ const AdDetailsPage: React.FC = () => {
           
           {activeTab === 'AdActivity' && (
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {/* Real-time notifications */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <div className={`w-3 h-3 rounded-full ${
-                    connectionStatus === 'connected' ? 'bg-green-500' : 
-                    connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}></div>
-                  <span className="text-xs text-gray-500">
-                    {connectionStatus === 'connected' ? 'Live' : 
-                     connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
-                  </span>
-                </div>
-              </div>
-
               {/* Device Notifications */}
               {deviceNotifications.map((notification) => (
-                <div key={notification.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 shadow-md rounded-lg">
+                <div key={notification.id} className="flex items-start bg-white/60 space-x-3  mr-3 shadow-md rounded-lg">
                   <div className="flex-shrink-0 mt-0.5">
                     {notification.type === 'DEVICE_ONLINE' && <Wifi size={20} className="text-green-500" />}
                     {notification.type === 'DEVICE_OFFLINE' && <WifiOff size={20} className="text-red-500" />}
@@ -1866,8 +1920,7 @@ const AdDetailsPage: React.FC = () => {
 
               {/* QR Scan Activity */}
               {qrImpressions.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-md font-semibold text-gray-800 mb-2">QR Code Scans</h4>
+                <div>
                   {qrImpressions.map((impression, index) => (
                     <div key={`${impression.id}-${index}`} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 shadow-md rounded-lg mb-2">
                       <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
@@ -1905,11 +1958,9 @@ const AdDetailsPage: React.FC = () => {
 
         {/* Right: Tablet Activity - Only show if fully paid and approved */}
         {isFullyPaidAndApproved && (
-          <div className="space-y-4">
-            {/* Map + Activity List */}
-            <div className="flex items-start space-x-6">
-            {/* Live Map */}
-            <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
+          <div className="relative h-64"> {/* height matches the map */}
+            {/* ---------- FULL MAP (background) ---------- */}
+            <div className="absolute inset-0 rounded-lg overflow-hidden shadow border border-gray-200">
               {deviceLocations.length > 0 ? (
                 <MapView
                   center={[
@@ -1978,13 +2029,14 @@ const AdDetailsPage: React.FC = () => {
               )}
             </div>
 
-            {/* Device List */}
-            <div className="flex flex-col space-y-4 flex-1">
-              {/* Material Selection Dropdown */}
-              <div className="relative mb-4 w-60 dropdown-container">
+            {/* ---------- OVERLAY PANEL (right side) ---------- */}
+            <div className="absolute inset-y-0 right-0 z-[9999] w-60 flex flex-col">
+              <div className=" flex-1 overflow-hidden flex flex-col">
+                {/* ---- Dropdown ---- */}
+                <div className="relative dropdown-container p-3">
                 <button
                   onClick={() => setShowAdDropdown(!showAdDropdown)}
-                  className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"
+                    className="flex items-center justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md rounded-md bg-white/80 backdrop-blur-md focus:outline-none"
                 >
                   <div className="flex flex-col items-start">
                     <div className="font-medium">
@@ -2007,9 +2059,7 @@ const AdDetailsPage: React.FC = () => {
                   </div>
                   <ChevronDown
                     size={16}
-                    className={`transform transition-transform duration-200 ${
-                      showAdDropdown ? 'rotate-180' : 'rotate-0'
-                    }`}
+                      className={`transform transition-transform duration-200 ${showAdDropdown ? 'rotate-180' : ''}`}
                   />
                 </button>
 
@@ -2020,13 +2070,11 @@ const AdDetailsPage: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-50 top-full mt-2 w-full shadow-lg bg-white/90 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
+                        className="absolute z-50 left-0 right-0 mt-2 shadow-xl bg-white/95 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
                     >
                       {adOptions.map((adOption, index) => {
-                        // First option is "All Materials" (index 0), rest are individual materials
-                        // Material array is offset by 1 because of "All Materials" option
                         const materialId = index === 0 
-                          ? null // "All Materials" option
+                            ? null
                           : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId[index - 1] 
                             ? ad.materialId[index - 1].materialId 
                             : null;
@@ -2036,13 +2084,13 @@ const AdDetailsPage: React.FC = () => {
                             key={adOption}
                             onClick={() => {
                               setSelectedAd(adOption);
-                              setSelectedMaterialId(materialId); // null for "All Materials", specific ID for individual materials
+                                setSelectedMaterialId(materialId);
                               setShowAdDropdown(false);
                             }}
-                            className={`block w-full text-left px-4 py-2 ml-2 text-xs transition-colors duration-150 ${
+                              className={`block w-full text-left px-4 py-2 text-xs transition-colors ${
                               (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
                                 ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-gray-700 hover:bg-white/60'
+                                  : 'text-gray-700 hover:bg-white/70'
                             }`}
                           >
                             {adOption}
@@ -2054,34 +2102,37 @@ const AdDetailsPage: React.FC = () => {
                 </AnimatePresence>
               </div>
 
-              <div className="max-h-64 overflow-y-auto">
-                {deviceLocations.map((location, index) => (
+                {/* ---- Device List ---- */}
+                <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
+                  {deviceLocations.length > 0 ? (
+                    deviceLocations.map((location, index) => (
                   <div key={location.deviceId} className="flex items-start space-x-2">
-                    <div className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
+                        <div
+                          className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
                       location.isOnline ? 'bg-green-500' : 'bg-red-500'
-                    }`}>
+                          }`}
+                        >
                       {index + 1}
                     </div>
                     <div className="flex flex-col">
                       <p className="text-xs text-black/90">
                         {new Date(location.lastSeen).toLocaleTimeString()} | {location.totalDistance.toFixed(1)} km
                       </p>
-                      <p className={`text-sm font-semibold px-2 py-1 rounded ${
+                          <p
+                            className={`text-sm font-semibold px-2 py-1 rounded text-xs ${
                         location.isOnline 
                           ? 'text-green-600 bg-green-50' 
                           : 'text-red-600 bg-red-50'
-                      }`}>
+                            }`}
+                          >
                         {location.isOnline ? 'Online' : 'Offline'} • {location.currentHours.toFixed(1)}h today
                       </p>
                       <p className="text-xs text-gray-500">{location.address}</p>
                     </div>
                   </div>
-                ))}
-                {deviceLocations.length === 0 && (
-                  <div className="text-center text-black/90 py-10">
-                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p>No devices found for this ad.</p>
-                    <p className="text-xs text-gray-500 mt-1">Devices will appear here when they come online.</p>
+                    ))
+                  ) : (
+                    <div>
                   </div>
                 )}
               </div>

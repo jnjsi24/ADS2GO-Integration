@@ -88,6 +88,7 @@ const PaymentHistory: React.FC = () => {
   const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPaymentType, setSelectedPaymentType] = useState("");
+  const [hoveredPaymentId, setHoveredPaymentId] = useState<string | null>(null);
 
   const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
     fetchPolicy: "network-only",
@@ -180,8 +181,8 @@ const PaymentHistory: React.FC = () => {
 
         console.log(`PaymentHistory: Ad ${ad.id} - ad.status: ${ad.status}, payment?.paymentStatus: ${payment?.paymentStatus}, ad.paymentStatus: ${ad.paymentStatus}, displayStatus: ${displayStatus}`);
 
-        const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
-        const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
+        const amount = `₱ ${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
+        const totalPrice = `${ad.totalPrice.toFixed(2)}`;
 
         return {
           id: ad.id,
@@ -504,25 +505,61 @@ const PaymentHistory: React.FC = () => {
               className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >
-              <div className="flex items-start">
+                <div className="flex items-start">
                 {/* Media Section (image/video) */}
-                <div className="w-1/4 relative h-44 flex-shrink-0">
+                <div
+                  className="w-1/4 relative h-44 flex-shrink-0"
+                  tabIndex={0}
+                  onMouseEnter={() => setHoveredPaymentId(item.id)}
+                  onMouseLeave={() =>
+                    setHoveredPaymentId(current => (current === item.id ? null : current))
+                  }
+                  onFocus={() => setHoveredPaymentId(item.id)}
+                  onBlur={() =>
+                    setHoveredPaymentId(current => (current === item.id ? null : current))
+                  }
+                  onTouchStart={() => setHoveredPaymentId(item.id)}
+                  onTouchEnd={() =>
+                    setHoveredPaymentId(current => (current === item.id ? null : current))
+                  }
+                  onTouchCancel={() =>
+                    setHoveredPaymentId(current => (current === item.id ? null : current))
+                  }
+                >
                   {item.imageUrl ? (
                     item.adFormat && item.adFormat.toLowerCase() === "video" ? (
-                      <video
-                        src={item.imageUrl}
-                        className="w-full h-full object-cover"
-                        autoPlay
-                        loop
-                        muted
-                        controls
-                        onError={(e) => console.error("Video load error:", e)}
-                      >
-                        <source src={item.imageUrl} type="video/mp4" />
-                        <source src={item.imageUrl} type="video/webm" />
-                        <source src={item.imageUrl} type="video/ogg" />
-                        Your browser does not support the video tag.
-                      </video>
+                      hoveredPaymentId === item.id ? (
+                        <video
+                          src={item.imageUrl}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          controls
+                          playsInline
+                          onError={(e) => console.error("Video load error:", e)}
+                        >
+                          <source src={item.imageUrl} type="video/mp4" />
+                          <source src={item.imageUrl} type="video/webm" />
+                          <source src={item.imageUrl} type="video/ogg" />
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : (
+                        <video
+                          src={item.imageUrl}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                          preload="metadata"
+                          controls={false}
+                          onError={(e) => console.error("Video load error:", e)}
+                        >
+                          <source src={item.imageUrl} type="video/mp4" />
+                          <source src={item.imageUrl} type="video/webm" />
+                          <source src={item.imageUrl} type="video/ogg" />
+                          Your browser does not support the video tag.
+                        </video>
+                      )
                     ) : (
                       <img
                         src={item.imageUrl}
@@ -703,16 +740,47 @@ const PaymentHistory: React.FC = () => {
             )}
             {/* Top row: thumbnail + details */}
             <div className="flex gap-3">
-              <div className="w-28 h-28 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+              <div
+                className="w-28 h-28 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0"
+                tabIndex={0}
+                onMouseEnter={() => setHoveredPaymentId(item.id)}
+                onMouseLeave={() =>
+                  setHoveredPaymentId(current => (current === item.id ? null : current))
+                }
+                onFocus={() => setHoveredPaymentId(item.id)}
+                onBlur={() =>
+                  setHoveredPaymentId(current => (current === item.id ? null : current))
+                }
+                onTouchStart={() => setHoveredPaymentId(item.id)}
+                onTouchEnd={() =>
+                  setHoveredPaymentId(current => (current === item.id ? null : current))
+                }
+                onTouchCancel={() =>
+                  setHoveredPaymentId(current => (current === item.id ? null : current))
+                }
+              >
                 {item.imageUrl ? (
                   item.adFormat?.toLowerCase() === 'video' ? (
-                    <video
-                      src={item.imageUrl}
-                      className="w-full h-full object-cover"
-                      muted
-                      playsInline
-                      loop
-                    />
+                    hoveredPaymentId === item.id ? (
+                      <video
+                        src={item.imageUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                        controls
+                      />
+                    ) : (
+                      <video
+                        src={item.imageUrl}
+                        className="w-full h-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                        controls={false}
+                      />
+                    )
                   ) : (
                     <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
                   )
