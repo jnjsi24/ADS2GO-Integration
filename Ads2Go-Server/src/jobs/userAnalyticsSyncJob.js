@@ -1004,6 +1004,10 @@ class UserAnalyticsSyncJob {
             // Only count devices for ads that belong to this user
             if (userAdIdSet.has(adIdStr)) {
               allUniqueDeviceIds.add(deployment.materialId);
+              if (!adToActiveDevicesMap.has(adIdStr)) {
+                adToActiveDevicesMap.set(adIdStr, new Map());
+              }
+              adToActiveDevicesMap.get(adIdStr).set(deployment.materialId, slot.slotNumber || 1);
               console.log(`   ✅ Counting device ${deployment.materialId} for ad ${adIdStr}`);
             } else {
               console.log(`   ⚠️ Skipping device ${deployment.materialId} - ad ${adIdStr} not in user's ads`);
@@ -1020,24 +1024,8 @@ class UserAnalyticsSyncJob {
         materialId: { $in: Array.from(allUniqueDeviceIds) } 
       });
       
-      // ✅ Build a map of adId -> Map of materialId -> slotNumber for each ad
-      const adToActiveDevicesMap = new Map();
-      activeDeployments.forEach(deployment => {
-        deployment.lcdSlots.forEach(slot => {
-          if (['RUNNING', 'SCHEDULED'].includes(slot.status) && slot.adId) {
-            const adIdStr = slot.adId.toString ? slot.adId.toString() : String(slot.adId);
-            if (userAdIdSet.has(adIdStr)) {
-              if (!adToActiveDevicesMap.has(adIdStr)) {
-                adToActiveDevicesMap.set(adIdStr, new Map());
-              }
-              adToActiveDevicesMap.get(adIdStr).set(deployment.materialId, slot.slotNumber || 1);
-            }
-          }
-        });
-      });
-      
       // ✅ Get existing UserAnalytics to preserve materials arrays
-      const existingUserAnalytics = await UserAnalytics.findOne({ userId }).select('ads');
+      const existingUserAnalytics = await UserAnalytics.findOne({ userId }).select('ads materialBreakdown');
       const existingAdsMap = new Map();
       if (existingUserAnalytics && existingUserAnalytics.ads && Array.isArray(existingUserAnalytics.ads)) {
         existingUserAnalytics.ads.forEach(existingAd => {
@@ -1184,7 +1172,6 @@ class UserAnalyticsSyncJob {
       };
 
       // ✅ Also filter materialBreakdown to only include actively deployed devices
-      const existingUserAnalytics = await UserAnalytics.findOne({ userId }).select('materialBreakdown');
       let filteredMaterialBreakdown = [];
       if (existingUserAnalytics && existingUserAnalytics.materialBreakdown) {
         filteredMaterialBreakdown = existingUserAnalytics.materialBreakdown.filter(

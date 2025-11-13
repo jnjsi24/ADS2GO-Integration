@@ -4487,6 +4487,9 @@ class UserAnalyticsService {
         console.log('📅 [Device Analytics] Using default date range (last 30 days)');
       }
 
+      // Pre-calculate user's ad IDs once (used throughout analytics calculations)
+      const userAdIds = userAds.map(ad => ad._id.toString());
+
       // Find device data in DeviceDataHistoryV2
       const deviceData = await DeviceDataHistoryV2.findOne({ materialId: deviceId });
       
@@ -4603,7 +4606,6 @@ class UserAnalyticsService {
 
       // Get ad performance breakdown
       const adPerformanceMap = {};
-      const userAdIds = userAds.map(ad => ad._id.toString());
       
       // ✅ PRIMARY SOURCE: Use adPlaybacks (raw data) as the source of truth
       // adPerformance might be missing or incomplete, so we always process adPlaybacks

@@ -235,6 +235,9 @@ const DetailedAnalytics: React.FC = () => {
     setIsCustomDateRange(false);
     setSelectedPeriod(period);
     setSelectedPeriodLabel(label);
+    setDateRange({});
+    setIsSelectingStart(true);
+    setTempStartDate('');
     setShowDatePicker(false);
   };
 
@@ -608,6 +611,10 @@ const DetailedAnalytics: React.FC = () => {
 
   // Get display text for the date input placeholder
   const getDatePlaceholder = () => {
+    if (!isCustomDateRange) {
+      return selectedPeriodLabel || "Select a date";
+    }
+
     if (!dateRange.start && !dateRange.end) {
       return "Select a date";
     } else if (dateRange.start && !dateRange.end) {
@@ -1741,7 +1748,7 @@ const DetailedAnalytics: React.FC = () => {
                               <div className="flex items-center gap-2 mb-2">
                                 <div
                                   className={`w-3 h-3 rounded-full ${
-                                    isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
+                                    isCustomDateRange && isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
                                   }`}
                                 ></div>
                                 <label className="block text-xs font-medium text-gray-600">
@@ -1759,7 +1766,7 @@ const DetailedAnalytics: React.FC = () => {
                               <div className="flex items-center gap-2 mb-2">
                                 <div
                                   className={`w-3 h-3 rounded-full ${
-                                    !isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
+                                    isCustomDateRange && !isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
                                   }`}
                                 ></div>
                                 <label className="block text-xs font-medium text-gray-600">
