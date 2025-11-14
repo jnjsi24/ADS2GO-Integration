@@ -1478,7 +1478,7 @@ const ManageAds: React.FC = () => {
       {/* Ad Details Modal */}
       {showAdDetailsModal && selectedAd && (
         <div
-          className="fixed inset-0 z-50 overflow-hidden"
+          className="fixed inset-0 z-[9999] overflow-hidden"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
           onClick={handleCloseAdModal} // closes the modal on outside click
         >

@@ -1106,14 +1106,13 @@ const ScreenTracking: React.FC = () => {
         <div className={`flex ${isMobile ? 'space-x-2 overflow-x-auto' : 'space-x-3'}`}>
           <button
             onClick={() => setActiveTab('live')}
-            className={`relative py-4 px-1 font-medium text-sm transition-colors group ${
+            className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
               activeTab === 'live'
                 ? 'text-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4" />
               <span>Live Tracking</span>
             </div>
             <span
@@ -1124,14 +1123,13 @@ const ScreenTracking: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('historical')}
-            className={`relative py-4 px-1 font-medium text-sm transition-colors group ${
+            className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
               activeTab === 'historical'
                 ? 'text-blue-600'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             <div className="flex items-center space-x-2">
-              <Clock className="w-4 h-4" />
               <span>Route Map</span>
             </div>
             <span
@@ -1238,7 +1236,7 @@ const ScreenTracking: React.FC = () => {
                           }
                         }}
                         disabled={loadingHistorical || !selectedScreen}
-                        className={`flex items-center ${isMobile ? 'justify-center w-full' : 'space-x-2'} px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 ${isMobile ? 'text-xs' : 'text-sm'}`}
+                        className={`flex items-center ${isMobile ? 'justify-center w-full' : 'space-x-2'} px-3 py-2 bg-[#3674B5] text-white rounded hover:bg-[#3674B5]/80 disabled:opacity-50 ${isMobile ? 'text-xs' : 'text-sm'}`}
                       >
                         <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
@@ -1247,7 +1245,7 @@ const ScreenTracking: React.FC = () => {
                   )}
                 </div>
               </div>
-              <div className={`${isMobile ? 'h-64' : 'h-96'} relative`}>
+              <div className={`${isMobile ? 'h-64' : 'h-[700px]'} relative`}>
                 {!showMap && (
                   <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
                     <div className="text-center">
@@ -1281,12 +1279,12 @@ const ScreenTracking: React.FC = () => {
                       />
                       
                       {/* Debug info */}
-                      <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs z-[1000]">
-                        <div>Selected Screen: {selectedScreen?.deviceId || 'N/A'}</div>
-                        <div>Material ID: {mapMaterialId}</div>
-                        <div>Date: {selectedDate}</div>
-                        <div>Filtered Screens: {screens?.length || 0}</div>
-                        <div className="flex items-center gap-1 mt-1 text-green-600">
+                      <div className="absolute w-[500px] top-3 right-3 bg-white p-2 rounded shadow text-xs z-[1000]">
+                        <div>Selected Screen: <span className="font-medium">{selectedScreen?.deviceId || 'N/A'}</span></div>
+                        <div>Material ID: <span className="font-medium">{mapMaterialId}</span></div>
+                        <div>Date: <span className="font-medium">{selectedDate}</span></div>
+                        <div>Filtered Screens: <span className="font-medium">{screens?.length || 0}</span></div>
+                        <div className="flex items-center justify-end gap-1 mt-1 text-green-600">
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                           <span>Auto-refresh active (2s)</span>
                         </div>

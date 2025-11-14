@@ -9,7 +9,7 @@ import DeviceNotificationList from "./tabs/dashboard/DeviceNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
 import SubtleLoader from "../../components/SubtleLoader";
 import { screenComplianceService } from '../../services/screenComplianceService';
-import { Monitor, PlayCircle, Users, Car, FileText, ArrowUpRight } from "lucide-react";
+import { Monitor, PlayCircle, Users, Car, FileText, ArrowUpRight, ChevronRight } from "lucide-react";
 import { motion, Transition } from "framer-motion";
 
 // ✨ Client-side reverse geocoding helper with caching
@@ -434,12 +434,13 @@ const Dashboard = () => {
       {/* Stats & Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
         {/* Left column */}
-        <div className="lg:col-span-4 space-y-6 ">
+        <div className="lg:col-span-4 space-y-6">
           {[
             {
               label: "Total Drivers",
               value: stats?.totalDrivers || 0,
-              change: `${stats?.newDriversToday || 0} new today`,
+              change: stats?.newDriversToday || 0,
+              changeLabel: "new today",
               up: true,
             },
             {
@@ -451,7 +452,8 @@ const Dashboard = () => {
             {
               label: "Total Ads",
               value: stats?.totalAds || 0,
-              change: `${stats?.activeAds || 0} active`,
+              change: stats?.activeAds || 0,
+              changeLabel: "active",
               up: true,
             },
             {
@@ -461,45 +463,56 @@ const Dashboard = () => {
               up: false,
             },
           ].map((stat, i) => {
-            const shouldShowArrow = stat.label === "Pending Drivers" || stat.label === "Pending Ads";
-            const navigationPath = stat.label === "Pending Drivers" ? "/admin/drivers?status=pending" : 
-                                 stat.label === "Pending Ads" ? "/admin/manage-ads?status=pending" : "";
-            
-            return (
+            const isClickable = stat.label.includes("Pending");
+            const path = stat.label === "Pending Drivers" 
+              ? "/admin/drivers?status=pending" 
+              : stat.label === "Pending Ads" 
+              ? "/admin/manage-ads?status=pending" 
+              : "";
+
+             const isAwaiting =
+               typeof stat.change === "string" &&
+               stat.change.toLowerCase().includes("awaiting");
+
+             return (
               <div
                 key={i}
-                className={`bg-white p-5 rounded-md shadow-md flex flex-col justify-between transition-all duration-200 hover:shadow-md ${
-                  shouldShowArrow ? 'cursor-pointer' : ''
+                className={`bg-white p-6 rounded-lg shadow-md transition-shadow ${
+                  isClickable ? "cursor-pointer hover:shadow-md" : ""
                 }`}
-                onClick={shouldShowArrow ? () => window.location.href = navigationPath : undefined}
+                onClick={isClickable ? () => (window.location.href = path) : undefined}
               >
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-sm text-gray-500">{stat.label}</p>
-                  {shouldShowArrow && (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
+                 <div className="flex items-start justify-between mb-1">
+                   <p className="text-sm font-medium text-gray-700">{stat.label}</p>
+                   {stat.up === true && (
+                     <div className="flex items-center gap-1 text-sm font-medium text-green-600">
+                       <span>▲</span>
+                       <span>{stat.change}</span>
+                     </div>
+                   )}
+                   {stat.up === false && !isAwaiting && (
+                     <div className="flex items-center gap-1 text-sm font-medium text-red-600">
+                       <span>▼</span>
+                       <span>{stat.change}</span>
+                     </div>
+                   )}
+                   {isAwaiting && (
+                    <ChevronRight className="h-4 w-4" strokeWidth={2} />
                   )}
-                </div>
-                <p className="text-2xl font-bold text-gray-800 mb-1">{stat.value}</p>
-                <p
-                  className={`text-sm font-medium ${
-                    stat.up ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {stat.up ? "▲" : "▼"} {stat.change}
-                </p>
+                 </div>
+
+                 <div className="flex items-baseline justify-between">
+                   <p className="text-4xl font-bold text-gray-900">{stat.value}</p>
+                   {stat.up === true && stat.changeLabel && (
+                     <p className="text-sm text-gray-500">{stat.changeLabel}</p>
+                   )}
+                   {isAwaiting && (
+                     <p className="text-sm text-red-600">{stat.change}</p>
+                   )}
+                 </div>
               </div>
             );
           })}
-
         </div>
 
         {/* Right column - Screen Status Cards and Notifications */}
@@ -507,8 +520,8 @@ const Dashboard = () => {
           {/* Screen Status Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Total Screens */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex items-center justify-center gap-16">
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="flex items-center justify-center gap-10">
                 <Monitor className="w-8 h-8 text-blue-500" />
                 <div className="flex flex-col items-center">
                   <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
@@ -518,202 +531,210 @@ const Dashboard = () => {
             </div>
             
             {/* Online Screens */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex items-center justify-center gap-3">
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="flex items-center justify-center gap-10">
+                <Monitor className="w-8 h-8 text-green-500" />
                 <div className="flex flex-col items-center">
-                  <p className="text-2xl font-bold text-green-600">
+                  <p className="text-3xl font-bold text-green-600">
                     {screens.filter(s => s.isOnline).length}
                   </p>
                   <p className="text-sm text-gray-600">Online Screens</p>
                 </div>
-                <Monitor className="w-8 h-8 text-green-500" />
               </div>
             </div>
 
+
             {/* Playing Ads */}
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex items-center justify-center gap-3">
+            <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="flex items-center justify-center gap-10">
+                <PlayCircle className="w-8 h-8 text-blue-500" />
                 <div className="flex flex-col items-center">
-                  <p className="text-2xl font-bold text-blue-600">
+                  <p className="text-3xl font-bold text-blue-600">
                     {screens.filter(s => {
                       const currentAd = s.screenMetrics?.currentAd;
-                      return s.isOnline && currentAd && currentAd.state && ['playing', 'buffering', 'loading'].includes(currentAd.state);
+                      return (
+                        s.isOnline &&
+                        currentAd &&
+                        currentAd.state &&
+                        ['playing', 'buffering', 'loading'].includes(currentAd.state)
+                      );
                     }).length}
                   </p>
                   <p className="text-sm text-gray-600">Playing Ads</p>
                 </div>
-                <PlayCircle className="w-8 h-8 text-blue-500" />
               </div>
             </div>
+
           </div>
 
           {/* Notifications (split into 2 parts) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left part - Admin Main Notifications */}
-          <div className="h-80">
-            <DynamicNotificationList pendingAdsCount={pendingAdsCount} />
-          </div>
+            {/* Left part - Admin Main Notifications */}
+            <div className="min-h-0">
+              <DynamicNotificationList pendingAdsCount={pendingAdsCount} />
+            </div>
 
-          {/* Right part - Device Notifications */}
-          <div className="h-80">
-            <DeviceNotificationList />
-          </div>
-        </div>
-
-          {/* Pending Reports (split into 2 parts) */}
-          <div className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left part - Pending User Reports */}
-              <div className="h-56">
-                <motion.div
-                  className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-full space-y-1.5 shadow-md flex flex-col"
-                  initial="collapsed"
-                  whileHover="expanded"
-                >
-                  <div className="flex-1 overflow-hidden min-h-0">
-                    {pendingUserReports.length === 0 ? (
-                      <div className="p-8 text-center text-gray-500">
-                        <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                        <p>No pending reports found</p>
-                      </div>
-                    ) : (
-                      pendingUserReports.slice(0, 3).map((report: any, i: number) => (
-                        <motion.div
-                          key={report.id}
-                          className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-3 py-1.5 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-14"
-                          variants={getCardVariants(i)}
-                          transition={transition}
-                          style={{ zIndex: Math.min(3, pendingUserReports.length) - i }}
-                        >
-                          <div className="flex items-center justify-between h-full">
-                            <div className="flex items-start gap-3">
-                              <Users className="w-5 h-5 text-blue-500" />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h1 className="text-sm font-medium truncate">{report.title}</h1>
-                                  <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
-                                </div>
-                                <div className="text-xs text-neutral-500 font-medium truncate">
-                                  <span>{new Date(report.createdAt).toLocaleDateString()}</span>
-                                  &nbsp;•&nbsp;
-                                  <span>
-                                    {report.user ? `${report.user.firstName} ${report.user.lastName}` : 'Unknown User'}
-                                  </span>
-                                  &nbsp;|&nbsp;
-                                  <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                                    {report.reportType.replace('_', ' ')}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))
-                    )}
-                  </div>
-                  {pendingUserReports.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
-                        {pendingUserReports.length}
-                      </div>
-                      <span className="grid">
-                        <motion.span
-                          className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
-                          variants={notificationTextVariants}
-                          transition={textSwitchTransition}
-                        >
-                          Advertiser Reports
-                        </motion.span>
-                        <motion.a
-                          href="/admin/reports?tab=user&status=pending"
-                          className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
-                          variants={viewAllTextVariants}
-                          transition={textSwitchTransition}
-                        >
-                          View all <ArrowUpRight className="size-4" />
-                        </motion.a>
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-
-              {/* Right part - Pending Driver Reports */}
-              <div className="h-56">
-                <motion.div
-                  className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-full space-y-1.5 shadow-md flex flex-col"
-                  initial="collapsed"
-                  whileHover="expanded"
-                >
-                  <div className="flex-1 overflow-hidden min-h-0">
-                    {pendingDriverReports.length === 0 ? (
-                      <div className="p-8 text-center text-gray-500">
-                        <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                        <p>No pending reports found</p>
-                      </div>
-                    ) : (
-                      pendingDriverReports.slice(0, 3).map((report: any, i: number) => (
-                        <motion.div
-                          key={report.id}
-                          className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-3 py-1.5 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-14"
-                          variants={getCardVariants(i)}
-                          transition={transition}
-                          style={{ zIndex: Math.min(3, pendingDriverReports.length) - i }}
-                        >
-                          <div className="flex items-center justify-between h-full">
-                            <div className="flex items-start gap-3">
-                              <Car className="w-5 h-5 text-green-500" />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <h1 className="text-sm font-medium truncate">{report.title}</h1>
-                                  <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
-                                </div>
-                                <div className="text-xs text-neutral-500 font-medium truncate">
-                                  <span>{new Date(report.createdAt).toLocaleDateString()}</span>
-                                  &nbsp;•&nbsp;
-                                  <span>
-                                    {report.driver ? `${report.driver.firstName} ${report.driver.lastName}` : 'Unknown Driver'}
-                                  </span>
-                                  &nbsp;|&nbsp;
-                                  <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                                    {report.reportType.replace('_', ' ')}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))
-                    )}
-                  </div>
-                  {pendingDriverReports.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
-                        {pendingDriverReports.length}
-                      </div>
-                      <span className="grid">
-                        <motion.span
-                          className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
-                          variants={notificationTextVariants}
-                          transition={textSwitchTransition}
-                        >
-                          Driver Reports
-                        </motion.span>
-                        <motion.a
-                          href="/admin/reports?tab=driver&status=pending"
-                          className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
-                          variants={viewAllTextVariants}
-                          transition={textSwitchTransition}
-                        >
-                          View all <ArrowUpRight className="size-4" />
-                        </motion.a>
-                      </span>
-                    </div>
-                  )}
-                </motion.div>
-              </div>
+            {/* Right part - Device Notifications */}
+            <div className="min-h-0">
+              <DeviceNotificationList />
             </div>
           </div>
+
+          {/* Pending Reports (split into 2 parts) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left part - Pending User Reports */}
+            <div className="min-h-0">
+              <motion.div
+                className="bg-white dark:bg-neutral-900 p-3 rounded-xl w-full h-auto space-y-3 shadow-md flex flex-col"
+                initial="collapsed"
+                whileHover="expanded"
+              >
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {pendingUserReports.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <p>No pending reports found</p>
+                    </div>
+                  ) : (
+                    pendingUserReports.slice(0, 3).map((report: any, i: number) => (
+                      <motion.div
+                        key={report.id}
+                        className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-4 py-2 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-16"
+                        variants={getCardVariants(i)}
+                        transition={transition}
+                        style={{ zIndex: Math.min(3, pendingUserReports.length) - i }}
+                      >
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex items-start gap-3 min-w-0 flex-1"> 
+                          {!report.read && (
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                          )} 
+                            <Users className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <h1 className="text-sm font-medium truncate flex-1 min-w-0">{report.title}</h1>
+                              </div>
+                              <div className="text-xs text-neutral-500 font-medium truncate">
+                                <span>{new Date(report.createdAt).toLocaleDateString()}</span>
+                                &nbsp;•&nbsp;
+                                <span>
+                                  {report.user ? `${report.user.firstName} ${report.user.lastName}` : 'Unknown User'}
+                                </span>
+                                &nbsp;|&nbsp;
+                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                  {report.reportType.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+                {pendingUserReports.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
+                      {pendingUserReports.length}
+                    </div>
+                    <span className="grid">
+                      <motion.span
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
+                        variants={notificationTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        Advertiser Reports
+                      </motion.span>
+                      <motion.a
+                        href="/admin/reports?tab=user&status=pending"
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
+                        variants={viewAllTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        View all <ArrowUpRight className="size-4" />
+                      </motion.a>
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+
+            {/* Right part - Pending Driver Reports */}
+            <div className="min-h-0">
+              <motion.div
+                className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-auto space-y-1.5 shadow-md flex flex-col"
+                initial="collapsed"
+                whileHover="expanded"
+              >
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {pendingDriverReports.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <FileText className="w-8 h-8 mx-auto text-gray-300" />
+                      <p>No pending reports found</p>
+                    </div>
+                  ) : (
+                    pendingDriverReports.slice(0, 3).map((report: any, i: number) => (
+                      <motion.div
+                        key={report.id}
+                        className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-3 py-1.5 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-14"
+                        variants={getCardVariants(i)}
+                        transition={transition}
+                        style={{ zIndex: Math.min(3, pendingDriverReports.length) - i }}
+                      >
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex items-start gap-3">
+                            <Car className="w-5 h-5 text-green-500" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-medium truncate">{report.title}</h1>
+                                <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                              </div>
+                              <div className="text-xs text-neutral-500 font-medium truncate">
+                                <span>{new Date(report.createdAt).toLocaleDateString()}</span>
+                                &nbsp;•&nbsp;
+                                <span>
+                                  {report.driver ? `${report.driver.firstName} ${report.driver.lastName}` : 'Unknown Driver'}
+                                </span>
+                                &nbsp;|&nbsp;
+                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                  {report.reportType.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+                {pendingDriverReports.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
+                      {pendingDriverReports.length}
+                    </div>
+                    <span className="grid">
+                      <motion.span
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
+                        variants={notificationTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        Driver Reports
+                      </motion.span>
+                      <motion.a
+                        href="/admin/reports?tab=driver&status=pending"
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
+                        variants={viewAllTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        View all <ArrowUpRight className="size-4" />
+                      </motion.a>
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

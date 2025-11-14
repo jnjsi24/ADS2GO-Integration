@@ -420,13 +420,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 mb-1">Status</h4>
                       <div className="flex items-center space-x-2">
-                        {screen.slot1Status && screen.slot2Status ? (
-                          // For consolidated view, show status based on overall online status
-                          getStatusIcon(screen.isOnline ? 'online' : 'offline')
-                        ) : (
-                          // For single device view, show normal status
-                          getStatusIcon(screen.isOnline ? 'online' : 'offline')
-                        )}
+                        
                         <div className="flex flex-col">
                           {screen.slot1Status && screen.slot2Status ? (
                             // Show individual slot statuses for consolidated view
