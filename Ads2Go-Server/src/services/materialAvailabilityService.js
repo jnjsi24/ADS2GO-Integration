@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const MaterialAvailability = require('../models/MaterialAvailability');
 const Material = require('../models/Material');
 const Ad = require('../models/Ad');
@@ -74,12 +75,19 @@ class MaterialAvailabilityService {
    */
   static async removeAdFromMaterials(adId) {
     try {
+        const adObjectId = mongoose.Types.ObjectId.isValid(adId)
+        ? new mongoose.Types.ObjectId(adId)
+        : adId;
+      
       const availabilities = await MaterialAvailability.find({
-        'currentAds.adId': adId
+        $or: [
+          { 'currentAds.adId': adObjectId },
+          { 'scheduledAds.adId': adObjectId }
+        ]
       });
       
       for (const availability of availabilities) {
-        availability.removeAd(adId);
+        availability.removeAd(adObjectId);
         await availability.save();
       }
       

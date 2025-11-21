@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const Ad = require('../models/Ad');
 const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
+const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 
 /**
  * Helper function to safely convert any date value to ISO string
@@ -820,6 +821,19 @@ const adsDeploymentResolvers = {
       }
 
       const result = await AdsDeployment.removeFromLCD(materialId, adIds, user.id, reason);
+
+      if (result?.removedSlots?.length) {
+        const removalTargets = Array.from(new Set(
+          result.removedSlots
+            .map(slot => (slot?.adId ? slot.adId.toString() : null))
+            .filter(Boolean)
+        ));
+
+        await Promise.all(
+          removalTargets.map(adId => MaterialAvailabilityService.removeAdFromMaterials(adId))
+        );
+      }
+
       return result;
     },
 

@@ -250,7 +250,17 @@ const CreateAdvertisement: React.FC = () => {
   };
 
   const handleInputChange = async (field: keyof AdvertisementForm, value: string | number | File | null) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let nextValue: string | number | File | null = value;
+
+    if (field === 'numberOfDevices') {
+      const numericValue = typeof value === 'number' ? value : Number(value);
+      const normalizedValue = Number.isFinite(numericValue) ? Math.floor(numericValue) : 1;
+      const minDevices = 1;
+      const maxDevices = Math.max(getMaxDevices(), minDevices);
+      nextValue = Math.min(Math.max(normalizedValue, minDevices), maxDevices);
+    }
+
+    setFormData(prev => ({ ...prev, [field]: nextValue }));
     
     // If uploading a video file, detect its duration
     if (field === 'mediaFile' && value instanceof File && value.type.startsWith('video/')) {
@@ -411,9 +421,16 @@ const CreateAdvertisement: React.FC = () => {
         newErrors.durationDays = 'Duration must be 1-6 months (30-180 days)';
       }
       // Validate number of devices - constraint based on available devices only
-      if (pricingCalculation?.availableDevices !== undefined && 
-          formData.numberOfDevices > pricingCalculation.availableDevices) {
-        newErrors.numberOfDevices = `Only ${pricingCalculation.availableDevices} device${pricingCalculation.availableDevices === 1 ? ' is' : 's are'} currently available. Please reduce to ${pricingCalculation.availableDevices} or try a different date.`;
+      if (formData.numberOfDevices < 1) {
+        newErrors.numberOfDevices = 'At least 1 device is required.';
+      }
+
+      if (pricingCalculation?.availableDevices !== undefined) {
+        if (pricingCalculation.availableDevices < 1) {
+          newErrors.numberOfDevices = 'No devices are currently available for this schedule.';
+        } else if (formData.numberOfDevices > pricingCalculation.availableDevices) {
+          newErrors.numberOfDevices = 'No devices are currently available for this schedule.';
+        }
       }
     }
 
@@ -1073,29 +1090,35 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         <input
           type="number"
           min="1"
-          max={getMaxDevices()}
+          max={Math.max(getMaxDevices(), 1)}
           value={formData.numberOfDevices}
           onChange={(e) => {
-            const value = parseInt(e.target.value);
+            const value = parseInt(e.target.value, 10);
             handleInputChange('numberOfDevices', isNaN(value) ? 1 : value);
           }}
-          className="w-full p-3 border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition bg-transparent [&::-webkit-outer-spin-button]:bg-transparent [&::-webkit-outer-spin-button]:text-black [&::-webkit-inner-spin-button]:bg-transparent [&::-webkit-inner-spin-button]:text-black [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+          disabled={pricingCalculation?.availableDevices === 0}
+          className="w-full p-3 border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition bg-transparent disabled:cursor-not-allowed disabled:opacity-60 [&::-webkit-outer-spin-button]:bg-transparent [&::-webkit-outer-spin-button]:text-black [&::-webkit-inner-spin-button]:bg-transparent [&::-webkit-inner-spin-button]:text-black [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
           required
         />
         <div className="flex flex-col mt-1">
-          {pricingCalculation?.availableDevices !== undefined ? (
-            <p className="text-sm text-gray-500">
-              {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'} available
-            </p>
-          ) : (
+          {pricingCalculation?.availableDevices === undefined ? (
             <p className="text-sm text-gray-500">
               Loading available devices...
             </p>
+          ) : pricingCalculation.availableDevices < 1 ? (
+            <p className="text-sm font-medium text-red-500">
+              No devices are currently available for this schedule.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-500">
+              {pricingCalculation.availableDevices} device{pricingCalculation.availableDevices === 1 ? '' : 's'} available
+            </p>
           )}
-          {pricingCalculation?.availableDevices !== undefined && 
+          {pricingCalculation?.availableDevices !== undefined &&
+           pricingCalculation.availableDevices > 0 &&
            pricingCalculation.availableDevices < formData.numberOfDevices && (
             <p className="text-sm font-medium text-red-500">
-              Only {pricingCalculation.availableDevices} available
+              No devices are currently available for this schedule.
             </p>
           )}
         </div>
