@@ -374,7 +374,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                       Pause
                                     </button>
                                     {(() => {
-                                      const isLocked = deviceLockStates[screen.deviceId] ?? false;
+                                      const isLocked = deviceLockStates[screen.deviceId] ?? true; // Default to locked since adsplayer starts locked
                                       return (
                                         <button
                                           onClick={() => onScreenAction(screen.deviceId, isLocked ? 'unlock' : 'lock')}

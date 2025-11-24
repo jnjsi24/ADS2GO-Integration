@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform, Alert, AppState } from 'react-native';
 // Using expo-av for compatibility with Expo SDK 49
 // TODO: Migrate to expo-video when upgrading to Expo SDK 54+
@@ -40,7 +40,7 @@ interface AdPlayerProps {
   onLockStateChange?: (isLocked: boolean) => void;
 }
 
-const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false, isLocked = false, onLockStateChange }) => {
+const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false, isLocked = true, onLockStateChange }) => {
   const [ads, setAds] = useState<Ad[]>([]);
   const [companyAds, setCompanyAds] = useState<CompanyAd[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -65,6 +65,28 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   
   // Guard to prevent multiple concurrent handleVideoEnd calls
   const isHandlingVideoEnd = useRef(false);
+  // Guard to prevent multiple simultaneous syncs for Slot 2
+  const isSyncingSlot2 = useRef(false);
+  // Track last pause state update time to prevent rapid toggling
+  const lastPauseStateUpdate = useRef<number>(0);
+  const PAUSE_STATE_UPDATE_THROTTLE = 200; // Only update pause state every 200ms
+  // Track last play command time to prevent rapid play/pause toggling
+  const lastPlayCommandTime = useRef<number>(0);
+  const PLAY_COMMAND_THROTTLE = 200; // Only send play command every 200ms (reduced from 500ms to allow faster playback recovery)
+  // ✅ NEW: Throttle display data broadcasting to prevent flooding Slot 2
+  const lastDisplayDataTime = useRef<number>(0);
+  const DISPLAY_DATA_THROTTLE = 300; // Only send display data every 300ms (3-4 times per second is enough)
+  const lastBroadcastAdIndex = useRef<number>(-999); // Track last ad index that was broadcast to detect ad changes
+  // ✅ NEW: Debounce display data processing on Slot 2 to prevent rapid sync loops
+  const lastDisplayDataProcessTime = useRef<number>(0);
+  const DISPLAY_DATA_PROCESS_DEBOUNCE = 200; // Ignore display data if we just processed one within 200ms (increased from 100ms to prevent seek loops)
+  // ✅ CRITICAL FIX: Track last sync time to prevent seek loop during buffering
+  const lastSyncCommandTime = useRef<number>(0);
+  const SYNC_COMMAND_COOLDOWN = 3000; // Don't sync again for 3 seconds after a sync (allows buffering and seek to complete)
+  // ✅ NEW: Persistent playback enforcer for ad transitions - keeps trying to play until video actually starts
+  const playbackEnforcerInterval = useRef<any>(null);
+  const lastEnforcedAdIndex = useRef<number>(-1);
+  const shouldBePlayingRef = useRef<boolean>(false); // Track if video should be playing
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(3);
   const lastPlaybackUpdateTime = useRef(0); // Throttle playback updates to admin
@@ -80,7 +102,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [lastSyncTime, setLastSyncTime] = useState<number>(Date.now()); // Track when last sync occurred
   const [wasBuffering, setWasBuffering] = useState(false); // Track previous buffering state
   const [currentVideoPosition, setCurrentVideoPosition] = useState<number>(0); // Track current video position for drift detection
+  const lastNonZeroSyncPosition = useRef<number | null>(null); // Track last synced position that was > 0 (to detect stale position 0 data)
   const positionDriftCheckInterval = useRef<NodeJS.Timeout | null>(null); // Interval for periodic drift checks
+  const seekFailureCount = useRef<number>(0); // Track consecutive seek failures
+  const MAX_SEEK_FAILURES = 3; // Stop trying to sync if seek fails this many times
+  const lastSuccessfulSeekTime = useRef<number>(0); // Track when last successful seek occurred
   const videoRef = useRef<Video>(null);
   const [isCompanyAdsOnlyMode, setIsCompanyAdsOnlyMode] = useState(false); // Track if in company-ads-only mode (after 8 hours)
 
@@ -187,7 +213,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setDisplayDataCallback(handleDisplayData);
       // Set up lockdown callback
       playbackWebSocketService.setLockdownCallback(handleLockdown);
-      // Set up unlock callback
+      // Set up unlock callback - update when onLockStateChange changes
       playbackWebSocketService.setUnlockCallback(handleUnlock);
       // Set up 8-hour stop callback
       playbackWebSocketService.setStop8HoursCallback(handleStop8Hours);
@@ -197,32 +223,44 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Connect to WebSocket
       playbackWebSocketService.connect().then((connected) => {
         if (connected) {
-          // Start periodic sync requests for late-connecting devices
-          playbackWebSocketService.startPeriodicSync();
-          
-          // Request initial synchronization after a delay to allow ads to start
-          setTimeout(() => {
-            playbackWebSocketService.requestSync();
-          }, 5000); // Wait 5 seconds before first sync request
+          // ✅ FIX: Only Slot 2 (slave) needs periodic sync for initial connection
+          // Slot 1 (master) doesn't need to request sync - it broadcasts its own state
+          if (slotNumber === 2) {
+            // Request initial synchronization after a delay to allow master to start
+            setTimeout(() => {
+              if (!hasReceivedInitialSync) {
+                console.log('📺 [Slot 2 Init] Requesting initial sync with master');
+                playbackWebSocketService.requestSync();
+              }
+            }, 3000); // Wait 3 seconds before first sync request
+          }
         }
       });
       
-      // ✅ NEW: Start periodic position drift check for Slot 2 (slave)
-      // This detects and corrects position drift caused by buffering
-      // The main drift detection happens in handleDisplayData when display data arrives
-      // This periodic check is a backup safety net
+      // ✅ FIX: Only Slot 2 needs a backup periodic sync request
+      // This is ONLY for the initial sync - after that, display data handles everything
+      // ✅ CRITICAL: Stop interval as soon as we receive initial sync
       if (slotNumber === 2) {
         positionDriftCheckInterval.current = setInterval(() => {
-          // Request sync periodically (every 10 seconds) as a safety net
-          // This ensures we stay in sync even if display data drift detection misses something
-          const timeSinceLastSync = (Date.now() - lastSyncTime) / 1000;
-          
-          // Request sync every 10 seconds as a preventive measure
-          if (timeSinceLastSync > 10) {
-            console.log(`📺 [Slave Periodic Sync] Requesting periodic sync (last sync ${timeSinceLastSync.toFixed(1)}s ago)`);
-            playbackWebSocketService.requestSync();
+          // Only request sync if we haven't received initial sync yet
+          // Once synced, display data will handle all updates
+          if (!hasReceivedInitialSync) {
+            const timeSinceLastSync = (Date.now() - lastSyncTime) / 1000;
+            
+            // Request sync every 15 seconds only if we haven't synced yet (increased from 10s)
+            if (timeSinceLastSync > 15) {
+              console.log(`📺 [Slot 2 Backup] Requesting initial sync (${timeSinceLastSync.toFixed(1)}s since last attempt)`);
+              playbackWebSocketService.requestSync();
+            }
+          } else {
+            // ✅ CRITICAL: Stop the interval once we've synced
+            if (positionDriftCheckInterval.current) {
+              console.log('✅ [Slot 2 Backup] Initial sync received - stopping backup sync requests');
+              clearInterval(positionDriftCheckInterval.current);
+              positionDriftCheckInterval.current = null;
+            }
           }
-        }, 10000); // Check every 10 seconds as safety net
+        }, 15000); // Check every 15 seconds as backup safety net
       }
     }
 
@@ -232,15 +270,24 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setPauseAllCallback(() => {});
       playbackWebSocketService.setResumeAllCallback(() => {});
       playbackWebSocketService.setStopAllCallback(() => {});
-      playbackWebSocketService.stopPeriodicSync();
       
       // Clear position drift check interval
       if (positionDriftCheckInterval.current) {
         clearInterval(positionDriftCheckInterval.current);
         positionDriftCheckInterval.current = null;
       }
+      
+      // ✅ NEW: Clear playback enforcer on component unmount
+      stopPlaybackEnforcer();
     };
   }, [isRegistered, slotNumber, lastSyncPosition, currentVideoPosition, lastSyncTime]);
+
+  // Update unlock callback when onLockStateChange prop changes
+  useEffect(() => {
+    if (isRegistered) {
+      playbackWebSocketService.setUnlockCallback(handleUnlock);
+    }
+  }, [isRegistered, onLockStateChange]); // Update when onLockStateChange changes
 
   // Execute perfect synchronization
   const executePerfectSync = (message: any) => {
@@ -290,10 +337,66 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   };
 
+  // Helper function to sync position and play for Slot 2
+  const syncPositionAndPlay = useCallback((currentTime?: number) => {
+    const now = Date.now();
+    const timeSinceLastPlay = now - lastPlayCommandTime.current;
+    
+    // Throttle play commands to prevent rapid toggling
+    if (timeSinceLastPlay < PLAY_COMMAND_THROTTLE) {
+      console.log(`⏭️ [Slot 2 Sync] Skipping play command (throttled, ${timeSinceLastPlay}ms since last)`);
+      // Still sync position even if we skip play
+      if (videoRef.current && currentTime !== undefined) {
+        const seekTime = currentTime * 1000;
+        videoRef.current.setPositionAsync(seekTime).catch(err => {
+          console.warn(`⚠️ [Slot 2 Sync] Error seeking (throttled):`, err);
+        });
+      }
+      return;
+    }
+    
+    if (videoRef.current && currentTime !== undefined) {
+      const seekTime = currentTime * 1000;
+      videoRef.current.setPositionAsync(seekTime).then(() => {
+        // ✅ CRITICAL: Force play immediately after seeking
+        if (videoRef.current) {
+          lastPlayCommandTime.current = Date.now();
+          videoRef.current.playAsync().catch(err => {
+            console.warn(`⚠️ [Slot 2 Sync] Error playing:`, err);
+          });
+          console.log(`▶️ [Slot 2 Sync] Force play after position sync to ${currentTime.toFixed(1)}s`);
+        }
+      }).catch(err => {
+        console.warn(`⚠️ [Slot 2 Sync] Error seeking:`, err);
+        // Try to play anyway
+        if (videoRef.current) {
+          lastPlayCommandTime.current = Date.now();
+          videoRef.current.playAsync().catch(playErr => {
+            console.warn(`⚠️ [Slot 2 Sync] Error playing after seek error:`, playErr);
+          });
+        }
+      });
+    } else if (videoRef.current) {
+      // No position, just play
+      lastPlayCommandTime.current = Date.now();
+      videoRef.current.playAsync().catch(err => {
+        console.warn(`⚠️ [Slot 2 Sync] Error playing:`, err);
+      });
+      console.log(`▶️ [Slot 2 Sync] Force play (no position sync)`);
+    }
+  }, []);
+
   // Handle slot synchronization messages (combined legacy and new system)
   const handleSlotSync = (message: any) => {
     try {
       console.log('🔄 [AdPlayer] Received slot sync:', message);
+      
+      // ✅ CRITICAL FIX: Ignore slot sync messages that claim to come from this slot
+      // This prevents processing stale cached data from the server
+      if (message.sourceSlot === slotNumber) {
+        console.log(`⏭️ [AdPlayer] Ignoring slot sync from same slot (${slotNumber}) - likely stale server cache`);
+        return;
+      }
       
       // NEW SYSTEM: Handle slot sync commands with action field
       if (message.action) {
@@ -356,10 +459,18 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           // Set this device as master for display duplication
           console.log('👑 [AdPlayer] This device is now MASTER for display duplication');
           setIsMaster(true);
+          // ✅ NEW: Enable broadcasting when explicitly set as master
+          if (slotNumber === 2) {
+            playbackWebSocketService.setSlaveMode(false);
+          }
         } else if (action === 'setSlave') {
           // Set this device as slave for display duplication
           console.log('👥 [AdPlayer] This device is now SLAVE for display duplication');
           setIsMaster(false);
+          // ✅ NEW: Disable broadcasting when explicitly set as slave
+          if (slotNumber === 2) {
+            playbackWebSocketService.setSlaveMode(true);
+          }
         }
         return;
       }
@@ -388,7 +499,97 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         return;
       }
       
-      // Original sync logic for backward compatibility
+      // ✅ FIX: For Slot 2, ONLY use slot sync for initial connection or when display data is not working
+      // When master is connected and we're receiving display data, ignore slot sync to prevent conflicts
+      // Slot sync is mainly for failover scenarios or initial connection
+      if (slotNumber === 2 && message.sourceSlot === 1) {
+        // ✅ FIX: If we're already receiving display data from master, skip slot sync
+        // Display data is more reliable and frequent, so use that instead
+        if (masterConnected && hasReceivedInitialSync) {
+          console.log(`⏭️ [Slot 2 Sync] Skipping slot sync - using display data instead (master connected)`);
+          return;
+        }
+        
+        // ✅ FIX: Prevent multiple simultaneous syncs
+        if (isSyncingSlot2.current) {
+          console.log(`⚠️ [Slot 2 Sync] Sync already in progress, skipping duplicate`);
+          return;
+        }
+        
+        isSyncingSlot2.current = true;
+        console.log(`🔄 [Slot 2 Sync] Received sync from Slot 1: state=${message.state}, adId=${message.adId}`);
+        
+        // ✅ CRITICAL FIX: Update pause state based on master's state
+        if (message.state === 'playing') {
+          // Master is playing - ensure Slot 2 is not paused
+          // ✅ FIX: Throttle pause state updates to prevent rapid toggling
+          const now = Date.now();
+          if (now - lastPauseStateUpdate.current < PAUSE_STATE_UPDATE_THROTTLE && !isPaused) {
+            // Skip update if recently updated and already in correct state
+            console.log(`⏭️ [Slot 2 Sync] Skipping pause state update (throttled)`);
+          } else {
+            console.log(`▶️ [Slot 2 Sync] Master is playing - setting isPaused to false`);
+            setIsPaused(false);
+            lastPauseStateUpdate.current = now;
+          }
+          
+          // Update master connection tracking
+          setMasterConnected(true);
+          setLastMasterUpdate(new Date());
+          setWaitingForMaster(false);
+          setHasReceivedInitialSync(true);
+          
+          // Sync ad if different
+          if (message.adId && currentAd?.adId !== message.adId) {
+            // Find the ad index
+            const adIndex = ads.findIndex((ad: any) => ad.adId === message.adId);
+            if (adIndex >= 0) {
+              console.log(`🔄 [Slot 2 Sync] Switching to ad index ${adIndex}`);
+              setCurrentAdIndex(adIndex);
+              // Wait a bit for ad to load before syncing position
+              setTimeout(() => {
+                syncPositionAndPlay(message.currentTime);
+              }, 300);
+            } else {
+              syncPositionAndPlay(message.currentTime);
+            }
+          } else {
+            // Same ad, just sync position
+            syncPositionAndPlay(message.currentTime);
+          }
+          
+          setIsSyncing(false);
+          // Clear sync guard after a short delay
+          setTimeout(() => {
+            isSyncingSlot2.current = false;
+          }, 500);
+          return;
+        } else if (message.state === 'paused') {
+          // ✅ FIX: Throttle pause state updates to prevent rapid toggling
+          const now = Date.now();
+          if (now - lastPauseStateUpdate.current < PAUSE_STATE_UPDATE_THROTTLE && isPaused) {
+            // Skip update if recently updated and already in correct state
+            console.log(`⏭️ [Slot 2 Sync] Skipping pause state update (throttled)`);
+          } else {
+            console.log(`⏸️ [Slot 2 Sync] Master is paused - setting isPaused to true`);
+            setIsPaused(true);
+            lastPauseStateUpdate.current = now;
+          }
+          if (videoRef.current) {
+            videoRef.current.pauseAsync().catch(err => {
+              console.warn(`⚠️ [Slot 2 Sync] Error pausing:`, err);
+            });
+          }
+          setIsSyncing(false);
+          isSyncingSlot2.current = false;
+          return;
+        }
+        
+          // Clear guard if we didn't handle the message
+          isSyncingSlot2.current = false;
+      }
+      
+      // Original sync logic for backward compatibility (for non-Slot 2 or other cases)
       if (message.sourceSlot !== slotNumber) {
         setSyncData(message);
         setIsSyncing(true);
@@ -434,6 +635,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('⏸️ [AdPlayer] Current ad state:', currentAd);
       console.log('⏸️ [AdPlayer] Video ref state:', videoRef.current ? 'available' : 'not available');
       console.log('⏸️ [AdPlayer] isPaused state:', isPaused);
+      
+      // ✅ FIX: Slot 2 in slave mode should ignore pause/resume commands from server
+      // It should only follow display data from Slot 1 (master)
+      if (slotNumber === 2 && masterConnected && !isMaster) {
+        console.log('👥 [AdPlayer] Slot 2 in slave mode - ignoring pause command, will follow master display data');
+        return;
+      }
       
       // Always set paused state when pause command is received
       console.log('⏸️ [AdPlayer] Setting paused state to true');
@@ -515,6 +723,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('▶️ [AdPlayer] Video ref state:', videoRef.current ? 'available' : 'not available');
       console.log('▶️ [AdPlayer] isPaused state:', isPaused);
       
+      // ✅ FIX: Slot 2 in slave mode should ignore pause/resume commands from server
+      // It should only follow display data from Slot 1 (master)
+      if (slotNumber === 2 && masterConnected && !isMaster) {
+        console.log('👥 [AdPlayer] Slot 2 in slave mode - ignoring resume command, will follow master display data');
+        return;
+      }
+      
       // Set resumed state when resume command is received
       console.log('▶️ [AdPlayer] Setting paused state to false');
       setIsPaused(false);
@@ -570,6 +785,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('⏹️ [AdPlayer] Video ref state:', videoRef.current ? 'available' : 'not available');
       console.log('⏹️ [AdPlayer] isPaused state:', isPaused);
       
+      // ✅ FIX: Slot 2 in slave mode should ignore stop commands from server
+      // It should only follow display data from Slot 1 (master)
+      if (slotNumber === 2 && masterConnected && !isMaster) {
+        console.log('👥 [AdPlayer] Slot 2 in slave mode - ignoring stop command, will follow master display data');
+        return;
+      }
+      
       // Set paused state when stop command is received
       console.log('⏹️ [AdPlayer] Setting paused state to true');
       setIsPaused(true);
@@ -618,6 +840,89 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   };
 
+  // ✅ NEW: Persistent playback enforcer for Slot 2 ad transitions
+  // This keeps trying to play the video until it actually starts playing
+  // Fixes issue where Slot 2 gets stuck at start of new ad
+  const startPlaybackEnforcer = (adIndex: number) => {
+    if (slotNumber !== 2) return; // Only for Slot 2
+    
+    // Clear any existing enforcer
+    if (playbackEnforcerInterval.current) {
+      clearInterval(playbackEnforcerInterval.current);
+      playbackEnforcerInterval.current = null;
+    }
+    
+    console.log(`🔄 [Playback Enforcer] Starting for ad ${adIndex}`);
+    lastEnforcedAdIndex.current = adIndex;
+    shouldBePlayingRef.current = true;
+    
+    let attempts = 0;
+    const maxAttempts = 100; // Try for 10 seconds (100 * 100ms) - more time for slow devices/buffering
+    
+    playbackEnforcerInterval.current = setInterval(async () => {
+      attempts++;
+      
+      // Stop if max attempts reached
+      if (attempts >= maxAttempts) {
+        console.warn(`⚠️ [Playback Enforcer] Max attempts reached (${maxAttempts}), stopping`);
+        stopPlaybackEnforcer();
+        return;
+      }
+      
+      // Stop if ad changed
+      if (lastEnforcedAdIndex.current !== currentAdIndex) {
+        console.log(`🛑 [Playback Enforcer] Ad changed, stopping enforcer`);
+        stopPlaybackEnforcer();
+        return;
+      }
+      
+      // Stop if we're not supposed to be playing
+      if (!shouldBePlayingRef.current) {
+        console.log(`🛑 [Playback Enforcer] Playback paused, stopping enforcer`);
+        stopPlaybackEnforcer();
+        return;
+      }
+      
+      // ✅ FIX: Don't interfere if we're currently syncing
+      if (isSyncingSlot2.current) {
+        // Silently skip - sync is in progress, don't interfere
+        return;
+      }
+      
+      // ✅ FIX: Don't interfere if we just synced recently (within cooldown period)
+      const timeSinceLastSync = Date.now() - lastSyncCommandTime.current;
+      if (timeSinceLastSync < SYNC_COMMAND_COOLDOWN) {
+        // Silently skip - give sync time to complete
+        return;
+      }
+      
+      try {
+        const status = await videoRef.current?.getStatusAsync();
+        
+        if (status && status.isLoaded && status.isPlaying) {
+          console.log(`✅ [Playback Enforcer] Video confirmed playing after ${attempts} attempts, stopping enforcer`);
+          stopPlaybackEnforcer();
+          return;
+        }
+        
+        // Video not playing - force play (but only if not buffering to avoid conflicts)
+        if (status && status.isLoaded && !status.isPlaying && !status.isBuffering) {
+          console.log(`🔄 [Playback Enforcer] Attempt ${attempts}: Video not playing, forcing playAsync()`);
+          await videoRef.current?.playAsync();
+        }
+      } catch (err) {
+        console.warn(`⚠️ [Playback Enforcer] Error on attempt ${attempts}:`, err);
+      }
+    }, 100); // Check every 100ms
+  };
+  
+  const stopPlaybackEnforcer = () => {
+    if (playbackEnforcerInterval.current) {
+      clearInterval(playbackEnforcerInterval.current);
+      playbackEnforcerInterval.current = null;
+      console.log(`🛑 [Playback Enforcer] Stopped`);
+    }
+  };
 
   // Handle display data for duplication (slave devices)
   const handleDisplayData = (message: any) => {
@@ -641,10 +946,45 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         return;
       }
       
-      // Update master connection tracking
+      // ✅ FIX: Debounce display data processing to prevent rapid sync loops
+      // If we just processed display data very recently, skip this one to prevent
+      // constant seeking/playing that causes pause/play flickering
+      const now = Date.now();
+      const timeSinceLastProcess = now - lastDisplayDataProcessTime.current;
+      
+      // EXCEPTION: Always process if it's the first sync or ad changed
+      const adChanged = data.adIndex !== undefined && data.adIndex !== currentAdIndex;
+      const isInitialSync = !hasReceivedInitialSync;
+      const shouldProcess = isInitialSync || adChanged || timeSinceLastProcess >= DISPLAY_DATA_PROCESS_DEBOUNCE;
+      
+      if (!shouldProcess) {
+        // Silently skip this display data - we just processed one recently
+        return;
+      }
+      
+      // Mark that we're processing display data now
+      lastDisplayDataProcessTime.current = now;
+      
+      // ✅ FIX: Update master connection tracking BEFORE processing display data
+      // This ensures Slot 2 knows master is connected and can play
       setMasterConnected(true);
       setLastMasterUpdate(new Date());
       setWaitingForMaster(false);
+      
+      // ✅ FIX: Ensure Slot 2 is in slave mode when receiving display data
+      if (isMaster) {
+        console.log('👥 [AdPlayer] Slot 2 receiving display data - switching back to SLAVE mode');
+        setIsMaster(false);
+        // ✅ NEW: Disable broadcasting when reverting to slave mode
+        playbackWebSocketService.setSlaveMode(true);
+      }
+      
+      // ✅ FIX: Clear any error state when receiving display data from master
+      // This prevents error messages from showing when Slot 2 is properly syncing
+      if (error) {
+        console.log('✅ [Slave Sync] Clearing error state - receiving display data from master');
+        setError(null);
+      }
       
       // Apply display data to mirror the master
       if (data) {
@@ -667,13 +1007,82 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         const positionDrift = data.currentTime !== undefined && currentVideoPosition !== undefined 
           ? Math.abs(data.currentTime - currentVideoPosition) 
           : 0;
-        const shouldSyncPosition = adChanged || isInitialSync || positionDrift > 1.5; // Sync if drift > 1.5 seconds
+        // ✅ FIX: Set drift threshold to 0.5 seconds to balance sync accuracy with stability
+        // This prevents unnecessary syncs that cause pause/play flicker while keeping slots in sync
+        // ✅ CRITICAL FIX: Don't sync to position 0 if master is already playing SAME ad (stale display data)
+        // This prevents Slot 2 from restarting when it receives buffering/initial state from master
+        // BUT: Always sync if ad changed, even to position 0 (new video starting)
+        // ✅ IMPROVED: Check both currentVideoPosition AND lastNonZeroSyncPosition to catch stale data
+        // This fixes the issue where currentVideoPosition becomes 0 after a seek, causing stale data check to fail
+        const isStaleData = !adChanged && // Not stale if ad changed!
+          data.currentTime === 0 && 
+          !data.isBuffering && 
+          !data.isPaused && 
+          (currentVideoPosition !== undefined && currentVideoPosition > 2.0 || // We're already past 2 seconds
+           (lastNonZeroSyncPosition.current !== null && lastNonZeroSyncPosition.current > 2.0)) && // OR we've synced to > 2s before
+          isPlaying && // Video is actually playing
+          !isInitialSync; // Not the first sync
+        // ✅ CRITICAL: Always sync on ad changes to ensure both slots start at same position (even at 0s)
+        // Also sync on initial connection or when drift exceeds 0.5 seconds
+        // ✅ FIX: Don't sync for drift correction while buffering - this prevents the infinite seek/buffer loop
+        // When Slot 2's video is buffering, skip drift correction to avoid constant seeking
+        // However, ALWAYS sync on ad changes or initial sync regardless of buffering (these are critical)
+        // ✅ CRITICAL FIX: Prevent seek loop - don't sync if we just synced within the last 2 seconds
+        // This gives the video time to buffer and start playing before we try to sync again
+        const timeSinceLastSync = Date.now() - lastSyncCommandTime.current;
+        const isInSyncCooldown = timeSinceLastSync < SYNC_COMMAND_COOLDOWN && !adChanged && !isInitialSync;
+        // ✅ ADDITIONAL SAFEGUARD: Don't sync to position 0 if we're already playing past 2 seconds
+        // This prevents restarts even if stale data check somehow fails
+        const isPosition0Restart = data.currentTime === 0 && 
+                                   !adChanged && 
+                                   !isInitialSync && 
+                                   currentVideoPosition > 2.0 && 
+                                   isPlaying;
+        // ✅ CRITICAL: Don't sync if seeking has been failing repeatedly
+        // This prevents infinite sync loops when seeking doesn't work on the device
+        const seekIsBroken = seekFailureCount.current >= MAX_SEEK_FAILURES;
+        // ✅ CRITICAL: Don't sync if video is actually playing and advancing (even if not at exact position)
+        // This prevents interrupting natural playback when seeking doesn't work
+        // Video is "playing naturally" if it's playing, has advanced past 0.5s, and is within reasonable range of master
+        // OR if video is playing from start (position 0-2s) and we've had seek failures - let it play naturally
+        const isVideoPlayingNaturally = (isPlaying && 
+                                       currentVideoPosition > 0.5 && 
+                                       currentVideoPosition < data.currentTime + 10.0 && // Within 10s of master
+                                       currentVideoPosition > data.currentTime - 2.0) || // Not too far ahead (within 2s behind is OK)
+                                       (isPlaying && 
+                                        currentVideoPosition < 2.0 && 
+                                        seekFailureCount.current >= MAX_SEEK_FAILURES); // If seeking is broken and video is playing from start, let it play
+        // ✅ NEW FIX: Increase drift threshold to 0.5s to reduce unnecessary syncs that cause pause/play flicker
+        // Only sync for drift if it's significant enough to warrant seeking
+        // ✅ CRITICAL: Only allow sync if seeking isn't broken OR if it's an ad change/initial sync (critical syncs)
+        // ✅ CRITICAL: Don't sync if video is playing naturally (unless drift is very large > 5s)
+        const shouldSyncPosition = !isStaleData && !isPosition0Restart && !isInSyncCooldown && 
+                                   (!seekIsBroken || adChanged || isInitialSync) && // Allow critical syncs even if seeking is broken
+                                   (!isVideoPlayingNaturally || positionDrift > 5.0 || adChanged || isInitialSync) && // Don't interrupt natural playback unless drift is huge
+                                   (adChanged || isInitialSync || (positionDrift > 0.5 && !wasBuffering)); // Allow drift sync only when not in cooldown, not buffering, AND drift > 0.5s
+        
+        // ✅ NEW: Log when sync is blocked by cooldown or stale data to help debug the seek loop issue
+        if (isStaleData) {
+          console.log(`⏸️ [Slave Sync] BLOCKED: Stale position 0 data detected - currentPos: ${currentVideoPosition?.toFixed(1)}s, lastNonZeroSync: ${lastNonZeroSyncPosition.current?.toFixed(1)}s, isPlaying: ${isPlaying}`);
+        }
+        if (isPosition0Restart) {
+          console.log(`⏸️ [Slave Sync] BLOCKED: Position 0 restart prevented - currentPos: ${currentVideoPosition?.toFixed(1)}s, isPlaying: ${isPlaying}, adChanged: ${adChanged}`);
+        }
+        if (seekIsBroken && !adChanged && !isInitialSync) {
+          console.log(`⏸️ [Slave Sync] BLOCKED: Seeking is broken (${seekFailureCount.current} failures) - skipping drift correction to prevent loops`);
+        }
+        if (isVideoPlayingNaturally && positionDrift <= 5.0 && !adChanged && !isInitialSync) {
+          console.log(`⏸️ [Slave Sync] BLOCKED: Video playing naturally at ${currentVideoPosition?.toFixed(1)}s (drift ${positionDrift.toFixed(1)}s) - not interrupting playback`);
+        }
+        if (!isStaleData && !isPosition0Restart && !seekIsBroken && isInSyncCooldown && positionDrift > 0.5 && !adChanged && !isInitialSync) {
+          console.log(`⏸️ [Slave Sync] Skipping drift correction (${positionDrift.toFixed(1)}s) - in sync cooldown (${(timeSinceLastSync / 1000).toFixed(1)}s ago, need ${(SYNC_COMMAND_COOLDOWN / 1000).toFixed(1)}s)`);
+        }
         
         if (shouldSyncPosition) {
           if (isInitialSync) {
             console.log(`📺 [Slave Initial Sync] First sync from master - syncing to ad ${data.adIndex} at position ${data.currentTime?.toFixed(1)}s`);
             setHasReceivedInitialSync(true);
-          } else if (positionDrift > 1.5) {
+          } else if (positionDrift > 0.5) {
             console.log(`📺 [Slave Drift Correction] Position drift detected (${positionDrift.toFixed(1)}s) - syncing to master position ${data.currentTime?.toFixed(1)}s`);
           } else {
             console.log(`📺 [Slave Sync] Switching to ad ${data.adIndex} and syncing to position ${data.currentTime?.toFixed(1)}s`);
@@ -682,6 +1091,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           setCurrentAdIndex(data.adIndex);
           setLastSyncPosition(data.currentTime);
           setLastSyncTime(Date.now());
+          // ✅ FIX: Reset lastNonZeroSyncPosition when ad changes (new video starting)
+          if (adChanged) {
+            lastNonZeroSyncPosition.current = null;
+            // ✅ CRITICAL: Reset seek failure count on ad change - new video might work better
+            seekFailureCount.current = 0;
+            console.log(`🔄 [Slave Sync] Ad changed - resetting seek failure count`);
+          }
           
           // ⏳ Wait for slave video to finish buffering before syncing position
           if (data.currentTime !== undefined && videoRef.current) {
@@ -694,17 +1110,132 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 try {
                   const status = await videoRef.current?.getStatusAsync();
                   
-                  if (status && status.isLoaded && !status.isBuffering) {
-                    // Video is ready! Now sync position
-                    console.log(`✅ [Slave Sync] Video buffered and ready (took ${attempts * 100}ms), syncing to ${data.currentTime?.toFixed(1)}s`);
-                    await videoRef.current?.setPositionAsync(data.currentTime * 1000);
-                    setCurrentVideoPosition(data.currentTime); // Update tracked position
+                  if (status && status.isLoaded) {
+                    // Video is loaded! Sync position even if still buffering
+                    console.log(`✅ [Slave Sync] Video loaded (took ${attempts * 100}ms), syncing to ${data.currentTime?.toFixed(1)}s`);
                     
-                    // Ensure video starts playing
-                    if (!data.isPaused) {
-                      await videoRef.current?.playAsync();
+                    // ✅ CRITICAL FIX: If we've failed too many seeks, don't try again - let video play naturally
+                    if (seekFailureCount.current >= MAX_SEEK_FAILURES) {
+                      console.warn(`⚠️ [Slave Sync] Too many seek failures (${seekFailureCount.current}), skipping sync - letting video play naturally`);
+                      // Reset failure count after 10 seconds to allow retry
+                      setTimeout(() => {
+                        if (seekFailureCount.current >= MAX_SEEK_FAILURES) {
+                          console.log(`🔄 [Slave Sync] Resetting seek failure count after timeout`);
+                          seekFailureCount.current = 0;
+                        }
+                      }, 10000);
+                      break;
                     }
-                    break;
+                    
+                    try {
+                      // ✅ CRITICAL FIX: Pause video before seeking (some devices need this)
+                      const wasPlaying = status.isPlaying;
+                      if (wasPlaying && videoRef.current) {
+                        await videoRef.current.pauseAsync().catch(() => {}); // Ignore errors
+                        await new Promise(resolve => setTimeout(resolve, 100)); // Brief pause
+                      }
+                      
+                      // Perform the seek
+                      await videoRef.current?.setPositionAsync(data.currentTime * 1000);
+                      
+                      // ✅ CRITICAL FIX: Wait longer and verify multiple times
+                      // Some devices need more time for seek to complete
+                      let seekSuccessful = false;
+                      for (let verifyAttempt = 0; verifyAttempt < 5; verifyAttempt++) {
+                        await new Promise(resolve => setTimeout(resolve, 300)); // Wait 300ms between checks
+                        
+                        const verifyStatus = await videoRef.current?.getStatusAsync();
+                        if (verifyStatus && verifyStatus.isLoaded) {
+                          const actualPosition = verifyStatus.positionMillis ? verifyStatus.positionMillis / 1000 : 0;
+                          const expectedPosition = data.currentTime;
+                          const positionError = Math.abs(actualPosition - expectedPosition);
+                          
+                          if (positionError < 1.5) {
+                            // Position is close enough - seek worked!
+                            console.log(`✅ [Slave Sync] Position verified after ${verifyAttempt + 1} attempts: ${actualPosition.toFixed(1)}s (expected ${expectedPosition.toFixed(1)}s, error ${positionError.toFixed(2)}s)`);
+                            setCurrentVideoPosition(actualPosition);
+                            if (actualPosition > 0) {
+                              lastNonZeroSyncPosition.current = actualPosition;
+                            }
+                            seekFailureCount.current = 0; // Reset failure count on success
+                            lastSuccessfulSeekTime.current = Date.now();
+                            seekSuccessful = true;
+                            break;
+                          } else if (verifyAttempt === 4) {
+                            // Last attempt failed
+                            console.warn(`⚠️ [Slave Sync] Position mismatch after 5 attempts: got ${actualPosition.toFixed(1)}s, expected ${expectedPosition.toFixed(1)}s`);
+                            seekFailureCount.current++;
+                            
+                            // If position is still 0, it might be a fundamental issue - don't update position tracking
+                            if (actualPosition < 0.5) {
+                              console.warn(`⚠️ [Slave Sync] Video stuck at position 0 - seek may not be working on this device`);
+                              // Don't update currentVideoPosition - let it stay at what it was
+                            } else {
+                              // Position changed but not to target - update anyway
+                              setCurrentVideoPosition(actualPosition);
+                            }
+                          }
+                        }
+                      }
+                      
+                      // If seek failed, try one more aggressive approach: pause, seek, wait longer, then play
+                      if (!seekSuccessful && seekFailureCount.current < MAX_SEEK_FAILURES) {
+                        console.log(`🔄 [Slave Sync] Attempting aggressive seek recovery...`);
+                        if (videoRef.current) {
+                          await videoRef.current.pauseAsync().catch(() => {});
+                          await new Promise(resolve => setTimeout(resolve, 200));
+                          await videoRef.current.setPositionAsync(data.currentTime * 1000);
+                          await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+                          
+                          const finalStatus = await videoRef.current?.getStatusAsync();
+                          if (finalStatus && finalStatus.isLoaded && finalStatus.positionMillis) {
+                            const finalPosition = finalStatus.positionMillis / 1000;
+                            const finalError = Math.abs(finalPosition - data.currentTime);
+                            if (finalError < 2.0) {
+                              console.log(`✅ [Slave Sync] Aggressive seek recovery successful: ${finalPosition.toFixed(1)}s`);
+                              setCurrentVideoPosition(finalPosition);
+                              if (finalPosition > 0) {
+                                lastNonZeroSyncPosition.current = finalPosition;
+                              }
+                              seekFailureCount.current = 0;
+                              lastSuccessfulSeekTime.current = Date.now();
+                              seekSuccessful = true;
+                            }
+                          }
+                        }
+                      }
+                      
+                      lastSyncCommandTime.current = Date.now(); // ✅ FIX: Track sync time to prevent immediate re-sync during buffering
+                      
+                      // ✅ FIX: Always try to play if master is playing, even if buffering
+                      // This ensures Slot 2 starts playing as soon as possible
+                      // ✅ FIX: Don't throttle on ad changes or initial sync - immediate playback needed
+                      if (!data.isPaused) {
+                        const now = Date.now();
+                        const skipThrottle = adChanged || isInitialSync; // No throttle on ad changes or initial sync
+                        if (skipThrottle || now - lastPlayCommandTime.current >= PLAY_COMMAND_THROTTLE) {
+                          lastPlayCommandTime.current = now;
+                          await videoRef.current?.playAsync();
+                          console.log(`▶️ [Slave Sync] Video play command sent${skipThrottle ? ' (immediate)' : ''}`);
+                          
+                          // ✅ CRITICAL FIX: Start persistent playback enforcer for Slot 2 after ANY seek/sync
+                          // This ensures video actually starts playing and doesn't get stuck at position 0
+                          if (slotNumber === 2) {
+                            console.log(`🔄 [Slave Sync] Starting playback enforcer for ad ${data.adIndex} (after sync)`);
+                            startPlaybackEnforcer(data.adIndex);
+                          }
+                        } else {
+                          console.log(`⏭️ [Slave Sync] Skipping play command (throttled)`);
+                        }
+                      }
+                    } catch (syncErr) {
+                      console.warn(`⚠️ [Slave Sync] Error syncing position:`, syncErr);
+                    }
+                    
+                    // If video is not buffering, we're done
+                    if (!status.isBuffering) {
+                      break;
+                    }
                   }
                   
                   // Still buffering, wait 100ms and check again
@@ -722,11 +1253,67 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               
               if (attempts >= maxAttempts) {
                 console.warn(`⚠️ [Slave Sync] Buffering timeout after ${maxAttempts * 100}ms, syncing anyway`);
+                
+                // Skip if too many failures
+                if (seekFailureCount.current >= MAX_SEEK_FAILURES) {
+                  console.warn(`⚠️ [Slave Sync] Skipping timeout sync - too many seek failures`);
+                  return; // Exit the async function
+                }
+                
                 try {
+                  // Pause before seeking
+                  if (videoRef.current) {
+                    await videoRef.current.pauseAsync().catch(() => {});
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                  }
+                  
                   await videoRef.current?.setPositionAsync(data.currentTime * 1000);
-                  setCurrentVideoPosition(data.currentTime);
+                  
+                  // ✅ CRITICAL FIX: Wait longer and verify after timeout seek
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  const timeoutStatus = await videoRef.current?.getStatusAsync();
+                  if (timeoutStatus && timeoutStatus.isLoaded && timeoutStatus.positionMillis) {
+                    const actualPosition = timeoutStatus.positionMillis / 1000;
+                    const positionError = Math.abs(actualPosition - data.currentTime);
+                    
+                    if (positionError < 2.0) {
+                      setCurrentVideoPosition(actualPosition);
+                      if (actualPosition > 0) {
+                        lastNonZeroSyncPosition.current = actualPosition;
+                      }
+                      seekFailureCount.current = 0;
+                      lastSuccessfulSeekTime.current = Date.now();
+                      console.log(`✅ [Slave Sync] Timeout sync verified: position ${actualPosition.toFixed(1)}s`);
+                    } else {
+                      console.warn(`⚠️ [Slave Sync] Timeout sync failed: got ${actualPosition.toFixed(1)}s, expected ${data.currentTime.toFixed(1)}s`);
+                      seekFailureCount.current++;
+                      // Don't update position if it's still wrong
+                    }
+                  } else {
+                    seekFailureCount.current++;
+                  }
+                  lastSyncCommandTime.current = Date.now(); // ✅ FIX: Track sync time to prevent immediate re-sync during buffering
+                  
+                  // ✅ FIX: Try to play even on timeout - don't throttle on ad changes or initial sync
+                  if (!data.isPaused && videoRef.current) {
+                    const now = Date.now();
+                    const skipThrottle = adChanged || isInitialSync; // No throttle on ad changes or initial sync
+                    if (skipThrottle || now - lastPlayCommandTime.current >= PLAY_COMMAND_THROTTLE) {
+                      lastPlayCommandTime.current = now;
+                      await videoRef.current?.playAsync();
+                      console.log(`▶️ [Slave Sync] Video play command sent (timeout)${skipThrottle ? ' (immediate)' : ''}`);
+                      
+                      // ✅ CRITICAL FIX: Start persistent playback enforcer for Slot 2 after timeout sync
+                      if (slotNumber === 2) {
+                        console.log(`🔄 [Slave Sync] Starting playback enforcer for ad ${data.adIndex} (after timeout)`);
+                        startPlaybackEnforcer(data.adIndex);
+                      }
+                    } else {
+                      console.log(`⏭️ [Slave Sync] Skipping play command on timeout (throttled)`);
+                    }
+                  }
                 } catch (err) {
-                  // Ignore
+                  console.warn(`⚠️ [Slave Sync] Error on timeout sync:`, err);
                 }
               }
             };
@@ -737,20 +1324,75 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           }
         }
         
-        // ✅ Update playback state (pause/resume)
-        if (data.isPaused !== undefined && data.isPaused !== isPaused) {
-          setIsPaused(data.isPaused);
+        // ✅ FIX: Update playback state (pause/resume) - but throttle to prevent rapid toggling
+        // Only update if state actually changed and enough time has passed
+        // Also skip if slot sync is currently handling it (to prevent conflicts)
+        if (data.isPaused !== undefined && !isSyncingSlot2.current) {
+          const now = Date.now();
+          const stateChanged = data.isPaused !== isPaused;
+          const enoughTimePassed = now - lastPauseStateUpdate.current >= PAUSE_STATE_UPDATE_THROTTLE;
           
-          if (videoRef.current) {
-            if (data.isPaused) {
-              videoRef.current.pauseAsync().catch(err => {
-                // Ignore pause errors
-              });
-            } else {
+          // Only update if state changed AND enough time has passed (throttle)
+          if (stateChanged && enoughTimePassed) {
+            const wasPaused = isPaused;
+            console.log(`📺 [Display Data] Updating pause state: ${isPaused} -> ${data.isPaused}`);
+            setIsPaused(data.isPaused);
+            lastPauseStateUpdate.current = now;
+            
+            // ✅ NEW: Update shouldBePlayingRef to control playback enforcer
+            if (slotNumber === 2) {
+              shouldBePlayingRef.current = !data.isPaused;
+              if (data.isPaused) {
+                // Stop enforcer when paused
+                stopPlaybackEnforcer();
+              }
+            }
+            
+            // ✅ FIX: Always try to play/pause immediately, don't wait for state update
+            // This ensures Slot 2 responds quickly to master's state changes
+            if (videoRef.current) {
+              if (data.isPaused) {
+                videoRef.current.pauseAsync().catch(err => {
+                  console.warn('⚠️ [Slave Sync] Error pausing video:', err);
+                });
+              } else {
+                // ✅ FIX: Force play immediately, especially if video was paused
+                // This fixes slow playback issues
+                // ✅ FIX: Don't throttle on ad changes - immediate playback needed
+                const playNow = Date.now();
+                const skipThrottle = adChanged; // No throttle on ad changes
+                if (skipThrottle || playNow - lastPlayCommandTime.current >= PLAY_COMMAND_THROTTLE) {
+                  lastPlayCommandTime.current = playNow;
+                  videoRef.current.playAsync().catch(err => {
+                    console.warn('⚠️ [Slave Sync] Error playing video:', err);
+                  });
+                } else {
+                  console.log(`⏭️ [Slave Sync] Skipping play command (throttled)`);
+                }
+                
+                // If video was paused and now should play, log it
+                if (wasPaused && !data.isPaused) {
+                  console.log(`▶️ [Slave Sync] Resuming playback - master is playing`);
+                }
+              }
+            }
+          } else if (!stateChanged && !data.isPaused && !isPaused && videoRef.current) {
+            // State hasn't changed and both should be playing - ensure video is actually playing
+            // Only do this occasionally to avoid spamming play commands
+            if (Math.random() < 0.1) { // Only 10% of the time
               videoRef.current.playAsync().catch(err => {
-                // Ignore play errors
+                // Ignore - video might already be playing
               });
             }
+          }
+        } else if (!isPaused && videoRef.current && !isSyncingSlot2.current) {
+          // ✅ FIX: If pause state not provided but we're not paused, ensure video is playing
+          // This handles cases where display data doesn't include pause state
+          // Only do this occasionally to avoid spamming play commands
+          if (Math.random() < 0.1) { // Only 10% of the time
+            videoRef.current.playAsync().catch(err => {
+              // Ignore - video might already be playing
+            });
           }
         }
       }
@@ -778,8 +1420,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   };
 
-  // Handle unlock command from server
-  const handleUnlock = (message: any) => {
+  // Handle unlock command from server - use useCallback to ensure latest onLockStateChange is used
+  const handleUnlock = useCallback((message: any) => {
     try {
       console.log('🔓 [AdPlayer] Received unlock command:', message);
       console.log('🔓 [AdPlayer] Current isLocked state:', isLocked);
@@ -793,7 +1435,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling unlock:', error);
     }
-  };
+  }, [isLocked, onLockStateChange]);
 
   // Handle 8-hour completion stop command from server
   const handleStop8Hours = async (message: any) => {
@@ -2414,6 +3056,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           setWaitingForMaster(false);
           setIsMaster(true);
           
+          // ✅ CRITICAL: Resume playback when entering failover mode
+          // Slot 2 should continue playing as master, not stay paused
+          setIsPaused(false);
+          
+          // ✅ NEW: Enable broadcasting for Slot 2 in failover mode
+          playbackWebSocketService.setSlaveMode(false);
+          
           // Fetch ads now that we're in failover mode
           const fetchAllAds = async () => {
             await Promise.all([
@@ -2433,6 +3082,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           setMasterConnected(false);
           setWaitingForMaster(false);
           setIsMaster(true);
+          
+          // ✅ CRITICAL: Resume playback when entering failover mode
+          // Slot 2 should continue playing as master, not stay paused
+          setIsPaused(false);
+          
+          // ✅ NEW: Enable broadcasting for Slot 2 in failover mode
+          playbackWebSocketService.setSlaveMode(false);
           
           // Fetch ads now that we're in failover mode
           const fetchAllAds = async () => {
@@ -2467,6 +3123,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         setIsMaster(false);
         setMasterConnected(true);
         setWaitingForMaster(false);
+        
+        // ✅ NEW: Disable broadcasting for Slot 2 when returning to slave mode
+        playbackWebSocketService.setSlaveMode(true);
       }
     }
   }, [slotNumber, lastMasterUpdate, isMaster, masterConnected]);
@@ -2517,9 +3176,16 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
     
     isHandlingVideoEnd.current = true;
-    console.log(`🎬 handleVideoEnd called - currentAdIndex: ${currentAdIndex}, total ads: ${ads.length}`);
     
     try {
+      // ✅ FIX: Capture current state values at the start to avoid stale closures
+      const currentIndex = currentAdIndex;
+      const currentRepeat = companyAdRepeatIndex;
+      const currentAdsList = ads;
+      const currentCompanyAdsList = companyAds;
+      
+      console.log(`🎬 handleVideoEnd called - currentAdIndex: ${currentIndex}, total ads: ${currentAdsList.length}`);
+      
       // End tracking for current ad
       await endAdPlayback();
       
@@ -2534,21 +3200,34 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // Reset video started flag for next ad
       setVideoActuallyStarted(false);
-    
-    // ✅ NEW: If in company ads only mode (after 8 hours), only show company ads
-    if (isCompanyAdsOnlyMode) {
-      console.log('🏢 [Company Ads Only Mode] Only showing company ads');
-      if (companyAds.length > 0) {
-        // Cycle through company ads
-        const selectedCompanyAd = selectWeightedCompanyAd(companyAds);
-        if (selectedCompanyAd) {
-          setCurrentAdIndex(-1); // -1 indicates company ad
-          setCompanyAdRepeatIndex(0);
-          setTimeout(() => {
-            setIsTransitioning(false);
-            isHandlingVideoEnd.current = false;
+      
+      // Helper function to move to next ad and clear guard
+      const moveToNextAd = (nextIndex: number, nextRepeat: number = 0) => {
+        setTimeout(() => {
+          setCurrentAdIndex(nextIndex);
+          setCompanyAdRepeatIndex(nextRepeat);
+          setIsTransitioning(false);
+          isHandlingVideoEnd.current = false;
+          console.log(`➡️ Moving to ad index: ${nextIndex}, repeat: ${nextRepeat}`);
+        }, 100);
+      };
+      
+      // ✅ NEW: If in company ads only mode (after 8 hours), only show company ads
+      if (isCompanyAdsOnlyMode) {
+        console.log('🏢 [Company Ads Only Mode] Only showing company ads');
+        if (currentCompanyAdsList.length > 0) {
+          // Cycle through company ads
+          const selectedCompanyAd = selectWeightedCompanyAd(currentCompanyAdsList);
+          if (selectedCompanyAd) {
+            moveToNextAd(-1, 0);
             console.log(`🏢 [Company Ads Only Mode] Next company ad: ${selectedCompanyAd.title}`);
-          }, 100);
+          } else {
+            console.log('⚠️ [Company Ads Only Mode] No company ads available');
+            setTimeout(() => {
+              setIsTransitioning(false);
+              isHandlingVideoEnd.current = false;
+            }, 100);
+          }
         } else {
           console.log('⚠️ [Company Ads Only Mode] No company ads available');
           setTimeout(() => {
@@ -2556,128 +3235,88 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             isHandlingVideoEnd.current = false;
           }, 100);
         }
-      } else {
-        console.log('⚠️ [Company Ads Only Mode] No company ads available');
-        setTimeout(() => {
-          setIsTransitioning(false);
-          isHandlingVideoEnd.current = false;
-        }, 100);
+        return;
       }
-      return;
-    }
-    
-    // If no user ads available, loop the company ad
-    if (ads.length === 0) {
-      console.log('🔄 No user ads available, looping company ad');
-      if (companyAds.length > 0) {
-        setCurrentAdIndex(-1); // Keep showing company ad
-      } else {
-        console.log('⚠️ No company ads available either');
-      }
-      // Clear transitioning state to allow company ad to loop
-      setTimeout(() => {
-        setIsTransitioning(false);
-        // Clear guard after state update
-        isHandlingVideoEnd.current = false;
-      }, 100);
-      return;
-    }
-    
-    // Calculate how many total slots we need (min 5)
-    const TARGET_SLOTS = 5;
-    const totalAdsNeeded = Math.max(TARGET_SLOTS, ads.length);
-    
-    // ✅ DEBUG: Log current ad state
-    const userAdsInRotation = ads.filter((ad: any) => !ad.isCompanyAd).length;
-    const companyAdsInRotation = ads.filter((ad: any) => ad.isCompanyAd).length;
-    console.log(`🔄 [Video End] Current rotation: ${ads.length} total ads (${userAdsInRotation} user, ${companyAdsInRotation} company), TARGET: ${TARGET_SLOTS} slots`);
-    
-    // If slots are not full (less than 5 ads), fill with company ads
-    if (ads.length < TARGET_SLOTS && companyAds.length > 0) {
-      const companyAdsNeeded = TARGET_SLOTS - ads.length;
       
-      console.log(`🏢 [Company Ad Filling] ${ads.length} ads in rotation (${userAdsInRotation} user, ${companyAdsInRotation} company) + ${companyAdsNeeded} company ad repeats = ${TARGET_SLOTS} total slots`);
-      
-      // Create rotation pattern: user ads first, then company ad repeated to fill to 5 slots
-      // Example: 3 user ads → Ad1, Ad2, Ad3, CompanyAd, CompanyAd (company ad plays twice)
-      
-      // If currently showing a user ad
-      if (currentAdIndex >= 0) {
-        // Move to next ad
-        if (currentAdIndex < ads.length - 1) {
-          setTimeout(() => {
-            setCurrentAdIndex(currentAdIndex + 1);
-            setIsTransitioning(false); // Clear transitioning state
-            isHandlingVideoEnd.current = false; // Clear guard
-            console.log(`➡️ Next user ad: ${currentAdIndex + 1}/${ads.length}`);
-          }, 100);
+      // If no user ads available, loop the company ad
+      if (currentAdsList.length === 0) {
+        console.log('🔄 No user ads available, looping company ad');
+        if (currentCompanyAdsList.length > 0) {
+          moveToNextAd(-1, currentRepeat);
         } else {
-          // Finished user ads, start company ad rotation (first repeat)
+          console.log('⚠️ No company ads available either');
           setTimeout(() => {
-            setCurrentAdIndex(-1);
-            setCompanyAdRepeatIndex(0);
-            setIsTransitioning(false); // Clear transitioning state
-            isHandlingVideoEnd.current = false; // Clear guard
-            console.log(`➡️ User ads complete, showing company ad repeat 1/${companyAdsNeeded}`);
+            setIsTransitioning(false);
+            isHandlingVideoEnd.current = false;
           }, 100);
         }
-      } else {
-        // Currently showing company ad - check if we need more repeats
-        const currentRepeat = companyAdRepeatIndex + 1;
+        return;
+      }
+      
+      // Calculate how many total slots we need (min 5)
+      const TARGET_SLOTS = 5;
+      
+      // ✅ DEBUG: Log current ad state
+      const userAdsInRotation = currentAdsList.filter((ad: any) => !ad.isCompanyAd).length;
+      const companyAdsInRotation = currentAdsList.filter((ad: any) => ad.isCompanyAd).length;
+      console.log(`🔄 [Video End] Current rotation: ${currentAdsList.length} total ads (${userAdsInRotation} user, ${companyAdsInRotation} company), TARGET: ${TARGET_SLOTS} slots`);
+      
+      // ✅ FIX: If slots are not full (less than 5 ads), fill with company ads
+      if (currentAdsList.length < TARGET_SLOTS && currentCompanyAdsList.length > 0) {
+        const companyAdsNeeded = TARGET_SLOTS - currentAdsList.length;
         
-        if (currentRepeat < companyAdsNeeded) {
-          // Play company ad again (need small delay to allow video to unmount/remount)
-          setTimeout(() => {
-            setCompanyAdRepeatIndex(currentRepeat);
-            setCurrentAdIndex(-1); // Keep showing company ad
-            setIsTransitioning(false); // Clear transitioning state
-            isHandlingVideoEnd.current = false; // Clear guard
-            console.log(`➡️ Company ad repeat ${currentRepeat + 1}/${companyAdsNeeded}`);
-          }, 100);
+        console.log(`🏢 [Company Ad Filling] ${currentAdsList.length} ads in rotation (${userAdsInRotation} user, ${companyAdsInRotation} company) + ${companyAdsNeeded} company ad repeats = ${TARGET_SLOTS} total slots`);
+        
+        // If currently showing a user ad
+        if (currentIndex >= 0) {
+          // Move to next user ad
+          if (currentIndex < currentAdsList.length - 1) {
+            moveToNextAd(currentIndex + 1, 0);
+            console.log(`➡️ Next user ad: ${currentIndex + 1}/${currentAdsList.length}`);
+          } else {
+            // Finished user ads, start company ad rotation (first repeat)
+            moveToNextAd(-1, 0);
+            console.log(`➡️ User ads complete, showing company ad repeat 1/${companyAdsNeeded}`);
+          }
         } else {
-          // Finished all company ad repeats, go back to first user ad
-          setTimeout(() => {
-            setCurrentAdIndex(0);
-            setCompanyAdRepeatIndex(0);
-            setIsTransitioning(false); // Clear transitioning state
-            isHandlingVideoEnd.current = false; // Clear guard
+          // Currently showing company ad - check if we need more repeats
+          const nextRepeat = currentRepeat + 1;
+          
+          if (nextRepeat < companyAdsNeeded) {
+            // Play company ad again
+            moveToNextAd(-1, nextRepeat);
+            console.log(`➡️ Company ad repeat ${nextRepeat + 1}/${companyAdsNeeded}`);
+          } else {
+            // Finished all company ad repeats, go back to first user ad
+            moveToNextAd(0, 0);
             console.log(`🔄 Company ad rotation complete (played ${companyAdsNeeded}x), looping back to first user ad`);
-          }, 100);
+          }
+        }
+      } else if (currentAdsList.length >= TARGET_SLOTS) {
+        // ✅ FIX: All 5 slots are full: cycle through ALL user ads one by one
+        // Use captured currentIndex to ensure we get the correct next index
+        const nextIndex = currentIndex < currentAdsList.length - 1 ? currentIndex + 1 : 0;
+        moveToNextAd(nextIndex, 0);
+        if (nextIndex === 0) {
+          console.log(`🔄 Looping back to first ad (completed all ${currentAdsList.length} ads)`);
+        } else {
+          console.log(`➡️ Next ad: ${nextIndex + 1}/${currentAdsList.length}`);
+        }
+      } else {
+        // No company ads available to fill, just loop user ads
+        const nextIndex = currentIndex < currentAdsList.length - 1 ? currentIndex + 1 : 0;
+        moveToNextAd(nextIndex, 0);
+        if (nextIndex === 0) {
+          console.log(`🔄 Looping back to first ad (no company ads available for filling)`);
+        } else {
+          console.log(`➡️ Next ad: ${nextIndex + 1}/${currentAdsList.length} (no company ads to fill)`);
         }
       }
-    } else if (ads.length >= TARGET_SLOTS) {
-      // All 5 slots are full: cycle through user ads only
-      setTimeout(() => {
-        if (currentAdIndex < ads.length - 1) {
-          setCurrentAdIndex(currentAdIndex + 1);
-          console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length}`);
-        } else {
-          setCurrentAdIndex(0); // Loop back to first ad
-          console.log(`🔄 Looping back to first ad (completed ${ads.length} ads)`);
-        }
-        // Clear transitioning state to allow next ad to play
-        setIsTransitioning(false);
-        isHandlingVideoEnd.current = false; // Clear guard
-      }, 100);
-    } else {
-      // No company ads available to fill, just loop user ads
-      setTimeout(() => {
-        if (currentAdIndex < ads.length - 1) {
-          setCurrentAdIndex(currentAdIndex + 1);
-          console.log(`➡️ Next ad: ${currentAdIndex + 1}/${ads.length} (no company ads to fill)`);
-        } else {
-          setCurrentAdIndex(0);
-          console.log(`🔄 Looping back to first ad (no company ads available for filling)`);
-        }
-        // Clear transitioning state to allow next ad to play
-        setIsTransitioning(false);
-        isHandlingVideoEnd.current = false; // Clear guard
-      }, 100);
-    }
     } catch (error) {
       console.error('❌ Error in handleVideoEnd:', error);
       // Clear guard on error
       isHandlingVideoEnd.current = false;
+      setIsTransitioning(false);
     }
   };
 
@@ -2842,7 +3481,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     );
   }
 
-  if (error || !currentAd || ads.length === 0) {
+  // ✅ FIX: Slot 2 in slave mode should not show error if waiting for master or receiving display data
+  // Only show error if Slot 2 is in failover mode (isMaster = true) or if it's Slot 1
+  const shouldShowError = (error || !currentAd || ads.length === 0) && 
+                          (slotNumber === 1 || (slotNumber === 2 && isMaster) || 
+                           (slotNumber === 2 && !masterConnected && !waitingForMaster));
+  
+  if (shouldShowError) {
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
@@ -2927,7 +3572,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           style={isLocked ? styles.fullscreenVideo : styles.video}
           useNativeControls={false}
           resizeMode={isLocked ? ResizeMode.CONTAIN : ResizeMode.COVER}
-          shouldPlay={!isPaused}
+          shouldPlay={!isPaused && (slotNumber === 1 || (slotNumber === 2 && (isMaster || (masterConnected && !waitingForMaster && hasReceivedInitialSync))))}
           isLooping={false}
           progressUpdateIntervalMillis={100} // ⚡ Update every 100ms for smooth master/slave sync
           onPlaybackStatusUpdate={(status) => {
@@ -2940,28 +3585,87 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               }
               
               // Track current video position for drift detection (both master and slave)
+              // ✅ CRITICAL FIX: For Slot 2, don't update position if we just synced recently
+              // This prevents the position from being reset to 0 after a successful sync
               if (status.positionMillis !== undefined) {
-                setCurrentVideoPosition(status.positionMillis / 1000);
+                const newPosition = status.positionMillis / 1000;
+                const timeSinceLastSync = Date.now() - lastSyncCommandTime.current;
+                const timeSinceSuccessfulSeek = Date.now() - lastSuccessfulSeekTime.current;
+                
+                // ✅ IMPROVED: Only ignore position updates if we recently had a successful seek
+                // If seeks are failing, we need to accept the actual position
+                let shouldUpdatePosition = true;
+                if (slotNumber === 2 && !isMaster && timeSinceLastSync < 300 && timeSinceSuccessfulSeek < 1500) {
+                  const lastSyncPos = lastSyncPosition || 0;
+                  // Only ignore if position is near 0 AND we successfully synced to > 2s AND video is not playing
+                  // If video is playing, we should accept the position even if it's not what we expected
+                  if (newPosition < 0.5 && lastSyncPos > 2.0 && !status.isPlaying) {
+                    // Position is near 0 but we just successfully synced to a higher position - ignore this update
+                    console.log(`⏸️ [Position Tracking] Ignoring position update: ${newPosition.toFixed(1)}s (just synced to ${lastSyncPos.toFixed(1)}s ${timeSinceLastSync}ms ago, not playing)`);
+                    shouldUpdatePosition = false; // Skip this position update
+                  }
+                }
+                
+                // ✅ CRITICAL: If we've had many seek failures, always accept the actual position
+                // This prevents getting stuck when seeking doesn't work
+                if (seekFailureCount.current >= MAX_SEEK_FAILURES) {
+                  shouldUpdatePosition = true; // Force update to accept reality
+                }
+                
+                // ✅ CRITICAL: If video is actually playing and position is advancing, always accept it
+                // This prevents blocking position updates when video is working naturally
+                if (status.isPlaying && newPosition > 0.1) {
+                  shouldUpdatePosition = true; // Video is playing - accept the position
+                }
+                
+                if (shouldUpdatePosition) {
+                  setCurrentVideoPosition(newPosition);
+                }
               }
               
               // If this is the master device, broadcast display data to other slots for duplication
               if (isMaster) {
-                const displayData = {
-                  currentTime: status.positionMillis / 1000, // Convert to seconds
-                  isPaused: !status.isPlaying,
-                  isBuffering: status.isBuffering || false, // ✅ NEW: Include buffering state
-                  adIndex: currentAdIndex,
-                  timestamp: new Date().toISOString(),
-                  // ✨ NEW: Include ad details for admin monitoring
-                  adDetails: currentAd ? {
-                    adId: currentAd.adId,
-                    adTitle: currentAd.adTitle,
-                    adDuration: status.durationMillis ? status.durationMillis / 1000 : currentAd.adDuration,
-                    isCompanyAd: currentAd.isCompanyAd || false
-                  } : null
-                };
+                // ✅ FIX: Detect ad changes to force immediate display data broadcast
+                // This ensures Slot 2 gets the new ad info immediately without waiting for throttle
+                const adChanged = lastBroadcastAdIndex.current !== currentAdIndex;
                 
-                playbackWebSocketService.sendDisplayData(displayData);
+                // ✅ FIX: Throttle display data to prevent flooding Slot 2 with rapid updates
+                // This prevents Slot 2 from constantly seeking/playing, which causes pause/play loops
+                // BUT: Always send immediately on ad changes to prevent Slot 2 from getting stuck
+                const now = Date.now();
+                const timeSinceLastBroadcast = now - lastDisplayDataTime.current;
+                const shouldSendDisplayData = adChanged || timeSinceLastBroadcast >= DISPLAY_DATA_THROTTLE;
+                
+                if (shouldSendDisplayData) {
+                  lastDisplayDataTime.current = now;
+                  lastBroadcastAdIndex.current = currentAdIndex; // Update last broadcast ad index
+                  
+                  const displayData = {
+                    currentTime: status.positionMillis / 1000, // Convert to seconds
+                    isPaused: !status.isPlaying,
+                    isBuffering: status.isBuffering || false, // ✅ NEW: Include buffering state
+                    adIndex: currentAdIndex,
+                    timestamp: new Date().toISOString(),
+                    // ✨ NEW: Include ad details for admin monitoring
+                    adDetails: currentAd ? {
+                      adId: currentAd.adId,
+                      adTitle: currentAd.adTitle,
+                      adDuration: status.durationMillis ? status.durationMillis / 1000 : (currentAd.duration || 0),
+                      isCompanyAd: false // This info is not in currentAd type, default to false
+                    } : null
+                  };
+                  
+                  playbackWebSocketService.sendDisplayData(displayData);
+                  
+                  if (adChanged) {
+                    console.log(`📺 [Master] Ad changed to index ${currentAdIndex} - sending display data immediately (bypassing throttle)`);
+                  }
+                }
+              } else {
+                // 🔍 DEBUG: Log why we're not sending display data (only log occasionally to reduce noise)
+                if (Math.random() < 0.05) { // Log ~5% of the time
+                  console.log(`⏭️ [Display Data] Not sending - isMaster: ${isMaster}, slotNumber: ${slotNumber}`);
+                }
               }
               
               // ✨ Send adPlaybackUpdate to admin clients for monitoring (throttled to every 2 seconds)
@@ -2985,16 +3689,22 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               }
               
               // ✅ NEW: For Slot 2 (slave), detect buffering state changes and re-sync after buffering
+              // ✅ FIX: Only request sync if we're significantly behind (drift > 2 seconds)
+              // This prevents unnecessary sync requests that cause restarts
               if (slotNumber === 2 && !isMaster) {
                 const isCurrentlyBuffering = status.isBuffering || false;
                 
                 // Detect when buffering completes
                 if (wasBuffering && !isCurrentlyBuffering) {
-                  console.log('📺 [Slave Buffer Recovery] Buffering completed - requesting re-sync');
-                  // Request immediate sync to catch up with master after buffering
-                  setTimeout(() => {
-                    playbackWebSocketService.requestSync();
-                  }, 500); // Small delay to ensure video is ready
+                  // Check if we're significantly behind before requesting sync
+                  const currentPos = status.positionMillis ? status.positionMillis / 1000 : 0;
+                  const lastSyncPos = lastSyncPosition || 0;
+                  const drift = Math.abs(currentPos - lastSyncPos);
+                  
+                  // ✅ FIX: Don't request re-sync after buffering - this creates an infinite loop
+                  // Display data already handles drift correction every 100ms
+                  // Buffer recovery re-sync was causing Slot 2 to constantly seek and never play
+                  console.log(`📺 [Slave Buffer Recovery] Buffering completed with drift ${drift.toFixed(1)}s - display data will sync`);
                 }
                 
                 setWasBuffering(isCurrentlyBuffering);
@@ -3145,6 +3855,19 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               isPaused,
               shouldPlay: !isPaused
             });
+            // ✅ FIX: For Slot 2 in slave mode, ensure video plays when loaded if master is playing
+            // ✅ FIX: Throttle to prevent rapid play commands
+            if (slotNumber === 2 && masterConnected && !isMaster && !isPaused && videoRef.current) {
+              const now = Date.now();
+              if (now - lastPlayCommandTime.current >= PLAY_COMMAND_THROTTLE) {
+                lastPlayCommandTime.current = now;
+                console.log(`▶️ [Slave Load] Video loaded - ensuring playback for Slot 2`);
+                videoRef.current.playAsync().catch(err => {
+                  console.warn(`⚠️ [Slave Load] Error playing on load:`, err);
+                });
+              }
+            }
+            
             // Only log video events occasionally to reduce noise
             if (Math.random() < 0.3) { // Log ~30% of video events
               log.adPlayback('Video loaded', { adTitle: currentAd?.adTitle });
@@ -3182,6 +3905,19 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               isPaused,
               shouldPlay: !isPaused
             });
+            // ✅ FIX: For Slot 2 in slave mode, ensure video plays when ready if master is playing
+            // ✅ FIX: Throttle to prevent rapid play commands
+            if (slotNumber === 2 && masterConnected && !isMaster && !isPaused && videoRef.current) {
+              const now = Date.now();
+              if (now - lastPlayCommandTime.current >= PLAY_COMMAND_THROTTLE) {
+                lastPlayCommandTime.current = now;
+                console.log(`▶️ [Slave Ready] Video ready for display - ensuring playback for Slot 2`);
+                videoRef.current.playAsync().catch(err => {
+                  console.warn(`⚠️ [Slave Ready] Error playing on ready:`, err);
+                });
+              }
+            }
+            
             // Only log video events occasionally to reduce noise
             if (Math.random() < 0.3) { // Log ~30% of video events
               log.adPlayback('Video ready', { adTitle: currentAd?.adTitle });
@@ -3225,7 +3961,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           {slotNumber === 2 && masterConnected && ' 🪞 MIRROR'}
           {slotNumber === 2 && !masterConnected && !waitingForMaster && ' ⚡ FAILOVER'}
         </Text>
-        {isPaused && (
+        {/* ✅ FIX: Only show "Paused by Admin" message for Slot 1 or Slot 2 in failover mode */}
+        {/* Slot 2 in slave mode should not show this message - it's just mirroring Slot 1 */}
+        {isPaused && (slotNumber === 1 || (slotNumber === 2 && isMaster)) && (
           <View style={{ alignItems: 'center', marginTop: 10 }}>
             <Text style={[styles.adTitle, { color: '#ff6b6b', fontSize: 16, marginBottom: 10 }]}>
               🎬 Video Paused by Admin
@@ -3478,6 +4216,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 8,
     borderRadius: 6,
+    zIndex: 2000, // Ensure ad info is always visible above video, even when locked
   },
   adTitle: {
     color: 'white',
@@ -3493,6 +4232,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    zIndex: 2000, // Ensure ad counter is always visible above video, even when locked
   },
   adCounterText: {
     color: 'white',
@@ -3526,6 +4266,7 @@ const styles = StyleSheet.create({
     bottom: 10,
     left: 10,
     alignItems: 'center',
+    zIndex: 2000, // Ensure QR code is always visible above video, even when locked
   },
   qrContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

@@ -116,7 +116,7 @@ const AdminAdsControl: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(true); // Default to true since ads play automatically
-  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state
+  const [isLocked, setIsLocked] = useState(true); // Track lock/unlock state - default to locked since adsplayer starts locked
   const [devicePlayStates, setDevicePlayStates] = useState<Record<string, boolean>>({}); // Track individual device play states - default to true (playing) since ads auto-play
   const [deviceLockStates, setDeviceLockStates] = useState<Record<string, boolean>>({}); // Track individual device lock states
   const [isUserControlling, setIsUserControlling] = useState(false); // Track if user is actively controlling devices

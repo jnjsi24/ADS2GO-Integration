@@ -4,6 +4,7 @@ const http = require('http');
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 require('dotenv').config();
 
@@ -251,12 +252,27 @@ app.get('/health', (req, res) => {
   // Only return error if MongoDB is explicitly disconnected (state 0) after initial connection attempt
   const isHealthy = mongoStatus === 1 || mongoStatus === 2;
   
+  // Get memory usage
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+  const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+  const heapLimitMB = Math.round((memUsage.heapTotal + memUsage.external) / 1024 / 1024);
+  const heapUsagePercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+  
   res.status(isHealthy ? 200 : 503).json({
     success: isHealthy,
     message: isHealthy ? 'Server is healthy' : 'Server is starting up',
     timestamp: new Date().toISOString(),
     status: isHealthy ? 'OK' : 'STARTING',
     uptime: process.uptime(),
+    memory: {
+      heapUsed: `${heapUsedMB} MB`,
+      heapTotal: `${heapTotalMB} MB`,
+      rss: `${rssMB} MB`,
+      heapUsagePercent: `${heapUsagePercent}%`,
+      limit: `${heapLimitMB} MB (approx)`
+    },
     mongodb: {
       status: mongoStates[mongoStatus] || 'unknown',
       readyState: mongoStatus
@@ -273,6 +289,24 @@ async function startServer() {
     console.error('⚠️ Server will continue without GraphQL endpoint');
     // Don't throw - allow server to start for health checks
   }
+
+  // ✅ Enable compression for all responses (especially important for large analytics data)
+  // Optimized for slow connections: higher compression level, smaller threshold
+  app.use(compression({
+    level: 9, // Maximum compression for slow connections (was 6)
+    threshold: 512, // Compress responses larger than 512 bytes (was 1KB default)
+    filter: (req, res) => {
+      // Compress all responses except if explicitly disabled
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      // Always compress JSON responses (analytics data)
+      if (req.path.includes('/analytics') || req.path.includes('/api/')) {
+        return true;
+      }
+      return compression.filter(req, res);
+    }
+  }));
 
   // ✅ Global CORS
   app.use(cors({
@@ -476,6 +510,24 @@ app.use('/api/google-oauth', googleOAuthRoutes);
       console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
       console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
       console.log(`\n✅ Health check available at http://0.0.0.0:${PORT}/health`);
+      
+      // Log initial memory usage
+      const initialMem = process.memoryUsage();
+      console.log(`\n💾 Memory: Heap ${Math.round(initialMem.heapUsed / 1024 / 1024)}MB / ${Math.round(initialMem.heapTotal / 1024 / 1024)}MB | RSS ${Math.round(initialMem.rss / 1024 / 1024)}MB`);
+      
+      // Periodic memory monitoring (every 5 minutes)
+      setInterval(() => {
+        const mem = process.memoryUsage();
+        const heapUsedMB = Math.round(mem.heapUsed / 1024 / 1024);
+        const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
+        const rssMB = Math.round(mem.rss / 1024 / 1024);
+        const heapUsagePercent = Math.round((mem.heapUsed / mem.heapTotal) * 100);
+        
+        // Only log if heap usage is above 50% or if verbose mode is enabled
+        if (heapUsagePercent > 50 || process.env.VERBOSE_LOGS === 'true') {
+          logger.info(`💾 Memory: Heap ${heapUsedMB}MB / ${heapTotalMB}MB (${heapUsagePercent}%) | RSS ${rssMB}MB`);
+        }
+      }, 5 * 60 * 1000); // Every 5 minutes
       
       // Start background services (non-blocking)
       try {

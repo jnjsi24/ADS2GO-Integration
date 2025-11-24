@@ -1465,8 +1465,11 @@ class UserAnalyticsService {
           });
           
           const [result] = await DeviceDataHistoryV2.aggregate(dailyStatsPipeline, {
-            maxTimeMS: 15000, // 15 seconds timeout
-            allowDiskUse: true // Allow using disk for large datasets
+            maxTimeMS: 30000, // 30 seconds timeout (increased for complex queries with 8GB memory)
+            allowDiskUse: true, // Allow using disk for large datasets
+            hint: materialIdsForAd && materialIdsForAd.length > 0 
+              ? { materialId: 1 } // Use materialId index if filtering
+              : { 'dailyData.date': 1 } // Use date index otherwise
           });
           
           historicalResult = result || [];

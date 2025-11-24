@@ -67,9 +67,21 @@ class PlaybackWebSocketService {
   private onCompanyAdsOnly: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
+  // ✅ NEW: Track if Slot 2 is in slave mode (true) or failover mode (false)
+  // Slot 2 starts in slave mode, can switch to failover if Slot 1 goes offline
+  private isInSlaveMode: boolean = true;
 
   constructor() {
     this.loadDeviceInfo();
+  }
+
+  // ✅ NEW: Method to toggle slave mode for Slot 2
+  // Called by AdPlayer when failover is triggered or when reverting to slave mode
+  setSlaveMode(isSlaveMode: boolean) {
+    if (this.slotNumber === 2) {
+      this.isInSlaveMode = isSlaveMode;
+      console.log(`🔄 [WebSocket] Slot 2 mode changed: ${isSlaveMode ? 'SLAVE (mirroring)' : 'FAILOVER (master)'}`);
+    }
   }
 
   private async loadDeviceInfo() {
@@ -311,6 +323,14 @@ class PlaybackWebSocketService {
   startPlaybackUpdates(playbackData: Partial<PlaybackUpdate>) {
     this.currentPlaybackData = playbackData;
     
+    // ✅ CRITICAL FIX: Slot 2 in SLAVE mode should NEVER broadcast playback updates
+    // This prevents Slot 2 from sending its state that could cause Slot 1 to sync backwards
+    // However, in FAILOVER mode (Slot 1 offline), Slot 2 acts as master and should broadcast
+    if (this.slotNumber === 2 && this.isInSlaveMode) {
+      console.log('⏭️ [WebSocket] Slot 2 (slave mode) skipping playback updates - only receives from Slot 1');
+      return;
+    }
+    
     if (!this.isConnected) {
       console.log('🔌 [WebSocket] Not connected, skipping playback updates');
       return;
@@ -355,6 +375,12 @@ class PlaybackWebSocketService {
   }
 
   private sendPlaybackUpdate() {
+    // ✅ CRITICAL FIX: Slot 2 in SLAVE mode should NEVER send playback updates
+    // Only the master (Slot 1 or Slot 2 in failover) sends playback updates
+    if (this.slotNumber === 2 && this.isInSlaveMode) {
+      return;
+    }
+    
     if (!this.isConnected || !this.ws || !this.currentPlaybackData) {
       return;
     }
@@ -440,6 +466,14 @@ class PlaybackWebSocketService {
 
   // Handle state request messages
   private handleStateRequest(message: any) {
+    // ✅ CRITICAL FIX: Slot 2 in SLAVE mode should NEVER respond to state requests
+    // This prevents Slot 2 from broadcasting its stale position to Slot 1, which causes both slots to restart
+    // However, in FAILOVER mode (Slot 1 offline), Slot 2 acts as master and should respond normally
+    if (this.slotNumber === 2 && this.isInSlaveMode) {
+      console.log('⏭️ [WebSocket] Slot 2 (slave mode) ignoring state request - only master responds');
+      return;
+    }
+    
     // Send current playback state to requesting slot
     if (this.currentPlaybackData && this.isConnected && this.ws) {
       const stateResponse = {
@@ -457,11 +491,23 @@ class PlaybackWebSocketService {
 
   // Handle state response messages (for late-connecting devices)
   private handleStateResponse(message: any) {
+    // ✅ CRITICAL FIX: Only the requesting slot should process the state response
+    // If this slot IS the requesting slot, process it. Otherwise ignore it.
+    // This prevents Slot 1 from processing Slot 2's state responses
+    if (this.slotNumber !== message.requestingSlot) {
+      console.log(`⏭️ [WebSocket] Ignoring state response - this is slot ${this.slotNumber}, response is for slot ${message.requestingSlot}`);
+      return;
+    }
+    
     // This will be called by the AdPlayer component to handle state responses
+    // The sourceSlot should be the slot that sent the response (NOT the requesting slot)
+    // For a 2-slot system: if requestingSlot is 2, sourceSlot is 1, and vice versa
+    const sourceSlot = message.requestingSlot === 1 ? 2 : 1;
+    
     if (this.onSlotSync) {
       this.onSlotSync({
         type: 'slotSync',
-        sourceSlot: message.requestingSlot,
+        sourceSlot: sourceSlot,  // ✅ FIX: Use the RESPONDING slot, not the requesting slot
         materialId: message.materialId,
         adId: message.adId,
         adTitle: message.adTitle,
@@ -546,20 +592,35 @@ class PlaybackWebSocketService {
 
   // Send display data to other slots for duplication
   sendDisplayData(displayData: any) {
+    // ✅ CRITICAL FIX: Slot 2 in SLAVE mode should NEVER send display data
+    // Only the master (Slot 1 or Slot 2 in failover) sends display data
+    if (this.slotNumber === 2 && this.isInSlaveMode) {
+      console.log('⏭️ [WebSocket] Slot 2 in slave mode - skipping display data broadcast');
+      return;
+    }
+    
     try {
-      if (this.ws && this.ws.readyState === 1) {
-        const message = {
-          type: 'displayData',
-          timestamp: new Date().toISOString(),
-          data: displayData,
-          deviceId: this.deviceId,
-          materialId: this.materialId,
-          slotNumber: this.slotNumber
-        };
-        
-        this.ws.send(JSON.stringify(message));
-        console.log('📺 [WebSocket] Sent display data to other slots:', displayData);
+      if (!this.ws) {
+        console.log('⚠️ [WebSocket] Cannot send display data - WebSocket not initialized');
+        return;
       }
+      
+      if (this.ws.readyState !== 1) {
+        console.log(`⚠️ [WebSocket] Cannot send display data - WebSocket not open (readyState: ${this.ws.readyState})`);
+        return;
+      }
+      
+      const message = {
+        type: 'displayData',
+        timestamp: new Date().toISOString(),
+        data: displayData,
+        deviceId: this.deviceId,
+        materialId: this.materialId,
+        slotNumber: this.slotNumber
+      };
+      
+      this.ws.send(JSON.stringify(message));
+      console.log('📺 [WebSocket] Sent display data to other slots:', displayData);
     } catch (error) {
       console.error('❌ [WebSocket] Error sending display data:', error);
     }

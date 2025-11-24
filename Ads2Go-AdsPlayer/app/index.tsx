@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import QRCode from "react-native-qrcode-svg";
@@ -26,10 +26,10 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
-  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state (for lockdown feature)
+  const [isLocked, setIsLocked] = useState(true); // Track lock/unlock state (for lockdown feature) - default locked
   const [is8HourLocked, setIs8HourLocked] = useState(false); // Track 8-hour/rest period lock state
   const [lockMessage, setLockMessage] = useState<string>(''); // Store lock message to display
-  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(true); // Track fullscreen state - default fullscreen when locked
   const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
@@ -88,6 +88,15 @@ export default function HomeScreen() {
       });
     };
   }, [is8HourLocked]);
+
+  // Lock orientation on startup if app starts in locked mode
+  useEffect(() => {
+    if (isLocked) {
+      lockToLandscape().catch((error) => {
+        console.error('❌ [Orientation] Error locking orientation on startup:', error);
+      });
+    }
+  }, []); // Run once on mount
 
   // Device status is now handled by DeviceStatusContext
 
@@ -575,20 +584,14 @@ export default function HomeScreen() {
       const currentOrientation = await ScreenOrientation.getOrientationAsync();
       setOriginalOrientation(currentOrientation);
       
-      // Force landscape orientation - use specific landscape lock instead of general LANDSCAPE
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
-      console.log('🔒 [Orientation] Locked to landscape mode');
+      // Force landscape orientation - use general LANDSCAPE to allow both left and right
+      // This prevents video inversion regardless of physical device orientation
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      console.log('🔒 [Orientation] Locked to landscape mode (allows both left and right)');
     } catch (error) {
       console.error('❌ [Orientation] Error locking to landscape:', error);
-      // Fallback: try the other landscape orientation
-      try {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
-        console.log('🔒 [Orientation] Fallback: Locked to landscape right mode');
-      } catch (fallbackError) {
-        console.error('❌ [Orientation] Fallback also failed:', fallbackError);
-        // If both fail, just unlock to prevent the error
-        await ScreenOrientation.unlockAsync();
-      }
+      // If lock fails, just unlock to prevent the error
+      await ScreenOrientation.unlockAsync();
     }
   };
 
@@ -637,6 +640,21 @@ export default function HomeScreen() {
     setShowFullInterface(prev => !prev);
   };
 
+  // Handler for lock state changes - memoized to prevent AdPlayer recreation
+  // MUST be placed after function definitions but before any early returns to follow Rules of Hooks
+  const handleLockStateChange = useCallback(async (locked: boolean) => {
+    console.log('🔓 [LockStateChange] Lock state changing to:', locked, 'showFullInterface:', showFullInterface);
+    setIsLocked(locked);
+    if (locked) {
+      await lockToLandscape();
+      setIsFullscreen(true); // Always go fullscreen when locked
+    } else {
+      // Unlock: restore orientation and exit fullscreen
+      await unlockOrientation();
+      // Exit fullscreen when unlocking (user should see the interface)
+      setIsFullscreen(false);
+    }
+  }, [showFullInterface]);
 
   const handleEmergencyUnregister = () => {
     Alert.alert(
@@ -745,36 +763,54 @@ export default function HomeScreen() {
     );
   }
 
-  // If not showing full interface, show only the video player
-  if (!showFullInterface || isFullscreen) {
-    return (
-      <View style={[styles.videoOnlyContainer, isFullscreen && styles.fullscreenContainer]}>
-        {registrationData ? (
-          <AdPlayer
-            materialId={registrationData.materialId}
-            slotNumber={registrationData.slotNumber}
-            isOffline={isSimulatingOffline}
-            isLocked={isLocked}
-            onLockStateChange={async (locked) => {
-              setIsLocked(locked);
-              if (locked) {
-                setIsFullscreen(true); // Go fullscreen when locked
-                await lockToLandscape(); // Force landscape orientation
-              } else {
-                setIsFullscreen(false); // Exit fullscreen when unlocked
-                await unlockOrientation(); // Restore orientation
-              }
-            }}
-            onAdError={(error) => {
-              console.log('Ad Player Error:', error);
-            }}
-          />
-        ) : (
+  // Single AdPlayer instance - always render with stable key to prevent remounting
+  // The key ensures React recognizes it as the same component even when props change
+  const adPlayerComponent = registrationData ? (
+    <AdPlayer
+      key={`adplayer-${registrationData.materialId}-${registrationData.slotNumber}`}
+      materialId={registrationData.materialId}
+      slotNumber={registrationData.slotNumber}
+      isOffline={isSimulatingOffline}
+      isLocked={isLocked}
+      onLockStateChange={handleLockStateChange}
+      onAdError={(error) => {
+        console.log('Ad Player Error:', error);
+      }}
+    />
+  ) : null;
+
+  // Always render AdPlayer in the same position with consistent container style
+  // This prevents React from remounting the component when isFullscreen changes
+  return (
+    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      {/* AdPlayer - always rendered in same position, positioned differently based on fullscreen state */}
+      <View 
+        key={`adplayer-container-${registrationData?.materialId || 'no-reg'}-${registrationData?.slotNumber || 0}`}
+        style={{
+          position: isFullscreen ? 'absolute' : 'relative',
+          top: isFullscreen ? 0 : 0,
+          left: isFullscreen ? 0 : 0,
+          right: isFullscreen ? 0 : 0,
+          bottom: isFullscreen ? 0 : undefined,
+          zIndex: isFullscreen ? 1000 : 10, // Higher zIndex when not fullscreen to stay above ScrollView
+          width: '100%',
+          height: isFullscreen ? '100%' : 400, // Fixed height when not fullscreen to ensure visibility
+          backgroundColor: '#000', // Black background for video visibility
+          overflow: 'hidden', // Ensure video doesn't overflow
+        }}
+      >
+        {adPlayerComponent || (
           <View style={styles.notRegisteredContainer}>
-            <Text style={styles.notRegisteredTitle}>Tablet Not Registered</Text>
-            <Text style={styles.notRegisteredSubtitle}>
-              This tablet needs to be registered before it can display advertisements.
+            <Text style={styles.notRegisteredTitle}>
+              {!showFullInterface || isFullscreen 
+                ? 'Tablet Not Registered' 
+                : 'Please register the tablet to start playing advertisements'}
             </Text>
+            {(!showFullInterface || isFullscreen) && (
+              <Text style={styles.notRegisteredSubtitle}>
+                This tablet needs to be registered before it can display advertisements.
+              </Text>
+            )}
             <TouchableOpacity 
               style={styles.registerButton}
               onPress={handleGoToRegistration}
@@ -783,44 +819,49 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         )}
-        
-        {/* Tap to show full interface - only visible after 10 taps */}
+      </View>
+
+      {/* Lock indicator - only show when locked and fullscreen */}
+      {isLocked && isFullscreen && (
+        <View style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 8,
+          zIndex: 2000,
+        }}>
+          <Text style={{
+            color: '#ff4444',
+            fontSize: 16,
+            fontWeight: 'bold',
+          }}>
+            🔒 LOCKED
+          </Text>
+        </View>
+      )}
+
+      {/* Settings button - only show when unlocked and in video-only mode */}
+      {(!showFullInterface || isFullscreen) && !isLocked && (
         <TouchableOpacity 
           style={styles.showInterfaceButton}
           onPress={toggleInterfaceMode}
         >
           <Text style={styles.showInterfaceText}>⚙️ Settings</Text>
         </TouchableOpacity>
+      )}
 
-        {/* Lock indicator for video mode - subtle overlay */}
-        {isLocked && (
-          <View style={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 8,
-            zIndex: 1000,
-          }}>
-            <Text style={{
-              color: '#ff4444',
-              fontSize: 16,
-              fontWeight: 'bold',
-            }}>
-              🔒 LOCKED
-            </Text>
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      {/* Full interface content - only show when not fullscreen */}
       {!isFullscreen && (
-        <ScrollView contentContainerStyle={styles.contentContainer}>
+        <ScrollView 
+          contentContainerStyle={styles.contentContainer}
+          style={{ 
+            flex: 1, // Take remaining space below AdPlayer
+            zIndex: 1, // Below AdPlayer
+          }}
+        >
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Advertisement Player</Text>
@@ -945,30 +986,10 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Advertisement Player */}
+      {/* Advertisement Player - AdPlayer is rendered at top level to prevent remounting */}
       <View style={styles.adSection}>
         <Text style={styles.adTitle}>📺 Advertisement Player</Text>
-        {registrationData ? (
-          <AdPlayer
-            materialId={registrationData.materialId}
-            slotNumber={registrationData.slotNumber}
-            isOffline={isSimulatingOffline}
-            isLocked={isLocked}
-            onLockStateChange={async (locked) => {
-              setIsLocked(locked);
-              if (locked) {
-                setIsFullscreen(true); // Go fullscreen when locked
-                await lockToLandscape(); // Force landscape orientation
-              } else {
-                setIsFullscreen(false); // Exit fullscreen when unlocked
-                await unlockOrientation(); // Restore orientation
-              }
-            }}
-            onAdError={(error) => {
-              console.log('Ad Player Error:', error);
-            }}
-          />
-        ) : (
+        {!registrationData && (
           <View style={styles.notRegisteredContainer}>
             <Text style={styles.notRegisteredTitle}>
               Please register the tablet to start playing advertisements
@@ -1019,49 +1040,6 @@ export default function HomeScreen() {
          </TouchableOpacity>
        </View>
         </ScrollView>
-      )}
-
-      {/* Fullscreen AdPlayer when locked */}
-      {isFullscreen && registrationData && (
-        <AdPlayer
-          materialId={registrationData.materialId}
-          slotNumber={registrationData.slotNumber}
-          isOffline={isSimulatingOffline}
-          isLocked={isLocked}
-          onLockStateChange={(locked) => {
-            setIsLocked(locked);
-            if (locked) {
-              setIsFullscreen(true);
-            } else {
-              setIsFullscreen(false);
-            }
-          }}
-          onAdError={(error) => {
-            console.log('Ad Player Error:', error);
-          }}
-        />
-      )}
-
-      {/* Lock indicator for fullscreen mode */}
-      {isLocked && isFullscreen && (
-        <View style={{
-          position: 'absolute',
-          top: 20,
-          right: 20,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-          borderRadius: 8,
-          zIndex: 1000,
-        }}>
-          <Text style={{
-            color: '#ff4444',
-            fontSize: 16,
-            fontWeight: 'bold',
-          }}>
-            🔒 LOCKED
-          </Text>
-        </View>
       )}
     </View>
   );

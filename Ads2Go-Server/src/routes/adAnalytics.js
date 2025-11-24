@@ -2,6 +2,18 @@ const express = require('express');
 const router = express.Router();
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const Ad = require('../models/Ad');
+const { slowConnectionOptimizer, parsePagination, createSummary } = require('../middleware/slowConnectionOptimizer');
+
+// Apply slow connection optimizer middleware
+router.use(slowConnectionOptimizer({
+  enablePagination: true,
+  enableFieldSelection: true,
+  enableCaching: true,
+  enableETags: true,
+  maxResponseSize: 5 * 1024 * 1024, // 5MB
+  defaultLimit: 50,
+  cacheMaxAge: 300 // 5 minutes
+}));
 
 /**
  * Ad Analytics API - Get analytics for a specific ad from DeviceDataHistoryV2
@@ -70,18 +82,44 @@ router.get('/:adId', async (req, res) => {
 
     console.log(`📊 [Ad Analytics] Date range: ${queryStartDate.toISOString().split('T')[0]} to ${queryEndDate.toISOString().split('T')[0]}`);
 
-    // ✅ OPTIMIZED: Simple query with date range filter to reduce data
+    // ✅ OPTIMIZED: Use aggregation pipeline for better performance with large datasets
     const historyQueryStart = Date.now();
-    const deviceHistoryRecords = await DeviceDataHistoryV2.find({
-      materialId: { $in: materialIds },
-      'dailyData.date': {
-        $gte: queryStartDate,
-        $lte: queryEndDate
+    
+    // Use aggregation instead of find() for better performance with nested arrays
+    const aggregationPipeline = [
+      {
+        $match: {
+          materialId: { $in: materialIds },
+          'dailyData.date': {
+            $gte: queryStartDate,
+            $lte: queryEndDate
+          }
+        }
+      },
+      {
+        $project: {
+          materialId: 1,
+          carGroupId: 1,
+          dailyData: {
+            $filter: {
+              input: '$dailyData',
+              as: 'day',
+              cond: {
+                $and: [
+                  { $gte: ['$$day.date', queryStartDate] },
+                  { $lte: ['$$day.date', queryEndDate] }
+                ]
+              }
+            }
+          }
+        }
       }
-    })
-      .select('materialId carGroupId dailyData.date dailyData.adPlaybacks dailyData.qrScansByAd')
-      .lean()
-      .maxTimeMS(30000);
+    ];
+    
+    const deviceHistoryRecords = await DeviceDataHistoryV2.aggregate(aggregationPipeline, {
+      maxTimeMS: 20000, // 20 seconds timeout (reduced from 30s)
+      allowDiskUse: true // Allow disk use for large datasets
+    });
 
     console.log(`⏱️ [Ad Analytics] History query took ${Date.now() - historyQueryStart}ms`);
     console.log(`📊 [Ad Analytics] Found ${deviceHistoryRecords.length} device history records`);
@@ -174,7 +212,7 @@ router.get('/:adId', async (req, res) => {
     console.log(`⏱️ [Ad Analytics] Data processing took ${Date.now() - processingStart}ms`);
 
     // Format device performance
-    const devicePerformance = Array.from(devicePerformanceMap.values()).map(device => ({
+    let devicePerformance = Array.from(devicePerformanceMap.values()).map(device => ({
       materialId: device.materialId,
       carGroupId: device.carGroupId,
       plays: device.plays,
@@ -184,12 +222,45 @@ router.get('/:adId', async (req, res) => {
     })).sort((a, b) => b.plays - a.plays); // Sort by plays descending
 
     // Format daily performance
-    const dailyPerformance = Array.from(dailyPerformanceMap.values()).map(day => ({
+    let dailyPerformance = Array.from(dailyPerformanceMap.values()).map(day => ({
       date: day.date,
       plays: day.plays,
       playTime: day.playTime,
       qrScans: day.qrScans
     })).sort((a, b) => new Date(a.date) - new Date(b.date)); // Sort by date ascending
+
+    // ✅ Apply pagination if requested (for slow connections)
+    const { page, limit, skip } = parsePagination(req);
+    let devicePagination = null;
+    let dailyPagination = null;
+    
+    if (req.query.page || req.query.limit) {
+      // Paginate device performance
+      const deviceTotal = devicePerformance.length;
+      const devicePaginated = devicePerformance.slice(skip, skip + limit);
+      devicePagination = {
+        page,
+        limit,
+        total: deviceTotal,
+        totalPages: Math.ceil(deviceTotal / limit),
+        hasMore: page < Math.ceil(deviceTotal / limit),
+        hasPrevious: page > 1
+      };
+      devicePerformance = devicePaginated;
+      
+      // Paginate daily performance
+      const dailyTotal = dailyPerformance.length;
+      const dailyPaginated = dailyPerformance.slice(skip, skip + limit);
+      dailyPagination = {
+        page,
+        limit,
+        total: dailyTotal,
+        totalPages: Math.ceil(dailyTotal / limit),
+        hasMore: page < Math.ceil(dailyTotal / limit),
+        hasPrevious: page > 1
+      };
+      dailyPerformance = dailyPaginated;
+    }
 
     const responseData = {
       success: true,
@@ -206,9 +277,14 @@ router.get('/:adId', async (req, res) => {
         totalQRScans,
         devicePerformance,
         dailyPerformance,
+        pagination: {
+          devices: devicePagination,
+          daily: dailyPagination
+        },
         metadata: {
           dataSource: 'DeviceDataHistoryV2',
-          totalDevices: devicePerformance.length,
+          totalDevices: devicePerformanceMap.size,
+          totalDays: dailyPerformanceMap.size,
           dateRange: {
             start: dailyPerformance[0]?.date,
             end: dailyPerformance[dailyPerformance.length - 1]?.date
@@ -244,6 +320,171 @@ router.get('/:adId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch ad analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /adAnalytics/:adId/summary - Get lightweight summary (optimized for slow connections)
+router.get('/:adId/summary', async (req, res) => {
+  const startTime = Date.now();
+  console.log(`🔍 [Ad Analytics Summary] Route hit! Ad ID: ${req.params.adId}`);
+  
+  try {
+    const { adId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    // Get the ad details
+    const ad = await Ad.findById(adId)
+      .select('title description adFormat status')
+      .lean();
+    
+    if (!ad) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ad not found'
+      });
+    }
+
+    // Get material IDs
+    const materialIds = ad.materialId?.map(m => m.materialId) || [];
+    
+    if (materialIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          adId,
+          adTitle: ad.title,
+          totals: {
+            totalPlays: 0,
+            totalPlayTime: 0,
+            totalQRScans: 0
+          }
+        }
+      });
+    }
+
+    // Build date filter
+    let queryStartDate = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    let queryEndDate = endDate ? new Date(endDate) : new Date();
+
+    // Quick aggregation for totals only
+    const totalsPipeline = [
+      {
+        $match: {
+          materialId: { $in: materialIds },
+          'dailyData.date': {
+            $gte: queryStartDate,
+            $lte: queryEndDate
+          }
+        }
+      },
+      { $unwind: '$dailyData' },
+      {
+        $match: {
+          'dailyData.date': {
+            $gte: queryStartDate,
+            $lte: queryEndDate
+          }
+        }
+      },
+      {
+        $project: {
+          adPlaybacks: {
+            $filter: {
+              input: { $ifNull: ['$dailyData.adPlaybacks', []] },
+              as: 'playback',
+              cond: {
+                $or: [
+                  { $eq: ['$$playback.adId', adId] },
+                  { $eq: [{ $toString: '$$playback.adId' }, adId.toString()] }
+                ]
+              }
+            }
+          },
+          qrScans: {
+            $filter: {
+              input: { $ifNull: ['$dailyData.qrScansByAd', []] },
+              as: 'scan',
+              cond: {
+                $or: [
+                  { $eq: ['$$scan.adId', adId] },
+                  { $eq: [{ $toString: '$$scan.adId' }, adId.toString()] }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalPlays: { $sum: { $size: '$adPlaybacks' } },
+          totalPlayTime: { 
+            $sum: { 
+              $sum: { 
+                $map: { 
+                  input: '$adPlaybacks', 
+                  as: 'p', 
+                  in: { $ifNull: ['$$p.viewTime', 0] } 
+                } 
+              } 
+            } 
+          },
+          totalQRScans: { 
+            $sum: { 
+              $sum: { 
+                $map: { 
+                  input: '$qrScans', 
+                  as: 's', 
+                  in: { $ifNull: ['$$s.scanCount', 0] } 
+                } 
+              } 
+            } 
+          }
+        }
+      }
+    ];
+
+    const [totals] = await DeviceDataHistoryV2.aggregate(totalsPipeline, {
+      maxTimeMS: 15000,
+      allowDiskUse: true
+    });
+
+    const summary = {
+      adId,
+      adTitle: ad.title,
+      adFormat: ad.adFormat,
+      status: ad.status,
+      totals: {
+        totalPlays: totals?.totalPlays || 0,
+        totalPlayTime: totals?.totalPlayTime || 0,
+        totalQRScans: totals?.totalQRScans || 0
+      },
+      dateRange: {
+        start: queryStartDate.toISOString().split('T')[0],
+        end: queryEndDate.toISOString().split('T')[0]
+      }
+    };
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Ad Analytics Summary] Generated in ${duration}ms`);
+
+    res.json({
+      success: true,
+      data: summary,
+      metadata: {
+        isSummary: true,
+        generatedAt: new Date().toISOString(),
+        duration: `${duration}ms`
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [Ad Analytics Summary] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ad analytics summary',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

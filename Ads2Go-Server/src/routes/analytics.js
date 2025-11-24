@@ -3,6 +3,18 @@ const router = express.Router();
 const AnalyticsService = require('../services/analyticsService');
 const UserAnalyticsService = require('../services/userAnalyticsService');
 const Analytics = require('../models/analytics');
+const { slowConnectionOptimizer, createSummary, parsePagination } = require('../middleware/slowConnectionOptimizer');
+
+// Apply slow connection optimizer middleware to all routes
+router.use(slowConnectionOptimizer({
+  enablePagination: true,
+  enableFieldSelection: true,
+  enableCaching: true,
+  enableETags: true,
+  maxResponseSize: 5 * 1024 * 1024, // 5MB
+  defaultLimit: 50,
+  cacheMaxAge: 300 // 5 minutes
+}));
 
 // GET /analytics/admin - Get comprehensive admin analytics
 router.get('/admin', async (req, res) => {
@@ -702,6 +714,100 @@ router.post('/cache/clear-all', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to clear all cache',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// ===========================================
+// LIGHTWEIGHT SUMMARY ENDPOINTS (for slow connections)
+// ===========================================
+
+// GET /analytics/user/:userId/summary - Get lightweight summary (optimized for slow connections)
+router.get('/user/:userId/summary', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate, period = '7d' } = req.query;
+    
+    console.log(`📊 [Summary] Fetching lightweight summary for user ${userId}`);
+    const startTime = Date.now();
+    
+    // Get full analytics
+    const analytics = await UserAnalyticsService.getUserAnalytics(
+      userId, 
+      startDate, 
+      endDate, 
+      period
+    );
+    
+    // Create lightweight summary
+    const summary = createSummary(analytics);
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Summary] Generated summary in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      data: summary,
+      message: 'Analytics summary retrieved successfully',
+      metadata: {
+        isSummary: true,
+        generatedAt: new Date().toISOString(),
+        duration: `${duration}ms`
+      }
+    });
+  } catch (error) {
+    console.error('Error getting analytics summary:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get analytics summary',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/totals-only - Get only totals (minimal data for slow connections)
+router.get('/user/:userId/totals-only', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate, period = '7d' } = req.query;
+    
+    console.log(`📊 [Totals Only] Fetching totals for user ${userId}`);
+    const startTime = Date.now();
+    
+    // Get full analytics
+    const analytics = await UserAnalyticsService.getUserAnalytics(
+      userId, 
+      startDate, 
+      endDate, 
+      period
+    );
+    
+    // Return only totals
+    const totals = {
+      totals: analytics.totals || {},
+      period: analytics.period,
+      dateRange: analytics.dateRange
+    };
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ [Totals Only] Generated in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      data: totals,
+      message: 'Analytics totals retrieved successfully',
+      metadata: {
+        isMinimal: true,
+        generatedAt: new Date().toISOString(),
+        duration: `${duration}ms`
+      }
+    });
+  } catch (error) {
+    console.error('Error getting analytics totals:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get analytics totals',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
