@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Popup, Polyline, Marker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
@@ -490,7 +490,10 @@ const ScreenTracking: React.FC = () => {
       // For historical tab: Use selectedDate (get specific date's archived data)
       const dateParam = activeTab === 'live' ? null : selectedDate;
       
-      const complianceData = await screenComplianceService.getCompliance(dateParam, false);
+      // ✅ OPTIMIZED: Skip geocoding for live updates to improve performance
+      // Geocoding is expensive and can be done asynchronously if needed
+      const skipGeocoding = activeTab === 'live';
+      const complianceData = await screenComplianceService.getCompliance(dateParam, skipGeocoding);
       
       if (complianceData.success) {
         setComplianceReport(complianceData.data);
@@ -530,26 +533,32 @@ const ScreenTracking: React.FC = () => {
    }, [selectedDate, activeTab]); // Re-fetch when date OR tab changes
 
   // 🔄 AUTO-REFRESH: Update device positions every 2 seconds when viewing Live Tracking tab
+  // ✅ OPTIMIZED: Reduced console logging for better performance
   useEffect(() => {
     // Only auto-refresh when on live tab
     if (activeTab !== 'live') {
       return;
     }
 
-    console.log('🔄 [Auto-Refresh Live] Starting device position auto-refresh every 2 seconds');
+    // Only log in verbose mode
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+      console.log('🔄 [Auto-Refresh Live] Starting device position auto-refresh every 2 seconds');
+    }
     
     // Fetch device data immediately when starting
     fetchData();
     
-    // Set up interval to refresh device positions every 2 seconds
+    // Set up interval to refresh device positions every 2 seconds (real-time)
     const liveRefreshInterval = setInterval(() => {
-      console.log('🔄 [Auto-Refresh Live] Refreshing device positions');
+      // Removed console.log to reduce overhead - only fetch data
       fetchData();
-    }, 2000); // Refresh every 2 seconds
+    }, 2000); // Refresh every 2 seconds for real-time updates
 
     // Cleanup interval when conditions change or component unmounts
     return () => {
-      console.log('🔄 [Auto-Refresh Live] Stopping device position auto-refresh');
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+        console.log('🔄 [Auto-Refresh Live] Stopping device position auto-refresh');
+      }
       clearInterval(liveRefreshInterval);
     };
   }, [activeTab, fetchData]);
@@ -606,6 +615,10 @@ const ScreenTracking: React.FC = () => {
   }, []);
 
   // WebSocket integration for real-time updates
+  // ✅ OPTIMIZED: Debounced WebSocket updates to reduce re-renders
+  const wsUpdateQueueRef = useRef<Map<string, any>>(new Map());
+  const wsUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     // Check initial WebSocket connection status
     if (playbackWebSocketService.isWebSocketConnected()) {
@@ -614,27 +627,46 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
     }
     
-    // Subscribe to real-time device updates
+    // Subscribe to real-time device updates with debouncing
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
       
       // Update connection status to connected when we receive any update
-      if (connectionStatus !== 'connected') {
-        setConnectionStatus('connected');
-      }
+      setConnectionStatus(prev => prev !== 'connected' ? 'connected' : prev);
       
       if (update.type === 'deviceUpdate') {
-        // Update specific device status in real-time
-        updateDeviceStatus(update.deviceId, update.isOnline ?? false, update.lastSeen);
+        // Queue device updates and batch process them
+        wsUpdateQueueRef.current.set(update.deviceId, update);
+        
+        // Clear existing timeout
+        if (wsUpdateTimeoutRef.current) {
+          clearTimeout(wsUpdateTimeoutRef.current);
+        }
+        
+        // Process queued updates after 500ms debounce
+        wsUpdateTimeoutRef.current = setTimeout(() => {
+          const updates = Array.from(wsUpdateQueueRef.current.values());
+          wsUpdateQueueRef.current.clear();
+          
+          // Process all queued updates
+          updates.forEach(u => {
+            updateDeviceStatus(u.deviceId, u.isOnline ?? false, u.lastSeen);
+          });
+        }, 500);
       } else if (update.type === 'deviceList') {
         // Update all devices at once
         updateAllDevices(update.devices ?? []);
       } else if (update.type === 'locationUpdate') {
-        // Handle real-time location updates for live map
-        console.log('📍 [ScreenTracking] Received location update:', update);
+        // Handle real-time location updates for live map (debounced)
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('📍 [ScreenTracking] Received location update:', update);
+        }
         updateDeviceLocation(update.deviceId, update.location);
       } else if (update.type === 'adPlaybackUpdate') {
         // Handle ad playback updates that might affect device status
-        console.log('🎬 [ScreenTracking] Received playback update:', update);
+        // Only log in verbose mode - these updates are very frequent
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🎬 [ScreenTracking] Received playback update:', update);
+        }
         // You can add logic here if needed for ad-related updates
       }
     });
@@ -648,9 +680,12 @@ const ScreenTracking: React.FC = () => {
     // Cleanup subscription on unmount
     return () => {
       clearInterval(statusCheckInterval);
+      if (wsUpdateTimeoutRef.current) {
+        clearTimeout(wsUpdateTimeoutRef.current);
+      }
       unsubscribe();
     };
-  }, [connectionStatus]);
+  }, []);
 
   // Helper function to update device status in real-time
   const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
@@ -689,14 +724,18 @@ const ScreenTracking: React.FC = () => {
           const slot2Online = updatedScreen.slot2Status?.toLowerCase() === 'online';
           updatedScreen.isOnline = slot1Online || slot2Online;
           
-          console.log(`🔄 [ScreenTracking] Updated screen ${screen.materialId}:`, {
-            slot1Status: updatedScreen.slot1Status,
-            slot2Status: updatedScreen.slot2Status,
-            isOnline: updatedScreen.isOnline,
-            deviceId: screen.deviceId,
-            slot1DeviceId: screen.slot1DeviceId,
-            slot2DeviceId: screen.slot2DeviceId
-          });
+          // ✅ OPTIMIZED: Removed frequent console logging
+          // Only log in verbose mode to reduce overhead
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+            console.log(`🔄 [ScreenTracking] Updated screen ${screen.materialId}:`, {
+              slot1Status: updatedScreen.slot1Status,
+              slot2Status: updatedScreen.slot2Status,
+              isOnline: updatedScreen.isOnline,
+              deviceId: screen.deviceId,
+              slot1DeviceId: screen.slot1DeviceId,
+              slot2DeviceId: screen.slot2DeviceId
+            });
+          }
           
           return updatedScreen;
         }
@@ -704,7 +743,11 @@ const ScreenTracking: React.FC = () => {
         return screen;
       });
       
-      console.log(`🔄 [ScreenTracking] Updated screens after update:`, updatedScreens.length);
+      // ✅ OPTIMIZED: Removed frequent console logging
+      // Only log in verbose mode to reduce overhead
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+        console.log(`🔄 [ScreenTracking] Updated screens after update:`, updatedScreens.length);
+      }
       return updatedScreens;
     });
   }, []);
@@ -771,11 +814,14 @@ const ScreenTracking: React.FC = () => {
             : 0;
           
           if (newTimestamp <= currentTimestamp) {
-            console.log(`📍 [ScreenTracking] Ignoring stale location for ${deviceId}:`, {
-              newTimestamp: new Date(newTimestamp).toISOString(),
-              currentTimestamp: new Date(currentTimestamp).toISOString(),
-              diff: ((newTimestamp - currentTimestamp) / 1000) + 's'
-            });
+            // ✅ OPTIMIZED: Removed frequent console logging
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log(`📍 [ScreenTracking] Ignoring stale location for ${deviceId}:`, {
+                newTimestamp: new Date(newTimestamp).toISOString(),
+                currentTimestamp: new Date(currentTimestamp).toISOString(),
+                diff: ((newTimestamp - currentTimestamp) / 1000) + 's'
+              });
+            }
             return screen; // Keep existing location
           }
           
@@ -786,17 +832,23 @@ const ScreenTracking: React.FC = () => {
           if (isCurrentFromWebSocket && isNewFromPolling) {
             const timeDiff = newTimestamp - currentTimestamp;
             if (timeDiff < 5000) {
-              console.log(`📍 [ScreenTracking] Ignoring polling update, WebSocket is more recent`);
+              // ✅ OPTIMIZED: Removed frequent console logging
+              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+                console.log(`📍 [ScreenTracking] Ignoring polling update, WebSocket is more recent`);
+              }
               return screen;
             }
           }
           
-          console.log(`📍 [ScreenTracking] Accepting newer location for ${screen.materialId}:`, {
-            source,
-            lat: locationData.lat.toFixed(6),
-            lng: locationData.lng.toFixed(6),
-            timestamp: new Date(newTimestamp).toISOString()
-          });
+          // ✅ OPTIMIZED: Removed frequent console logging
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+            console.log(`📍 [ScreenTracking] Accepting newer location for ${screen.materialId}:`, {
+              source,
+              lat: locationData.lat.toFixed(6),
+              lng: locationData.lng.toFixed(6),
+              timestamp: new Date(newTimestamp).toISOString()
+            });
+          }
           
           // ✨ Preserve existing geocoded address if new one is just coordinates
           let addressToUse = locationData.address || screen.currentLocation?.address;
@@ -1026,6 +1078,14 @@ const ScreenTracking: React.FC = () => {
       popupAnchor: [0, -20]
     });
   };
+
+  // ✅ OPTIMIZED: Memoize valid screens filtering to prevent recalculation on every render
+  const validScreens = useMemo(() => {
+    return screens?.filter(screen => 
+      screen?.currentLocation && 
+      isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+    ) || [];
+  }, [screens]);
 
   if (loading || materialsLoading) {
     return <AdminLoader />;
@@ -1312,10 +1372,7 @@ const ScreenTracking: React.FC = () => {
                     <>
                       {/* Real-time device markers with vehicle icons and overlap handling */}
                       {(() => {
-                        const validScreens = screens?.filter(screen => 
-                          screen?.currentLocation && 
-                          isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
-                        ) || [];
+                        // ✅ OPTIMIZED: Use memoized validScreens instead of recalculating
                         
                         // Only log marker debug in verbose mode
                         if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_MAP === 'true') {
@@ -1365,7 +1422,10 @@ const ScreenTracking: React.FC = () => {
                               icon={createVehicleIcon(screen.screenType, isOnline, index)}
                               eventHandlers={{
                                 click: (e) => {
-                                  console.log(`🎯 [Click Debug] Marker clicked for ${screen.materialId} (${screen.deviceId}) - Online: ${isOnline}`);
+                                  // ✅ OPTIMIZED: Removed console logging for click events
+                                  if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+                                    console.log(`🎯 [Click Debug] Marker clicked for ${screen.materialId} (${screen.deviceId}) - Online: ${isOnline}`);
+                                  }
                                   handleScreenSelect(screen);
                                 },
                               }}

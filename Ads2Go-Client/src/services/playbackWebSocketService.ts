@@ -115,22 +115,27 @@ class PlaybackWebSocketService {
               console.log('🔌 [Admin WebSocket] Received pong');
             }
           } else if (message.type === 'adPlaybackUpdate') {
-            // Only log playback updates in verbose mode
+            // ✅ OPTIMIZED: Only log in verbose mode
             if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
-              console.log('🎬 [Admin WebSocket] Received playback update:', {
+              console.log('🎬 [WebSocket Service] Received adPlaybackUpdate:', {
                 deviceId: message.deviceId,
                 adTitle: message.adTitle,
                 state: message.state,
-                progress: message.progress
+                progress: message.progress,
+                currentTime: message.currentTime
               });
             }
             
             // Notify all callbacks
-            this.callbacks.forEach(callback => {
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('📡 [WebSocket Service] Forwarding adPlaybackUpdate to', this.callbacks.length, 'callbacks');
+            }
+            this.callbacks.forEach((callback, index) => {
               try {
                 callback(message);
+                // ✅ OPTIMIZED: Only log errors, not successful callbacks
               } catch (error) {
-                console.error('Error in playback update callback:', error);
+                console.error(`❌ [WebSocket Service] Error in playback update callback ${index + 1}:`, error);
               }
             });
           } else if (message.type === 'deviceUpdate') {
@@ -228,15 +233,22 @@ class PlaybackWebSocketService {
             });
           } else if (message.type === 'displayData') {
             // ✨ NEW: Handle real-time display data from ad player (for live ad monitoring)
-            console.log('📺 [Admin WebSocket] Received display data:', {
-              materialId: message.materialId,
-              adIndex: message.data?.adIndex,
-              currentTime: message.data?.currentTime?.toFixed(1),
-              isPaused: message.data?.isPaused
-            });
+            // ✅ OPTIMIZED: Removed frequent console logging - only log in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('📺 [Admin WebSocket] Received display data:', {
+                materialId: message.materialId,
+                adIndex: message.data?.adIndex,
+                currentTime: message.data?.currentTime?.toFixed(1),
+                isPaused: message.data?.isPaused
+              });
+            }
             
             // Forward display data to callbacks
-            this.callbacks.forEach(callback => {
+            // ✅ OPTIMIZED: Only log in verbose mode (displayData is very frequent)
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+              console.log('📡 [WebSocket Service] Forwarding displayData to', this.callbacks.length, 'callbacks');
+            }
+            this.callbacks.forEach((callback, index) => {
               try {
                 callback({
                   type: 'displayData',
@@ -245,8 +257,9 @@ class PlaybackWebSocketService {
                   data: message.data,
                   timestamp: message.timestamp
                 });
+                // ✅ OPTIMIZED: Only log errors, not successful callbacks
               } catch (error) {
-                console.error('Error in display data callback:', error);
+                console.error(`❌ [WebSocket Service] Error in display data callback ${index + 1}:`, error);
               }
             });
           }

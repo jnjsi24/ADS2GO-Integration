@@ -16,7 +16,7 @@ interface ComplianceCache {
 
 class ScreenComplianceService {
   private cache: Map<string, ComplianceCache> = new Map();
-  private readonly CACHE_TTL = 30 * 1000; // 30 seconds cache TTL
+  private readonly CACHE_TTL = 5 * 1000; // ✅ OPTIMIZED: 5 seconds cache TTL (reduced from 30s for real-time updates)
   private readonly baseUrl: string;
   
   constructor() {
@@ -41,12 +41,18 @@ class ScreenComplianceService {
     // Check cache first
     const cached = this.cache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
-      console.log(`✅ [ScreenCompliance] Cache hit for ${dateStr} (skipGeocoding: ${skipGeocoding})`);
+      // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_CACHE === 'true') {
+        console.log(`✅ [ScreenCompliance] Cache hit for ${dateStr} (skipGeocoding: ${skipGeocoding})`);
+      }
       return cached.data;
     }
     
     // Cache miss or expired - fetch fresh data
-    console.log(`🔄 [ScreenCompliance] Cache miss for ${dateStr} - fetching from API`);
+    // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_CACHE === 'true') {
+      console.log(`🔄 [ScreenCompliance] Cache miss for ${dateStr} - fetching from API`);
+    }
     
     try {
       const queryParams = [];
@@ -77,7 +83,10 @@ class ScreenComplianceService {
         timestamp: Date.now()
       });
       
-      console.log(`✅ [ScreenCompliance] Fetched and cached data for ${dateStr}`);
+      // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_CACHE === 'true') {
+        console.log(`✅ [ScreenCompliance] Fetched and cached data for ${dateStr}`);
+      }
       
       return data;
     } catch (error) {

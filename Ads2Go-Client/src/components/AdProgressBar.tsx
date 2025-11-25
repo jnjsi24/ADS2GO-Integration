@@ -43,20 +43,50 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
     }
   }, [realTimeData, lastKnownProgress]);
 
-  // Use real-time current time if available, but ALWAYS show 0 during buffering/loading
-  const displayCurrentTime = realTimeData 
-    ? (realTimeData.state === 'buffering' || realTimeData.state === 'loading' 
-        ? 0 // ALWAYS 0 during buffering/loading
-        : realTimeData.currentTime)
-    : currentTime;
+  // ✅ OPTIMIZED: Prefer local calculation using startTime when available
+  // This reduces dependency on frequent WebSocket updates
+  // Only use real-time data for state changes (paused/playing) and periodic sync
+  const shouldUseLocalCalculation = startTime && !realTimeData;
+  const displayCurrentTime = shouldUseLocalCalculation
+    ? currentTime // Use local timer calculation
+    : (realTimeData 
+      ? (realTimeData.state === 'buffering' || realTimeData.state === 'loading' 
+          ? 0 // ALWAYS 0 during buffering/loading
+          : realTimeData.currentTime)
+      : currentTime);
   
-  // Use real-time state if available
+  // Use real-time state if available, otherwise use local state
   const displayState = realTimeData ? realTimeData.state : (isPlaying ? 'playing' : 'paused');
 
-  // Start/stop progress tracking (only when real-time data is not available)
+  // Start/stop progress tracking
   useEffect(() => {
-    // If we have real-time data, completely disable local timer and return early
-    if (realTimeData) {
+    // ✅ OPTIMIZED: Use local timer when startTime is available, even if realTimeData exists
+    // Real-time data is only used for state changes and periodic sync (every 5 seconds)
+    // This allows smooth progress updates without frequent WebSocket messages
+    
+    // If we have startTime, prefer local calculation for smooth updates
+    // Only sync with realTimeData periodically (when it arrives every 5 seconds)
+    if (startTime) {
+      // Sync currentTime from real-time data when it arrives (periodic sync)
+      if (realTimeData && realTimeData.state !== 'buffering' && realTimeData.state !== 'loading') {
+        // Update local timer to match server time (correct drift)
+        const serverTime = realTimeData.currentTime;
+        const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+        const drift = Math.abs(serverTime - elapsed);
+        
+        // If drift is significant (>1 second), resync
+        if (drift > 1) {
+          startTimeRef.current = Date.now() - (serverTime * 1000);
+          setCurrentTime(serverTime);
+        }
+        
+        // Update last known progress
+        setLastKnownProgress(realTimeData.progress);
+      }
+      
+      // Continue with local timer (don't return early)
+    } else if (realTimeData) {
+      // No startTime available, use real-time data only
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -72,15 +102,46 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
       return;
     }
 
-    // Only run local timer when we don't have real-time data
-    if (isPlaying && isActive && !isPaused) {
-      if (!intervalRef.current) {
-        // Use real start time if available, otherwise fall back to component mount time
-        if (startTime) {
-          startTimeRef.current = new Date(startTime).getTime();
-        } else {
+    // ✅ OPTIMIZED: Run local timer when startTime is available (preferred method)
+    // This allows smooth progress updates without frequent WebSocket messages
+    if (startTime) {
+      // Initialize startTime reference if not set
+      if (startTimeRef.current === 0) {
+        startTimeRef.current = new Date(startTime).getTime();
+        // If we have an initial currentTime, adjust startTime to match
+        if (currentTime > 0) {
           startTimeRef.current = Date.now() - (currentTime * 1000);
         }
+      }
+      
+      // Run timer based on state (playing/paused)
+      if (displayState === 'playing' && !isPaused) {
+        if (!intervalRef.current) {
+          intervalRef.current = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+            setCurrentTime(Math.min(elapsed, adDuration)); // Cap at duration
+            
+            if (elapsed >= adDuration) {
+              // Ad finished
+              setCurrentTime(adDuration);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+            }
+          }, 100); // Update every 100ms for smooth animation
+        }
+      } else {
+        // Paused or not playing - stop timer but keep currentTime
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      }
+    } else if (isPlaying && isActive && !isPaused) {
+      // Fallback: No startTime available, use component mount time
+      if (!intervalRef.current) {
+        startTimeRef.current = Date.now() - (currentTime * 1000);
       }
       
       intervalRef.current = setInterval(() => {
@@ -107,17 +168,42 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
     };
   }, [isPlaying, isActive, isPaused, adDuration, currentTime, startTime, realTimeData]);
 
-  // CRITICAL: Completely disable local timer when real-time data is available
+  // ✅ OPTIMIZED: Sync with real-time data periodically (every 5 seconds)
+  // Don't disable local timer - use it for smooth updates, sync for drift correction
   useEffect(() => {
-    if (realTimeData) {
+    if (realTimeData && startTime) {
+      // We have startTime, so use local calculation with periodic sync
+      // Only sync when not buffering/loading
+      if (realTimeData.state !== 'buffering' && realTimeData.state !== 'loading') {
+        // Calculate drift and resync if significant
+        const serverTime = realTimeData.currentTime;
+        const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+        const drift = Math.abs(serverTime - elapsed);
+        
+        // If drift is significant (>1 second), resync startTime
+        if (drift > 1) {
+          startTimeRef.current = Date.now() - (serverTime * 1000);
+          setCurrentTime(serverTime);
+        }
+        
+        setLastKnownProgress(realTimeData.progress);
+      } else {
+        // Buffering/loading - pause local timer
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        setCurrentTime(0);
+      }
+    } else if (realTimeData && !startTime) {
+      // No startTime available, use real-time data only
       // Force stop any running timer
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
       
-      // Update state immediately from real-time data with smooth transitions
-      // Only update currentTime if not buffering/loading, otherwise keep it at 0
+      // Update state immediately from real-time data
       if (realTimeData.state === 'buffering' || realTimeData.state === 'loading') {
         setCurrentTime(0); // Force 0 during buffering/loading
       } else {
@@ -128,7 +214,7 @@ const AdProgressBar: React.FC<AdProgressBarProps> = ({
         setLastKnownProgress(realTimeData.progress);
       }
     }
-  }, [realTimeData]);
+  }, [realTimeData, startTime]);
 
   // Optimize re-renders by memoizing expensive calculations
   const memoizedProgressPercentage = React.useMemo(() => {

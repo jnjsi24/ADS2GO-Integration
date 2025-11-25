@@ -1598,6 +1598,48 @@ class DeviceStatusService {
     });
   }
 
+  // ✨ NEW: Notify devices to refresh their ad list when ads are moved/removed
+  notifyRefreshAds(materialId, reason = 'adsUpdated') {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      console.log(`⚠️ [RefreshAds] No material connections found for ${materialId}`);
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    const refreshMessage = {
+      type: 'refreshAds',
+      materialId: materialId,
+      reason: reason,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`🔄 [RefreshAds] Notifying devices for material ${materialId} to refresh ads (reason: ${reason})`);
+
+    // Send refresh message to all connected devices for this material
+    connections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify(refreshMessage));
+          console.log(`✅ [RefreshAds] Sent refresh command to device (slot ${ws.slotNumber || 'unknown'})`);
+        } catch (error) {
+          console.error(`❌ [RefreshAds] Error sending refresh to device:`, error);
+        }
+      }
+    });
+
+    // Also try to find devices by materialId in activeConnections (for devices that might not be in materialConnections)
+    this.activeConnections.forEach((ws, deviceId) => {
+      if (ws.materialId === materialId && ws.readyState === WebSocket.OPEN && !ws.isAdmin) {
+        try {
+          ws.send(JSON.stringify(refreshMessage));
+          console.log(`✅ [RefreshAds] Sent refresh command to device ${deviceId}`);
+        } catch (error) {
+          console.error(`❌ [RefreshAds] Error sending refresh to device ${deviceId}:`, error);
+        }
+      }
+    });
+  }
+
   handleSyncRequest(deviceId, materialId, slotNumber, message) {
     if (!this.materialConnections || !this.materialConnections.has(materialId)) {
       return;

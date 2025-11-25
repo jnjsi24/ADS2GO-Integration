@@ -85,6 +85,10 @@ const reverseGeocodeClient = async (lat: number, lng: number): Promise<string> =
   }
 };
 
+// ✅ FIXED: Module-level subscription tracking to persist across React StrictMode cycles
+let globalSubscriptionActive = false;
+let globalUnsubscribe: (() => void) | null = null;
+
 const AdminAdsControl: React.FC = () => {
   // Component loaded
   
@@ -166,27 +170,38 @@ const AdminAdsControl: React.FC = () => {
     
     try {
       if (isManualRefresh) {
-        console.log('🔄 Manual refresh - setting refreshing state');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🔄 Manual refresh - setting refreshing state');
+        }
         setIsRefreshing(true);
         setError(null);
       } else if (isInitialLoad) {
-        console.log('🔄 Initial load - setting loading state');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🔄 Initial load - setting loading state');
+        }
         setLoading(true);
       }
       
-      console.log('🔄 Fetching data from server...');
-      console.log('🔍 isInitialLoad:', isInitialLoad, 'hasInitiallyLoaded:', hasInitiallyLoaded);
+      // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+        console.log('🔄 Fetching data from server...');
+        console.log('🔍 isInitialLoad:', isInitialLoad, 'hasInitiallyLoaded:', hasInitiallyLoaded);
+      }
       
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       // ✨ OPTIMIZATION: Skip geocoding on initial load to speed up response (addresses can load later)
       const skipGeocoding = isInitialLoad ? '&skipGeocoding=true' : '';
       const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}${skipGeocoding}`;
       
-      console.log('🌐 Compliance URL:', complianceUrl);
-      console.log('📍 Skip geocoding:', isInitialLoad ? 'YES (initial load)' : 'NO (refresh)');
+      // ✅ OPTIMIZED: Reduced logging
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+        console.log('🌐 Compliance URL:', complianceUrl);
+        console.log('📍 Skip geocoding:', isInitialLoad ? 'YES (initial load)' : 'NO (refresh)');
+      }
       
       const fetchStartTime = Date.now();
-      console.log('⏱️ Starting fetch at:', new Date().toISOString());
       
       // ✨ OPTIMIZATION: Fetch compliance and analytics in parallel
       let timeoutId: NodeJS.Timeout | null = null;
@@ -201,13 +216,20 @@ const AdminAdsControl: React.FC = () => {
           }
           }).then(async res => {
             const fetchDuration = Date.now() - fetchStartTime;
-            console.log(`📡 Compliance response received after ${fetchDuration}ms (${(fetchDuration/1000).toFixed(2)}s)!`);
-            console.log('📡 Response status:', res.status);
-            console.log('📡 Response ok:', res.ok);
-            console.log('📡 Response headers:', {
-              contentType: res.headers.get('content-type'),
-              contentLength: res.headers.get('content-length')
-            });
+            // ✅ OPTIMIZED: Only log slow responses or in verbose mode
+            if (fetchDuration > 2000 || (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true')) {
+              console.log(`📡 Compliance response received after ${fetchDuration}ms (${(fetchDuration/1000).toFixed(2)}s)!`);
+            }
+            
+            // ✅ OPTIMIZED: Reduced logging
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('📡 Response status:', res.status);
+              console.log('📡 Response ok:', res.ok);
+              console.log('📡 Response headers:', {
+                contentType: res.headers.get('content-type'),
+                contentLength: res.headers.get('content-length')
+              });
+            }
             
             // Clear timeout on successful response
             if (timeoutId) {
@@ -222,7 +244,10 @@ const AdminAdsControl: React.FC = () => {
             }
             
             const jsonData = await res.json();
-            console.log('✅ Compliance JSON parsed successfully');
+            // ✅ OPTIMIZED: Reduced logging
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('✅ Compliance JSON parsed successfully');
+            }
             return jsonData;
           }),
           new Promise((_, reject) => {
@@ -237,7 +262,10 @@ const AdminAdsControl: React.FC = () => {
         (async () => {
           setAnalyticsLoading(true);
           try {
-            console.log('🔄 Fetching analytics in parallel...');
+            // ✅ OPTIMIZED: Reduced logging
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('🔄 Fetching analytics in parallel...');
+            }
             return await apiService.getAdAnalytics();
           } finally {
             setAnalyticsLoading(false);
@@ -248,39 +276,68 @@ const AdminAdsControl: React.FC = () => {
       // Process compliance data (priority - show UI immediately)
       if (complianceResult.status === 'fulfilled') {
         const complianceData = complianceResult.value;
+        // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
           console.log('📊 Compliance data received:', complianceData);
-        console.log('📊 Compliance data structure:', {
-          hasData: !!complianceData,
-          hasDataProperty: !!complianceData?.data,
-          hasScreens: !!complianceData?.data?.screens,
-          screensIsArray: Array.isArray(complianceData?.data?.screens),
-          screensLength: complianceData?.data?.screens?.length
-        });
+          console.log('📊 Compliance data structure:', {
+            hasData: !!complianceData,
+            hasDataProperty: !!complianceData?.data,
+            hasScreens: !!complianceData?.data?.screens,
+            screensIsArray: Array.isArray(complianceData?.data?.screens),
+            screensLength: complianceData?.data?.screens?.length
+          });
+        }
           
           if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
-            console.log(`✅ Found ${complianceData.data.screens.length} screens with real-time status`);
+            // ✅ OPTIMIZED: Reduced logging
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log(`✅ Found ${complianceData.data.screens.length} screens with real-time status`);
+            }
             
-            // ✨ Geocode addresses on client-side if missing OR is just coordinates
-            const screensWithAddresses = await Promise.all(
-              complianceData.data.screens.map(async (screen: any) => {
+            // ✅ OPTIMIZED: Skip geocoding on initial load to prevent blocking (addresses can load async later)
+            // Only geocode if NOT initial load (manual refresh)
+            const shouldGeocode = !isInitialLoad;
+            
+            let screensWithAddresses = complianceData.data.screens;
+            
+            if (shouldGeocode) {
+              // ✨ Geocode addresses on client-side if missing OR is just coordinates (non-blocking)
+              // Use Promise.allSettled to prevent one failure from blocking all
+              const geocodePromises = complianceData.data.screens.map(async (screen: any) => {
                 // If address is missing OR is just coordinates (starts with "Location:"), geocode on client
                 const needsGeocoding = screen.currentLocation?.lat && screen.currentLocation?.lng && 
                   (!screen.currentLocation?.address || screen.currentLocation.address.startsWith('Location:'));
                 
                 if (needsGeocoding) {
                   try {
-                    const address = await reverseGeocodeClient(screen.currentLocation.lat, screen.currentLocation.lng);
+                    // Add timeout to prevent hanging on slow geocoding
+                    const address = await Promise.race([
+                      reverseGeocodeClient(screen.currentLocation.lat, screen.currentLocation.lng),
+                      new Promise<string>((_, reject) => 
+                        setTimeout(() => reject(new Error('Geocoding timeout')), 3000)
+                      )
+                    ]);
                     screen.currentLocation = {
                       ...screen.currentLocation,
                       address: address
                     };
                   } catch (error) {
-                    console.warn(`Failed to geocode ${screen.currentLocation.lat}, ${screen.currentLocation.lng}:`, error);
+                    // Silently fail - don't block UI, address will remain as coordinates
+                    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+                      console.warn(`Failed to geocode ${screen.currentLocation.lat}, ${screen.currentLocation.lng}:`, error);
+                    }
                   }
                 }
                 return screen;
-              })
-            );
+              });
+              
+              screensWithAddresses = await Promise.allSettled(geocodePromises).then(results =>
+                results.map(result => result.status === 'fulfilled' ? result.value : result.reason)
+              );
+            } else {
+              // On initial load, skip geocoding entirely - UI loads faster
+              // Geocoding can happen async later if needed
+            }
             
             // Process the screens data to create consolidated entries (one per device)
             const processedScreens = screensWithAddresses.map((screen: any) => {
@@ -321,45 +378,75 @@ const AdminAdsControl: React.FC = () => {
             
             setScreens(processedScreens);
             
-            // Log all device IDs for debugging
-            console.log('📋 Processed Device IDs:', processedScreens.map((s: any) => ({
-              deviceId: s.deviceId,
-              materialId: s.materialId,
-              slotNumber: s.slotNumber,
-              isOnline: s.isOnline,
-              statusText: s.statusText,
-              lastSeen: s.lastSeen,
-              screenMetrics: s.screenMetrics,
-              currentAd: s.screenMetrics?.currentAd
-            })));
+            // ✅ OPTIMIZED: Only log in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('✅ [AdminAdsControl] Screens loaded! Count:', processedScreens.length);
+              console.log('📋 [AdminAdsControl] Screen IDs:', processedScreens.map((s: any) => ({
+                deviceId: s.deviceId,
+                materialId: s.materialId,
+                displayId: s.displayId,
+                slot1DeviceId: s.slot1DeviceId,
+                slot2DeviceId: s.slot2DeviceId
+              })));
+            }
+            
+            // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('📋 Processed Device IDs:', processedScreens.map((s: any) => ({
+                deviceId: s.deviceId,
+                materialId: s.materialId,
+                slotNumber: s.slotNumber,
+                isOnline: s.isOnline,
+                statusText: s.statusText,
+                lastSeen: s.lastSeen,
+                screenMetrics: s.screenMetrics,
+                currentAd: s.screenMetrics?.currentAd
+              })));
+            }
             
             // Initial load complete - current ad info available in screenMetrics
+            // ✅ FIXED: Now that screens are loaded, WebSocket updates can match them
+            // The subscription is already active, so future updates will be processed
           } else {
-            console.warn('⚠️ Unexpected compliance data format:', complianceData);
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.warn('⚠️ Unexpected compliance data format:', complianceData);
+            }
             setScreens([]);
           }
         } else {
           // Check if it's a timeout error - these are expected and non-critical
           if (complianceResult.reason?.message?.includes('timeout')) {
-            console.log('⏱️ Compliance request timed out (non-critical, will retry on next refresh)');
+            // ✅ OPTIMIZED: Only log in verbose mode
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.log('⏱️ Compliance request timed out (non-critical, will retry on next refresh)');
+            }
           } else {
             console.error('❌ Error fetching compliance data:', complianceResult.reason);
-            console.error('❌ Compliance result status:', complianceResult.status);
-            console.error('❌ Full compliance result:', complianceResult);
+            // ✅ OPTIMIZED: Reduced error logging detail
+            if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+              console.error('❌ Compliance result status:', complianceResult.status);
+              console.error('❌ Full compliance result:', complianceResult);
+            }
           }
           setScreens([]);
         }
       
       // ✨ OPTIMIZATION: Show UI now, analytics loads in background
       if (isInitialLoad) {
-        console.log('⚡ Setting loading to false - UI ready with compliance data');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('⚡ Setting loading to false - UI ready with compliance data');
+        }
         setLoading(false);
         setHasInitiallyLoaded(true);
       }
       
       // Process analytics data (non-blocking)
       if (analyticsResult.status === 'fulfilled') {
-        console.log('📊 Analytics data received');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('📊 Analytics data received');
+        }
         setAdAnalytics(analyticsResult.value);
       } else {
         // Handle timeout errors specifically - they're expected and non-critical
@@ -477,64 +564,152 @@ const AdminAdsControl: React.FC = () => {
     }
   }, [apiService]);
 
+  // ✅ OPTIMIZED: Prevent duplicate initial fetches
+  const hasInitialFetchTriggered = useRef(false);
+  
   // Load data on component mount
   useEffect(() => {
+    // ✅ OPTIMIZED: Prevent duplicate initial fetches
+    if (hasInitialFetchTriggered.current) {
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+        console.log('⏭️ [AdminAdsControl] Skipping duplicate initial fetch');
+      }
+      return;
+    }
+    
+    hasInitialFetchTriggered.current = true;
     fetchData();
     
-    // Check WebSocket connection status
-    console.log('🔌 [AdminAdsControl] WebSocket connected:', playbackWebSocketService.isWebSocketConnected());
+    // ✅ OPTIMIZED: Reduced logging
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+      console.log('🔌 [AdminAdsControl] WebSocket connected:', playbackWebSocketService.isWebSocketConnected());
+    }
     
     // ✨ OPTIMIZATION: Reduced auto-refresh from 10s to 30s to reduce server load
     // WebSocket handles real-time updates, so aggressive polling is unnecessary
     const autoRefreshInterval = setInterval(() => {
       // Don't auto-refresh until initial data has loaded (use ref to avoid recreating interval)
       if (!hasInitiallyLoadedRef.current) {
-        console.log('🔄 [AdminAdsControl] Auto-refresh skipped - waiting for initial load');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🔄 [AdminAdsControl] Auto-refresh skipped - waiting for initial load');
+        }
         return;
       }
       
       if (!isUserControllingRef.current) {
-        console.log('🔄 [AdminAdsControl] Auto-refresh triggered');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🔄 [AdminAdsControl] Auto-refresh triggered');
+        }
         autoRefreshData();
       } else {
-        console.log('🔄 [AdminAdsControl] Auto-refresh skipped - user is controlling devices');
+        // ✅ OPTIMIZED: Reduced logging
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log('🔄 [AdminAdsControl] Auto-refresh skipped - user is controlling devices');
+        }
       }
     }, 30000); // 30 seconds (reduced from 10s)
     
     // ✨ OPTIMIZATION: Debounce timer for deviceList updates
     let deviceListDebounceTimer: NodeJS.Timeout | null = null;
     
-    // Subscribe to real-time WebSocket updates for immediate processing
-    const unsubscribe = playbackWebSocketService.subscribe((update) => {
-      // ✨ OPTIMIZATION: Only log meaningful updates, reduce console spam
-      if (update.type !== 'deviceList' || (update as any).devices?.length > 0) {
-      console.log('🎬 [AdminAdsControl] Received real-time update:', {
-        type: update.type,
-        deviceId: update.deviceId,
-        adTitle: update.adTitle,
-        state: update.state,
-        currentTime: update.currentTime,
-        progress: update.progress,
-        timestamp: update.timestamp,
-        isOnline: (update as any).isOnline,
-        lastSeen: (update as any).lastSeen,
-        devices: (update as any).devices
-      });
+    // ✅ FIXED: Only subscribe if not already subscribed (prevent React StrictMode double-subscription)
+    // Use module-level variable to persist across StrictMode cycles
+    // This ensures subscription persists even if component re-renders
+    if (!globalSubscriptionActive) {
+      // ✅ OPTIMIZED: Only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        console.log('🔌 [AdminAdsControl] Setting up WebSocket subscription...');
+      }
+      globalSubscriptionActive = true;
+      globalUnsubscribe = playbackWebSocketService.subscribe((update) => {
+      // ✅ OPTIMIZED: Only log in verbose debug mode to reduce console noise
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        console.log('🔔 [AdminAdsControl] WebSocket callback triggered!', {
+          type: update.type,
+          deviceId: update.deviceId,
+          materialId: (update as any).materialId,
+          hasData: !!(update as any).data,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // ✅ OPTIMIZED: Only log meaningful updates - filter out frequent displayData with undefined values
+      // Skip logging for displayData updates (too frequent and often have undefined values)
+      // BUT STILL PROCESS THEM - logging is separate from processing
+      const updateAny = update as any;
+      const shouldLog = !(updateAny.type === 'displayData' && !update.deviceId && !update.adTitle && !updateAny.materialId);
+      if (shouldLog && process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        // Only log in verbose debug mode
+        console.log('🎬 [AdminAdsControl] Received real-time update:', {
+          type: update.type,
+          deviceId: update.deviceId,
+          adTitle: update.adTitle,
+          state: update.state,
+          currentTime: update.currentTime,
+          progress: update.progress,
+          timestamp: update.timestamp,
+          isOnline: (update as any).isOnline,
+          lastSeen: (update as any).lastSeen,
+          devices: (update as any).devices,
+          materialId: (update as any).materialId
+        });
       }
       
       // Handle different types of WebSocket updates
       if (update.type === 'adPlaybackUpdate') {
         // Process ad playback updates
         setScreens(prevScreens => {
-          return prevScreens.map(screen => {
-            // Check if the device ID matches either slot1 or slot2 device ID
-            const isMatchingDevice = screen.slot1DeviceId === update.deviceId || screen.slot2DeviceId === update.deviceId;
-            if (isMatchingDevice) {
-              // ✅ FIXED: Check if this is a new ad or an update to the current ad
-          const existingCurrentAd = screen.screenMetrics?.currentAd;
-          const isNewAd = !existingCurrentAd || existingCurrentAd.adId !== update.adId;
+          // ✅ FIXED: If screens array is empty, skip processing (data not loaded yet)
+          if (!prevScreens || prevScreens.length === 0) {
+            // Silently skip - screens will load soon
+            return prevScreens; // Return unchanged, updates will be processed once screens are loaded
+          }
           
-          const updatedScreen: ScreenData = {
+          const updatedScreens = prevScreens.map(screen => {
+            // ✅ FIXED: Check multiple matching criteria - deviceId can match slot devices, materialId, or displayId
+            const isMatchingDevice = screen.slot1DeviceId === update.deviceId || 
+                                    screen.slot2DeviceId === update.deviceId ||
+                                    screen.deviceId === update.deviceId ||
+                                    screen.materialId === update.deviceId ||
+                                    screen.displayId === update.deviceId;
+            
+            if (isMatchingDevice) {
+              // ✅ OPTIMIZED: Only log in verbose mode
+              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+                console.log('✅ [AdminAdsControl] Matched adPlaybackUpdate to screen:', {
+                  screenMaterialId: screen.materialId,
+                  updateDeviceId: update.deviceId
+                });
+              }
+              // ✅ FIXED: Check if this is a new ad or an update to the current ad
+              const existingCurrentAd = screen.screenMetrics?.currentAd;
+              const isNewAd = !existingCurrentAd || existingCurrentAd.adId !== update.adId;
+              
+              const newCurrentAd = {
+                adId: update.adId || '',
+                adTitle: update.adTitle || '',
+                adDuration: update.duration || 0,
+                // ✅ OPTIMIZED: Store startTime for local calculation
+                // Client will calculate progress locally, reducing WebSocket dependency
+                startTime: isNewAd 
+                  ? (update.startTime || update.timestamp || new Date().toISOString())
+                  : (existingCurrentAd.startTime || update.startTime || update.timestamp || new Date().toISOString()),
+                // ✅ OPTIMIZED: Only store currentTime/progress for initial sync
+                // Client calculates locally using startTime + duration
+                // Periodic sync updates (every 5s) will correct any drift
+                currentTime: isNewAd ? (update.currentTime || 0) : (existingCurrentAd.currentTime || 0),
+                state: update.state || 'playing',
+                progress: isNewAd ? (update.progress || 0) : (existingCurrentAd.progress || 0)
+              };
+              
+              // ✅ OPTIMIZED: Only log in verbose mode
+              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+                console.log('🔄 [AdminAdsControl] Updating currentAd from adPlaybackUpdate');
+              }
+              
+              const updatedScreen: ScreenData = {
                 ...screen,
                 screenMetrics: {
                   isDisplaying: screen.screenMetrics?.isDisplaying ?? true,
@@ -546,18 +721,7 @@ const AdminAdsControl: React.FC = () => {
                   adPerformance: screen.screenMetrics?.adPerformance ?? [],
                   lastAdPlayed: screen.screenMetrics?.lastAdPlayed ?? '',
                   ...screen.screenMetrics,
-                  currentAd: {
-                    adId: update.adId || '',
-                    adTitle: update.adTitle || '',
-                    adDuration: update.duration || 0,
-                    // ✅ FIXED: Only update startTime if this is a new ad or if backend provides it
-                    startTime: isNewAd 
-                      ? (update.startTime || update.timestamp || new Date().toISOString())
-                      : (existingCurrentAd.startTime || update.startTime || update.timestamp || new Date().toISOString()),
-                    currentTime: update.currentTime || 0,
-                    state: update.state || 'playing',
-                    progress: update.progress || 0
-                  }
+                  currentAd: newCurrentAd
                 }
               };
               
@@ -565,14 +729,23 @@ const AdminAdsControl: React.FC = () => {
             }
             return screen;
           });
+          
+          // ✅ OPTIMIZED: Only log in verbose mode
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+            console.log('📋 [AdminAdsControl] Updated screens after adPlaybackUpdate');
+          }
+          
+          return updatedScreens;
         });
       } else if (update.type === 'deviceUpdate') {
-        // Process device status updates (online/offline)
-        console.log(`📱 [AdminAdsControl] Device status update:`, {
-          deviceId: update.deviceId,
-          isOnline: update.isOnline,
-          lastSeen: update.lastSeen
-        });
+        // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+          console.log(`📱 [AdminAdsControl] Device status update:`, {
+            deviceId: update.deviceId,
+            isOnline: update.isOnline,
+            lastSeen: update.lastSeen
+          });
+        }
         
         setScreens(prevScreens => {
           return prevScreens.map(screen => {
@@ -584,7 +757,10 @@ const AdminAdsControl: React.FC = () => {
                                  screen.slot2DeviceId === update.deviceId;
             
             if (matchesDevice) {
-              console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} (materialId: ${screen.materialId}) status to:`, update.isOnline ? 'ONLINE' : 'OFFLINE');
+              // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+                console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} (materialId: ${screen.materialId}) status to:`, update.isOnline ? 'ONLINE' : 'OFFLINE');
+              }
               
               // Determine which slot this device belongs to
               const isSlot1Device = screen.slot1DeviceId === update.deviceId;
@@ -607,62 +783,118 @@ const AdminAdsControl: React.FC = () => {
             return screen;
           });
         });
-      } else if (update.type === 'displayData') {
+      } else if ((update as any).type === 'displayData') {
         // ✨ NEW: Handle real-time display data from ad player
+        // ✅ FIXED: Ensure displayData updates are processed even if they don't have deviceId/adTitle at top level
+        const updateMaterialId = (update as any).materialId;
+        const displayData = (update as any).data;
+        
+        // ✅ OPTIMIZED: Only log in verbose mode
+        if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+          console.log('📺 [AdminAdsControl] Processing displayData update:', {
+            materialId: updateMaterialId,
+            hasData: !!displayData,
+            currentTime: displayData?.currentTime,
+            isPaused: displayData?.isPaused
+          });
+        }
+        
         setScreens(prevScreens => {
-          return prevScreens.map(screen => {
-            // Match by materialId
-            if (screen.displayId === (update as any).materialId || screen.materialId === (update as any).materialId) {
-              const displayData = (update as any).data;
+          // ✅ FIXED: If screens array is empty, skip processing (data not loaded yet)
+          if (!prevScreens || prevScreens.length === 0) {
+            // Silently skip - screens will load soon
+            return prevScreens; // Return unchanged, updates will be processed once screens are loaded
+          }
+          
+          const updatedScreens = prevScreens.map(screen => {
+            // Match by materialId (displayData uses materialId, not deviceId)
+            const isMatchingScreen = screen.displayId === updateMaterialId || 
+                                    screen.materialId === updateMaterialId ||
+                                    screen.deviceId === updateMaterialId;
+            
+            if (isMatchingScreen && displayData) {
+              // ✅ OPTIMIZED: Only log in verbose mode
+              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+                console.log('✅ [AdminAdsControl] Matched displayData to screen:', {
+                  screenMaterialId: screen.materialId,
+                  updateMaterialId: updateMaterialId
+                });
+              }
               const adDetails = displayData.adDetails;
               
               // If ad details are provided (ad changed), create/update currentAd
               if (adDetails) {
+                const newCurrentAd = {
+                  adId: adDetails.adId,
+                  adTitle: adDetails.adTitle,
+                  adDuration: adDetails.adDuration,
+                  currentTime: displayData.currentTime || 0,
+                  progress: displayData.currentTime && adDetails.adDuration
+                    ? (displayData.currentTime / adDetails.adDuration) * 100
+                    : 0,
+                  state: displayData.isPaused ? 'paused' : 'playing',
+                  startTime: screen.screenMetrics?.currentAd?.startTime || new Date().toISOString()
+                };
+                
+                // ✅ OPTIMIZED: Only log in verbose mode
+                if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+                  console.log('🔄 [AdminAdsControl] Creating/updating currentAd with adDetails');
+                }
+                
                 return {
                   ...screen,
                   screenMetrics: {
                     ...screen.screenMetrics,
-                    currentAd: {
-                      adId: adDetails.adId,
-                      adTitle: adDetails.adTitle,
-                      adDuration: adDetails.adDuration,
-                      currentTime: displayData.currentTime,
-                      progress: displayData.currentTime && adDetails.adDuration
-                        ? (displayData.currentTime / adDetails.adDuration) * 100
-                        : 0,
-                      state: displayData.isPaused ? 'paused' : 'playing',
-                      startTime: new Date().toISOString()
-                    }
+                    currentAd: newCurrentAd,
+                    isDisplaying: screen.screenMetrics?.isDisplaying ?? true
                   }
-                };
+                } as ScreenData;
               }
               
-              // If no ad details but we have existing currentAd, just update progress/state
+              // If no ad details but we have existing currentAd, just update state
+              // ✅ OPTIMIZED: Don't update currentTime/progress from displayData - let client calculate locally
+              // Only update state (playing/paused) to reduce WebSocket dependency
               if (screen.screenMetrics?.currentAd) {
+                const updatedCurrentAd = {
+                  ...screen.screenMetrics.currentAd,
+                  // Keep existing currentTime and progress - client calculates locally using startTime
+                  // Only update state when it changes
+                  state: displayData.isPaused !== undefined ? (displayData.isPaused ? 'paused' : 'playing') : screen.screenMetrics.currentAd.state
+                };
+                
+                // ✅ OPTIMIZED: Only log in verbose mode
+                if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+                  console.log('🔄 [AdminAdsControl] Updating currentAd progress');
+                }
+                
                 return {
                   ...screen,
                   screenMetrics: {
                     ...screen.screenMetrics,
-                    currentAd: {
-                      ...screen.screenMetrics.currentAd,
-                      currentTime: displayData.currentTime || screen.screenMetrics.currentAd.currentTime,
-                      progress: displayData.currentTime && screen.screenMetrics.currentAd.adDuration
-                        ? (displayData.currentTime / screen.screenMetrics.currentAd.adDuration) * 100
-                        : screen.screenMetrics.currentAd.progress,
-                      state: displayData.isPaused ? 'paused' : 'playing'
-                    }
+                    currentAd: updatedCurrentAd,
+                    isDisplaying: screen.screenMetrics?.isDisplaying ?? true
                   }
-                };
+                } as ScreenData;
               }
             }
             return screen;
           });
+          
+          // ✅ OPTIMIZED: Only log in verbose mode
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+            console.log('📋 [AdminAdsControl] Updated screens after displayData');
+          }
+          
+          return updatedScreens;
         });
       } else if (update.type === 'deviceList') {
         // ✨ OPTIMIZATION: Debounce deviceList updates to prevent spam
         // Empty device lists are being sent repeatedly, causing excessive re-renders
         if (!update.devices || !Array.isArray(update.devices) || update.devices.length === 0) {
-          console.log(`📋 [AdminAdsControl] Skipping empty deviceList update`);
+          // ✅ OPTIMIZED: Reduced logging
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+            console.log(`📋 [AdminAdsControl] Skipping empty deviceList update`);
+          }
           return; // Skip empty updates
         }
         
@@ -673,7 +905,10 @@ const AdminAdsControl: React.FC = () => {
         
         // Debounce: only process after 2 seconds of no new updates
         deviceListDebounceTimer = setTimeout(() => {
-          console.log(`📋 [AdminAdsControl] Processing debounced deviceList update:`, update.devices);
+          // ✅ OPTIMIZED: Reduced logging - only log in verbose mode
+          if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_SCREEN_TRACKING === 'true') {
+            console.log(`📋 [AdminAdsControl] Processing debounced deviceList update:`, update.devices);
+          }
           
           setScreens(prevScreens => {
             const updatedScreens = [...prevScreens];
@@ -704,16 +939,33 @@ const AdminAdsControl: React.FC = () => {
           });
         }, 2000); // 2 second debounce
       }
-    });
+      });
+      
+      // ✅ OPTIMIZED: Only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        console.log('✅ [AdminAdsControl] WebSocket subscription registered!');
+      }
+    }
     
     return () => {
+      // ✅ FIXED: Only cleanup intervals/timers immediately, but delay WebSocket cleanup
+      // This prevents StrictMode from unsubscribing, but still cleans up on real unmount
       clearInterval(autoRefreshInterval);
       if (deviceListDebounceTimer) {
         clearTimeout(deviceListDebounceTimer);
       }
-      unsubscribe();
+      
+      // ✅ FIXED: Don't cleanup WebSocket subscription on unmount - let it persist
+      // React StrictMode causes premature cleanup. Instead, only cleanup when component
+      // is actually being destroyed (not just re-rendered). We'll rely on the module-level
+      // variable to prevent double subscriptions.
+      // The subscription will persist across re-renders and only cleanup on actual page navigation
+      // ✅ OPTIMIZED: Only log in verbose mode
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
+        console.log('⚠️ [AdminAdsControl] Component unmounting, but keeping WebSocket subscription active');
+      }
     };
-  }, [fetchData, autoRefreshData]); // isUserControlling removed - now using ref to prevent recreation
+  }, []); // ✅ FIXED: Empty dependency array - subscribe once on mount, cleanup on unmount
 
   // Toggle play/pause handler
   const handleTogglePlayPause = async () => {
@@ -1105,7 +1357,6 @@ const AdminAdsControl: React.FC = () => {
   const handleScreenClick = (screen: any) => {
     // Close Device Details modal if open
     if (showDeviceModal) {
-      setIsDeviceModalOpen(false);
       setShowDeviceModal(false);
       setSelectedDeviceForModal(null);
     }

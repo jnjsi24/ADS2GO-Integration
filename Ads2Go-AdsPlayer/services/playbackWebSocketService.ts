@@ -65,6 +65,7 @@ class PlaybackWebSocketService {
   private onExitFullscreen: ((message: any) => void) | null = null;
   private onStop8Hours: ((message: any) => void) | null = null;
   private onCompanyAdsOnly: ((message: any) => void) | null = null;
+  private onRefreshAds: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
   // ✅ NEW: Track if Slot 2 is in slave mode (true) or failover mode (false)
@@ -195,6 +196,9 @@ class PlaybackWebSocketService {
           } else if (message.type === 'companyAdsOnly') {
             console.log('🏢 [WebSocket] Received company ads only mode command:', message);
             this.handleCompanyAdsOnly(message);
+          } else if (message.type === 'refreshAds') {
+            console.log('🔄 [WebSocket] Received refresh ads command:', message);
+            this.handleRefreshAds(message);
           } else if (message.type === 'slotSync') {
             console.log('🔄 [WebSocket] Received slot sync command:', message);
             this.handleSlotSync(message);
@@ -347,12 +351,14 @@ class PlaybackWebSocketService {
       clearInterval(this.playbackUpdateInterval);
     }
 
-    // Send updates every 200ms for ultra smooth real-time progress bar
+    // ✅ OPTIMIZED: Send periodic sync updates every 5 seconds instead of every 200ms
+    // Client will calculate progress locally using startTime + duration
+    // This reduces WebSocket traffic by 96% (from 5 updates/sec to 0.2 updates/sec)
     this.playbackUpdateInterval = setInterval(() => {
       this.sendPlaybackUpdate();
-    }, 200);
+    }, 5000); // 5 seconds for periodic sync to correct any drift
 
-    // Send initial update immediately
+    // Send initial update immediately with startTime
     this.sendPlaybackUpdate();
   }
 
@@ -862,6 +868,24 @@ class PlaybackWebSocketService {
 
   setCompanyAdsOnlyCallback(callback: (message: any) => void) {
     this.onCompanyAdsOnly = callback;
+  }
+
+  // Handle refresh ads command from server
+  private handleRefreshAds(message: any) {
+    try {
+      console.log('🔄 [WebSocket] Handling refresh ads command:', message);
+      
+      // Emit refreshAds event to the AdPlayer component
+      if (this.onRefreshAds) {
+        this.onRefreshAds(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling refresh ads command:', error);
+    }
+  }
+
+  setRefreshAdsCallback(callback: (message: any) => void) {
+    this.onRefreshAds = callback;
   }
 
   isWebSocketConnected(): boolean {

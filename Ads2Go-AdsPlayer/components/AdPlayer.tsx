@@ -219,6 +219,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setStop8HoursCallback(handleStop8Hours);
       // Set up company ads only callback
       playbackWebSocketService.setCompanyAdsOnlyCallback(handleCompanyAdsOnly);
+      // Set up refresh ads callback
+      playbackWebSocketService.setRefreshAdsCallback(handleRefreshAds);
       
       // Connect to WebSocket
       playbackWebSocketService.connect().then((connected) => {
@@ -270,6 +272,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setPauseAllCallback(() => {});
       playbackWebSocketService.setResumeAllCallback(() => {});
       playbackWebSocketService.setStopAllCallback(() => {});
+      playbackWebSocketService.setRefreshAdsCallback(() => {});
       
       // Clear position drift check interval
       if (positionDriftCheckInterval.current) {
@@ -1529,6 +1532,28 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log(`⏰ [AdPlayer] Device will lock at ${message.lockTime} due to time-based lock`);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling company ads only mode:', error);
+    }
+  };
+
+  // ✨ NEW: Handle refresh ads command from server (when ads are moved/removed)
+  const handleRefreshAds = async (message: any) => {
+    try {
+      console.log('🔄 [AdPlayer] Received refresh ads command:', message);
+      console.log(`🔄 [AdPlayer] Reason: ${message.reason || 'adsUpdated'}`);
+      
+      // Reset the fetch flag to allow refetching
+      hasFetchedInitialAds.current = false;
+      
+      // Refetch ads and company ads
+      console.log('🔄 [AdPlayer] Refetching ads...');
+      await Promise.all([
+        fetchAds(),
+        fetchCompanyAds()
+      ]);
+      
+      console.log('✅ [AdPlayer] Ads refreshed successfully');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error refreshing ads:', error);
     }
   };
 

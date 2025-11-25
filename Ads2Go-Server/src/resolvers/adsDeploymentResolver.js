@@ -9,6 +9,7 @@ const Ad = require('../models/Ad');
 const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const deviceStatusService = require('../services/deviceStatusService');
 
 /**
  * Helper function to safely convert any date value to ISO string
@@ -755,6 +756,16 @@ const adsDeploymentResolvers = {
         }
 
         if (deployment.driverId && typeof deployment.driverId === 'object') deployment.driverId = deployment.driverId._id;
+        
+        // ✨ NEW: Notify device to refresh ads after new deployment (when ads are moved)
+        try {
+          deviceStatusService.notifyRefreshAds(materialIdString, 'adsAdded');
+          console.log(`✅ [DeploymentResolver] Notified device ${materialIdString} to refresh ads after new deployment`);
+        } catch (error) {
+          console.error(`❌ [DeploymentResolver] Error notifying device to refresh:`, error);
+          // Don't fail the operation if notification fails
+        }
+        
         return deployment;
       } else {
         // For non-LCD/HEADDRESS materials, use string materialId
@@ -777,6 +788,16 @@ const adsDeploymentResolvers = {
         ]);
 
         if (deployment.driverId && typeof deployment.driverId === 'object') deployment.driverId = deployment.driverId._id;
+        
+        // ✨ NEW: Notify device to refresh ads after new deployment
+        try {
+          deviceStatusService.notifyRefreshAds(materialIdString, 'adsAdded');
+          console.log(`✅ [DeploymentResolver] Notified device ${materialIdString} to refresh ads after new deployment`);
+        } catch (error) {
+          console.error(`❌ [DeploymentResolver] Error notifying device to refresh:`, error);
+          // Don't fail the operation if notification fails
+        }
+        
         return deployment;
       }
     },
@@ -832,6 +853,15 @@ const adsDeploymentResolvers = {
         await Promise.all(
           removalTargets.map(adId => MaterialAvailabilityService.removeAdFromMaterials(adId))
         );
+      }
+
+      // ✨ NEW: Notify device to refresh ads after removal
+      try {
+        deviceStatusService.notifyRefreshAds(materialId, 'adsRemoved');
+        console.log(`✅ [DeploymentResolver] Notified device ${materialId} to refresh ads after removal`);
+      } catch (error) {
+        console.error(`❌ [DeploymentResolver] Error notifying device to refresh:`, error);
+        // Don't fail the operation if notification fails
       }
 
       return result;
