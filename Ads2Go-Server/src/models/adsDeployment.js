@@ -353,6 +353,38 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
     // Save the deployment
     const savedDeployment = await deployment.save();
     
+    // ✅ UPDATE Ad model's materialId array with ONLY current active materials
+    try {
+      const Material = require('./Material');
+      
+      // Find all active deployments for this ad across all materials
+      const activeDeployments = await this.find({
+        'lcdSlots.adId': adId,
+        'lcdSlots.status': { $in: ['SCHEDULED', 'RUNNING'] }
+      });
+      
+      // Get unique material ObjectIds from active deployments
+      const activeMaterialIds = [];
+      for (const dep of activeDeployments) {
+        const material = await Material.findOne({ materialId: dep.materialId });
+        if (material && !activeMaterialIds.some(id => id.toString() === material._id.toString())) {
+          activeMaterialIds.push(material._id);
+        }
+      }
+      
+      // Set ad's materialId array to only contain currently active materials
+      if (activeMaterialIds.length > 0) {
+        ad.materialId = activeMaterialIds;
+        await ad.save({ validateBeforeSave: false });
+        console.log(`✅ Updated ad ${adId}'s materialId to current active materials: [${activeMaterialIds.map(id => id.toString()).join(', ')}]`);
+      } else {
+        console.log(`⚠️ No active materials found for ad ${adId}`);
+      }
+    } catch (materialUpdateError) {
+      console.error(`⚠️ Warning: Could not update ad's materialId array:`, materialUpdateError.message);
+      // Don't fail the deployment if materialId update fails
+    }
+    
     // Create DeviceTracking record if it doesn't exist
     try {
       const DeviceTracking = require('./deviceTracking');
@@ -571,6 +603,38 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     // Save the deployment
     const savedDeployment = await deployment.save();
     
+    // ✅ UPDATE Ad model's materialId array with ONLY current active materials
+    try {
+      const Material = require('./Material');
+      
+      // Find all active deployments for this ad across all materials
+      const activeDeployments = await this.find({
+        'lcdSlots.adId': adId,
+        'lcdSlots.status': { $in: ['SCHEDULED', 'RUNNING'] }
+      });
+      
+      // Get unique material ObjectIds from active deployments
+      const activeMaterialIds = [];
+      for (const dep of activeDeployments) {
+        const material = await Material.findOne({ materialId: dep.materialId });
+        if (material && !activeMaterialIds.some(id => id.toString() === material._id.toString())) {
+          activeMaterialIds.push(material._id);
+        }
+      }
+      
+      // Set ad's materialId array to only contain currently active materials
+      if (activeMaterialIds.length > 0) {
+        ad.materialId = activeMaterialIds;
+        await ad.save({ validateBeforeSave: false });
+        console.log(`✅ Updated ad ${adId}'s materialId to current active materials: [${activeMaterialIds.map(id => id.toString()).join(', ')}]`);
+      } else {
+        console.log(`⚠️ No active materials found for ad ${adId}`);
+      }
+    } catch (materialUpdateError) {
+      console.error(`⚠️ Warning: Could not update ad's materialId array:`, materialUpdateError.message);
+      // Don't fail the deployment if materialId update fails
+    }
+    
     // Create DeviceTracking record if it doesn't exist
     try {
       const DeviceTracking = require('./deviceTracking');
@@ -709,6 +773,40 @@ AdsDeploymentSchema.statics.removeFromLCD = async function(materialId, adIds, re
   }
 
   await deployment.save();
+  
+  // ✅ UPDATE Ad model's materialId array to remove this material
+  try {
+    const Material = require('./Material');
+    const Ad = require('./Ad');
+    const material = await Material.findOne({ materialId });
+    
+    if (material) {
+      const materialObjectId = material._id.toString();
+      
+      // Remove this material from each removed ad's materialId array
+      for (const removedSlot of removedSlots) {
+        try {
+          const ad = await Ad.findById(removedSlot.adId);
+          
+          if (ad && ad.materialId && Array.isArray(ad.materialId)) {
+            const originalLength = ad.materialId.length;
+            ad.materialId = ad.materialId.filter(mid => mid.toString() !== materialObjectId);
+            
+            if (ad.materialId.length < originalLength) {
+              await ad.save();
+              console.log(`✅ Removed material ${materialId} from ad ${removedSlot.adId}'s materialId array`);
+            }
+          }
+        } catch (adUpdateError) {
+          console.error(`⚠️ Warning: Could not update ad ${removedSlot.adId}'s materialId:`, adUpdateError.message);
+          // Continue with other ads even if one fails
+        }
+      }
+    }
+  } catch (materialUpdateError) {
+    console.error(`⚠️ Warning: Could not update ads' materialId arrays:`, materialUpdateError.message);
+    // Don't fail the removal if materialId update fails
+  }
   
   // Get available slots after removal
   const availableSlots = [];

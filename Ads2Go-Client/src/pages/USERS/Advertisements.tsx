@@ -81,8 +81,12 @@ const Advertisements: React.FC = () => {
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
   const [hoveredVideoId, setHoveredVideoId] = useState<string | null>(null);
   
-  // ✅ OPTIMIZATION: Use shared hook (static variant - no polling needed)
-  const { data, loading, error } = useMyAdsStatic();
+  // ✅ Use cache-and-network to ensure fresh data while maintaining cache benefits
+  // This ensures material assignments are always up-to-date
+  const { data, loading, error } = useMyAdsStatic({
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+  });
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
   });

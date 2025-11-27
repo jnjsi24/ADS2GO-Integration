@@ -210,9 +210,12 @@ const AdDetailsPage: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   
-  // ✅ OPTIMIZATION: Use shared hook (static variant - fetches once, then uses cache)
-  // Removed inline query definition, now imports from centralized location
-  const { loading, error, data, refetch } = useMyAdsStatic();
+  // ✅ Use cache-and-network to ensure fresh data while maintaining cache benefits
+  // This ensures material assignments are always up-to-date
+  const { loading, error, data, refetch } = useMyAdsStatic({
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+  });
 
   // Handle query errors
   useEffect(() => {
@@ -2174,8 +2177,8 @@ const AdDetailsPage: React.FC = () => {
           onClose={() => setShowPaymentModal(false)}
           onSuccess={() => {
             setShowPaymentModal(false);
-            // Optionally refresh the ad data
-            window.location.reload();
+            // Refresh the ad data to show updated payment status
+            refetch();
           }}
         />
       )}
