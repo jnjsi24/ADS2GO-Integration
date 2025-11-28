@@ -26,10 +26,10 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
-  const [isLocked, setIsLocked] = useState(true); // Track lock/unlock state (for lockdown feature) - default locked
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state (for lockdown feature) - default unlocked to allow registration
   const [is8HourLocked, setIs8HourLocked] = useState(false); // Track 8-hour/rest period lock state
   const [lockMessage, setLockMessage] = useState<string>(''); // Store lock message to display
-  const [isFullscreen, setIsFullscreen] = useState(true); // Track fullscreen state - default fullscreen when locked
+  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state - default not fullscreen when unlocked
   const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
@@ -97,6 +97,18 @@ export default function HomeScreen() {
       });
     }
   }, []); // Run once on mount
+
+  // Ensure screen is unlocked when not registered
+  useEffect(() => {
+    if (!registrationData) {
+      // Unlock screen and orientation when not registered to allow registration
+      setIsLocked(false);
+      setIsFullscreen(false);
+      unlockOrientation().catch((error) => {
+        console.error('❌ [Orientation] Error unlocking orientation when not registered:', error);
+      });
+    }
+  }, [registrationData]);
 
   // Device status is now handled by DeviceStatusContext
 
