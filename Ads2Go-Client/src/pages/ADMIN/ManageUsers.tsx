@@ -323,7 +323,11 @@ const ManageUsers: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = async () => {
+  // Get the user object for the user being deleted
+  const userBeingDeleted = users.find((user: User) => user.id === userToDelete);
+  const userFullName = userBeingDeleted ? `${userBeingDeleted.firstName} ${userBeingDeleted.middleName ? userBeingDeleted.middleName + ' ' : ''}${userBeingDeleted.lastName}`.trim() : '';
+
+  const confirmDelete = async (reason?: string) => {
     if (!userToDelete) return;
     
     // Prevent multiple clicks
@@ -335,7 +339,7 @@ const ManageUsers: React.FC = () => {
     
     try {
       const result = await deleteUser({
-        variables: { id: userToDelete },
+        variables: { id: userToDelete, reason: reason || null },
       });
       
       if (result.data?.deleteUser?.success) {
@@ -432,7 +436,7 @@ const ManageUsers: React.FC = () => {
     setShowBulkDeleteModal(true);
   };
 
-  const confirmBulkDelete = async () => {
+  const confirmBulkDelete = async (reason?: string) => {
     if (selectedUsers.length === 0) return;
     
     setIsBulkDeleting(true);
@@ -441,7 +445,7 @@ const ManageUsers: React.FC = () => {
       const results = await Promise.allSettled(
         selectedUsers.map(userId =>
           deleteUser({
-            variables: { id: userId },
+            variables: { id: userId, reason: reason || null },
           })
         )
       );
@@ -1317,6 +1321,9 @@ const ManageUsers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isDeletingUser}
+        requireTitleConfirmation={true}
+        confirmationTitle={userFullName}
+        requireReason={true}
       />
 
       {/* Bulk Delete Confirmation Modal */}
@@ -1330,6 +1337,7 @@ const ManageUsers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isBulkDeleting}
+        requireReason={true}
       />
 
       {/* Restore Confirmation Modal */}

@@ -250,8 +250,8 @@ export const UPDATE_AD = gql`
 `;
 
 export const DELETE_AD = gql`
-  mutation DeleteAd($id: ID!) {
-    deleteAd(id: $id)
+  mutation DeleteAd($id: ID!, $reason: String) {
+    deleteAd(id: $id, reason: $reason)
   }
 `;
 

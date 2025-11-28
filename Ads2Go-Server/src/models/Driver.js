@@ -120,6 +120,10 @@ const DriverSchema = new mongoose.Schema(
       ref: 'Admin',
       default: null
     },
+    reasonForDeletion: {
+      type: String,
+      default: null
+    },
 
     dateJoined: { type: Date, default: Date.now },
     currentBalance: { type: Number, default: 0 },

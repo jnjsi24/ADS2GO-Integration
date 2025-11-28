@@ -1066,7 +1066,7 @@ createDriver: async (_, { input }) => {
       }
     },
 
-    deleteDriver: async (_, { driverId }, { user }) => {
+    deleteDriver: async (_, { driverId, reason }, { user }) => {
       try {
         checkAdmin(user);
         const driver = await Driver.findOne({ driverId });
@@ -1110,6 +1110,7 @@ createDriver: async (_, { input }) => {
         driver.archivedAt = now;
         driver.scheduledDeletionDate = deletionDate;
         driver.deletedBy = user.id; // Store admin who deleted
+        driver.reasonForDeletion = reason || null; // Store deletion reason if provided
         driver.tokenVersion += 1; // Invalidate all sessions
         
         await driver.save();

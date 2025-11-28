@@ -209,6 +209,104 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send ad deletion notification
+   * @param {string} adId - The ID of the deleted ad
+   * @param {boolean} deletedByUser - Whether the ad was deleted by the user (true) or admin (false)
+   * @param {string} reason - The reason for deletion (optional, only for user deletions)
+   */
+  static async sendAdDeletionNotification(adId, deletedByUser = false, reason = null) {
+    try {
+      console.log('🔔 UserNotificationService: Starting ad deletion notification for ad:', adId);
+      
+      const Ad = require('../../models/Ad');
+      const ad = await Ad.findById(adId).populate('userId');
+      if (!ad) {
+        console.error('❌ UserNotificationService: Ad not found:', adId);
+        throw new Error('Ad not found');
+      }
+
+      const user = ad.userId;
+      if (!user) {
+        console.error('❌ UserNotificationService: User not found for ad:', adId);
+        throw new Error('User not found');
+      }
+
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+
+      // Determine notification message based on who deleted it
+      const notificationTitle = deletedByUser 
+        ? '🗑️ Ad Deleted' 
+        : '🗑️ Ad Deleted by Admin';
+      
+      let notificationMessage;
+      if (deletedByUser) {
+        notificationMessage = `Your advertisement "${ad.title}" has been deleted.`;
+        if (reason) {
+          notificationMessage += ` Reason: ${reason}`;
+        }
+        notificationMessage += ' This action cannot be undone.';
+      } else {
+        notificationMessage = `Your advertisement "${ad.title}" has been deleted by an administrator.`;
+        if (reason) {
+          notificationMessage += ` Reason: ${reason}`;
+        }
+        notificationMessage += ' This action cannot be undone.';
+      }
+
+      // Create in-app notification
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        user._id,
+        notificationTitle,
+        notificationMessage,
+        'WARNING',
+        {
+          userRole: 'USER',
+          category: 'AD_DELETION',
+          priority: 'HIGH',
+          adId: ad._id,
+          adTitle: ad.title,
+          data: { deletedByUser }
+        }
+      );
+      console.log('✅ UserNotificationService: In-app notification created');
+
+      // Send email notification using enhanced service
+      console.log('📧 UserNotificationService: Sending email notification...');
+      try {
+        const emailData = await this.getAdDeletionEmailData(user.firstName, ad.title, ad._id, deletedByUser, reason);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'AD_DELETION',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Ad deletion email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Ad deletion email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send ad deletion email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
+
+      return notification;
+    } catch (error) {
+      console.error('❌ UserNotificationService: Error sending ad deletion notification:', error);
+      console.error('❌ UserNotificationService: Error details:', error.message);
+      // Don't throw - deletion should succeed even if notification fails
+      return null;
+    }
+  }
+
+  /**
    * Send ad performance update notification
    */
   static async sendAdPerformanceNotification(userId, adTitle, impressions, plays) {
@@ -577,6 +675,61 @@ class UserNotificationService extends BaseNotificationService {
         firstName,
         changeMessages,
         changedFields
+      }
+    };
+  }
+
+  /**
+   * Get email data for ad deletion notification
+   */
+  static async getAdDeletionEmailData(firstName, adTitle, adId, deletedByUser = false, reason = null) {
+    const deletionContext = deletedByUser 
+      ? 'You have deleted your advertisement' 
+      : 'An administrator has deleted your advertisement';
+    
+    return {
+      subject: deletedByUser ? 'Advertisement Deleted' : 'Advertisement Deleted by Admin',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">🗑️ Advertisement Deleted</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName},</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">${deletionContext}.</p>
+            
+            <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <h3 style="color: #856404; margin: 0 0 10px 0;">Ad Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #dc3545; font-weight: bold;">DELETED 🗑️</span></p>
+              ${reason ? `<p style="margin: 5px 0; color: #333;"><strong>Reason:</strong> ${reason}</p>` : ''}
+            </div>
+            
+            <div style="background-color: #f8d7da; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545;">
+              <p style="margin: 0; color: #721c24; font-weight: bold;">⚠️ Important Notice:</p>
+              <p style="margin: 5px 0 0 0; color: #721c24;">
+                This action cannot be undone. The advertisement has been removed from all devices and will be permanently deleted after 30 days.
+                ${deletedByUser ? '' : 'If you believe this was done in error, please contact our support team.'}
+              </p>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/advertisements" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View My Advertisements
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              ${deletedByUser ? 'If you have any questions, please contact our support team.' : 'If you have questions about this deletion, please contact our support team immediately.'}
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        adTitle,
+        adId,
+        deletedByUser,
+        reason
       }
     };
   }

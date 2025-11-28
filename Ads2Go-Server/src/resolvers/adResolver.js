@@ -1116,7 +1116,7 @@ const adResolvers = {
       return ad;
     },
 
-    deleteAd: async (_, { id }, { user }) => {
+    deleteAd: async (_, { id, reason }, { user }) => {
       checkAuth(user);
       
       try {
@@ -1126,14 +1126,13 @@ const adResolvers = {
           throw new Error('Ad not found');
         }
 
-        // 2. Check permissions: Only Admins (not SuperAdmins) can delete ads, users can only delete their own pending ads
+        // 2. Check permissions: Admins can delete any ad, users can delete their own ads (any status)
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
         const canDeleteAsAdmin = user.role === 'ADMIN'; // Only Admins can delete ads
         const isOwner = ad.userId.toString() === user.id;
-        const isPending = ad.status === 'PENDING';
 
-        if (!isAdmin && (!isOwner || !isPending)) {
-          throw new Error('You can only delete your own pending advertisements');
+        if (!isAdmin && !isOwner) {
+          throw new Error('You can only delete your own advertisements');
         }
 
         // Check if already archived
@@ -1153,10 +1152,19 @@ const adResolvers = {
         ad.scheduledDeletionDate = deletionDate;
         ad.status = 'ARCHIVED'; // Change status so devices won't play it
         
-        // Store admin who deleted (only if Admin deleted it, not if user deleted their own pending ad)
+        // Track who deleted the ad
         if (canDeleteAsAdmin) {
+          // Admin deletion
           ad.deletedBy = user.id;
-          console.log(`🗑️ Ad ${ad._id} deleted by Admin ID: ${user.id}, Role: ${user.role}`);
+          ad.deletedByUser = false; // Track that it was deleted by admin
+          ad.reasonForDeletion = reason || null; // Store deletion reason if provided
+          console.log(`🗑️ Ad ${ad._id} deleted by Admin ID: ${user.id}, Role: ${user.role}${reason ? ` with reason: ${reason}` : ''}`);
+        } else if (isOwner) {
+          // User deletion - store user ID in deletedBy and mark as user deletion
+          ad.deletedBy = user.id;
+          ad.deletedByUser = true; // Track that it was deleted by user (cannot be restored)
+          ad.reasonForDeletion = reason || null; // Store deletion reason if provided
+          console.log(`🗑️ Ad ${ad._id} deleted by User ID: ${user.id}${reason ? ` with reason: ${reason}` : ''}`);
         }
         
         // Skip validation when archiving to avoid issues with required fields that might be missing
@@ -1262,6 +1270,16 @@ const adResolvers = {
           // Don't fail the archive if cleanup fails - ad is already archived
         }
 
+        // ✅ SEND NOTIFICATION: Notify user when ad is deleted
+        try {
+          const UserNotificationService = require('../services/notifications/UserNotificationService');
+          await UserNotificationService.sendAdDeletionNotification(ad._id, ad.deletedByUser, ad.reasonForDeletion);
+          console.log(`📧 Deletion notification sent to user for ad ${ad._id}`);
+        } catch (notifError) {
+          console.error(`❌ Error sending deletion notification (non-critical):`, notifError);
+          // Don't fail the deletion if notification fails
+        }
+
         return true;
 
       } catch (error) {
@@ -1291,6 +1309,11 @@ const adResolvers = {
           throw new Error('Ad is not archived');
         }
 
+        // Prevent restoration of user-deleted ads
+        if (ad.deletedByUser === true) {
+          throw new Error('This advertisement was deleted by the user and cannot be restored');
+        }
+
         console.log(`✅ Restoring ad: ${id} (${ad.title})`);
 
         ad.isArchived = false;
@@ -1302,10 +1325,12 @@ const adResolvers = {
         if (canRestoreAsAdmin) {
           ad.restoredBy = user.id;
           ad.deletedBy = null; // Clear deletedBy when restored
+          ad.deletedByUser = false; // Clear deletedByUser flag
           console.log(`✅ Ad ${ad._id} restored by Admin ID: ${user.id}, Role: ${user.role}`);
         } else if (isOwner) {
           // User restoring their own ad - clear deletedBy but don't set restoredBy
           ad.deletedBy = null;
+          ad.deletedByUser = false; // Clear deletedByUser flag
         }
         
         // Skip validation when restoring to avoid issues with required fields that might be missing

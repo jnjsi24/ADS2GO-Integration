@@ -62,6 +62,7 @@ module.exports = gql`
     isArchived: Boolean!
     archivedAt: String
     scheduledDeletionDate: String
+    reasonForDeletion: String
   }
 
   type InspectionPhoto {
@@ -174,7 +175,7 @@ extend type Query {
     # Admin-only
     createMaterial(input: CreateMaterialInput!): Material
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
-    deleteMaterial(id: ID!): String
+    deleteMaterial(id: ID!, reason: String): String
     restoreMaterial(id: ID!): String
 
     # Material Assignment (Admin-only)

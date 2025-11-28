@@ -96,6 +96,10 @@ const MaterialSchema = new mongoose.Schema({
   scheduledDeletionDate: {
     type: Date,
     default: null
+  },
+  reasonForDeletion: {
+    type: String,
+    default: null
   }
 }, { 
   timestamps: true,

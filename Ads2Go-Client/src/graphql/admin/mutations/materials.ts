@@ -20,8 +20,8 @@ export const CREATE_MATERIAL = gql`
 `;
 
 export const DELETE_MATERIAL = gql`
-  mutation DeleteMaterial($id: ID!) {
-    deleteMaterial(id: $id)
+  mutation DeleteMaterial($id: ID!, $reason: String) {
+    deleteMaterial(id: $id, reason: $reason)
   }
 `;
 

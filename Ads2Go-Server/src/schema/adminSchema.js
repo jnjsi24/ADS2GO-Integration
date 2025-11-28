@@ -164,7 +164,7 @@ const typeDefs = gql`
     restoreAdmin(id: ID!): AdminResponse!
 
     # User management
-    deleteUser(id: ID!): ResponseMessage!
+    deleteUser(id: ID!, reason: String): ResponseMessage!
     restoreUser(id: ID!): ResponseMessage!
 
     # Password management

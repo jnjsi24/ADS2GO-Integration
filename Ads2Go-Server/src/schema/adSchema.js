@@ -111,6 +111,8 @@ const adTypeDefs = gql`
     approvedBy: Admin
     rejectedBy: Admin
     deletedBy: Admin
+    deletedByUser: Boolean!
+    reasonForDeletion: String
     restoredBy: Admin
   }
 
@@ -168,7 +170,7 @@ const adTypeDefs = gql`
     createAd(input: CreateAdInput!): Ad! # Deprecated - not used, kept for schema compatibility
     createFlexibleAd(input: FlexibleAdInput!): Ad!
     updateAd(id: ID!, input: UpdateAdInput!): Ad!
-    deleteAd(id: ID!): Boolean!
+    deleteAd(id: ID!, reason: String): Boolean!
     restoreAd(id: ID!): Boolean!
   }
 `;

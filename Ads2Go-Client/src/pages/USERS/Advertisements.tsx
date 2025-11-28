@@ -34,7 +34,7 @@ type Ad = {
   adType: string;
   vehicleType: string;
   price: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'SCHEDULED' | 'ENDED' | 'CANCELLED' | 'ARCHIVED';
   paymentStatus?: string | null;
   reasonForReject?: string;
   createdAt: string;
@@ -50,7 +50,7 @@ type Ad = {
   };
 };
 
-const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'Running'];
+const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'Running', 'Scheduled', 'Ended', 'Cancelled', 'Archived'];
 const sortByOptions = ['Newest First', 'Oldest First', 'Start Date (Newest)', 'End Date (Soonest)', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
 const Advertisements: React.FC = () => {
@@ -62,7 +62,7 @@ const Advertisements: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('Running');
   const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
   const [dateFilter, setDateFilter] = useState('');
   const [showCreateAdPopup, setShowCreateAdPopup] = useState(false);
@@ -201,10 +201,13 @@ const Advertisements: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = async () => {
+  // Get the ad object for the ad being deleted
+  const adBeingDeleted = data?.getMyAds?.find((ad: Ad) => ad.id === adToDelete);
+
+  const confirmDelete = async (reason?: string) => {
     if (adToDelete) {
       try {
-        await deleteAd({ variables: { id: adToDelete } });
+        await deleteAd({ variables: { id: adToDelete, reason: reason || null } });
         setShowDeleteModal(false);
         setAdToDelete(null);
       } catch (error) {
@@ -708,6 +711,14 @@ const Advertisements: React.FC = () => {
                         ? "bg-red-200 text-red-800"
                         : ad.status === "RUNNING"
                         ? "bg-green-200 text-green-800"
+                        : ad.status === "SCHEDULED"
+                        ? "bg-purple-200 text-purple-800"
+                        : ad.status === "ENDED"
+                        ? "bg-gray-200 text-gray-800"
+                        : ad.status === "CANCELLED"
+                        ? "bg-red-200 text-red-800"
+                        : ad.status === "ARCHIVED"
+                        ? "bg-gray-300 text-gray-700"
                         : "bg-gray-200 text-gray-800"
                     }`}
                   >
@@ -940,6 +951,14 @@ const Advertisements: React.FC = () => {
                           ? "bg-red-200 text-red-800"
                           : ad.status === "RUNNING"
                           ? "bg-green-200 text-green-800"
+                          : ad.status === "SCHEDULED"
+                          ? "bg-purple-200 text-purple-800"
+                          : ad.status === "ENDED"
+                          ? "bg-gray-200 text-gray-800"
+                          : ad.status === "CANCELLED"
+                          ? "bg-red-200 text-red-800"
+                          : ad.status === "ARCHIVED"
+                          ? "bg-gray-300 text-gray-700"
                           : "bg-gray-200 text-gray-800"
                       }`}
                     >
@@ -1168,10 +1187,17 @@ const Advertisements: React.FC = () => {
           onClose={cancelDelete}
           onConfirm={confirmDelete}
           title="Delete Advertisement"
-          message="Are you sure you want to delete this advertisement? This action cannot be undone."
+          message={
+            adBeingDeleted?.status === 'RUNNING' || adBeingDeleted?.status === 'APPROVED' || adBeingDeleted?.status === 'SCHEDULED'
+              ? "Are you sure you want to delete this running advertisement? This action cannot be undone and the ad will be immediately removed from all devices. No refund will be issued."
+              : "Are you sure you want to delete this advertisement? This action cannot be undone."
+          }
           confirmText="Delete"
           cancelText="Cancel"
           confirmButtonClass="bg-red-600 hover:bg-red-700"
+          requireTitleConfirmation={true}
+          confirmationTitle={adBeingDeleted?.title || ''}
+          requireReason={true}
         />
         <style>
           {`

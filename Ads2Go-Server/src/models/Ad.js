@@ -116,6 +116,14 @@ const AdSchema = new mongoose.Schema({
     ref: 'Admin',
     default: null
   },
+  deletedByUser: {
+    type: Boolean,
+    default: false
+  },
+  reasonForDeletion: {
+    type: String,
+    default: null
+  },
   restoredBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin',

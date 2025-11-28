@@ -33,8 +33,8 @@ export const REJECT_DRIVER = gql`
 `;
 
 export const DELETE_DRIVER = gql`
-  mutation DeleteDriver($driverId: ID!) {
-    deleteDriver(driverId: $driverId) {
+  mutation DeleteDriver($driverId: ID!, $reason: String) {
+    deleteDriver(driverId: $driverId, reason: $reason) {
       success
       message
     }

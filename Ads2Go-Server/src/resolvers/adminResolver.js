@@ -402,7 +402,7 @@ const resolvers = {
       return true;
     },
 
-    deleteUser: async (_, { id }, { admin }) => {
+    deleteUser: async (_, { id, reason }, { admin }) => {
       console.log('🗑️ deleteUser called with context:', { admin: admin ? { id: admin.id, email: admin.email, role: admin.role } : null });
       checkAuth(admin);
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
@@ -433,6 +433,7 @@ const resolvers = {
       user.isArchived = true;
       user.archivedAt = now;
       user.scheduledDeletionDate = deletionDate;
+      user.reasonForDeletion = reason || null; // Store deletion reason if provided
       
       await user.save();
       

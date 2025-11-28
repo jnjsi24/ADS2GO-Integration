@@ -29,12 +29,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 type DeploymentTabProps = {
   statusFilter: string; // or stricter union type
   onStatusChange: (status: string) => void;
+  onDeleteAd?: (adId: string, adTitle: string) => void; // Callback to handle ad deletion and navigation
 };
 
 
 const DeploymentTab: React.FC<DeploymentTabProps> = ({
   statusFilter: parentFilter,
-  onStatusChange
+  onStatusChange,
+  onDeleteAd
 }) => {
   const [deploymentFilter, setDeploymentFilter] = useState(parentFilter || 'all');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -390,6 +392,20 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     const key = getSlotKey(slot);
     setSlotActionSelection((prev) => {
       if (!prev.isOpen) return prev;
+      
+      // For delete action, only allow single selection
+      if (prev.action === 'delete') {
+        const isSelected = prev.selectedSlotIds.includes(key);
+        // If clicking the same slot, deselect it. Otherwise, select only this slot.
+        const nextSelected = isSelected ? [] : [key];
+        return {
+          ...prev,
+          selectedSlotIds: nextSelected,
+          targetDeploymentId: ''
+        };
+      }
+      
+      // For move action, allow multiple selection
       const isSelected = prev.selectedSlotIds.includes(key);
       const nextSelected = isSelected
         ? prev.selectedSlotIds.filter((id) => id !== key)
@@ -462,6 +478,20 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     if (selectedSlots.length === 0) return;
 
     if (slotActionSelection.action === 'delete') {
+      // If onDeleteAd callback is provided, use it to navigate to All Ads tab
+      // For single selection, navigate directly. For multiple, navigate with the first selected ad.
+      if (onDeleteAd && selectedSlots.length > 0) {
+        const slot = selectedSlots[0]; // Use first selected ad
+        const adId = extractAdIdFromSlot(slot);
+        const adTitle = slot.ad?.title || 'Unknown Ad';
+        if (adId) {
+          resetSlotActionSelection();
+          onDeleteAd(adId, adTitle);
+          return;
+        }
+      }
+      
+      // Fallback: use old behavior when callback not provided
       setDeleteConfirmation({
         isOpen: true,
         slots: selectedSlots,
@@ -538,15 +568,27 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
 
   // Handle delete icon click
   const handleDeleteClick = (slot: LCDSlot, materialId: string, adName: string) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      slots: [slot],
-      materialId,
-      adNames: [adName]
-    });
+    const adId = extractAdIdFromSlot(slot);
+    if (!adId) {
+      alert('Error: Could not determine ad ID');
+      return;
+    }
+    
+    // If onDeleteAd callback is provided, use it to navigate to All Ads tab and delete
+    if (onDeleteAd) {
+      onDeleteAd(adId, adName);
+    } else {
+      // Fallback to old behavior (remove from LCD only)
+      setDeleteConfirmation({
+        isOpen: true,
+        slots: [slot],
+        materialId,
+        adNames: [adName]
+      });
+    }
   };
 
-  // Confirm delete
+  // Confirm delete (fallback for when onDeleteAd is not provided)
   const handleConfirmDelete = async () => {
     if (!deleteConfirmation.materialId || deleteConfirmation.slots.length === 0) return;
     
@@ -573,6 +615,8 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       setDeleteConfirmation({ isOpen: false, slots: [], materialId: '', adNames: [] });
     } catch (error) {
       console.error('Error deleting ad:', error);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -1337,21 +1381,25 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
               </button>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Select one or more active slots you want to {slotActionSelection.action === 'delete' ? 'remove' : 'move'} from this deployment.
+              {slotActionSelection.action === 'delete' 
+                ? 'Select one ad slot you want to remove from this deployment.'
+                : 'Select one or more active slots you want to move from this deployment.'}
             </p>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-gray-500">
                 {selectedSlotCount} selected
               </span>
-              <button
-                onClick={toggleSelectAllSlots}
-                type="button"
-                className="text-xs font-medium text-[#3674B5] hover:text-[#3674B5]/80"
-              >
-                {slotActionSelection.selectedSlotIds.length === slotActionSelection.slots.length
-                  ? 'Clear selection'
-                  : 'Select all'}
-              </button>
+              {slotActionSelection.action !== 'delete' && (
+                <button
+                  onClick={toggleSelectAllSlots}
+                  type="button"
+                  className="text-xs font-medium text-[#3674B5] hover:text-[#3674B5]/80"
+                >
+                  {slotActionSelection.selectedSlotIds.length === slotActionSelection.slots.length
+                    ? 'Clear selection'
+                    : 'Select all'}
+                </button>
+              )}
             </div>
             <div className="space-y-2 max-h-auto mb-4">
               {slotActionSelection.slots.map((slot) => (
@@ -1368,11 +1416,14 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
                     <div className="flex items-center gap-3">
                       <label className="relative inline-flex items-center">
                     <input
-                      type="checkbox"
+                      type={slotActionSelection.action === 'delete' ? 'radio' : 'checkbox'}
+                      name={slotActionSelection.action === 'delete' ? 'slot-selection' : undefined}
                       checked={slotActionSelection.selectedSlotIds.includes(getSlotKey(slot))}
                       onChange={() => toggleSlotSelection(slot)}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 appearance-none border border-gray-300 rounded checked:bg-[#3674B5] transition-colors"
+                      className={slotActionSelection.action === 'delete' 
+                        ? "h-4 w-4 appearance-none border border-gray-300 rounded-full checked:bg-[#3674B5] transition-colors"
+                        : "h-4 w-4 appearance-none border border-gray-300 rounded checked:bg-[#3674B5] transition-colors"}
                     />
 
                     {/* Animated Checkmark Overlay */}

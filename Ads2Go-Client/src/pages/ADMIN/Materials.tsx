@@ -815,14 +815,14 @@ const Materials: React.FC = () => {
     setShowBulkDeleteModal(true);
   };
 
-  const confirmBulkDelete = async () => {
+  const confirmBulkDelete = async (reason?: string) => {
     setIsBulkProcessing(true);
 
     try {
       const results = await Promise.allSettled(
         selectedMaterials.map(id =>
           deleteMaterial({
-            variables: { id }
+            variables: { id, reason: reason || null }
           })
         )
       );
@@ -989,10 +989,14 @@ const Materials: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = async () => {
+  // Get the material object for the material being deleted
+  const materialBeingDeleted = data?.getAllMaterials?.find((material: Material) => material.id === materialToDelete);
+  const materialIdForConfirmation = materialBeingDeleted?.materialId || '';
+
+  const confirmDelete = async (reason?: string) => {
     if (materialToDelete) {
       try {
-        await deleteMaterial({ variables: { id: materialToDelete } });
+        await deleteMaterial({ variables: { id: materialToDelete, reason: reason || null } });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
         setShowDeleteModal(false);
@@ -1596,6 +1600,9 @@ const Materials: React.FC = () => {
       confirmText="Delete"
       cancelText="Cancel"
       confirmButtonClass="bg-red-600 hover:bg-red-700"
+      requireTitleConfirmation={true}
+      confirmationTitle={materialIdForConfirmation}
+      requireReason={true}
     />
     
     {/* Restore Confirmation Modal */}
@@ -1701,6 +1708,7 @@ const Materials: React.FC = () => {
       confirmText={`Delete ${selectedMaterials.length} Material${selectedMaterials.length > 1 ? 's' : ''}`}
       cancelText="Cancel"
       confirmButtonClass="bg-red-600 hover:bg-red-700"
+      requireReason={true}
       isProcessing={isBulkProcessing}
     />
 

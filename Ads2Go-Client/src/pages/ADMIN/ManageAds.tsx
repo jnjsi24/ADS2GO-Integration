@@ -35,7 +35,6 @@ import {
   GET_ALL_ADS,
   UPDATE_AD,
   DELETE_AD,
-  RESTORE_AD,
   type Ad,
   type User
 } from '../../graphql/admin/ads';
@@ -63,10 +62,6 @@ const ManageAds: React.FC = () => {
   
   // Tab management
   const [activeTab, setActiveTab] = useState<'ads' | 'archived' | 'schedule' | 'deployment' | 'company-ads'>('ads');
-  
-  // Restore state
-  const [adToRestore, setAdToRestore] = useState<string | null>(null);
-  const [showRestoreModal, setShowRestoreModal] = useState(false);
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
@@ -267,26 +262,6 @@ const ManageAds: React.FC = () => {
     }
   });
 
-  const [restoreAd] = useMutation(RESTORE_AD, {
-    onCompleted: () => {
-      refetch();
-      addToast({
-        type: 'success',
-        title: 'Restore Successful',
-        message: 'Advertisement restored successfully',
-        duration: 5000
-      });
-    },
-    onError: (error) => {
-      console.error('Error restoring ad:', error);
-      addToast({
-        type: 'error',
-        title: 'Restore Failed',
-        message: `Error restoring ad: ${error.message}`,
-        duration: 6000
-      });
-    }
-  });
 
   // Show loading state while authentication is being checked
   if (isLoading || !isInitialized) {
@@ -391,11 +366,14 @@ const ManageAds: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = async () => {
+  // Get the ad object for the ad being deleted
+  const adBeingDeleted = data?.getAllAds?.find((ad: Ad) => ad.id === adToDelete);
+
+  const confirmDelete = async (reason?: string) => {
     if (adToDelete) {
       try {
         await deleteAd({
-          variables: { id: adToDelete }
+          variables: { id: adToDelete, reason: reason || null }
         });
         addToast({
           type: 'success',
@@ -1074,8 +1052,7 @@ const ManageAds: React.FC = () => {
                     {activeTab === 'archived' ? (
                       <>
                         <div className="col-span-1">Status</div>
-                        <div className="col-span-2">Deletion Date</div>
-                        <div className="col-span-1 text-center">Actions</div>
+                        <div className="col-span-3">Deletion Date</div>
                       </>
                     ) : (
                       <>
@@ -1146,22 +1123,8 @@ const ManageAds: React.FC = () => {
                                 {ad.status === 'ARCHIVED' ? 'Deleted' : ad.status}
                               </span>
                             </div>
-                            <div className="col-span-2 text-sm text-red-600 font-medium">
+                            <div className="col-span-3 text-sm text-red-600 font-medium">
                               {ad.scheduledDeletionDate ? formatDate(ad.scheduledDeletionDate) : 'N/A'}
-                            </div>
-                            <div className="col-span-1 flex items-center justify-center gap-1">
-                              <button
-                                className="group flex items-center text-green-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                                onClick={(e) => { e.stopPropagation(); setAdToRestore(ad.id); setShowRestoreModal(true); }}
-                                title="Restore"
-                              >
-                                <RotateCcw 
-                                  className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                                  size={16} />
-                                <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                                  Restore
-                                </span>
-                              </button>
                             </div>
                           </>
                         ) : (
@@ -1313,19 +1276,7 @@ const ManageAds: React.FC = () => {
                       
                       {/* Mobile Actions */}
                       <div className="flex justify-end gap-1 pt-3 flex-wrap">
-                        {activeTab === 'archived' ? (
-                          <button
-                            className="px-2 py-2 bg-green-100 text-green-700 rounded-md text-xs font-medium flex items-center justify-center gap-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdToRestore(ad.id);
-                              setShowRestoreModal(true);
-                            }}
-                          >
-                            <RotateCcw size={14} />
-                            Restore
-                          </button>
-                        ) : (
+                        {activeTab !== 'archived' && (
                           <>
                             {ad.status === 'PENDING' && (
                               <>
@@ -1468,6 +1419,13 @@ const ManageAds: React.FC = () => {
           <DeploymentTab
             statusFilter={deploymentStatusFilter}
             onStatusChange={setDeploymentStatusFilter}
+            onDeleteAd={(adId, adTitle) => {
+              // Navigate to All Ads tab
+              setActiveTab('ads');
+              // Set the ad to delete (this will trigger the delete modal with validation)
+              setAdToDelete(adId);
+              setShowDeleteModal(true);
+            }}
           />
         )}
         {activeTab === 'company-ads' && (
@@ -1877,64 +1835,19 @@ const ManageAds: React.FC = () => {
         onClose={cancelDelete}
         onConfirm={confirmDelete}
         title="Delete Advertisement"
-        message="Are you sure you want to delete this ad? This action cannot be undone."
+        message={
+          adBeingDeleted?.status === 'RUNNING' || adBeingDeleted?.status === 'APPROVED' || adBeingDeleted?.status === 'SCHEDULED'
+            ? "Are you sure you want to delete this running advertisement? This action cannot be undone and the ad will be immediately removed from all devices."
+            : "Are you sure you want to delete this ad? This action cannot be undone."
+        }
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+        requireTitleConfirmation={true}
+        confirmationTitle={adBeingDeleted?.title || ''}
+        requireReason={true}
       />
 
-      {/* Restore Confirmation Modal */}
-      {showRestoreModal && adToRestore && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white rounded-md p-4 md:p-6 max-w-md w-full">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Restore Advertisement</h2>
-              <button
-                onClick={() => {
-                  setShowRestoreModal(false);
-                  setAdToRestore(null);
-                }}
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to restore this advertisement?
-            </p>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowRestoreModal(false);
-                  setAdToRestore(null);
-                }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  if (adToRestore) {
-                    try {
-                      await restoreAd({ variables: { id: adToRestore } });
-                      setShowRestoreModal(false);
-                      setAdToRestore(null);
-                    } catch (error) {
-                      console.error('Error restoring ad:', error);
-                    }
-                  }
-                }}
-                className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <RotateCcw size={16} />
-                Restore
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Date Filter Modal */}
       <DateFilter

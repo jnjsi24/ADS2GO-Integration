@@ -28,6 +28,7 @@ const typeDefs = gql`
     isArchived: Boolean!
     archivedAt: String
     scheduledDeletionDate: String
+    reasonForDeletion: String
   }
 
   type AuthPayload {

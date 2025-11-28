@@ -135,6 +135,7 @@ const typeDefs = gql`
     approvedBy: Admin
     rejectedBy: Admin
     deletedBy: Admin
+    reasonForDeletion: String
   }
 
   type DriverWithMaterial {
@@ -355,7 +356,7 @@ const typeDefs = gql`
   type Mutation {
     createDriver(input: DriverInput!): DriverResponse!
     updateDriver(driverId: ID!, input: UpdateDriverInput!): DriverResponse!
-    deleteDriver(driverId: ID!): DriverResponse!
+    deleteDriver(driverId: ID!, reason: String): DriverResponse!
     restoreDriver(driverId: ID!): DriverResponse!
 
     loginDriver(email: String!, password: String!, deviceInfo: DeviceInfoInput!): LoginDriverPayload!

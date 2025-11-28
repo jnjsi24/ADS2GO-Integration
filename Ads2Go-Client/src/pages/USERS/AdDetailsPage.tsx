@@ -247,9 +247,9 @@ const AdDetailsPage: React.FC = () => {
     }
   }, [deleteSuccess, navigate]);
 
-  const confirmDelete = () => {
-    if (ad && ad.status === 'PENDING') {
-      deleteAd({ variables: { id: ad.id } });
+  const confirmDelete = (reason?: string) => {
+    if (ad) {
+      deleteAd({ variables: { id: ad.id, reason: reason || null } });
       setShowDeleteModal(false);
     }
   };
@@ -1198,15 +1198,15 @@ const AdDetailsPage: React.FC = () => {
                       </button>
                     )}
 
-                    {/* Delete button — always visible, but disabled if not PENDING */}
+                    {/* Delete button — visible for PENDING, RUNNING, APPROVED, and SCHEDULED ads */}
                     <button
                       onClick={() => {
-                        if (ad.status === 'PENDING') {
+                        if (ad.status === 'PENDING' || ad.status === 'RUNNING' || ad.status === 'APPROVED' || ad.status === 'SCHEDULED') {
                           setShowDeleteModal(true);
                           setShowMobileMenu(false);
                         }
                       }}
-                      disabled={ad.status !== 'PENDING'}
+                      disabled={!(ad.status === 'PENDING' || ad.status === 'RUNNING' || ad.status === 'APPROVED' || ad.status === 'SCHEDULED')}
                       className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 text-xs transition-colors duration-200
                         ${
                           ad.status === 'PENDING'
@@ -1669,8 +1669,8 @@ const AdDetailsPage: React.FC = () => {
               </button>
             )}
             
-            {/* Delete Button - Only show when ad is PENDING */}
-            {ad.status === 'PENDING' && (
+            {/* Delete Button - Show for PENDING, RUNNING, APPROVED, and SCHEDULED ads */}
+            {(ad.status === 'PENDING' || ad.status === 'RUNNING' || ad.status === 'APPROVED' || ad.status === 'SCHEDULED') && (
               <button
                 onClick={() => setShowDeleteModal(true)}
                 disabled={deleteLoading}
@@ -2151,10 +2151,17 @@ const AdDetailsPage: React.FC = () => {
         onClose={cancelDelete}
         onConfirm={confirmDelete}
         title="Delete Advertisement"
-        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        message={
+          ad?.status === 'RUNNING' || ad?.status === 'APPROVED' || ad?.status === 'SCHEDULED'
+            ? "Are you sure you want to delete this running advertisement? This action cannot be undone and the ad will be immediately removed from all devices. No refund will be issued."
+            : "Are you sure you want to delete this advertisement? This action cannot be undone."
+        }
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+        requireTitleConfirmation={true}
+        confirmationTitle={ad?.title || ''}
+        requireReason={true}
       />
 
       {/* Payment Modal */}

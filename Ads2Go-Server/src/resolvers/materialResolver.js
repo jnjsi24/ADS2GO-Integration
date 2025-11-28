@@ -721,7 +721,7 @@ const materialResolvers = {
       return material;
     },
 
-    deleteMaterial: async (_, { id }, { user }) => {
+    deleteMaterial: async (_, { id, reason }, { user }) => {
       checkAdmin(user);
 
       const material = await Material.findById(id);
@@ -743,6 +743,7 @@ const materialResolvers = {
       material.archivedAt = now;
       material.scheduledDeletionDate = deletionDate;
       material.status = 'RETIRED'; // Change status so it won't be used
+      material.reasonForDeletion = reason || null; // Store deletion reason if provided
       
       await material.save();
       

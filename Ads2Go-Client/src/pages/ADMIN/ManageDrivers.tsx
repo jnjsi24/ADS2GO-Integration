@@ -530,7 +530,11 @@ const ManageDrivers: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = async () => {
+  // Get the driver object for the driver being deleted
+  const driverBeingDeleted = data?.getAllDrivers?.find((driver: Driver) => driver.driverId === driverToDelete);
+  const driverFullName = driverBeingDeleted ? `${driverBeingDeleted.firstName} ${driverBeingDeleted.middleName ? driverBeingDeleted.middleName + ' ' : ''}${driverBeingDeleted.lastName}`.trim() : '';
+
+  const confirmDelete = async (reason?: string) => {
     if (!driverToDelete) return;
     
     // Prevent multiple clicks
@@ -541,7 +545,7 @@ const ManageDrivers: React.FC = () => {
     setIsProcessingDeletion(true);
     
     try {
-      const result = await deleteDriver({ variables: { driverId: driverToDelete } });
+      const result = await deleteDriver({ variables: { driverId: driverToDelete, reason: reason || null } });
       if (result.data?.deleteDriver?.success) {
         addToast({
           type: 'success',
@@ -982,14 +986,14 @@ const ManageDrivers: React.FC = () => {
     });
   };
 
-  const confirmBulkDelete = async () => {
+  const confirmBulkDelete = async (reason?: string) => {
     setIsBulkProcessing(true);
 
     try {
       const results = await Promise.allSettled(
         selectedDrivers.map(driverId =>
           deleteDriver({
-            variables: { id: driverId }
+            variables: { driverId, reason: reason || null }
           })
         )
       );
@@ -2183,6 +2187,9 @@ const ManageDrivers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:shadow-md"
         isProcessing={isProcessingDeletion}
+        requireTitleConfirmation={true}
+        confirmationTitle={driverFullName}
+        requireReason={true}
       />
 
       {/* Reject Modal */}
@@ -2420,6 +2427,7 @@ const ManageDrivers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
         isProcessing={isBulkProcessing}
+        requireReason={true}
       />
 
       {/* Restore Confirmation Modal */}
