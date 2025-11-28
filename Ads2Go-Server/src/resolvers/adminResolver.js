@@ -376,7 +376,12 @@ const resolvers = {
       admin.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
       await admin.save();
-      await EmailService.sendVerificationEmail(admin.email, resetCode);
+      
+      const emailResult = await EmailService.sendVerificationEmail(admin.email, resetCode);
+      if (!emailResult.success) {
+        console.error(`❌ Failed to send password reset email to ${admin.email}:`, emailResult.error);
+        throw new Error(emailResult.error || 'Failed to send reset code. Please check your email service configuration.');
+      }
 
       return true;
     },

@@ -459,7 +459,11 @@ createDriver: async (_, { input }) => {
       emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
     });
 
-    await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
+    const emailResult = await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
+    if (!emailResult.success) {
+      console.error(`❌ Failed to send verification email to ${newDriver.email}:`, emailResult.error);
+      console.error('   Driver will still be created, but they may need to request a new verification code');
+    }
     console.log(`Verification code for ${newDriver.email}: ${verificationCode}`);
 
     await newDriver.save();
@@ -629,7 +633,11 @@ createDriver: async (_, { input }) => {
         driver.emailVerificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
         await driver.save();
 
-        await EmailService.sendVerificationEmail(driver.email, verificationCode);
+        const emailResult = await EmailService.sendVerificationEmail(driver.email, verificationCode);
+        if (!emailResult.success) {
+          console.error(`❌ Failed to send verification email to ${driver.email}:`, emailResult.error);
+          throw new Error(emailResult.error || 'Failed to send verification code. Please check your email service configuration.');
+        }
         console.log(`Verification code for ${driver.email}: ${verificationCode}`);
 
         return { success: true, message: "Verification code resent successfully" };
@@ -661,7 +669,11 @@ createDriver: async (_, { input }) => {
         await driver.save();
         
         // Send reset email
-        await EmailService.sendVerificationEmail(driver.email, resetCode);
+        const emailResult = await EmailService.sendVerificationEmail(driver.email, resetCode);
+        if (!emailResult.success) {
+          console.error(`❌ Failed to send password reset email to ${driver.email}:`, emailResult.error);
+          throw new Error(emailResult.error || 'Failed to send reset code. Please check your email service configuration.');
+        }
         console.log(`Password reset code for ${driver.email}: ${resetCode}`);
 
         return {

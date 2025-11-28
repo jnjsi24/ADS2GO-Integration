@@ -153,36 +153,79 @@ class EmailService {
 
   // Get the "from" email address
   static getFromEmail() {
+    let fromEmail;
+    let source;
+    
     // Priority: 1. Environment variable, 2. Resend domain, 3. SMTP_USER, 4. Default
     if (process.env.EMAIL_FROM) {
-      return process.env.EMAIL_FROM;
-    }
-    
-    if (process.env.RESEND_FROM_EMAIL) {
-      return process.env.RESEND_FROM_EMAIL;
-    }
-    
-    if (process.env.SMTP_FROM_EMAIL) {
-      return process.env.SMTP_FROM_EMAIL;
-    }
-    
-    if (process.env.SMTP_USER) {
-      return `Ads2Go <${process.env.SMTP_USER}>`;
-    }
-    
-    // Default based on provider
-    if (this.provider === 'resend') {
+      fromEmail = process.env.EMAIL_FROM;
+      source = 'EMAIL_FROM';
+    } else if (process.env.RESEND_FROM_EMAIL) {
+      fromEmail = process.env.RESEND_FROM_EMAIL;
+      source = 'RESEND_FROM_EMAIL';
+    } else if (process.env.SMTP_FROM_EMAIL) {
+      fromEmail = process.env.SMTP_FROM_EMAIL;
+      source = 'SMTP_FROM_EMAIL';
+    } else if (process.env.SMTP_USER) {
+      fromEmail = `Ads2Go <${process.env.SMTP_USER}>`;
+      source = 'SMTP_USER (formatted)';
+    } else if (this.provider === 'resend') {
       // Use your domain if verified, otherwise Resend's default
-      return process.env.RESEND_FROM_EMAIL || 'Ads2Go <onboarding@resend.dev>';
+      fromEmail = 'Ads2Go <onboarding@resend.dev>';
+      source = 'Default (Resend)';
+    } else {
+      fromEmail = 'Ads2Go <noreply@ads2go.com>';
+      source = 'Default (SMTP)';
     }
     
-    return 'Ads2Go <noreply@ads2go.com>';
+    console.log(`📧 'From' email source: ${source}`);
+    console.log(`   Value: ${fromEmail}`);
+    
+    return fromEmail;
   }
 
   // Extract email address from formatted string (e.g., "Name <email@domain.com>")
   static extractEmailAddress(emailString) {
     const match = emailString.match(/<(.+)>/);
     return match ? match[1] : emailString;
+  }
+
+  // Format 'from' email for Resend API (must be: "email@domain.com" or "Name <email@domain.com>")
+  static formatFromEmailForResend(fromEmail) {
+    if (!fromEmail) {
+      throw new Error('From email is required');
+    }
+
+    // Remove any extra whitespace
+    fromEmail = fromEmail.trim();
+
+    // Check if it's already in valid format: "email@domain.com"
+    const simpleEmailRegex = /^[^\s<>]+@[^\s<>]+\.[^\s<>]+$/;
+    if (simpleEmailRegex.test(fromEmail)) {
+      return fromEmail;
+    }
+
+    // Check if it's in format: "Name <email@domain.com>"
+    const formattedEmailRegex = /^[^<]+<[^\s<>]+@[^\s<>]+\.[^\s<>]+>$/;
+    if (formattedEmailRegex.test(fromEmail)) {
+      return fromEmail;
+    }
+
+    // Try to extract email and format it properly
+    const emailMatch = fromEmail.match(/([^\s<>]+@[^\s<>]+\.[^\s<>]+)/);
+    if (emailMatch) {
+      const email = emailMatch[1];
+      // If there's a name part, format it properly
+      const nameMatch = fromEmail.match(/^([^<]+)/);
+      if (nameMatch) {
+        const name = nameMatch[1].trim();
+        return `${name} <${email}>`;
+      }
+      return email;
+    }
+
+    // If we can't parse it, throw an error
+    throw new Error(`Invalid 'from' field format: "${fromEmail}". The email address needs to follow the 'email@example.com' or 'Name <email@example.com>' format.`);
   }
 
   // Send email (unified method that works with both Resend and SMTP)
@@ -203,9 +246,21 @@ class EmailService {
 
     try {
       if (this.provider === 'resend') {
+        // Format 'from' email for Resend API (must be valid format)
+        let formattedFromEmail;
+        try {
+          formattedFromEmail = this.formatFromEmailForResend(fromEmail);
+          console.log(`📧 Using 'from' email: ${formattedFromEmail}`);
+        } catch (formatError) {
+          console.error(`❌ Invalid 'from' email format: ${fromEmail}`);
+          console.error(`   Error: ${formatError.message}`);
+          console.error(`   Please check your EMAIL_FROM, RESEND_FROM_EMAIL, or SMTP_FROM_EMAIL environment variable`);
+          return { success: false, error: formatError.message };
+        }
+
         // Use Resend API
         const resendOptions = {
-          from: fromEmail,
+          from: formattedFromEmail,
           to: Array.isArray(to) ? to : [to],
           subject: subject,
           html: html,
@@ -223,7 +278,44 @@ class EmailService {
         
         // Check for errors in response
         if (data.error) {
-          throw new Error(data.error.message || JSON.stringify(data.error));
+          const errorMessage = data.error.message || JSON.stringify(data.error);
+          
+          // Check if it's a domain verification error
+          if (errorMessage.includes('not verified') || errorMessage.includes('domain')) {
+            console.error(`❌ Domain verification error: ${errorMessage}`);
+            console.error(`   Attempted to use: ${formattedFromEmail}`);
+            console.error(`   💡 Solution: Either verify your domain at https://resend.com/domains`);
+            console.error(`   OR set RESEND_FROM_EMAIL to use Resend's default: onboarding@resend.dev`);
+            
+            // Try fallback to Resend's default domain if not already using it
+            const defaultFromEmail = 'Ads2Go <onboarding@resend.dev>';
+            if (formattedFromEmail !== defaultFromEmail && !formattedFromEmail.includes('onboarding@resend.dev')) {
+              console.log(`🔄 Attempting fallback to Resend's default domain...`);
+              try {
+                const fallbackOptions = {
+                  ...resendOptions,
+                  from: defaultFromEmail
+                };
+                const fallbackData = await this.resend.emails.send(fallbackOptions);
+                
+                if (fallbackData.error) {
+                  throw new Error(fallbackData.error.message || JSON.stringify(fallbackData.error));
+                }
+                
+                const messageId = fallbackData.data?.id || fallbackData.id;
+                console.log(`✅ Email sent successfully via Resend (using fallback domain) to ${to}`);
+                console.log(`   Message ID: ${messageId || 'N/A'}`);
+                return { success: true, messageId: messageId, provider: 'resend' };
+              } catch (fallbackError) {
+                // If fallback also fails, return the original error
+                throw new Error(errorMessage);
+              }
+            } else {
+              throw new Error(errorMessage);
+            }
+          } else {
+            throw new Error(errorMessage);
+          }
         }
         
         const messageId = data.data?.id || data.id;
@@ -252,10 +344,21 @@ class EmailService {
         console.log(`   Message ID: ${info.messageId || 'N/A'}`);
         return { success: true, messageId: info.messageId, provider: 'smtp' };
       }
-    } catch (error) {
-      console.error(`❌ Error sending email:`, error.message);
-      return { success: false, error: error.message };
-    }
+      } catch (error) {
+        console.error(`❌ Error sending email:`, error.message);
+        
+        // Enhance error message for domain verification issues
+        let errorMessage = error.message;
+        if (errorMessage.includes('not verified') || errorMessage.includes('domain')) {
+          const fromDomain = this.extractEmailAddress(fromEmail).split('@')[1];
+          if (fromDomain && fromDomain !== 'resend.dev') {
+            errorMessage = `The ${fromDomain} domain is not verified. Please, add and verify your domain on https://resend.com/domains`;
+            console.error(`   💡 Quick fix: Set RESEND_FROM_EMAIL=onboarding@resend.dev in your .env file to use Resend's default domain`);
+          }
+        }
+        
+        return { success: false, error: errorMessage };
+      }
   }
 
   // Generate 6-digit verification code
@@ -266,6 +369,8 @@ class EmailService {
   // Send verification email
   static async sendVerificationEmail(email, code) {
     console.log(`📧 Attempting to send verification email to: ${email}`);
+    console.log(`   Provider: ${this.provider || 'Not configured'}`);
+    console.log(`   Is Configured: ${this.isConfigured}`);
     
     const result = await this.sendEmail({
       to: email,
@@ -294,7 +399,11 @@ class EmailService {
       text: `Ads2Go Email Verification\n\nYour verification code is: ${code}\n\nThis code will expire in 15 minutes. Do not share this code with anyone.`,
     });
 
-    return result.success;
+    if (!result.success) {
+      console.error(`❌ Failed to send verification email to ${email}:`, result.error);
+    }
+
+    return result;
   }
 
   // Send password reset email

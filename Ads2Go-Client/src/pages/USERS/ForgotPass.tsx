@@ -22,11 +22,17 @@ const ForgotPass: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const [requestPasswordReset, { loading: requesting }] = useMutation(
     REQUEST_PASSWORD_RESET,
     {
-      onCompleted: () => setStep("reset"),
+      onCompleted: () => {
+        setStep("reset");
+        setResendCooldown(60); // 60 second cooldown
+        setError("");
+        setToken(""); // Clear token when resending
+      },
       onError: (error) => {
         // Extract specific error message
         const errorMessage = error?.graphQLErrors?.[0]?.message 
@@ -62,6 +68,23 @@ const ForgotPass: React.FC = () => {
     setError("");
     await resetPassword({ variables: { token, newPassword } });
   };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || !email) return;
+    
+    setError("");
+    await requestPasswordReset({ variables: { email } });
+  };
+
+  // Countdown timer for resend cooldown
+  React.useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   return (
     <div
@@ -188,6 +211,22 @@ const ForgotPass: React.FC = () => {
             >
               {resetting ? "Resetting..." : "Reset Password"}
             </button>
+
+            {/* Resend Code Button */}
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={resendCooldown > 0 || requesting || !email}
+                className="text-white/80 hover:text-white text-sm underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+              >
+                {resendCooldown > 0
+                  ? `Resend code in ${resendCooldown}s`
+                  : requesting
+                  ? "Sending..."
+                  : "Resend code"}
+              </button>
+            </div>
           </form>
 
         )}

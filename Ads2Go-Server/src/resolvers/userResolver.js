@@ -254,9 +254,10 @@ const resolvers = {
         });
 
         // Try to send verification email
-        const emailSent = await EmailService.sendVerificationEmail(newUser.email, verificationCode);
-        if (!emailSent) {
+        const emailResult = await EmailService.sendVerificationEmail(newUser.email, verificationCode);
+        if (!emailResult.success) {
           console.error(`❌ Failed to send verification email to ${newUser.email}`);
+          console.error(`   Error: ${emailResult.error || 'Unknown error'}`);
           console.error('   User will still be created, but they may need to request a new verification code');
         }
         
@@ -495,7 +496,12 @@ const resolvers = {
       user.emailVerificationCode = newVerificationCode;
       user.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
 
-      await EmailService.sendVerificationEmail(user.email, newVerificationCode);
+      const emailResult = await EmailService.sendVerificationEmail(user.email, newVerificationCode);
+      if (!emailResult.success) {
+        console.error(`❌ Failed to send verification email to ${user.email}:`, emailResult.error);
+        throw new Error(emailResult.error || 'Failed to send verification code. Please check your email service configuration.');
+      }
+      
       await user.save();
 
       return { success: true, message: 'New verification code sent to your email' };
@@ -771,8 +777,30 @@ const resolvers = {
       user.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
       await user.save();
-      await EmailService.sendVerificationEmail(user.email, resetCode);
+      
+      const emailResult = await EmailService.sendVerificationEmail(user.email, resetCode);
+      if (!emailResult.success) {
+        console.error(`❌ Failed to send password reset email to ${user.email}`);
+        console.error(`   Error: ${emailResult.error || 'Unknown error'}`);
+        console.error(`   Provider: ${EmailService.provider || 'Not configured'}`);
+        console.error(`   Is Configured: ${EmailService.isConfigured}`);
+        
+        // Provide more helpful error message
+        let errorMessage = "Failed to send reset code. ";
+        if (emailResult.error) {
+          if (emailResult.error.includes('not configured')) {
+            errorMessage += "Email service is not configured. Please contact support.";
+          } else {
+            errorMessage += emailResult.error;
+          }
+        } else {
+          errorMessage += "Please check your email service configuration or try again later.";
+        }
+        
+        throw new Error(errorMessage);
+      }
 
+      console.log(`✅ Password reset code sent successfully to ${user.email}`);
       return true;
     },
 
