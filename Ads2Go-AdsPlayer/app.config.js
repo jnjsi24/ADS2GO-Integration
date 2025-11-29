@@ -22,6 +22,12 @@ export default {
     scheme: "ads2godadsplayer",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+    updates: {
+      url: "https://u.expo.dev/99757ff1-9fc6-4a5e-99aa-f404e624c834"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
     ios: {
       supportsTablet: true
     },
@@ -31,7 +37,11 @@ export default {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      edgeToEdgeEnabled: true
+      edgeToEdgeEnabled: true,
+      compileSdkVersion: 36,
+      targetSdkVersion: 36,
+      minSdkVersion: 24,
+      buildToolsVersion: "36.0.0"
     },
     web: {
       bundler: "metro",
@@ -62,6 +72,9 @@ export default {
       typedRoutes: true
     },
     extra: {
+      eas: {
+        projectId: "99757ff1-9fc6-4a5e-99aa-f404e624c834"
+      },
       EXPO_PUBLIC_API_URL: API_URL,
       EXPO_PUBLIC_TABLET_ID: process.env.EXPO_PUBLIC_TABLET_ID,
       EXPO_PUBLIC_MATERIAL_ID: process.env.EXPO_PUBLIC_MATERIAL_ID,

@@ -8,7 +8,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:android": "npx expo prebuild --platform android --clean",
+    "build:apk": "cd android && ./gradlew assembleRelease",
+    "build:apk:local": "npm run build:android && npm run build:apk",
+    "update:production": "npx eas update --branch production --message",
+    "update:preview": "npx eas update --branch preview --message"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -23,7 +28,6 @@
     "expo": "~54.0.10",
     "expo-application": "~7.0.7",
     "expo-av": "~16.0.7",
-    "expo-barcode-scanner": "~12.9.3",
     "expo-blur": "~15.0.7",
     "expo-camera": "~17.0.8",
     "expo-constants": "~18.0.8",
@@ -40,6 +44,7 @@
     "expo-status-bar": "~3.0.8",
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.7",
+    "expo-updates": "~29.0.13",
     "expo-web-browser": "~15.0.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
