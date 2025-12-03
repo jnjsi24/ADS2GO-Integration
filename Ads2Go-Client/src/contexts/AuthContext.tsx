@@ -348,8 +348,19 @@ export const AuthProvider: React.FC<{
 
           return user;
         }
-      } catch (userError) {
-        // All login attempts failed
+      } catch (userError: any) {
+        // Preserve the original error message if it's an authentication error
+        const errorMessage = userError?.message || userError?.graphQLErrors?.[0]?.message || userError?.networkError?.message;
+        if (errorMessage && (
+          errorMessage.includes('email does not exist') ||
+          errorMessage.includes('Incorrect password') ||
+          errorMessage.includes('Invalid password') ||
+          errorMessage.includes('Account is temporarily locked') ||
+          errorMessage.includes('account has been deleted')
+        )) {
+          throw new Error(errorMessage);
+        }
+        // For other errors, use generic message
         throw new Error('Invalid credentials');
       }
 

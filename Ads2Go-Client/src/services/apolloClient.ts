@@ -86,6 +86,7 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
       // Soften login credential errors (common/expected during failed login attempts)
       if (
         (message === 'Invalid password' ||
+         message === 'Incorrect password' ||
          message === 'Invalid credentials' ||
          message?.includes('temporarily locked')) &&
         (

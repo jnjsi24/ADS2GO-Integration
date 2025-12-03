@@ -221,6 +221,26 @@ const server = new ApolloServer({
           }
         };
       }
+      
+      // Allow authentication-related errors to pass through in production
+      // These are user-facing errors that should be shown to users
+      const authErrorMessages = [
+        'Invalid password',
+        'Incorrect password',
+        'No user found with this email',
+        'This email does not exist',
+        'No admin found with this email',
+        'No superadmin found with this email',
+        'Account is temporarily locked',
+        'This account has been deleted',
+        'Not authenticated',
+        'Invalid credentials'
+      ];
+      
+      if (authErrorMessages.some(msg => err.message.includes(msg))) {
+        return err;
+      }
+      
       // Hide internal error details in production
       if (err.extensions?.code === 'INTERNAL_SERVER_ERROR') {
         return {

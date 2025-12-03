@@ -429,7 +429,7 @@ const resolvers = {
       console.log(`User login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
       const user = await User.findOne({ email });
-      if (!user || user.role !== 'USER') throw new Error('No user found with this email');
+      if (!user || user.role !== 'USER') throw new Error('This email does not exist');
 
       // Check if user is archived (scheduled for deletion)
       if (user.isArchived) {
@@ -438,7 +438,21 @@ const resolvers = {
 
       if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
-      const valid = await bcrypt.compare(password, user.password);
+      // Check if user has a password set
+      if (!user.password) {
+        throw new Error('Incorrect password');
+      }
+
+      // Safely compare passwords with proper error handling
+      let valid = false;
+      try {
+        valid = await bcrypt.compare(password, user.password);
+      } catch (error) {
+        // If bcrypt.compare throws an error (e.g., invalid hash format), treat as invalid password
+        console.error('Password comparison error:', error.message);
+        valid = false;
+      }
+
       if (!valid) {
         user.loginAttempts += 1;
         if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
@@ -446,7 +460,7 @@ const resolvers = {
           user.lockUntil = new Date(Date.now() + LOCK_TIME);
         }
         await user.save();
-        throw new Error('Invalid password');
+        throw new Error('Incorrect password');
       }
 
       user.loginAttempts = 0;
