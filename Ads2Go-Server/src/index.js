@@ -229,6 +229,8 @@ const server = new ApolloServer({
         'Incorrect password',
         'No user found with this email',
         'This email does not exist',
+        'This email already exists',
+        'User with this email already exists',
         'No admin found with this email',
         'No superadmin found with this email',
         'Account is temporarily locked',

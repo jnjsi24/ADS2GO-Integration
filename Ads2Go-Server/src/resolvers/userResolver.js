@@ -230,7 +230,7 @@ const resolvers = {
           normalizedNumber = normalizedNumber.startsWith('0') ? '+63' + normalizedNumber.substring(1) : '+63' + normalizedNumber;
         }
 
-        if (await User.findOne({ email })) throw new Error('User with this email already exists');
+        if (await User.findOne({ email: email.toLowerCase().trim() })) throw new Error('This email already exists');
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationCode = EmailService.generateVerificationCode();
@@ -313,6 +313,13 @@ const resolvers = {
 
         return { token, user: newUser };
       } catch (error) {
+        // Handle MongoDB duplicate key error (E11000) for email field
+        if (error.code === 11000 || error.code === 11001) {
+          if (error.keyPattern && error.keyPattern.email) {
+            throw new Error('This email already exists');
+          }
+        }
+        // Re-throw other errors as-is
         throw error;
       }
     },
@@ -420,6 +427,12 @@ const resolvers = {
 
         return { token, user: newUser };
       } catch (error) {
+        // Handle MongoDB duplicate key error (E11000) for email field
+        if (error.code === 11000 || error.code === 11001) {
+          if (error.keyPattern && error.keyPattern.email) {
+            throw new Error('This email already exists');
+          }
+        }
         console.error('Complete Google OAuth profile error:', error);
         throw error;
       }
