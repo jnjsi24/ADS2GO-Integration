@@ -26,10 +26,10 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
-  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state (for lockdown feature) - default unlocked to allow registration
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state - starts unlocked, auto-locks when registered
   const [is8HourLocked, setIs8HourLocked] = useState(false); // Track 8-hour/rest period lock state
   const [lockMessage, setLockMessage] = useState<string>(''); // Store lock message to display
-  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state - default not fullscreen when unlocked
+  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state - starts false, auto-fullscreen when registered
   const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function HomeScreen() {
     }
   }, []); // Run once on mount
 
-  // Ensure screen is unlocked when not registered
+  // Auto-lock and fullscreen when registered, unlock when not registered
   useEffect(() => {
     if (!registrationData) {
       // Unlock screen and orientation when not registered to allow registration
@@ -106,6 +106,14 @@ export default function HomeScreen() {
       setIsFullscreen(false);
       unlockOrientation().catch((error) => {
         console.error('❌ [Orientation] Error unlocking orientation when not registered:', error);
+      });
+    } else {
+      // Auto-lock and go fullscreen when registered
+      console.log('🔒 [Auto-Lock] Registration detected - locking screen and entering fullscreen');
+      setIsLocked(true);
+      setIsFullscreen(true);
+      lockToLandscape().catch((error) => {
+        console.error('❌ [Orientation] Error locking orientation on registration:', error);
       });
     }
   }, [registrationData]);
@@ -493,21 +501,23 @@ export default function HomeScreen() {
     }
   };
 
-  const handleReRegister = () => {
+  const handleForceUnregister = () => {
     Alert.alert(
-      'Re-register Tablet',
-      'This will unregister this tablet from the server and redirect you to the registration screen. Continue?',
+      'Force Unregister',
+      'This will unregister this tablet and redirect you to the registration screen. The app will try to notify the server first, otherwise it will clear local data only. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Continue',
+          text: 'Unregister',
           style: 'destructive',
           onPress: async () => {
             setUnregistering(true);
             try {
+              // First, try to unregister from the server
               const result = await tabletRegistrationService.unregisterTablet();
+              
               if (result.success) {
-                // Force clear ALL registration data
+                // Server unregistration successful - clear all local data
                 await tabletRegistrationService.forceClearAllRegistrationData();
                 
                 Alert.alert(
@@ -517,9 +527,7 @@ export default function HomeScreen() {
                     {
                       text: 'OK',
                       onPress: () => {
-                        // Force refresh the app state before redirect
                         setRegistrationData(null);
-                        // Add a small delay to ensure cleanup is complete
                         setTimeout(() => {
                           router.push('/registration?force=true');
                         }, 500);
@@ -528,54 +536,61 @@ export default function HomeScreen() {
                   ]
                 );
               } else {
-                // If server unregistration fails, offer to force unregister locally
-                Alert.alert(
-                  'Server Unavailable',
-                  'Unable to unregister from server. Would you like to unregister locally and continue?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Force Unregister',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          const forceResult = await tabletRegistrationService.forceUnregisterTablet();
-                          if (forceResult.success) {
-                            // Clear local registration data, material ID, and cached ads before redirect
-                            await tabletRegistrationService.clearRegistration();
-                            await tabletRegistrationService.clearMaterialId();
-                            await tabletRegistrationService.clearAllCachedAds();
-                            
-                            Alert.alert(
-                              'Success',
-                              'Tablet unregistered locally. You will be redirected to the registration screen.',
-                              [
-                                {
-                                  text: 'OK',
-                                  onPress: () => {
-                                    // Force refresh the app state before redirect
-                                    setRegistrationData(null);
-                                    // Add a small delay to ensure cleanup is complete
-                                    setTimeout(() => {
-                                      router.push('/registration?force=true');
-                                    }, 500);
-                                  }
-                                }
-                              ]
-                            );
-                          } else {
-                            Alert.alert('Error', forceResult.message);
-                          }
-                        } catch (error) {
-                          Alert.alert('Error', 'Failed to unregister tablet locally.');
+                // Server unavailable - automatically fall back to local unregistration
+                console.log('Server unregistration failed, falling back to local clear...');
+                const forceResult = await tabletRegistrationService.forceUnregisterTablet();
+                
+                if (forceResult.success) {
+                  await tabletRegistrationService.forceClearAllRegistrationData();
+                  
+                  Alert.alert(
+                    'Success',
+                    'Server unavailable. Local registration cleared. You will be redirected to the registration screen.',
+                    [
+                      {
+                        text: 'OK',
+                        onPress: () => {
+                          setRegistrationData(null);
+                          setTimeout(() => {
+                            router.push('/registration?force=true');
+                          }, 500);
                         }
                       }
-                    }
-                  ]
-                );
+                    ]
+                  );
+                } else {
+                  Alert.alert('Error', forceResult.message);
+                }
               }
             } catch (error) {
-              Alert.alert('Error', 'Failed to unregister tablet. Please try again.');
+              // Network error - try local unregistration as last resort
+              console.log('Network error, attempting local unregistration...');
+              try {
+                const forceResult = await tabletRegistrationService.forceUnregisterTablet();
+                if (forceResult.success) {
+                  await tabletRegistrationService.forceClearAllRegistrationData();
+                  
+                  Alert.alert(
+                    'Success',
+                    'Network unavailable. Local registration cleared. You will be redirected to the registration screen.',
+                    [
+                      {
+                        text: 'OK',
+                        onPress: () => {
+                          setRegistrationData(null);
+                          setTimeout(() => {
+                            router.push('/registration?force=true');
+                          }, 500);
+                        }
+                      }
+                    ]
+                  );
+                } else {
+                  Alert.alert('Error', 'Failed to clear local registration.');
+                }
+              } catch (localError) {
+                Alert.alert('Error', 'Failed to unregister tablet.');
+              }
             } finally {
               setUnregistering(false);
             }
@@ -668,53 +683,6 @@ export default function HomeScreen() {
     }
   }, [showFullInterface]);
 
-  const handleEmergencyUnregister = () => {
-    Alert.alert(
-      'Emergency Unregister',
-      'This will clear the local registration data without contacting the server. Use this only if the server is completely unavailable. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Emergency Clear',
-          style: 'destructive',
-          onPress: async () => {
-            setUnregistering(true);
-            try {
-              const result = await tabletRegistrationService.forceUnregisterTablet();
-              if (result.success) {
-                // Force clear ALL registration data
-                await tabletRegistrationService.forceClearAllRegistrationData();
-                
-                Alert.alert(
-                  'Success',
-                  'Local registration cleared. You will be redirected to the registration screen.',
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => {
-                        // Force refresh the app state before redirect
-                        setRegistrationData(null);
-                        // Add a small delay to ensure cleanup is complete
-                        setTimeout(() => {
-                          router.push('/registration?force=true');
-                        }, 500);
-                      }
-                    }
-                  ]
-                );
-              } else {
-                Alert.alert('Error', result.message);
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear local registration.');
-            } finally {
-              setUnregistering(false);
-            }
-          }
-        }
-      ]
-    );
-  };
 
   if (loading) {
     return (
@@ -1029,26 +997,18 @@ export default function HomeScreen() {
         </View>
       </View>
 
-             {/* Action Buttons */}
+             {/* Action Button */}
        <View style={styles.actionSection}>
          <TouchableOpacity 
            style={styles.actionButton}
-           onPress={handleReRegister}
+           onPress={handleForceUnregister}
            disabled={unregistering}
          >
            {unregistering ? (
              <ActivityIndicator color="#fff" />
            ) : (
-             <Text style={styles.actionButtonText}>🔄 Re-register Tablet</Text>
+             <Text style={styles.actionButtonText}>⚡ Force Unregister</Text>
            )}
-         </TouchableOpacity>
-         
-         <TouchableOpacity 
-           style={[styles.actionButton, styles.emergencyButton]}
-           onPress={handleEmergencyUnregister}
-           disabled={unregistering}
-         >
-           <Text style={styles.actionButtonText}>🚨 Emergency Unregister</Text>
          </TouchableOpacity>
        </View>
         </ScrollView>
@@ -1395,9 +1355,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 12,
-  },
-  emergencyButton: {
-    backgroundColor: '#f39c12',
   },
   actionButtonText: {
     color: '#fff',
