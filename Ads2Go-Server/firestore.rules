@@ -27,6 +27,12 @@ service firebase.storage {
                    request.resource.contentType.matches('image/.*|video/.*');
     }
 
+    // Advertisement media uploads (client-side direct uploads)
+    match /advertisements/{fileName} {
+      allow write: if request.resource.size < 50 * 1024 * 1024 && // 50MB limit for video ads
+                   request.resource.contentType.matches('image/.*|video/.*');
+    }
+
     // Server-side upload path for sensitive documents
     match /drivers/{documentType}/{fileName} {
       // Only allow server-side uploads (using Firebase Admin SDK)
