@@ -918,10 +918,10 @@ const NewsletterManagement: React.FC = () => {
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-4 mb-8`}>
               {/* Total Subscribers */}
               <div className="bg-blue-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
+                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
                   <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Total</div>
+                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
+                    <div className="text-sm text-right text-gray-600">Total</div>
                     <div className="text-xs text-gray-500">All time</div>
                   </div>
                 </div>
@@ -929,10 +929,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Active Subscribers */}
               <div className="bg-green-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
+                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
                   <div className="text-3xl font-bold text-green-600">{stats.active}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Active</div>
+                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
+                    <div className="text-sm text-right text-gray-600">Active</div>
                     <div className="text-xs text-gray-500">Currently subscribed</div>
                   </div>
                 </div>
@@ -940,10 +940,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Registration Source */}
               <div className="bg-purple-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
+                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
                   <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Registration</div>
+                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
+                    <div className="text-sm text-right text-gray-600">Registration</div>
                     <div className="text-xs text-gray-500">Registered users</div>
                   </div>
                 </div>
@@ -951,10 +951,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Contact Form Source */}
               <div className="bg-orange-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
+                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
                   <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Contact Form</div>
+                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
+                    <div className="text-sm text-right text-gray-600">Contact Form</div>
                     <div className="text-xs text-gray-500">Contact submissions</div>
                   </div>
                 </div>
@@ -962,10 +962,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Inactive Subscribers */}
               <div className="bg-red-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
+                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
                   <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Inactive</div>
+                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
+                    <div className="text-sm text-right text-gray-600">Inactive</div>
                     <div className="text-xs text-gray-500">No longer active</div>
                   </div>
                 </div>
