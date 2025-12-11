@@ -1212,8 +1212,8 @@ const Reports: React.FC = () => {
         } else {
           // User/Driver Reports: Can resolve if ALL are IN_PROGRESS
           canBulkResolve = selectedReportStatuses.every((s: string) => s === 'IN_PROGRESS');
-          // Can close if ALL are PENDING or IN_PROGRESS
-          canBulkClose = selectedReportStatuses.every((s: string) => s === 'PENDING' || s === 'IN_PROGRESS');
+          // Can close if ALL are RESOLVED
+          canBulkClose = selectedReportStatuses.every((s: string) => s === 'RESOLVED');
           
           if (!canBulkResolve && !canBulkClose) {
             if (allFinalStatuses) {
@@ -1244,7 +1244,7 @@ const Reports: React.FC = () => {
                     </button>
                   )}
                   
-                  {/* Mark as Closed - Only for User/Driver Reports, and only if ALL are PENDING or IN_PROGRESS */}
+                  {/* Mark as Closed - Only for User/Driver Reports, and only if ALL are RESOLVED */}
                   {reportSource !== 'messages' && canBulkClose && (
                     <button
                       onClick={() => handleBulkStatusUpdate('CLOSED')}
@@ -1846,15 +1846,18 @@ const Reports: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
                 
                 {(() => {
+                  // Define status order: Pending -> In Progress -> Resolved -> Closed
+                  const statusOrder = ['Pending', 'In Progress', 'Resolved', 'Closed'];
+                  
                   // Determine available status options based on current status
                   const getAvailableStatuses = (currentStatus: ReportStatus): string[] => {
                     switch (currentStatus) {
                       case 'PENDING':
-                        return ['Closed']; // Can only close from pending (reject without addressing)
+                        return ['In Progress']; // Can move to in progress
                       case 'IN_PROGRESS':
-                        return ['Resolved', 'Closed']; // Can resolve or close after reviewing
+                        return ['Resolved']; // Can resolve after reviewing
                       case 'RESOLVED':
-                        return []; // No changes allowed from resolved (final state)
+                        return ['Closed']; // Can close from resolved
                       case 'CLOSED':
                         return []; // No changes allowed from closed (final state)
                       default:
@@ -1864,7 +1867,14 @@ const Reports: React.FC = () => {
 
                   const availableStatuses = getAvailableStatuses(selectedReport.status);
                   
-                  if (availableStatuses.length === 0) {
+                  // Sort available statuses according to the status order
+                  const sortedStatuses = availableStatuses.sort((a, b) => {
+                    const indexA = statusOrder.indexOf(a);
+                    const indexB = statusOrder.indexOf(b);
+                    return indexA - indexB;
+                  });
+                  
+                  if (sortedStatuses.length === 0) {
                     // Show current status as read-only
                     return (
                       <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 text-gray-700 rounded-md border border-gray-200">
@@ -1902,7 +1912,7 @@ const Reports: React.FC = () => {
                             transition={{ duration: 0.2 }}
                             className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                           >
-                            {availableStatuses.map((status) => (
+                            {sortedStatuses.map((status) => (
                               <button
                                 key={status}
                                 onClick={() => {

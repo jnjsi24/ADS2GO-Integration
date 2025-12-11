@@ -131,12 +131,23 @@ EmailService.initializeTransporter();
 EmailService.verifyConfiguration()
   .then(isConfigured => {
     if (isConfigured) {
-      logger.info('✅ Email Service: Ready and configured (SMTP)');
+      const provider = EmailService.provider || 'Unknown';
+      logger.info(`✅ Email Service: Ready and configured (${provider.toUpperCase()})`);
+      if (provider === 'resend') {
+        logger.info('   Using Resend API for email delivery');
+      } else if (provider === 'smtp') {
+        logger.info('   Using SMTP for email delivery');
+      }
     } else {
       logger.warn('⚠️  Email Service: Configuration issues detected');
-      logger.warn('   Check your .env file for SMTP configuration');
-      logger.warn('   Required: SMTP_HOST, SMTP_USER, SMTP_PASSWORD');
-      logger.warn('   Optional: SMTP_PORT (default: 587), SMTP_SECURE (default: false), SMTP_FROM_EMAIL');
+      if (process.env.RESEND_API_KEY) {
+        logger.warn('   RESEND_API_KEY is set but Resend initialization failed');
+        logger.warn('   Please check your RESEND_API_KEY is valid');
+      } else {
+        logger.warn('   Check your .env file for email configuration');
+        logger.warn('   For Resend: Set RESEND_API_KEY');
+        logger.warn('   For SMTP: Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD (or EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD)');
+      }
     }
   })
   .catch(err => {

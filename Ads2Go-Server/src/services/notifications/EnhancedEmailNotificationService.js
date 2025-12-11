@@ -6,6 +6,19 @@ const mongoose = require('mongoose');
 
 class EnhancedEmailNotificationService {
   /**
+   * Critical notification types that should always be sent regardless of user preferences
+   * These are transactional emails that users need to receive
+   */
+  static CRITICAL_NOTIFICATION_TYPES = [
+    'AD_CREATED',
+    'AD_APPROVAL',
+    'AD_REJECTION',
+    'PAYMENT_CONFIRMATION',
+    'AD_DEPLOYED',
+    'AD_DELETION'
+  ];
+
+  /**
    * Send email notification with preference checking and queuing
    */
   static async sendEmailNotification(userId, userRole, email, firstName, notificationType, emailData, priority = 'MEDIUM', originalNotificationId = null) {
@@ -33,6 +46,25 @@ class EnhancedEmailNotificationService {
       if (!user) {
         console.error(`❌ EnhancedEmailNotificationService: User not found: ${userId}`);
         throw new Error('User not found');
+      }
+
+      // Check if this is a critical notification type that should always be sent
+      const isCriticalNotification = this.CRITICAL_NOTIFICATION_TYPES.includes(notificationType);
+      
+      if (isCriticalNotification) {
+        console.log(`📤 EnhancedEmailNotificationService: Critical notification type ${notificationType} - sending email immediately (bypassing preferences)`);
+        const result = await this.sendEmailImmediately(email, emailData);
+        
+        if (result.success) {
+          return {
+            sent: true,
+            queued: false,
+            message: 'Critical email sent successfully (bypassed preferences)'
+          };
+        } else {
+          // If email sending failed, throw error to trigger fallback queueing
+          throw new Error(result.error || 'Failed to send email');
+        }
       }
 
       // Initialize notification preferences if they don't exist (for users created before this feature)
@@ -88,11 +120,16 @@ class EnhancedEmailNotificationService {
       console.log(`📤 EnhancedEmailNotificationService: Announcements emails enabled, sending email immediately`);
       const result = await this.sendEmailImmediately(email, emailData);
       
-      return {
-        sent: true,
-        queued: false,
-        message: 'Email sent successfully'
-      };
+      if (result.success) {
+        return {
+          sent: true,
+          queued: false,
+          message: 'Email sent successfully'
+        };
+      } else {
+        // If email sending failed, throw error to trigger fallback queueing
+        throw new Error(result.error || 'Failed to send email');
+      }
 
     } catch (error) {
       console.error(`❌ EnhancedEmailNotificationService: Error processing ${notificationType} email:`, error);
@@ -133,10 +170,24 @@ class EnhancedEmailNotificationService {
    */
   static async sendEmailImmediately(email, emailData) {
     try {
+      // Ensure email service is initialized before sending
+      if (!EmailService.isConfigured) {
+        console.log(`🔄 EnhancedEmailNotificationService: Email service not configured, initializing...`);
+        EmailService.initializeTransporter();
+        await EmailService.verifyConfiguration();
+      }
+
       console.log(`📧 EnhancedEmailNotificationService: Attempting to send email to ${email}`);
       console.log(`   Subject: ${emailData.subject}`);
       console.log(`   Email service configured: ${EmailService.isConfigured}`);
       console.log(`   Email provider: ${EmailService.provider || 'Not set'}`);
+      console.log(`   From email: ${EmailService.getFromEmail()}`);
+      
+      if (!EmailService.isConfigured) {
+        const errorMsg = 'Email service is not configured. Please check RESEND_API_KEY or SMTP settings.';
+        console.error(`❌ EnhancedEmailNotificationService: ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
       
       // Use EmailService.sendEmail() which handles both Resend and SMTP properly
       const result = await EmailService.sendEmail({
@@ -154,12 +205,20 @@ class EnhancedEmailNotificationService {
       } else {
         const errorMessage = result.error || 'Unknown error sending email';
         console.error(`❌ EnhancedEmailNotificationService: Email sending failed: ${errorMessage}`);
+        console.error(`   Email: ${email}`);
+        console.error(`   Subject: ${emailData.subject}`);
+        console.error(`   Provider: ${EmailService.provider || 'Not set'}`);
+        console.error(`   Is Configured: ${EmailService.isConfigured}`);
         throw new Error(errorMessage);
       }
     } catch (error) {
       console.error(`❌ EnhancedEmailNotificationService: Failed to send email to ${email}:`, error);
       console.error(`   Error details:`, error.message);
-      console.error(`   Stack:`, error.stack);
+      console.error(`   Error stack:`, error.stack);
+      console.error(`   Email service state:`);
+      console.error(`     - Configured: ${EmailService.isConfigured}`);
+      console.error(`     - Provider: ${EmailService.provider || 'Not set'}`);
+      console.error(`     - From email: ${EmailService.getFromEmail()}`);
       throw error;
     }
   }

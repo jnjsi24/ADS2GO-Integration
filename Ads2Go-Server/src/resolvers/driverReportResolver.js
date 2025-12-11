@@ -160,6 +160,8 @@ const resolvers = {
           // Don't fail the report creation if notification fails
         }
         
+        // Note: No email notification for PENDING status (only IN_PROGRESS and RESOLVED send emails)
+        
         return {
           success: true,
           message: 'Report submitted successfully. Our team will review it shortly.',
@@ -485,16 +487,21 @@ const resolvers = {
                 );
               }
             } else {
-              // Just send status update notification
-              await NotificationService.sendReportStatusUpdateNotification(
-                driverDetails._id,
-                report._id.toString(),
-                report.title,
-                report.status,
-                input.adminNotes || null,
-                adminName
-              );
-              console.log(`📧 [DriverReportResolver] Sent status update notification to driver ${driverDetails.driverId}`);
+              // Only send email notifications for IN_PROGRESS and RESOLVED statuses
+              if (report.status === 'IN_PROGRESS' || report.status === 'RESOLVED') {
+                await NotificationService.sendReportStatusUpdateNotification(
+                  driverDetails._id,
+                  report._id.toString(),
+                  report.title,
+                  report.status,
+                  input.adminNotes || null,
+                  adminName
+                );
+                console.log(`📧 [DriverReportResolver] Sent status update notification to driver ${driverDetails.driverId}`);
+              } else {
+                // For other statuses (PENDING, CLOSED), only create in-app notification, no email
+                console.log(`📝 DriverReportResolver: Status changed to ${report.status}, skipping email (only IN_PROGRESS and RESOLVED send emails)`);
+              }
             }
           }
         } catch (notifError) {

@@ -227,30 +227,32 @@ class DriverNotificationService extends BaseNotificationService {
         }
       );
 
-      // Send email notification if admin notes are provided (admin reply)
-      if (adminNotes && adminNotes.trim()) {
+      // Send email notification only for IN_PROGRESS and RESOLVED statuses
+      if (status === 'IN_PROGRESS' || status === 'RESOLVED') {
         try {
-          const emailData = await this.getDriverReportAdminResponseEmailData(driver.firstName, reportTitle, adminNotes);
+          const emailData = await this.getDriverReportStatusUpdateEmailData(driver.firstName, reportTitle, status, adminNotes);
           const result = await EnhancedEmailNotificationService.sendEmailNotification(
             driver._id,
             'DRIVER',
             driver.email,
             driver.firstName,
-            'ADMIN_RESPONSE',
+            'REPORT_STATUS_UPDATE',
             emailData,
             'HIGH',
             notification._id
           );
           
           if (result.sent) {
-            console.log('✅ DriverNotificationService: Admin response email sent successfully');
+            console.log(`✅ DriverNotificationService: Report status update email sent successfully (${status})`);
           } else if (result.queued) {
-            console.log('📝 DriverNotificationService: Admin response email queued (announcements emails disabled)');
+            console.log('📝 DriverNotificationService: Report status update email queued');
           }
         } catch (emailError) {
-          console.error('❌ DriverNotificationService: Failed to send admin response email:', emailError.message);
+          console.error('❌ DriverNotificationService: Failed to send report status update email:', emailError.message);
           // Don't throw the error - continue with in-app notification
         }
+      } else {
+        console.log(`📝 DriverNotificationService: Status is ${status}, skipping email (only IN_PROGRESS and RESOLVED send emails)`);
       }
 
       return notification;
@@ -544,6 +546,105 @@ class DriverNotificationService extends BaseNotificationService {
         firstName,
         status,
         reason
+      }
+    };
+  }
+
+  /**
+   * Get email data for driver report status update notification
+   */
+  static async getDriverReportStatusUpdateEmailData(firstName, reportTitle, status, adminNotes) {
+    // Status-specific configurations
+    const statusConfig = {
+      'PENDING': {
+        icon: '📋',
+        color: '#FFA500',
+        bgColor: '#FFF4E6',
+        borderColor: '#FFA500',
+        title: 'Report Submitted',
+        message: 'Your report has been successfully submitted and is now pending review by our support team.',
+        actionMessage: 'We will review your report and get back to you as soon as possible.'
+      },
+      'IN_PROGRESS': {
+        icon: '🔧',
+        color: '#4A90E2',
+        bgColor: '#E8F4FD',
+        borderColor: '#4A90E2',
+        title: 'Report In Progress',
+        message: 'Your report is now being actively reviewed by our support team.',
+        actionMessage: 'We are working on resolving your issue and will keep you updated.'
+      },
+      'RESOLVED': {
+        icon: '✅',
+        color: '#28a745',
+        bgColor: '#E8F5E9',
+        borderColor: '#28a745',
+        title: 'Report Resolved',
+        message: 'Great news! Your report has been resolved.',
+        actionMessage: 'Thank you for your patience. If you have any further concerns, please don\'t hesitate to reach out.'
+      },
+      'CLOSED': {
+        icon: '🔒',
+        color: '#6c757d',
+        bgColor: '#F5F5F5',
+        borderColor: '#6c757d',
+        title: 'Report Closed',
+        message: 'Your report has been closed.',
+        actionMessage: 'If you need to reopen this issue or have any questions, please create a new report.'
+      }
+    };
+    
+    const config = statusConfig[status] || statusConfig['PENDING'];
+    const statusText = status.replace('_', ' ').toLowerCase();
+    
+    return {
+      subject: `${config.icon} Report ${config.title} - ${reportTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center; margin-bottom: 10px;">${config.icon} ${config.title}</h2>
+            <p style="text-align: center; font-size: 16px; color: #666; margin-top: 0;">Hello ${firstName}!</p>
+            
+            <div style="background-color: ${config.bgColor}; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${config.borderColor};">
+              <h3 style="color: ${config.color}; margin: 0 0 15px 0; font-size: 18px;">Report Details:</h3>
+              <p style="margin: 8px 0; color: #333; font-size: 15px;"><strong>Report Title:</strong> ${reportTitle}</p>
+              <p style="margin: 8px 0; color: #333; font-size: 15px;"><strong>Status:</strong> <span style="color: ${config.color}; font-weight: bold; text-transform: capitalize;">${statusText}</span></p>
+              ${adminNotes ? `
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                  <p style="margin: 0 0 8px 0; color: #333; font-weight: bold; font-size: 14px;">Admin Response:</p>
+                  <div style="background-color: #ffffff; padding: 12px; border-radius: 5px; margin-top: 8px;">
+                    <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.5;">${adminNotes}</p>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+            
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.6; text-align: center;">
+                ${config.message}
+              </p>
+              ${adminNotes ? '' : `<p style="margin: 10px 0 0 0; color: #666; font-size: 14px; line-height: 1.6; text-align: center;">${config.actionMessage}</p>`}
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/driver-dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                View Your Reports
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px; line-height: 1.5;">
+              Thank you for your patience and for helping us improve our service.<br>
+              If you have any questions, please don't hesitate to contact our support team.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        reportTitle,
+        status,
+        adminNotes
       }
     };
   }

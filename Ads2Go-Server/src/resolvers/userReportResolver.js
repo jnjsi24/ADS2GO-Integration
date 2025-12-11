@@ -178,6 +178,8 @@ const resolvers = {
           // Don't fail the report creation if notification fails
         }
         
+        // Note: No email notification for PENDING status (only IN_PROGRESS and RESOLVED send emails)
+        
         return {
           success: true,
           message: 'Report created successfully',
@@ -480,16 +482,22 @@ const resolvers = {
         try {
           const UserNotificationService = require('../services/notifications/UserNotificationService');
           
-          // Check if status changed
+          // Check if status changed - only send emails for IN_PROGRESS and RESOLVED
           if (input.status && input.status !== oldStatus) {
-            await UserNotificationService.sendReportStatusUpdateNotification(
-              updatedReport.userId,
-              updatedReport._id,
-              updatedReport.title,
-              oldStatus,
-              input.status,
-              input.adminNotes || null
-            );
+            // Only send email notifications for IN_PROGRESS and RESOLVED statuses
+            if (input.status === 'IN_PROGRESS' || input.status === 'RESOLVED') {
+              await UserNotificationService.sendReportStatusUpdateNotification(
+                updatedReport.userId,
+                updatedReport._id,
+                updatedReport.title,
+                oldStatus,
+                input.status,
+                input.adminNotes || null
+              );
+            } else {
+              // For other statuses (PENDING, CLOSED), only create in-app notification, no email
+              console.log(`📝 UserNotificationService: Status changed to ${input.status}, skipping email (only IN_PROGRESS and RESOLVED send emails)`);
+            }
           }
           // If only admin notes were added (no status change)
           else if (input.adminNotes && input.adminNotes.trim() && !input.status) {
