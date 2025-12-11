@@ -341,34 +341,27 @@ const paymentResolvers = {
       let startDateAdjusted = false;
       const originalStartTime = new Date(ad.startTime);
       
-      // Check if the start date is in the past
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      // ✅ FIX: Check if the start date is in the past - if so, deploy instantly (current time)
       const startDateOnly = new Date(ad.startTime);
       startDateOnly.setUTCHours(0, 0, 0, 0);
+      const today = new Date(now);
+      today.setUTCHours(0, 0, 0, 0);
       
-      if (startDateOnly < today) {
-        // Start date is in the past - auto-adjust to tomorrow at 8:00 AM Manila time (00:00 UTC)
-        console.log(`📅 Original start date (${originalStartTime.toISOString()}) is in the past, auto-adjusting to tomorrow...`);
+      if (startDateOnly < today || ad.startTime < now) {
+        // Start date is in the past - auto-adjust to current time (instant deployment)
+        console.log(`📅 Original start date (${originalStartTime.toISOString()}) is in the past, auto-adjusting to current time for instant deployment...`);
         
-        // Calculate tomorrow at 8:00 AM Manila time (00:00 UTC tomorrow)
-        const tomorrow = new Date();
-        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-        tomorrow.setUTCHours(0, 0, 0, 0);
-        
-        // Update start time to tomorrow
-        ad.startTime = tomorrow;
+        // Update start time to current time (instant deployment)
+        ad.startTime = now;
         
         // Recalculate end time to maintain original duration
-        // End time = start time + durationDays, ending at 11:59 PM Manila time (15:59 UTC)
-        const newEndDate = new Date(tomorrow);
+        const newEndDate = new Date(now);
         newEndDate.setUTCDate(newEndDate.getUTCDate() + ad.durationDays);
-        newEndDate.setUTCHours(15, 59, 59, 999); // 15:59 UTC = 11:59 PM Manila
         
         ad.endTime = newEndDate;
         startDateAdjusted = true;
         
-        console.log(`✅ Start date adjusted from ${originalStartTime.toISOString()} to ${tomorrow.toISOString()}`);
+        console.log(`✅ Start date adjusted from ${originalStartTime.toISOString()} to ${now.toISOString()} (instant deployment)`);
         console.log(`✅ End date recalculated to ${newEndDate.toISOString()} (maintaining ${ad.durationDays} days duration)`);
       }
 

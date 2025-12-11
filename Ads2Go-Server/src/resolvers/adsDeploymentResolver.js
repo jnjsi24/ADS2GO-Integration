@@ -791,9 +791,26 @@ const adsDeploymentResolvers = {
 
       const ad = await Ad.findById(adId);
       if (!ad) throw new Error('Ad not found');
-      // Allow APPROVED or RUNNING status - if ad is running, it must have been approved
-      if (ad.status !== 'APPROVED' && ad.status !== 'RUNNING') {
-        throw new Error('Ad must be approved before deployment');
+      
+      // ✅ FIX: Check if ad is already deployed somewhere - if so, allow moving it
+      // This handles the case where an ad is being moved between devices
+      const existingDeployment = await AdsDeployment.findOne({
+        $or: [
+          { 'lcdSlots.adId': adId }
+        ]
+      });
+      
+      // If ad is already deployed, allow moving it (bypass approval check)
+      // Otherwise, require APPROVED or RUNNING status
+      if (!existingDeployment) {
+        // Allow APPROVED or RUNNING status - if ad is running, it must have been approved
+        if (ad.status !== 'APPROVED' && ad.status !== 'RUNNING') {
+          throw new Error('Ad must be approved before deployment');
+        }
+      } else {
+        // Ad is already deployed - this is likely a move operation
+        // Log for debugging but allow it to proceed
+        console.log(`ℹ️ [createDeployment] Ad ${adId} is already deployed - allowing move operation`);
       }
 
       /*

@@ -449,25 +449,35 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       throw new Error('Could not determine ad ID');
     }
 
-    await removeAdsFromLCD({
-      variables: {
-        materialId: sourceMaterialId,
-        adIds: [adId],
-        reason: `Moved to ${targetDeviceName}`
-      }
-    });
-
-    await createDeployment({
-      variables: {
-        input: {
-          adId,
-          materialId: targetDeployment.materialId || '',
-          driverId: targetDeployment.driverId,
-          startTime,
-          endTime
+    // ✅ FIX: Create deployment FIRST (before removing from source)
+    // This ensures if the deployment fails (e.g., ad not approved), the ad stays in the source
+    // If deployment succeeds, then remove from source
+    try {
+      await createDeployment({
+        variables: {
+          input: {
+            adId,
+            materialId: targetDeployment.materialId || '',
+            driverId: targetDeployment.driverId,
+            startTime,
+            endTime
+          }
         }
-      }
-    });
+      });
+      
+      // Only remove from source if deployment succeeded
+      await removeAdsFromLCD({
+        variables: {
+          materialId: sourceMaterialId,
+          adIds: [adId],
+          reason: `Moved to ${targetDeviceName}`
+        }
+      });
+    } catch (error: any) {
+      // If deployment fails, the ad remains in the source device
+      // Re-throw the error so the UI can display it
+      throw error;
+    }
   };
 
   const handleSlotSelectionConfirm = async () => {

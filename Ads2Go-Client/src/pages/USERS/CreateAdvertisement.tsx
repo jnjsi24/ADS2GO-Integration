@@ -498,17 +498,29 @@ const CreateAdvertisement: React.FC = () => {
       const mediaFileURL = await uploadMediaFile(formData.mediaFile!);
       setIsUploading(false);
       
-      // Parse start date - ads always start at 8:00 AM Manila time (operating hours start)
-      // Manila is UTC+8, so 8:00 AM Manila = 00:00 UTC
+      // ✅ FIX: Parse start date - ads deploy instantly (current time) instead of 8:00 AM
       const [year, month, day] = formData.startDate.split('-').map(Number);
-      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)); // 00:00 UTC = 8:00 AM Manila
+      const selectedDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const now = new Date();
+      
+      // If selected date is today or in the past, use current time (instant deployment)
+      // Otherwise, use the selected date at current time (not 8:00 AM)
+      let startDate: Date;
+      if (selectedDate <= new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+        // Today or past date - deploy instantly
+        startDate = now;
+      } else {
+        // Future date - use selected date at current time of day
+        startDate = new Date(selectedDate);
+        startDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      }
+      
       const startTime = startDate.toISOString();
       
-      // Calculate end date - ads end at 11:59 PM Manila time (operating hours end)
-      // Manila is UTC+8, so 11:59 PM Manila = 15:59 UTC (next day at 23:59 - 8 hours)
+      // Calculate end date - maintain duration from start time
       const endDate = new Date(startDate);
       endDate.setUTCDate(endDate.getUTCDate() + formData.durationDays);
-      endDate.setUTCHours(15, 59, 59, 999); // 15:59 UTC = 11:59 PM Manila
+      // Keep the same time of day as start time, just add the duration days
       const endTime = endDate.toISOString();
       
       // Create ad with ensured category
