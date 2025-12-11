@@ -384,6 +384,11 @@ const CreateAdvertisement: React.FC = () => {
       if (!formData.category) newErrors.category = 'Category is required';
       if (!formData.mediaFile) newErrors.mediaFile = 'Media file is required';
       
+      // ✅ Validate that only video files are allowed
+      if (formData.mediaFile && formData.mediaFile.type.startsWith('image/')) {
+        newErrors.mediaFile = 'Photos are not allowed. Please upload a video file only.';
+      }
+      
       // ✅ Block if still detecting video duration
       if (isDetectingDuration) {
         newErrors.mediaFile = 'Please wait while we detect your video duration...';
@@ -586,23 +591,25 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   setMediaFileError('');
   
   if (file) {
-    // More specific validation for supported types
-    const isImage = file.type.startsWith('image/');
+    // Only allow video files
     const isVideo = file.type.startsWith('video/');
     
-    // List of specific supported MIME types
-    const supportedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    // List of specific supported video MIME types
     const supportedVideoTypes = ['video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/quicktime'];
     
-    const isSupportedImage = supportedImageTypes.includes(file.type);
     const isSupportedVideo = supportedVideoTypes.includes(file.type);
     
-    if ((isImage && isSupportedImage) || (isVideo && isSupportedVideo)) {
+    if (isVideo && isSupportedVideo) {
       handleInputChange('mediaFile', file);
       setUploadProgress(100); // Set to 100% when file is selected
       e.target.value = ''; // Allow re-selecting the same file later
+    } else if (file.type.startsWith('image/')) {
+      setMediaFileError('Photos are not allowed. Please upload a video file only. Supported formats: MP4, MPEG, OGG, WebM, MOV');
+      // Clear the file input
+      e.target.value = '';
+      handleInputChange('mediaFile', null);
     } else {
-      setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, MOV');
+      setMediaFileError('Invalid file type. Only video files are allowed. Supported: MP4, MPEG, OGG, WebM, MOV');
       // Clear the file input
       e.target.value = '';
       handleInputChange('mediaFile', null);
@@ -622,18 +629,22 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
   setMediaFileError('');
   
   if (file) {
-    // More specific validation for supported types
-    const supportedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    // Only allow video files
+    const isVideo = file.type.startsWith('video/');
+    
+    // List of specific supported video MIME types
     const supportedVideoTypes = ['video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/quicktime'];
     
-    const isSupportedImage = supportedImageTypes.includes(file.type);
     const isSupportedVideo = supportedVideoTypes.includes(file.type);
     
-    if (isSupportedImage || isSupportedVideo) {
+    if (isVideo && isSupportedVideo) {
       handleInputChange('mediaFile', file);
       setUploadProgress(100); // Set to 100% when file is selected
+    } else if (file.type.startsWith('image/')) {
+      setMediaFileError('Photos are not allowed. Please upload a video file only. Supported formats: MP4, MPEG, OGG, WebM, MOV');
+      handleInputChange('mediaFile', null);
     } else {
-      setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, ');
+      setMediaFileError('Invalid file type. Only video files are allowed. Supported: MP4, MPEG, OGG, WebM, MOV');
       handleInputChange('mediaFile', null);
     }
   }
@@ -746,7 +757,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 mediaFileError ? 'text-red-400' : 'text-gray-600'
               }`}
             />
-            <p className="text-gray-700 mb-4">Drag your file image/video here</p>
+            <p className="text-gray-700 mb-4">Drag your video file here</p>
 
             {/* Divider with 'or' */}
             <div className="flex items-center justify-center mb-4 w-full">
@@ -769,7 +780,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
 
             <input
               type="file"
-              accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
+              accept=".mp4,.mpeg,.ogg,.webm,.mov,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
               onChange={handleFileInputChange}
               className="hidden"
               id="media-upload"
@@ -780,22 +791,14 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <div className="mt-10 w-full max-w-md flex items-center gap-4 px-5 py-4">
               {/* Thumbnail */}
               <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0 bg-gray-100">
-                {formData.mediaFile.type.startsWith('image/') ? (
-                  <img
-                    src={URL.createObjectURL(formData.mediaFile)}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <video
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  >
-                    <source src={URL.createObjectURL(formData.mediaFile)} />
-                  </video>
-                )}
+                <video
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  preload="metadata"
+                >
+                  <source src={URL.createObjectURL(formData.mediaFile)} />
+                </video>
               </div>
 
               {/* File Info */}
@@ -806,11 +809,9 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                       {formData.mediaFile.name}
                     </p>
                     <p className="text-xs text-gray-600 mt-1 text-left">
-                      {formData.mediaFile.type.startsWith('video/')
-                        ? detectedVideoDuration !== null
-                          ? `${detectedVideoDuration}s`
-                          : 'Detecting duration...'
-                        : `${(formData.mediaFile.size / 1024).toFixed(0)} KB`}
+                      {detectedVideoDuration !== null
+                        ? `${detectedVideoDuration}s`
+                        : 'Detecting duration...'}
                     </p>
                   </div>
                   {/* Action Icons */}

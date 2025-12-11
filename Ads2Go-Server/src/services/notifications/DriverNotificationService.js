@@ -46,9 +46,16 @@ class DriverNotificationService extends BaseNotificationService {
    */
   static async sendDriverStatusChangeNotification(driverId, status, reason = null) {
     try {
+      console.log('🔔 DriverNotificationService: Starting driver status change notification for driver:', driverId);
+      
       const Driver = require('../../models/Driver');
       const driver = await Driver.findById(driverId);
-      if (!driver) throw new Error('Driver not found');
+      if (!driver) {
+        console.error('❌ DriverNotificationService: Driver not found:', driverId);
+        throw new Error('Driver not found');
+      }
+
+      console.log('👤 DriverNotificationService: Found driver:', driver.firstName, driver.lastName, driver.email);
 
       const statusMessages = {
         'APPROVED': '🎉 Congratulations! Your driver application has been approved!',
@@ -57,6 +64,8 @@ class DriverNotificationService extends BaseNotificationService {
         'ACTIVE': '✅ Your driver account is now active!'
       };
 
+      // Create in-app notification
+      console.log('🔔 DriverNotificationService: Creating in-app notification...');
       const notification = await this.createNotification(
         driver._id,
         '📋 Driver Status Update',
@@ -69,13 +78,44 @@ class DriverNotificationService extends BaseNotificationService {
           data: { status, reason }
         }
       );
+      console.log('✅ DriverNotificationService: In-app notification created');
 
-      // Send email notification
-      await this.sendDriverStatusChangeEmail(driver.email, driver.firstName, status, reason);
+      // Send email notification using enhanced service
+      console.log('📧 DriverNotificationService: Sending email notification...');
+      try {
+        const emailData = await this.getDriverStatusChangeEmailData(driver.firstName, status, reason);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          driver._id,
+          'DRIVER',
+          driver.email,
+          driver.firstName,
+          'DRIVER_STATUS_CHANGE',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ DriverNotificationService: Driver status change email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 DriverNotificationService: Driver status change email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ DriverNotificationService: Failed to send driver status change email:', emailError.message);
+        console.error('❌ DriverNotificationService: Email error details:', emailError);
+        // Fallback to direct email if enhanced service fails
+        try {
+          await this.sendDriverStatusChangeEmail(driver.email, driver.firstName, status, reason);
+          console.log('✅ DriverNotificationService: Fallback email sent successfully');
+        } catch (fallbackError) {
+          console.error('❌ DriverNotificationService: Fallback email also failed:', fallbackError);
+          // Don't throw the error - continue with in-app notification
+        }
+      }
 
       return notification;
     } catch (error) {
-      console.error('Error sending driver status change notification:', error);
+      console.error('❌ DriverNotificationService: Error sending driver status change notification:', error);
       throw error;
     }
   }
@@ -187,9 +227,102 @@ class DriverNotificationService extends BaseNotificationService {
         }
       );
 
+      // Send email notification if admin notes are provided (admin reply)
+      if (adminNotes && adminNotes.trim()) {
+        try {
+          const emailData = await this.getDriverReportAdminResponseEmailData(driver.firstName, reportTitle, adminNotes);
+          const result = await EnhancedEmailNotificationService.sendEmailNotification(
+            driver._id,
+            'DRIVER',
+            driver.email,
+            driver.firstName,
+            'ADMIN_RESPONSE',
+            emailData,
+            'HIGH',
+            notification._id
+          );
+          
+          if (result.sent) {
+            console.log('✅ DriverNotificationService: Admin response email sent successfully');
+          } else if (result.queued) {
+            console.log('📝 DriverNotificationService: Admin response email queued (announcements emails disabled)');
+          }
+        } catch (emailError) {
+          console.error('❌ DriverNotificationService: Failed to send admin response email:', emailError.message);
+          // Don't throw the error - continue with in-app notification
+        }
+      }
+
       return notification;
     } catch (error) {
       console.error('Error sending report status update notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send admin response notification to driver (when admin replies to driver report)
+   */
+  static async sendDriverReportAdminResponseNotification(driverId, reportId, reportTitle, adminNotes) {
+    try {
+      console.log('🔔 DriverNotificationService: Starting admin response notification for driver:', driverId);
+      
+      const Driver = require('../../models/Driver');
+      const driver = await Driver.findById(driverId);
+      if (!driver) {
+        console.error('❌ DriverNotificationService: Driver not found:', driverId);
+        throw new Error('Driver not found');
+      }
+
+      console.log('👤 DriverNotificationService: Found driver:', driver.firstName, driver.lastName, driver.email);
+
+      // Create in-app notification
+      console.log('🔔 DriverNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        driverId,
+        '💬 Admin Response',
+        `You received a response from our admin team regarding your report "${reportTitle}". Message: "${adminNotes}"`,
+        'INFO',
+        {
+          userRole: 'DRIVER',
+          category: 'REPORT_ADMIN_RESPONSE',
+          priority: 'HIGH',
+          reportId: reportId,
+          reportTitle: reportTitle,
+          data: { adminNotes }
+        }
+      );
+      console.log('✅ DriverNotificationService: In-app notification created');
+
+      // Send email notification using enhanced service
+      console.log('📧 DriverNotificationService: Sending email notification...');
+      try {
+        const emailData = await this.getDriverReportAdminResponseEmailData(driver.firstName, reportTitle, adminNotes);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          driver._id,
+          'DRIVER',
+          driver.email,
+          driver.firstName,
+          'ADMIN_RESPONSE',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ DriverNotificationService: Admin response email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 DriverNotificationService: Admin response email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ DriverNotificationService: Failed to send admin response email:', emailError.message);
+        console.error('❌ DriverNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
+
+      return notification;
+    } catch (error) {
+      console.error('❌ DriverNotificationService: Error sending admin response notification:', error);
       throw error;
     }
   }
@@ -357,46 +490,123 @@ class DriverNotificationService extends BaseNotificationService {
   }
 
   /**
-   * Send driver status change email
+   * Get email data for driver status change notification
+   */
+  static async getDriverStatusChangeEmailData(firstName, status, reason) {
+    const statusMessages = {
+      'APPROVED': '🎉 Congratulations! Your driver application has been approved!',
+      'REJECTED': '❌ Your driver application has been rejected.',
+      'SUSPENDED': '⚠️ Your driver account has been suspended.',
+      'ACTIVE': '✅ Your driver account is now active!'
+    };
+
+    const statusColors = {
+      'APPROVED': '#4CAF50',
+      'REJECTED': '#dc3545',
+      'SUSPENDED': '#ff9800',
+      'ACTIVE': '#4CAF50'
+    };
+
+    const statusColor = statusColors[status] || '#4A90E2';
+
+    return {
+      subject: `Driver Status Update - ${status}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">Driver Status Update</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            
+            <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${statusColor};">
+              <h3 style="color: ${statusColor}; margin: 0 0 10px 0;">Status Update:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${status}</span></p>
+              ${reason ? `<p style="margin: 5px 0; color: #333;"><strong>Reason:</strong> ${reason}</p>` : ''}
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              ${statusMessages[status]}
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/driver-dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Driver Dashboard
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              If you have any questions, please contact our support team.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        status,
+        reason
+      }
+    };
+  }
+
+  /**
+   * Get email data for driver report admin response notification
+   */
+  static async getDriverReportAdminResponseEmailData(firstName, reportTitle, adminNotes) {
+    return {
+      subject: 'Admin Response - Your Report',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">💬 Admin Response</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Our admin team has responded to your report.</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Report Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Report:</strong> ${reportTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Admin Response:</strong></p>
+              <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                <p style="margin: 0; color: #333; font-style: italic;">"${adminNotes}"</p>
+              </div>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Please review the response and let us know if you need any clarification.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/driver-dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Reports
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for your feedback and for helping us improve our service.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        reportTitle,
+        adminNotes
+      }
+    };
+  }
+
+  /**
+   * Send driver status change email (legacy method - kept for fallback)
    */
   static async sendDriverStatusChangeEmail(email, firstName, status, reason) {
     try {
-      const statusMessages = {
-        'APPROVED': '🎉 Congratulations! Your driver application has been approved!',
-        'REJECTED': '❌ Your driver application has been rejected.',
-        'SUSPENDED': '⚠️ Your driver account has been suspended.',
-        'ACTIVE': '✅ Your driver account is now active!'
-      };
-
+      const emailData = await this.getDriverStatusChangeEmailData(firstName, status, reason);
+      
       const mailOptions = {
         from: EmailService.getFromEmail(),
         to: email,
-        subject: `Driver Status Update - ${status}`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
-            <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-              <h2 style="color: #333; text-align: center;">Driver Status Update</h2>
-              <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
-              
-              <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
-                <h3 style="color: #4A90E2; margin: 0 0 10px 0;">Status Update:</h3>
-                <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #28a745; font-weight: bold;">${status}</span></p>
-                ${reason ? `<p style="margin: 5px 0; color: #333;"><strong>Reason:</strong> ${reason}</p>` : ''}
-              </div>
-              
-              <p style="color: #666; text-align: center; margin: 20px 0;">
-                ${statusMessages[status]}
-              </p>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/driver-dashboard" 
-                   style="background-color: #4A90E2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                  View Driver Dashboard
-                </a>
-              </div>
-            </div>
-          </div>
-        `
+        subject: emailData.subject,
+        html: emailData.html
       };
 
       const transporter = EmailService.getTransporter();

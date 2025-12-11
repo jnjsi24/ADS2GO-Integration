@@ -255,36 +255,14 @@ class AdSchedulingJob {
             }
           }
           
-          // ✅ Send notification to user
+          // ✅ Send notification to user (includes email)
           if (ad.userId) {
             try {
-              const endDate = new Date(ad.endTime).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
-              });
-              
-              await BaseNotificationService.createNotification(
-                ad.userId._id,
-                '▶️  Your Ad is Now Running!',
-                `Your ad "${ad.title}" has started running and is now being displayed on the selected devices. It will run until ${endDate}.`,
-                'SUCCESS',
-                {
-                  category: 'AD_STARTED',
-                  priority: 'MEDIUM',
-                  adId: ad._id,
-                  adTitle: ad.title,
-                  data: {
-                    startTime: ad.startTime,
-                    endTime: ad.endTime,
-                    adId: ad._id.toString(),
-                    action: 'VIEW_DETAILS'
-                  }
-                }
-              );
-              console.log(`📧 Sent ad started notification for ad ${ad._id} to user ${ad.userId.email}`);
+              const NotificationService = require('../services/notifications/NotificationService');
+              await NotificationService.sendAdDeployedNotification(ad._id);
+              console.log(`📧 Sent ad deployed notification (with email) for ad ${ad._id} to user ${ad.userId.email}`);
             } catch (notifError) {
-              console.error(`❌ Error sending ad started notification for ad ${ad._id}:`, notifError);
+              console.error(`❌ Error sending ad deployed notification for ad ${ad._id}:`, notifError);
             }
           }
           

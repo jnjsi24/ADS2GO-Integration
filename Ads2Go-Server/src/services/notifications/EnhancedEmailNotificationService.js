@@ -1,5 +1,6 @@
 const EmailNotificationQueue = require('../../models/EmailNotificationQueue');
 const User = require('../../models/User');
+const Driver = require('../../models/Driver');
 const EmailService = require('../../utils/emailService');
 const mongoose = require('mongoose');
 
@@ -9,9 +10,25 @@ class EnhancedEmailNotificationService {
    */
   static async sendEmailNotification(userId, userRole, email, firstName, notificationType, emailData, priority = 'MEDIUM', originalNotificationId = null) {
     try {
-      console.log(`📧 EnhancedEmailNotificationService: Processing ${notificationType} email for user ${userId}`);
+      console.log(`📧 EnhancedEmailNotificationService: Processing ${notificationType} email for ${userRole} ${userId}`);
       
-      // Get user notification preferences
+      // For drivers, send email directly (they don't have notification preferences like users)
+      if (userRole === 'DRIVER') {
+        console.log(`📤 EnhancedEmailNotificationService: Sending email directly to driver ${userId}`);
+        const result = await this.sendEmailImmediately(email, emailData);
+        
+        if (result.success) {
+          return {
+            sent: true,
+            queued: false,
+            message: 'Email sent successfully to driver'
+          };
+        } else {
+          throw new Error('Failed to send email to driver');
+        }
+      }
+      
+      // For users, check notification preferences
       const user = await User.findById(userId);
       if (!user) {
         console.error(`❌ EnhancedEmailNotificationService: User not found: ${userId}`);

@@ -456,20 +456,46 @@ const resolvers = {
         
         const updatedReport = await report.save();
         
-        // Send notification to driver about report status update
+        // Send notification to driver about report status update (includes email if admin notes provided)
         try {
           const driverDetails = await Driver.findOne({ driverId: report.driverId });
           if (driverDetails) {
             const adminName = `${currentAdmin.firstName || ''} ${currentAdmin.lastName || ''}`.trim();
-            await NotificationService.sendReportStatusUpdateNotification(
-              driverDetails._id,
-              report._id.toString(),
-              report.title,
-              report.status,
-              input.adminNotes || null,
-              adminName
-            );
-            console.log(`📧 [DriverReportResolver] Sent status update notification to driver ${driverDetails.driverId}`);
+            
+            // If admin added notes, send admin response notification (includes email)
+            if (input.adminNotes && input.adminNotes.trim()) {
+              try {
+                await NotificationService.sendDriverReportAdminResponseNotification(
+                  driverDetails._id,
+                  report._id.toString(),
+                  report.title,
+                  input.adminNotes
+                );
+                console.log(`📧 [DriverReportResolver] Sent admin response notification (with email) to driver ${driverDetails.driverId}`);
+              } catch (adminResponseError) {
+                console.error('Error sending driver admin response notification:', adminResponseError);
+                // Fallback to status update notification
+                await NotificationService.sendReportStatusUpdateNotification(
+                  driverDetails._id,
+                  report._id.toString(),
+                  report.title,
+                  report.status,
+                  input.adminNotes || null,
+                  adminName
+                );
+              }
+            } else {
+              // Just send status update notification
+              await NotificationService.sendReportStatusUpdateNotification(
+                driverDetails._id,
+                report._id.toString(),
+                report.title,
+                report.status,
+                input.adminNotes || null,
+                adminName
+              );
+              console.log(`📧 [DriverReportResolver] Sent status update notification to driver ${driverDetails.driverId}`);
+            }
           }
         } catch (notifError) {
           console.error('Error sending driver report status notification:', notifError);

@@ -50,6 +50,14 @@ class NotificationService {
     return await UserNotificationService.sendPaymentConfirmationNotification(userId, amount, adTitle, adId);
   }
 
+  static async sendAdCreatedNotification(adId) {
+    return await UserNotificationService.sendAdCreatedNotification(adId);
+  }
+
+  static async sendAdDeployedNotification(adId) {
+    return await UserNotificationService.sendAdDeployedNotification(adId);
+  }
+
   static async sendAdPerformanceNotification(userId, adTitle, impressions, plays) {
     return await UserNotificationService.sendAdPerformanceNotification(userId, adTitle, impressions, plays);
   }
@@ -78,6 +86,10 @@ class NotificationService {
 
   static async sendReportStatusUpdateNotification(driverId, reportId, reportTitle, status, adminNotes, adminName) {
     return await DriverNotificationService.sendReportStatusUpdateNotification(driverId, reportId, reportTitle, status, adminNotes, adminName);
+  }
+
+  static async sendDriverReportAdminResponseNotification(driverId, reportId, reportTitle, adminNotes) {
+    return await DriverNotificationService.sendDriverReportAdminResponseNotification(driverId, reportId, reportTitle, adminNotes);
   }
 
   static async sendMaterialOnlineNotification(driverId, materialId, materialName) {

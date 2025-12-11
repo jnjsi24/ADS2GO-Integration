@@ -3,8 +3,13 @@ const mongoose = require('mongoose');
 const EmailNotificationQueueSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    refPath: 'userModel',
     required: true
+  },
+  userModel: {
+    type: String,
+    enum: ['User', 'Driver'],
+    default: 'User'
   },
   userRole: {
     type: String,
@@ -25,6 +30,8 @@ const EmailNotificationQueueSchema = new mongoose.Schema({
     enum: [
       'AD_APPROVAL',
       'AD_REJECTION', 
+      'AD_CREATED',
+      'AD_DEPLOYED',
       'PAYMENT_CONFIRMATION',
       'PROFILE_CHANGE',
       'MATERIAL_ASSIGNMENT',
@@ -42,7 +49,8 @@ const EmailNotificationQueueSchema = new mongoose.Schema({
       'SECURITY_ALERT',
       'DATABASE_ISSUE',
       'REPORT_STATUS_UPDATE',
-      'NEW_USER_REPORT'
+      'NEW_USER_REPORT',
+      'ADMIN_RESPONSE'
     ]
   },
   emailData: {

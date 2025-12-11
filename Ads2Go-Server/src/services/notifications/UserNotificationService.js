@@ -781,6 +781,252 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send ad created successfully notification
+   */
+  static async sendAdCreatedNotification(adId) {
+    try {
+      console.log('🔔 UserNotificationService: Starting ad created notification for ad:', adId);
+      
+      const Ad = require('../../models/Ad');
+      const ad = await Ad.findById(adId).populate('userId');
+      if (!ad) {
+        console.error('❌ UserNotificationService: Ad not found:', adId);
+        throw new Error('Ad not found');
+      }
+
+      const user = ad.userId;
+      if (!user) {
+        console.error('❌ UserNotificationService: User not found for ad:', adId);
+        throw new Error('User not found');
+      }
+
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+
+      // Create in-app notification
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        user._id,
+        '✅ Ad Created Successfully!',
+        `Your advertisement "${ad.title}" has been created successfully and is pending admin review.`,
+        'SUCCESS',
+        {
+          userRole: 'USER',
+          category: 'AD_CREATED',
+          priority: 'MEDIUM',
+          adId: ad._id,
+          adTitle: ad.title
+        }
+      );
+      console.log('✅ UserNotificationService: In-app notification created');
+
+      // Send email notification using enhanced service
+      console.log('📧 UserNotificationService: Sending email notification...');
+      try {
+        const emailData = await this.getAdCreatedEmailData(user.firstName, ad.title, ad._id);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'AD_CREATED',
+          emailData,
+          'MEDIUM',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Ad created email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Ad created email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send ad created email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
+
+      return notification;
+    } catch (error) {
+      console.error('❌ UserNotificationService: Error sending ad created notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send ad deployed notification
+   */
+  static async sendAdDeployedNotification(adId) {
+    try {
+      console.log('🔔 UserNotificationService: Starting ad deployed notification for ad:', adId);
+      
+      const Ad = require('../../models/Ad');
+      const ad = await Ad.findById(adId).populate('userId');
+      if (!ad) {
+        console.error('❌ UserNotificationService: Ad not found:', adId);
+        throw new Error('Ad not found');
+      }
+
+      const user = ad.userId;
+      if (!user) {
+        console.error('❌ UserNotificationService: User not found for ad:', adId);
+        throw new Error('User not found');
+      }
+
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+
+      const endDate = new Date(ad.endTime).toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      });
+
+      // Create in-app notification
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        user._id,
+        '▶️  Your Ad is Now Running!',
+        `Your ad "${ad.title}" has started running and is now being displayed on the selected devices. It will run until ${endDate}.`,
+        'SUCCESS',
+        {
+          userRole: 'USER',
+          category: 'AD_DEPLOYED',
+          priority: 'HIGH',
+          adId: ad._id,
+          adTitle: ad.title,
+          data: {
+            startTime: ad.startTime,
+            endTime: ad.endTime,
+            adId: ad._id.toString(),
+            action: 'VIEW_DETAILS'
+          }
+        }
+      );
+      console.log('✅ UserNotificationService: In-app notification created');
+
+      // Send email notification using enhanced service
+      console.log('📧 UserNotificationService: Sending email notification...');
+      try {
+        const emailData = await this.getAdDeployedEmailData(user.firstName, ad.title, ad._id, endDate);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'AD_DEPLOYED',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Ad deployed email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Ad deployed email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send ad deployed email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
+
+      return notification;
+    } catch (error) {
+      console.error('❌ UserNotificationService: Error sending ad deployed notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get email data for ad created notification
+   */
+  static async getAdCreatedEmailData(firstName, adTitle, adId) {
+    return {
+      subject: 'Ad Created Successfully!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">✅ Ad Created Successfully!</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been created successfully.</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Ad Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">PENDING REVIEW ⏳</span></p>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Your advertisement is now pending admin review. Once approved, you'll receive a notification and can proceed with payment.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/ad-details/${adId}" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Ad Details
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for choosing Ads2Go for your advertising needs!
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        adTitle,
+        adId
+      }
+    };
+  }
+
+  /**
+   * Get email data for ad deployed notification
+   */
+  static async getAdDeployedEmailData(firstName, adTitle, adId, endDate) {
+    return {
+      subject: 'Your Ad is Now Running!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">▶️  Your Ad is Now Running!</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Great news! Your advertisement has been deployed and is now running.</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Ad Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">RUNNING ▶️</span></p>
+              <p style="margin: 5px 0; color: #333;"><strong>End Date:</strong> ${endDate}</p>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Your advertisement is now being displayed on the selected devices and will continue running until ${endDate}.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/ad-details/${adId}" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Ad Details
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for choosing Ads2Go for your advertising needs!
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        adTitle,
+        adId,
+        endDate
+      }
+    };
+  }
+
+  /**
    * Send email notification for ad approval (legacy method - use getAdApprovalEmailData instead)
    */
   static async sendAdApprovalEmail(email, firstName, adTitle, adId) {

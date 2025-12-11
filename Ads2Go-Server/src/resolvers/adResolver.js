@@ -676,6 +676,16 @@ const adResolvers = {
 
       const savedAd = await ad.save();
 
+      // Send notification to user about ad created successfully
+      try {
+        const NotificationService = require('../services/notifications/NotificationService');
+        await NotificationService.sendAdCreatedNotification(savedAd._id);
+        console.log(`✅ Sent ad created notification to user for ad: ${savedAd._id}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending ad created notification:', notificationError);
+        // Don't fail the ad creation if notification fails
+      }
+
       // Send notification to admins about new ad submission
       try {
         const AdminNotificationService = require('../services/notifications/AdminNotificationService');
