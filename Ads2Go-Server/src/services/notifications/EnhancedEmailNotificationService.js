@@ -133,24 +133,33 @@ class EnhancedEmailNotificationService {
    */
   static async sendEmailImmediately(email, emailData) {
     try {
-      const mailOptions = {
-        from: EmailService.getFromEmail(),
+      console.log(`📧 EnhancedEmailNotificationService: Attempting to send email to ${email}`);
+      console.log(`   Subject: ${emailData.subject}`);
+      console.log(`   Email service configured: ${EmailService.isConfigured}`);
+      console.log(`   Email provider: ${EmailService.provider || 'Not set'}`);
+      
+      // Use EmailService.sendEmail() which handles both Resend and SMTP properly
+      const result = await EmailService.sendEmail({
         to: email,
         subject: emailData.subject,
-        html: emailData.html
-      };
+        html: emailData.html,
+        text: emailData.text || null // Include text version if available
+      });
 
-      const transporter = EmailService.getTransporter();
-      if (!transporter) {
-        throw new Error('Email service not configured');
+      if (result.success) {
+        console.log(`✅ EnhancedEmailNotificationService: Email sent successfully to ${email}`);
+        console.log(`   Message ID: ${result.messageId || 'N/A'}`);
+        console.log(`   Provider: ${result.provider || 'Unknown'}`);
+        return { success: true };
+      } else {
+        const errorMessage = result.error || 'Unknown error sending email';
+        console.error(`❌ EnhancedEmailNotificationService: Email sending failed: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
-
-      await transporter.sendMail(mailOptions);
-      console.log(`✅ EnhancedEmailNotificationService: Email sent successfully to ${email}`);
-      
-      return { success: true };
     } catch (error) {
-      console.error(`❌ EnhancedEmailNotificationService: Failed to send email:`, error);
+      console.error(`❌ EnhancedEmailNotificationService: Failed to send email to ${email}:`, error);
+      console.error(`   Error details:`, error.message);
+      console.error(`   Stack:`, error.stack);
       throw error;
     }
   }
