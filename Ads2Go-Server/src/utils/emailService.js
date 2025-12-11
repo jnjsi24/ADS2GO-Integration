@@ -1,15 +1,30 @@
 // server/utils/emailService.js
 
 const nodemailer = require('nodemailer');
+require('dotenv').config();
+
 let Resend;
+let ResendAvailable = false;
 try {
   const resendModule = require('resend');
-  Resend = resendModule.Resend || resendModule; // Support both export styles
+  // Resend v2+ exports as { Resend: class }
+  // Older versions might export the class directly
+  if (resendModule && resendModule.Resend) {
+    Resend = resendModule.Resend;
+    ResendAvailable = true;
+  } else if (resendModule && typeof resendModule === 'function') {
+    Resend = resendModule;
+    ResendAvailable = true;
+  } else {
+    console.log('⚠️  Resend package found but export structure is unexpected');
+    console.log('   Module type:', typeof resendModule);
+    console.log('   Module keys:', resendModule ? Object.keys(resendModule) : 'null');
+  }
 } catch (error) {
   // Resend not installed, will use SMTP only
   console.log('📦 Resend package not found - will use SMTP only');
+  console.log('   Error:', error.message);
 }
-require('dotenv').config();
 
 class EmailService {
   static transporter = null;
@@ -27,7 +42,13 @@ class EmailService {
     // Priority: Check for Resend API key first (works on Railway without SMTP)
     const resendApiKey = process.env.RESEND_API_KEY;
     
-    if (resendApiKey && Resend) {
+    // Debug: Check Resend configuration
+    console.log('🔍 Checking Resend configuration:');
+    console.log('   RESEND_API_KEY:', resendApiKey ? '✅ Found (hidden)' : '❌ Not found');
+    console.log('   Resend package:', ResendAvailable ? '✅ Installed' : '❌ Not installed');
+    console.log('   Resend class:', Resend ? '✅ Available' : '❌ Not available');
+    
+    if (resendApiKey && Resend && ResendAvailable) {
       try {
         this.resend = new Resend(resendApiKey);
         this.provider = 'resend';
@@ -37,6 +58,19 @@ class EmailService {
         return this.resend;
       } catch (error) {
         console.error('❌ Failed to initialize Resend:', error.message);
+      }
+    } else {
+      if (!resendApiKey) {
+        console.log('⚠️  RESEND_API_KEY not found in environment variables');
+        console.log('💡 To use Resend: Set RESEND_API_KEY in your .env file or environment variables');
+      }
+      if (!ResendAvailable || !Resend) {
+        console.log('⚠️  Resend package not available');
+        if (!ResendAvailable) {
+          console.log('💡 To use Resend: Run npm install resend');
+        } else {
+          console.log('💡 Resend package is installed but could not be loaded. Check for module errors.');
+        }
       }
     }
 
@@ -232,12 +266,29 @@ class EmailService {
   static async sendEmail(options) {
     const { to, subject, html, text, from, bcc } = options;
     
+    // Re-initialize if not configured
     if (!this.isConfigured) {
+      console.log('🔄 Email service not configured, attempting to initialize...');
       this.initializeTransporter();
     }
 
     if (!this.isConfigured) {
+      const resendApiKey = process.env.RESEND_API_KEY;
+      const smtpHost = process.env.SMTP_HOST;
+      
       console.error('❌ Cannot send email: Email service not configured');
+      console.error('   Current provider:', this.provider || 'None');
+      console.error('   RESEND_API_KEY:', resendApiKey ? '✅ Set' : '❌ Not set');
+      console.error('   SMTP_HOST:', smtpHost ? '✅ Set' : '❌ Not set');
+      console.error('💡 To fix:');
+      if (!resendApiKey && !smtpHost) {
+        console.error('   Option 1 (Recommended): Set RESEND_API_KEY in your .env file');
+        console.error('   Option 2: Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in your .env file');
+      } else if (!resendApiKey) {
+        console.error('   Set RESEND_API_KEY in your .env file to use Resend');
+      } else if (!smtpHost) {
+        console.error('   Set SMTP_HOST, SMTP_USER, SMTP_PASSWORD in your .env file to use SMTP');
+      }
       return { success: false, error: 'Email service not configured' };
     }
 
@@ -246,6 +297,15 @@ class EmailService {
 
     try {
       if (this.provider === 'resend') {
+        // Ensure Resend instance exists
+        if (!this.resend) {
+          console.error('❌ Resend instance not available, re-initializing...');
+          this.initializeTransporter();
+          if (!this.resend) {
+            return { success: false, error: 'Resend instance not available. Please check RESEND_API_KEY configuration.' };
+          }
+        }
+
         // Format 'from' email for Resend API (must be valid format)
         let formattedFromEmail;
         try {
