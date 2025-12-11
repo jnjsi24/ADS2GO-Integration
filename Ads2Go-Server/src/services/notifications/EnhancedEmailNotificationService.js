@@ -35,8 +35,27 @@ class EnhancedEmailNotificationService {
         throw new Error('User not found');
       }
 
+      // Initialize notification preferences if they don't exist (for users created before this feature)
+      if (!user.notificationPreferences) {
+        console.log(`🔧 EnhancedEmailNotificationService: Initializing notification preferences for user ${userId}`);
+        user.notificationPreferences = {
+          enableDesktopNotifications: false,
+          enableNotificationBadge: true,
+          pushNotificationTimeout: '10',
+          communicationEmails: false,
+          announcementsEmails: true // Default to true to enable emails
+        };
+        await user.save();
+        console.log(`✅ EnhancedEmailNotificationService: Notification preferences initialized for user ${userId}`);
+      }
+
       // Check if announcements emails are enabled
-      const announcementsEmailsEnabled = user.notificationPreferences?.announcementsEmails;
+      // Default to true if announcementsEmails is undefined (shouldn't happen after initialization, but safety check)
+      const announcementsEmailsEnabled = user.notificationPreferences.announcementsEmails !== undefined 
+        ? user.notificationPreferences.announcementsEmails 
+        : true; // Default to true (matching schema default)
+      
+      console.log(`📧 EnhancedEmailNotificationService: User ${userId} announcementsEmails setting: ${announcementsEmailsEnabled}`);
       
       if (!announcementsEmailsEnabled) {
         console.log(`📝 EnhancedEmailNotificationService: Announcements emails disabled for user ${userId}, queuing email`);
