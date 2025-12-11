@@ -1681,7 +1681,7 @@ const DetailedAnalytics: React.FC = () => {
               {/* Desktop Filters */}
               <div className="flex items-center gap-3">
                 {/* Date Picker */}
-                <div className="relative w-full sm:w-64 date-picker-container">
+                <div className="relative w-full sm:w-52 date-picker-container">
                   <button
                     onClick={() => setShowDatePicker(!showDatePicker)}
                     className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
@@ -1891,14 +1891,14 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
 
                 {/* Device Selection */}
-                <div className="relative w-full sm:w-40 device-dropdown-container">
+                <div className="relative w-full sm:w-52 device-dropdown-container">
                   <button
                     onClick={() => {
                       if (selectedAd === 'all') return;
                       setShowDeviceDropdown(!showDeviceDropdown);
                     }}
                     disabled={selectedAd === 'all'}
-                    className={`flex items-center justify-between w-full text-xs rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                    className={`flex items-center justify-between w-full text-xs rounded-md px-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 ${
                       selectedAd === 'all' 
                         ? 'text-gray-400 cursor-not-allowed opacity-60' 
                         : 'text-black cursor-pointer'
@@ -1922,7 +1922,7 @@ const DetailedAnalytics: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
+                        className="absolute z-50 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
                       >
                         <div className="p-3">
                           {/* All Devices Option */}
@@ -1932,7 +1932,7 @@ const DetailedAnalytics: React.FC = () => {
                               setSelectedDeviceLabel("All Devices");
                               setShowDeviceDropdown(false);
                             }}
-                            className={`w-full text-left px-3 py-2 text-xs transition-all duration-200 rounded-md${
+                            className={`w-full text-left px-1 py-2 text-xs transition-all duration-200 rounded-md${
                               selectedDevice === "all"
                                 ? ""
                                 : "hover:bg-gray-50 text-gray-700"
@@ -1952,7 +1952,7 @@ const DetailedAnalytics: React.FC = () => {
                                 setSelectedDeviceLabel(device.name);
                                 setShowDeviceDropdown(false);
                               }}
-                              className={`block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                              className={`block w-full text-left px-1 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
                                 selectedDevice === device.materialId
                                   ? ""
                                   : "hover:bg-gray-50 text-gray-700"
@@ -1964,7 +1964,7 @@ const DetailedAnalytics: React.FC = () => {
                                     <div className="font-medium">{device.name}</div>
                                   </div>
                                 </div>
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-1">
                                   <div
                                     className={`w-2 h-2 rounded-full ${
                                       device.isOnline ? "bg-green-500" : "bg-red-500"

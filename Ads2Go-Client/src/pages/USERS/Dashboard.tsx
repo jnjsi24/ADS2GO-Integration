@@ -1587,7 +1587,7 @@ const Dashboard = () => {
           {/* Map Container */}
           <div className="relative overflow-hidden">
             {/* Map Content */}
-            <div style={{ height: mapActiveTab === 'history' ? '500px' : '300px' }} className="relative z-0">
+            <div style={{ height: mapActiveTab === 'history' ? '500px' : '500px' }} className="relative z-0">
               {mapActiveTab === 'today' ? (
                 <Suspense fallback={<MapLoader />}>
                   <UserMaterialsMap height="100%" className="rounded-b-lg" />

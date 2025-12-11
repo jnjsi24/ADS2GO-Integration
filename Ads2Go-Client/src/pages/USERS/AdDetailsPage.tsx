@@ -1268,6 +1268,28 @@ const AdDetailsPage: React.FC = () => {
             </button>
             </div>
           )}
+
+          {/* QR Scan Activity Tab (only if fully paid and approved) */}
+          {isFullyPaidAndApproved && (
+            <div className="relative">
+            <button
+              onClick={() => setActiveTab('AdActivity')}
+                className={`relative px-1 py-1 font-medium transition-colors ${
+                  activeTab === 'AdActivity' ? 'text-black/90 font-semibold' : 'text-black/70 hover:text-black/90'
+                }`}
+            >
+              QR Scan Activity
+                <motion.span
+                  className="absolute left-0 bottom-0 h-[2px] rounded-full"
+                  style={{ background: '#FF9D3D' }}
+                  initial={{ width: 0 }}
+                  animate={{ width: activeTab === 'AdActivity' ? '100%' : 0 }}
+                  whileHover={{ width: '100%' }}
+                  transition={{ duration: 0.3 }}
+                />
+            </button>
+            </div>
+          )}
         </div>
 
 
@@ -1677,7 +1699,7 @@ const AdDetailsPage: React.FC = () => {
                 className="w-10 h-10 rounded-full bg-white border border-gray-300 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete"
               >
-                <Trash2 className="w-4 h-4 text-gray-700" />
+                <Trash2 className="w-4 h-4 text-red-700" />
               </button>
             )}
             
@@ -1691,7 +1713,7 @@ const AdDetailsPage: React.FC = () => {
                 className="w-10 h-10 rounded-full bg-white border border-gray-300 shadow-sm hover:shadow-md hover:bg-gray-50 transition-all duration-200 flex items-center justify-center"
                 title="Make Payment"
               >
-                <CreditCard className="w-4 h-4 text-gray-700" />
+                <CreditCard className="w-4 h-4 text-gray-500" />
               </button>
             )}
           </div>
@@ -1814,10 +1836,10 @@ const AdDetailsPage: React.FC = () => {
                       onClick={() => setShowPaymentTooltip((prev) => !prev)}
                       onFocus={() => setShowPaymentTooltip(true)}
                       onBlur={() => setShowPaymentTooltip(false)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-white/90 shadow hover:shadow-md transition"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-white/70 shadow hover:shadow-md transition"
                       aria-label="View payment information"
                     >
-                      <WalletCards className="h-4 w-4" />
+                      <WalletCards className="h-4 w-4 text-gray-700" />
                     </button>
 
                     {showPaymentTooltip && (
@@ -2073,7 +2095,7 @@ const AdDetailsPage: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                        className="absolute z-50 left-0 right-0 mt-2 shadow-xl bg-white/95 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
+                        className="absolute z-50 left-3 right-3 mt-2 shadow-xl bg-white/95 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
                     >
                       {adOptions.map((adOption, index) => {
                         const materialId = index === 0 
