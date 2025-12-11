@@ -341,7 +341,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between ${isMobile ? 'p-4' : 'p-6'} border-b pb-4 sticky top-0 bg-white z-10`}>
+        <div className={`flex items-center justify-between rounded-lg  ${isMobile ? 'p-4' : 'p-6'} border-b pb-4 sticky top-0 bg-white z-10`}>
           <div className="flex gap-2 items-center flex-1 min-w-0">
             <h2 className={`${isMobile ? 'text-lg' : 'text-2xl'} font-bold text-gray-800 truncate`}>
               {material.materialId}
@@ -793,72 +793,72 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                     className="overflow-hidden space-y-4"
                   >
                     <div className="grid grid-cols-1 gap-3 pt-2">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Condition:</span>
-                  {!isEditingCondition && (
-                    <button
-                      onClick={handleStartEditingCondition}
-                      className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
-                    >
-                      <Edit3 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                      <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                        Edit
-                      </span>
-                    </button>
-                  )}
-                </div>
-                <div className="mt-1">
-                  {isEditingCondition ? (
-                    <div className="space-y-2">
-                      <select
-                        value={selectedCondition}
-                        onChange={(e) => setSelectedCondition(e.target.value)}
-                        className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        disabled={isUpdatingCondition}
-                      >
-                        {conditionOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex justify-between gap-2">
-                        <button
-                          onClick={handleCancelEditingCondition}
-                          disabled={isUpdatingCondition}
-                          className="px-3 py-1 text-black border text-xs rounded hover:bg-gray-100 disabled:bg-gray-400 flex items-center gap-1"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSaveCondition}
-                          disabled={isUpdatingCondition}
-                          className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
-                        >
-                          {isUpdatingCondition ? 'Saving...' : 'Save'}
-                        </button>
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-700">Condition:</span>
+                          {!isEditingCondition && (
+                            <button
+                              onClick={handleStartEditingCondition}
+                              className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                            >
+                              <Edit3 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                                Edit
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          {isEditingCondition ? (
+                            <div className="space-y-2">
+                              <select
+                                value={selectedCondition}
+                                onChange={(e) => setSelectedCondition(e.target.value)}
+                                className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none"
+                                disabled={isUpdatingCondition}
+                              >
+                                {conditionOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="flex justify-between gap-2">
+                                <button
+                                  onClick={handleCancelEditingCondition}
+                                  disabled={isUpdatingCondition}
+                                  className="px-3 py-1 text-black border text-xs rounded hover:bg-gray-100 disabled:bg-gray-400 flex items-center gap-1"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleSaveCondition}
+                                  disabled={isUpdatingCondition}
+                                  className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
+                                >
+                                  {isUpdatingCondition ? 'Saving...' : 'Save'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                material.materialCondition === 'GOOD'
+                                  ? 'bg-blue-200 text-blue-800'
+                                  : material.materialCondition === 'FADED'
+                                  ? 'bg-yellow-200 text-yellow-800'
+                                  : material.materialCondition === 'DAMAGED'
+                                  ? 'bg-red-200 text-red-800'
+                                  : material.materialCondition === 'REMOVED'
+                                  ? 'bg-gray-200 text-gray-800'
+                                  : 'bg-gray-200 text-gray-800'
+                              }`}
+                            >
+                              {conditionOptions.find(opt => opt.value === material.materialCondition)?.label || 'Good'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        material.materialCondition === 'GOOD'
-                          ? 'bg-blue-200 text-blue-800'
-                          : material.materialCondition === 'FADED'
-                          ? 'bg-yellow-200 text-yellow-800'
-                          : material.materialCondition === 'DAMAGED'
-                          ? 'bg-red-200 text-red-800'
-                          : material.materialCondition === 'REMOVED'
-                          ? 'bg-gray-200 text-gray-800'
-                          : 'bg-gray-200 text-gray-800'
-                      }`}
-                    >
-                      {conditionOptions.find(opt => opt.value === material.materialCondition)?.label || 'Good'}
-                    </span>
-                  )}
-                </div>
-              </div>
                       <div>
                         <span className="text-xs font-semibold text-gray-700">Photo Compliance:</span>
                         <div className="mt-1">
@@ -1012,7 +1012,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                       <select
                         value={selectedCondition}
                         onChange={(e) => setSelectedCondition(e.target.value)}
-                        className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none"
                         disabled={isUpdatingCondition}
                       >
                         {conditionOptions.map((option) => (
@@ -1297,49 +1297,49 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
             })()}
           </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className={`${isMobile ? 'p-4' : 'p-6'} mt-auto border-t bg-white sticky bottom-0`}>
-          <div
-            className={`flex ${
-              isMobile ? 'justify-between gap-2 w-full' : 'justify-between'
-            }`}
-          >
-            {/* Usage History Button */}
-            <button
-              onClick={() => setShowUsageHistory(true)}
-              className={`flex items-center gap-2 px-3 py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-colors ${
-                isMobile ? 'w-1/2 justify-center' : 'w-36 justify-start'
+          {/* Action Buttons */}
+          <div className={`mt-6 ${isMobile ? 'mb-4' : 'mb-6'}`}>
+            <div
+              className={`flex ${
+                isMobile ? 'justify-between gap-2 w-full' : 'justify-between'
               }`}
-              title="View driver usage history"
             >
-              <History size={16} />
-              Usage History
-            </button>
+              {/* Usage History Button */}
+              <button
+                onClick={() => setShowUsageHistory(true)}
+                className={`flex items-center gap-2 px-3 py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-colors ${
+                  isMobile ? 'w-1/2 justify-center' : 'w-36 justify-start'
+                }`}
+                title="View driver usage history"
+              >
+                <History size={16} />
+                Usage History
+              </button>
 
-            {/* Conditional Button */}
-            {getStatus(material) === 'Available' ? (
-              <button
-                onClick={() => onAssignDriver(material)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-colors ${
-                  isMobile ? 'w-1/2' : 'w-48'
-                }`}
-              >
-                <UserPlus size={16} />
-                Assign Driver
-              </button>
-            ) : (
-              <button
-                onClick={() => onRemoveFromDriver(material.id)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white text-xs sm:text-sm rounded-lg hover:bg-red-600 transition-colors ${
-                  isMobile ? 'w-1/2' : 'w-48'
-                }`}
-              >
-                <UserX size={16} />
-                Remove Driver
-              </button>
-            )}
+              {/* Conditional Button */}
+              {getStatus(material) === 'Available' ? (
+                <button
+                  onClick={() => onAssignDriver(material)}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-colors ${
+                    isMobile ? 'w-1/2' : 'w-48'
+                  }`}
+                >
+                  <UserPlus size={16} />
+                  Assign Driver
+                </button>
+              ) : (
+                <button
+                  onClick={() => onRemoveFromDriver(material.id)}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 bg-red-500 text-white text-xs sm:text-sm rounded-lg hover:bg-red-600 transition-colors ${
+                    isMobile ? 'w-1/2' : 'w-48'
+                  }`}
+                >
+                  <UserX size={16} />
+                  Remove Driver
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

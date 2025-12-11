@@ -404,57 +404,56 @@ const DeviceDataHistoryV2: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
               />
-              {searchTerm !== debouncedSearch && (
-                <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 animate-spin" />
-              )}
             </div>
 
-            <div className="relative flex-1 sm:flex-none sm:w-40">
-              <button
-                onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                <span className="truncate">{selectedDeviceFilter}</span>
-                <ChevronDown
-                  size={16}
-                  className={`flex-shrink-0 transform transition-transform duration-200 ${showDeviceDropdown ? 'rotate-180' : ''}`}
-                />
-              </button>
+            {/* Device and Date Filters - Side by side on mobile, in same row as search on desktop */}
+            <div className="flex flex-row sm:contents gap-3">
+              <div className="relative flex-1 sm:flex-none sm:w-40">
+                <button
+                  onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{selectedDeviceFilter}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showDeviceDropdown ? 'rotate-180' : ''}`}
+                  />
+                </button>
 
-              <AnimatePresence>
-                {showDeviceDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                  >
-                    {deviceFilterOptions.map((device) => (
-                      <button
-                        key={device}
-                        onClick={() => {
-                          setSelectedDeviceFilter(device);
-                          setShowDeviceDropdown(false);
-                          setCurrentPage(1);
-                        }}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {device}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                <AnimatePresence>
+                  {showDeviceDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    >
+                      {deviceFilterOptions.map((device) => (
+                        <button
+                          key={device}
+                          onClick={() => {
+                            setSelectedDeviceFilter(device);
+                            setShowDeviceDropdown(false);
+                            setCurrentPage(1);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {device}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-            {/* Date Dropdown */}
-            <div className="relative w-full sm:w-40">
+              {/* Date Dropdown */}
+              <div className="relative flex-1 sm:flex-none sm:w-40">
               <button
                 onClick={() => setShowDateDropdown(!showDateDropdown)}
                 className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
-                <span className="truncate text-sm text-gray-700">
+                <span className="truncate">
                   {selectedDate
                     ? new Date(selectedDate).toLocaleDateString('en-US', {
                         year: 'numeric',
@@ -463,7 +462,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                       })
                     : "All Dates"}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   {selectedDate && (
                     <button
                       onClick={(e) => {
@@ -535,6 +534,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>

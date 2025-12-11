@@ -1445,7 +1445,7 @@ const RouteTab: React.FC = () => {
                 {/* Real-time indicator */}
                 {lastUpdate && (
                   <Text style={styles.lastUpdateText}>
-                    {isRealTimeActive ? 'Real-time:' : 'Updated:'} {lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                    {isRealTimeActive ? 'Real time:' : 'Updated:'} {lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                   </Text>
                 )}
               </View>
@@ -1487,7 +1487,6 @@ const RouteTab: React.FC = () => {
       {selectedDate.toDateString() === new Date().toDateString() && (
         <View style={styles.sessionCard}>
           <View style={styles.sessionHeader}>
-            <Ionicons name="time-outline" size={24} color="#3674B5" />
             <Text style={styles.sessionTitle}>Daily 8-Hour Requirement</Text>
           </View>
           
@@ -2672,7 +2671,6 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3674B5',
     textAlign: 'center',
   },
   sessionTimeInfo: {

@@ -41,10 +41,10 @@ interface Report {
 }
 
 const STATUS_COLORS = {
-  PENDING: { bg: '#fef3c7', text: '#92400e', border: '#fbbf24' },
-  IN_PROGRESS: { bg: '#dbeafe', text: '#1e40af', border: '#3674B5' },
-  RESOLVED: { bg: '#d1fae5', text: '#065f46', border: '#10b981' },
-  CLOSED: { bg: '#e5e7eb', text: '#374151', border: '#9ca3af' },
+  PENDING: { bg: '#fef3c7', text: '#92400e'},
+  IN_PROGRESS: { bg: '#dbeafe', text: '#1e40af'},
+  RESOLVED: { bg: '#d1fae5', text: '#065f46'},
+  CLOSED: { bg: '#e5e7eb', text: '#374151'},
 };
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
@@ -162,16 +162,11 @@ export default function MyReportsScreen() {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerTop}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#111827" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>My Reports</Text>
             <View style={styles.placeholder} />
-          </View>
-          <Text style={styles.headerSubtitle}>
-            {filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'}
-          </Text>
         </View>
 
         {/* Status Filter */}
@@ -225,23 +220,20 @@ export default function MyReportsScreen() {
                   onPress={() => openReportDetails(report)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.reportCardHeader}>
-                    <View style={styles.reportCardTitleContainer}>
-                      <Text style={styles.reportCardTitle} numberOfLines={1}>
-                        {report.title}
+                  <View style={styles.reportCardTopRow}>
+                    <Text style={styles.reportCardTitle} numberOfLines={1}>
+                      {report.title}
+                    </Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: statusColor.bg },
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: statusColor.text }]}>
+                        {report.status.replace('_', ' ')}
                       </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: statusColor.bg, borderColor: statusColor.border },
-                        ]}
-                      >
-                        <Text style={[styles.statusText, { color: statusColor.text }]}>
-                          {report.status.replace('_', ' ')}
-                        </Text>
-                      </View>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
                   </View>
 
                   <Text style={styles.reportCardType}>
@@ -273,7 +265,6 @@ export default function MyReportsScreen() {
 
                   <View style={styles.reportCardFooter}>
                     <View style={styles.footerItem}>
-                      <Ionicons name="calendar-outline" size={14} color="#9ca3af" />
                       <Text style={styles.footerText}>{formatDate(report.createdAt)}</Text>
                     </View>
                   </View>
@@ -305,33 +296,33 @@ export default function MyReportsScreen() {
             </View>
 
             <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {/* Status Badge */}
-              <View
-                style={[
-                  styles.modalStatusBadge,
-                  {
-                    backgroundColor: getStatusColor(selectedReport.status).bg,
-                    borderColor: getStatusColor(selectedReport.status).border,
-                  },
-                ]}
-              >
-                <Text
+              {/* Title and Status Row */}
+              <View style={styles.modalTitleRow}>
+                <Text style={styles.modalTitle}>{selectedReport.title}</Text>
+                <View
                   style={[
-                    styles.modalStatusText,
-                    { color: getStatusColor(selectedReport.status).text },
+                    styles.modalStatusBadge,
+                    {
+                      backgroundColor: getStatusColor(selectedReport.status).bg,
+                    },
                   ]}
                 >
-                  {selectedReport.status.replace('_', ' ')}
-                </Text>
+                  <Text
+                    style={[
+                      styles.modalStatusText,
+                      { color: getStatusColor(selectedReport.status).text },
+                    ]}
+                  >
+                    {selectedReport.status.replace('_', ' ')}
+                  </Text>
+                </View>
               </View>
-
-              {/* Title */}
-              <Text style={styles.modalTitle}>{selectedReport.title}</Text>
+              {/* Report ID */}
+              <Text style={styles.reportId}>Report ID: {selectedReport.id.slice(0, 8)}</Text>
 
               {/* Type */}
-              <View style={styles.modalInfoRow}>
-                <Ionicons name="pricetag-outline" size={20} color="#6b7280" />
-                <Text style={styles.modalInfoLabel}>Category:</Text>
+              <View style={styles.modalInfoColumn}>
+                <Text style={styles.modalInfoLabel}>Category</Text>
                 <Text style={styles.modalInfoValue}>
                   {REPORT_TYPE_LABELS[selectedReport.reportType] || selectedReport.reportType}
                 </Text>
@@ -420,7 +411,7 @@ export default function MyReportsScreen() {
                 </View>
 
                 {selectedReport.resolvedAt && (
-                  <View style={styles.timestampRow}>
+                  <View style={styles.timestampRowResolved}>
                     <Ionicons name="checkmark-circle-outline" size={18} color="#10b981" />
                     <View style={styles.timestampContent}>
                       <Text style={styles.timestampLabel}>Resolved</Text>
@@ -429,10 +420,6 @@ export default function MyReportsScreen() {
                   </View>
                 )}
               </View>
-
-              {/* Report ID */}
-              <Text style={styles.reportId}>Report ID: {selectedReport.id.slice(0, 8)}...</Text>
-
               <View style={styles.bottomSpacing} />
             </ScrollView>
           </View>
@@ -459,31 +446,24 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-  },
-  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 16,
   },
-  backButton: {
+  closeButton: {
     padding: 4,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
   },
   placeholder: {
-    width: 32,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
+    width: 36,
+    color: '#000000',
   },
   filterContainer: {
     paddingVertical: 12,
@@ -515,6 +495,7 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
     paddingHorizontal: 20,
+    
   },
   emptyState: {
     alignItems: 'center',
@@ -540,36 +521,29 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  reportCardHeader: {
+  reportCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 8,
   },
-  reportCardTitleContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
   reportCardTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 6,
+    marginRight: 12,
   },
   statusBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
   },
   statusText: {
     fontSize: 11,
@@ -604,8 +578,8 @@ const styles = StyleSheet.create({
   },
   reportCardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   footerItem: {
     flexDirection: 'row',
@@ -631,11 +605,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
-  closeButton: {
+  backButton: {
     padding: 4,
   },
   modalHeaderTitle: {
@@ -647,13 +618,16 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  modalTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
   modalStatusBadge: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 2,
-    marginBottom: 16,
   },
   modalStatusText: {
     fontSize: 13,
@@ -662,10 +636,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   modalTitle: {
+    flex: 1,
     fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 16,
+    marginRight: 12,
     lineHeight: 32,
   },
   modalInfoRow: {
@@ -674,10 +649,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     gap: 8,
   },
+  modalInfoColumn: {
+    flexDirection: 'column',
+    marginBottom: 20,
+  },
   modalInfoLabel: {
     fontSize: 14,
     color: '#6b7280',
     fontWeight: '500',
+    marginBottom: 4,
   },
   modalInfoValue: {
     fontSize: 14,
@@ -688,15 +668,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   modalSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginBottom: 4,
   },
   modalSectionContent: {
-    fontSize: 15,
-    color: '#374151',
-    lineHeight: 24,
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '600',
   },
   adminNotesHeader: {
     flexDirection: 'row',
@@ -710,8 +690,6 @@ const styles = StyleSheet.create({
   },
   adminNotesBox: {
     backgroundColor: '#eff6ff',
-    borderLeftWidth: 4,
-    borderLeftColor: '#3674B5',
     padding: 16,
     borderRadius: 8,
   },
@@ -733,10 +711,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   timestampRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    paddingVertical: 10,
+    gap: 12,
+  },
+  timestampRowResolved: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
     paddingVertical: 10,
     gap: 12,
   },
@@ -756,7 +746,7 @@ const styles = StyleSheet.create({
   reportId: {
     fontSize: 12,
     color: '#9ca3af',
-    textAlign: 'center',
+    textAlign: 'right',
     marginBottom: 8,
   },
   changeItem: {
