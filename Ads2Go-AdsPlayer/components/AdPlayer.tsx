@@ -1548,27 +1548,56 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Reset the fetch flag to allow refetching
       hasFetchedInitialAds.current = false;
       
-      // Refetch ads and company ads
-      console.log('🔄 [AdPlayer] Refetching ads...');
-      await Promise.all([
-        fetchAds(),
-        fetchCompanyAds()
-      ]);
+      // ✅ OPTIMIZED: Fast refresh - skip loading state and network checks
+      // We know we're online if we received the WebSocket message
+      console.log('🔄 [AdPlayer] Fast refreshing ads (skipping validation)...');
       
-      // After refresh, check if the current ad still exists
-      // fetchAds() will reset currentAdIndex to 0, so we need to check the new ads list
-      // The video will automatically switch to the new ad at index 0
-      // If we want to maintain the same ad if it still exists, we could do:
-      // const newAdIndex = ads.findIndex(ad => ad.adId === currentAdId);
-      // if (newAdIndex !== -1) {
-      //   setCurrentAdIndex(newAdIndex);
-      // }
-      // But resetting to 0 is safer and simpler - it ensures we start from the beginning
+      try {
+        // Fetch ads directly without showing loading state or network checks
+        const result = await tabletRegistrationService.fetchAds(materialId, slotNumber);
+        
+        if (result.success && result.ads.length > 0) {
+          // ✅ OPTIMIZED: Update ads immediately without validation (validate in background)
+          // This makes the refresh instant - validation can happen async
+          setAds(result.ads);
+          setCurrentAdIndex(0);
+          console.log(`✅ [AdPlayer] Fast refresh: Updated ${result.ads.length} ads immediately`);
+          
+          // Check if current ad still exists in new list
+          const currentAdStillExists = result.ads.find((ad: Ad) => ad.adId === currentAdId);
+          if (currentAdId && !currentAdStillExists) {
+            console.log(`ℹ️ [AdPlayer] Previous ad (${currentAdId}) was removed, starting from first ad`);
+          }
+          
+          // Validate ads in background (non-blocking)
+          filterValidAds(result.ads).then((validAds) => {
+            if (validAds.length !== result.ads.length) {
+              // Only update if validation filtered out some ads
+              setAds(validAds);
+              console.log(`✅ [AdPlayer] Background validation: ${validAds.length} valid ads`);
+            }
+            // Cache the valid ads
+            saveAdsToCache(validAds).catch(err => {
+              console.warn('Failed to cache ads:', err);
+            });
+          }).catch(err => {
+            console.warn('Background validation failed:', err);
+          });
+        } else {
+          console.log('⚠️ [AdPlayer] No ads returned from server during refresh');
+        }
+      } catch (fetchError) {
+        console.error('❌ [AdPlayer] Error fetching ads during refresh:', fetchError);
+        // Fallback to full fetch if fast refresh fails
+        await fetchAds();
+      }
+      
+      // Fetch company ads in parallel (non-blocking)
+      fetchCompanyAds().catch(err => {
+        console.warn('Failed to refresh company ads:', err);
+      });
       
       console.log('✅ [AdPlayer] Ads refreshed successfully');
-      if (currentAdId && !ads.find(ad => ad.adId === currentAdId)) {
-        console.log(`ℹ️ [AdPlayer] Previous ad (${currentAdId}) was removed, starting from first ad`);
-      }
     } catch (error) {
       console.error('❌ [AdPlayer] Error refreshing ads:', error);
     }
