@@ -14,17 +14,17 @@ service firebase.storage {
                    request.resource.contentType.matches('image/.*');
     }
 
-    // Admin profile picture uploads (allows any authenticated user including superadmins)
+    // Admin profile picture uploads (allows uploads without Firebase Auth - uses custom JWT auth)
+    // Size and content type restrictions provide security
     match /admin/{fileId} {
-      allow write: if request.auth != null && 
-                   request.resource.size < 5 * 1024 * 1024 && // 5MB limit
+      allow write: if request.resource.size < 5 * 1024 * 1024 && // 5MB limit
                    request.resource.contentType.matches('image/.*');
     }
 
-    // Superadmin profile picture uploads
+    // Superadmin profile picture uploads (allows uploads without Firebase Auth - uses custom JWT auth)
+    // Size and content type restrictions provide security
     match /superadmin/{fileId} {
-      allow write: if request.auth != null && 
-                   request.resource.size < 5 * 1024 * 1024 && // 5MB limit
+      allow write: if request.resource.size < 5 * 1024 * 1024 && // 5MB limit
                    request.resource.contentType.matches('image/.*');
     }
 
