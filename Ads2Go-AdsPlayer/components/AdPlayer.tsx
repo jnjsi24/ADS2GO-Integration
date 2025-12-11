@@ -1541,6 +1541,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('🔄 [AdPlayer] Received refresh ads command:', message);
       console.log(`🔄 [AdPlayer] Reason: ${message.reason || 'adsUpdated'}`);
       
+      // Store current ad info before refresh to check if it still exists
+      const currentAdBeforeRefresh = ads[currentAdIndex];
+      const currentAdId = currentAdBeforeRefresh?.adId;
+      
       // Reset the fetch flag to allow refetching
       hasFetchedInitialAds.current = false;
       
@@ -1551,7 +1555,20 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         fetchCompanyAds()
       ]);
       
+      // After refresh, check if the current ad still exists
+      // fetchAds() will reset currentAdIndex to 0, so we need to check the new ads list
+      // The video will automatically switch to the new ad at index 0
+      // If we want to maintain the same ad if it still exists, we could do:
+      // const newAdIndex = ads.findIndex(ad => ad.adId === currentAdId);
+      // if (newAdIndex !== -1) {
+      //   setCurrentAdIndex(newAdIndex);
+      // }
+      // But resetting to 0 is safer and simpler - it ensures we start from the beginning
+      
       console.log('✅ [AdPlayer] Ads refreshed successfully');
+      if (currentAdId && !ads.find(ad => ad.adId === currentAdId)) {
+        console.log(`ℹ️ [AdPlayer] Previous ad (${currentAdId}) was removed, starting from first ad`);
+      }
     } catch (error) {
       console.error('❌ [AdPlayer] Error refreshing ads:', error);
     }

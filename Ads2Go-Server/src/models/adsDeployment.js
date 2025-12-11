@@ -488,6 +488,17 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
     }
     
     console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on HEADDRESS material ${materialId} (available to both tablet slots)`);
+    
+    // ✨ NEW: Notify device to refresh ads after deployment
+    try {
+      const deviceStatusService = require('../services/deviceStatusService');
+      deviceStatusService.notifyRefreshAds(materialId, 'adsAdded');
+      console.log(`✅ [addToHEADDRESS] Notified device ${materialId} to refresh ads after deployment`);
+    } catch (notifyError) {
+      console.error(`❌ [addToHEADDRESS] Error notifying device to refresh:`, notifyError);
+      // Don't fail the deployment if notification fails
+    }
+    
     return savedDeployment;
     
   } catch (error) {
@@ -723,6 +734,17 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     }
     
     console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on material ${materialId}`);
+    
+    // ✨ NEW: Notify device to refresh ads after deployment
+    try {
+      const deviceStatusService = require('../services/deviceStatusService');
+      deviceStatusService.notifyRefreshAds(materialId, 'adsAdded');
+      console.log(`✅ [addToLCD] Notified device ${materialId} to refresh ads after deployment`);
+    } catch (notifyError) {
+      console.error(`❌ [addToLCD] Error notifying device to refresh:`, notifyError);
+      // Don't fail the deployment if notification fails
+    }
+    
     return savedDeployment;
     
   } catch (error) {
@@ -815,6 +837,18 @@ AdsDeploymentSchema.statics.removeFromLCD = async function(materialId, adIds, re
       slot.slotNumber === i && ['SCHEDULED', 'RUNNING'].includes(slot.status)
     );
     if (!occupied) availableSlots.push(i);
+  }
+
+  // ✨ NEW: Notify device to refresh ads after removal
+  if (removedSlots.length > 0) {
+    try {
+      const deviceStatusService = require('../services/deviceStatusService');
+      deviceStatusService.notifyRefreshAds(materialId, 'adsRemoved');
+      console.log(`✅ [removeFromLCD] Notified device ${materialId} to refresh ads after removal`);
+    } catch (notifyError) {
+      console.error(`❌ [removeFromLCD] Error notifying device to refresh:`, notifyError);
+      // Don't fail the removal if notification fails
+    }
   }
 
   return {

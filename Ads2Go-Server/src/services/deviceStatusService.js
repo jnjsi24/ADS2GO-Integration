@@ -1600,12 +1600,6 @@ class DeviceStatusService {
 
   // ✨ NEW: Notify devices to refresh their ad list when ads are moved/removed
   notifyRefreshAds(materialId, reason = 'adsUpdated') {
-    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
-      console.log(`⚠️ [RefreshAds] No material connections found for ${materialId}`);
-      return;
-    }
-
-    const connections = this.materialConnections.get(materialId);
     const refreshMessage = {
       type: 'refreshAds',
       materialId: materialId,
@@ -1615,29 +1609,47 @@ class DeviceStatusService {
 
     console.log(`🔄 [RefreshAds] Notifying devices for material ${materialId} to refresh ads (reason: ${reason})`);
 
-    // Send refresh message to all connected devices for this material
-    connections.forEach((ws) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify(refreshMessage));
-          console.log(`✅ [RefreshAds] Sent refresh command to device (slot ${ws.slotNumber || 'unknown'})`);
-        } catch (error) {
-          console.error(`❌ [RefreshAds] Error sending refresh to device:`, error);
-        }
-      }
-    });
+    let sentCount = 0;
 
-    // Also try to find devices by materialId in activeConnections (for devices that might not be in materialConnections)
+    // ✅ FIX: Send to playback WebSocket connections (where the client listens)
+    // The client's playbackWebSocketService listens for refreshAds messages
     this.activeConnections.forEach((ws, deviceId) => {
-      if (ws.materialId === materialId && ws.readyState === WebSocket.OPEN && !ws.isAdmin) {
+      // Only send to playback connections (not status connections) that match the materialId
+      if (ws.connectionType === 'playback' && 
+          ws.materialId === materialId && 
+          ws.readyState === WebSocket.OPEN && 
+          !ws.isAdmin) {
         try {
           ws.send(JSON.stringify(refreshMessage));
-          console.log(`✅ [RefreshAds] Sent refresh command to device ${deviceId}`);
+          sentCount++;
+          console.log(`✅ [RefreshAds] Sent refresh command to playback connection: device ${deviceId}, slot ${ws.slotNumber || 'unknown'}`);
         } catch (error) {
           console.error(`❌ [RefreshAds] Error sending refresh to device ${deviceId}:`, error);
         }
       }
     });
+
+    // Also try materialConnections (status connections) as fallback
+    if (this.materialConnections && this.materialConnections.has(materialId)) {
+      const connections = this.materialConnections.get(materialId);
+      connections.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify(refreshMessage));
+            sentCount++;
+            console.log(`✅ [RefreshAds] Sent refresh command to status connection (slot ${ws.slotNumber || 'unknown'})`);
+          } catch (error) {
+            console.error(`❌ [RefreshAds] Error sending refresh to device:`, error);
+          }
+        }
+      });
+    }
+
+    if (sentCount === 0) {
+      console.log(`⚠️ [RefreshAds] No active connections found for material ${materialId} to send refresh command`);
+    } else {
+      console.log(`✅ [RefreshAds] Successfully sent refresh command to ${sentCount} connection(s) for material ${materialId}`);
+    }
   }
 
   handleSyncRequest(deviceId, materialId, slotNumber, message) {

@@ -1275,6 +1275,50 @@ const adResolvers = {
           }
 
           console.log(`✅ Cleanup completed - ad removed from deployments and material availability`);
+          
+          // ✨ NEW: Notify all devices that had this ad to refresh
+          try {
+            const deviceStatusService = require('../services/deviceStatusService');
+            const Material = require('../models/Material');
+            
+            // Get all unique materialIds from deployments that had this ad
+            const materialIds = new Set();
+            for (const deployment of deployments) {
+              if (deployment.materialId) {
+                materialIds.add(deployment.materialId);
+              }
+            }
+            
+            // Also check targetDevices/materialId from the ad itself
+            const targetDeviceIds = ad.targetDevices || (ad.materialId ? (Array.isArray(ad.materialId) ? ad.materialId : [ad.materialId]) : []);
+            for (const deviceId of targetDeviceIds) {
+              // Convert ObjectId to materialId string if needed
+              try {
+                const material = await Material.findById(deviceId);
+                if (material && material.materialId) {
+                  materialIds.add(material.materialId);
+                }
+              } catch (err) {
+                // If deviceId is already a materialId string, use it directly
+                if (typeof deviceId === 'string') {
+                  materialIds.add(deviceId);
+                }
+              }
+            }
+            
+            // Notify each material to refresh
+            for (const materialId of materialIds) {
+              try {
+                deviceStatusService.notifyRefreshAds(materialId, 'adsRemoved');
+                console.log(`✅ [deleteAd] Notified device ${materialId} to refresh ads after deletion`);
+              } catch (notifyError) {
+                console.error(`❌ [deleteAd] Error notifying device ${materialId} to refresh:`, notifyError);
+              }
+            }
+          } catch (notifyError) {
+            console.error(`❌ [deleteAd] Error notifying devices to refresh (non-critical):`, notifyError);
+            // Don't fail the deletion if notification fails
+          }
         } catch (cleanupError) {
           console.error(`❌ Error during cleanup (non-critical):`, cleanupError);
           // Don't fail the archive if cleanup fails - ad is already archived
