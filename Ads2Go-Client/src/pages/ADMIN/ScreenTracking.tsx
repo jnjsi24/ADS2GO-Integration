@@ -1101,16 +1101,18 @@ const ScreenTracking: React.FC = () => {
               <h1 className={`${isMobile ? 'text-xl' : 'text-3xl'} font-bold text-gray-900`}>Device Tracking Dashboard</h1>
             </div>
             <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center space-x-2'}`}>
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-green-500' : 
-                  connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                }`}></div>
-                <span className="text-sm text-gray-600">
-                  {connectionStatus === 'connected' ? 'Connected' : 
-                   connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                </span>
-              </div>
+              {!isMobile && (
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' : 
+                    connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}></div>
+                  <span className="text-sm text-gray-600">
+                    {connectionStatus === 'connected' ? 'Connected' : 
+                     connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                  </span>
+                </div>
+              )}
               {activeTab === 'historical' && (
                 <input
                   type="date"
@@ -1148,14 +1150,16 @@ const ScreenTracking: React.FC = () => {
                   })()}
                 />
               )}
-              <button
-                onClick={fetchData}
-                disabled={refreshing}
-                className={`flex items-center ${isMobile ? 'justify-center w-full' : 'space-x-2'} bg-[#3674B5] text-white px-4 py-2 rounded hover:shadow-md disabled:opacity-50`}
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {!isMobile && <span>Refresh</span>}
-              </button>
+              {!isMobile && (
+                <button
+                  onClick={fetchData}
+                  disabled={refreshing}
+                  className="flex items-center space-x-2 bg-[#3674B5] text-white px-4 py-2 rounded hover:shadow-md disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1163,48 +1167,59 @@ const ScreenTracking: React.FC = () => {
 
       {/* Tab Navigation */}
       <div className="max-w-7xl bg-gray-100 mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={`flex ${isMobile ? 'space-x-2 overflow-x-auto' : 'space-x-3'}`}>
-          <button
-            onClick={() => setActiveTab('live')}
-            className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
-              activeTab === 'live'
-                ? 'text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <span>Live Tracking</span>
-            </div>
-            <span
-              className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
-                activeTab === 'live' ? 'w-full' : 'w-0 group-hover:w-full'
+        <div className={`flex ${isMobile ? 'space-x-2 overflow-x-auto items-center justify-between' : 'space-x-3'}`}>
+          <div className={`flex ${isMobile ? 'space-x-2' : 'space-x-3'}`}>
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'live'
+                  ? 'text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
-            />
-          </button>
-          <button
-            onClick={() => setActiveTab('historical')}
-            className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
-              activeTab === 'historical'
-                ? 'text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <span>Route Map</span>
-            </div>
-            <span
-              className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
-                activeTab === 'historical' ? 'w-full' : 'w-0 group-hover:w-full'
+            >
+              <div className="flex items-center space-x-2">
+                <span>Live Tracking</span>
+              </div>
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
+                  activeTab === 'live' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+            <button
+              onClick={() => setActiveTab('historical')}
+              className={`relative py-4 px-2 font-medium text-sm transition-colors group ${
+                activeTab === 'historical'
+                  ? 'text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
-            />
-          </button>
+            >
+              <div className="flex items-center space-x-2">
+                <span>Route Map</span>
+              </div>
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 bg-blue-500 transition-all duration-300 ${
+                  activeTab === 'historical' ? 'w-full' : 'w-0 group-hover:w-full'
+                }`}
+              />
+            </button>
+          </div>
+          {isMobile && (
+            <button
+              onClick={fetchData}
+              disabled={refreshing}
+              className="flex items-center justify-center bg-[#3674B5] text-white px-3 py-2 rounded hover:shadow-md disabled:opacity-50 flex-shrink-0"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Compliance Summary */}
       {complianceReport && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'} gap-2`}>
+          <div className={`grid ${isMobile ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'} gap-2`}>
             <div className={`bg-white rounded-lg shadow ${isMobile ? 'p-4' : 'p-6'}`}>
               <div className="flex items-center">
                 <div className={`${isMobile ? 'p-1.5' : 'p-2'} bg-blue-100 rounded-lg`}>
@@ -1282,9 +1297,7 @@ const ScreenTracking: React.FC = () => {
                   </div>
                   {activeTab === 'historical' && (
                     <div className={`flex ${isMobile ? 'flex-col gap-2 w-full' : 'items-center space-x-4'}`}>
-                      <div className={`${isMobile ? 'text-xs' : 'text-xs'} w-60 text-gray-500 leading-tight line-clamp-2`}>
-                        {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}                      
-                      </div>
+                     
                       <button
                         onClick={() => {
                           if (selectedScreen) {
@@ -1339,14 +1352,14 @@ const ScreenTracking: React.FC = () => {
                       />
                       
                       {/* Debug info */}
-                      <div className="absolute w-[500px] top-3 right-3 bg-white p-2 rounded shadow text-xs z-[1000]">
-                        <div>Selected Screen: <span className="font-medium">{selectedScreen?.deviceId || 'N/A'}</span></div>
-                        <div>Material ID: <span className="font-medium">{mapMaterialId}</span></div>
-                        <div>Date: <span className="font-medium">{selectedDate}</span></div>
+                      <div className={`absolute ${isMobile ? 'w-[calc(100%-1.5rem)] max-w-xs' : 'w-[500px]'} top-3 right-3 bg-white p-2 rounded shadow text-xs z-[1000]`}>
+                        <div className={isMobile ? 'truncate' : ''}>Selected Screen: <span className="font-medium">{selectedScreen?.deviceId || 'N/A'}</span></div>
+                        <div className={isMobile ? 'truncate' : ''}>Material ID: <span className="font-medium">{mapMaterialId}</span></div>
+                        <div className={isMobile ? 'truncate' : ''}>Date: <span className="font-medium">{selectedDate}</span></div>
                         <div>Filtered Screens: <span className="font-medium">{screens?.length || 0}</span></div>
-                        <div className="flex items-center justify-end gap-1 mt-1 text-green-600">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>Auto-refresh active (2s)</span>
+                        <div className={`flex items-center ${isMobile ? 'justify-start' : 'justify-end'} gap-1 mt-1 text-green-600`}>
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+                          <span className={isMobile ? 'text-[10px]' : ''}>Auto-refresh active (2s)</span>
                         </div>
                       </div>
                     </div>
@@ -1438,34 +1451,34 @@ const ScreenTracking: React.FC = () => {
                                 }
                               }}
                             >
-                              <Popup maxWidth={300} maxHeight={400}>
-                                <div className="p-3 space-y-3 max-w-xs">
+                              <Popup maxWidth={isMobile ? 280 : 300} maxHeight={400}>
+                                <div className={`p-3 space-y-3 ${isMobile ? 'max-w-[260px]' : 'max-w-xs'}`}>
                                   <div className="border-b pb-2">
-                                    <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                                      <span className="text-lg">
+                                    <h3 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 flex items-center gap-2`}>
+                                      <span className={isMobile ? 'text-base' : 'text-lg'}>
                                         {screen.screenType === 'HEADDRESS' ? '🏍️' : 
                                          screen.screenType === 'LCD' ? '🚐' : 
                                          screen.screenType === 'BILLBOARD' ? '🚛' : 
                                          screen.screenType === 'DIGITAL_DISPLAY' ? '🚌' : '🚗'}
                                       </span>
                                       Screen Details
-                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                      <span className={`${isMobile ? 'text-[10px]' : 'text-xs'} bg-blue-100 text-blue-800 px-2 py-1 rounded-full`}>
                                         #{index + 1}
                                       </span>
                                     </h3>
                                   </div>
 
                                   <div>
-                                    <h4 className="font-medium text-gray-900 text-sm">Device Info</h4>
+                                    <h4 className={`font-medium text-gray-900 ${isMobile ? 'text-xs' : 'text-sm'}`}>Device Info</h4>
                                     <div className="mt-1 space-y-1 text-xs text-gray-600">
-                                      <p>Device ID: {screen.deviceId}</p>
-                                      <p>Material: {screen.materialId}</p>
-                                      <p>Screen Type: {screen.screenType}</p>
-                                      <p className="text-sm text-gray-600">
-                                        Status: {isOnline ? 'ONLINE' : 'OFFLINE'} (calculated: {isOnline}, main: {screen.isOnline}, slot1: {screen.slot1Status}, slot2: {screen.slot2Status})
+                                      <p className={isMobile ? 'truncate text-[10px]' : ''}>Device ID: {screen.deviceId}</p>
+                                      <p className={isMobile ? 'truncate text-[10px]' : ''}>Material: {screen.materialId}</p>
+                                      <p className={isMobile ? 'text-[10px]' : ''}>Screen Type: {screen.screenType}</p>
+                                      <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
+                                        Status: {isOnline ? 'ONLINE' : 'OFFLINE'} {!isMobile && `(calculated: ${isOnline}, main: ${screen.isOnline}, slot1: ${screen.slot1Status}, slot2: ${screen.slot2Status})`}
                                       </p>
                                       {screen.currentLocation?.address && (
-                                        <p>Location: {screen.currentLocation.address}</p>
+                                        <p className={isMobile ? 'truncate text-[10px]' : ''}>Location: {screen.currentLocation.address}</p>
                                       )}
                                     </div>
                                   </div>
@@ -1531,11 +1544,11 @@ const ScreenTracking: React.FC = () => {
                             }
                           }}
                         >
-                          <Popup maxWidth={300} maxHeight={400}>
-                            <div className="p-3 space-y-3 max-w-xs">
+                          <Popup maxWidth={isMobile ? 280 : 300} maxHeight={400}>
+                            <div className={`p-3 space-y-3 ${isMobile ? 'max-w-[260px]' : 'max-w-xs'}`}>
                               <div className="border-b pb-2">
-                                <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                                  <span className="text-lg">
+                                <h3 className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-900 flex items-center gap-2`}>
+                                  <span className={isMobile ? 'text-base' : 'text-lg'}>
                                     {selectedScreen.screenType === 'HEADDRESS' ? '🏍️' : 
                                      selectedScreen.screenType === 'LCD' ? '🚐' : 
                                      selectedScreen.screenType === 'BILLBOARD' ? '🚛' : 
@@ -1543,21 +1556,21 @@ const ScreenTracking: React.FC = () => {
                                   </span>
                                   Screen Details
                                 </h3>
-                                <div className="text-xs text-yellow-600 mt-1">
+                                <div className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-yellow-600 mt-1`}>
                                   ⚠️ No GPS location available
                                 </div>
                               </div>
 
                               <div>
-                                <h4 className="font-medium text-gray-900 text-sm">Device Info</h4>
+                                <h4 className={`font-medium text-gray-900 ${isMobile ? 'text-xs' : 'text-sm'}`}>Device Info</h4>
                                 <div className="mt-1 space-y-1 text-xs text-gray-600">
-                                  <p>Device ID: {selectedScreen.deviceId}</p>
-                                  <p>Material: {selectedScreen.materialId}</p>
-                                  <p>Screen Type: {selectedScreen.screenType}</p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className={isMobile ? 'truncate text-[10px]' : ''}>Device ID: {selectedScreen.deviceId}</p>
+                                  <p className={isMobile ? 'truncate text-[10px]' : ''}>Material: {selectedScreen.materialId}</p>
+                                  <p className={isMobile ? 'text-[10px]' : ''}>Screen Type: {selectedScreen.screenType}</p>
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     Status: {isOnline ? 'ONLINE' : 'OFFLINE'}
                                   </p>
-                                  <p className="text-xs text-gray-500">
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-xs'} text-gray-500`}>
                                     Location: GPS data not available
                                   </p>
                                 </div>
@@ -1624,16 +1637,16 @@ const ScreenTracking: React.FC = () => {
                                 shadowSize: [41, 41]
                               })}
                             >
-                              <Popup>
-                                <div className="p-2">
-                                  <h3 className="font-semibold text-green-600">Route Start</h3>
-                                  <p className="text-sm text-gray-600">
+                              <Popup maxWidth={isMobile ? 200 : 250}>
+                                <div className={`p-2 ${isMobile ? 'min-w-[180px]' : ''}`}>
+                                  <h3 className={`font-semibold text-green-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>Route Start</h3>
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     {new Date(historicalRouteData.route[0].timestamp).toLocaleString()}
                                   </p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     Distance: {historicalRouteData.metrics.totalDistance} km
                                   </p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     Duration: {Math.floor(historicalRouteData.metrics.totalDuration / 60)} minutes
                                   </p>
                                 </div>
@@ -1657,16 +1670,16 @@ const ScreenTracking: React.FC = () => {
                                 shadowSize: [41, 41]
                               })}
                             >
-                              <Popup>
-                                <div className="p-2">
-                                  <h3 className="font-semibold text-red-600">Route End</h3>
-                                  <p className="text-sm text-gray-600">
+                              <Popup maxWidth={isMobile ? 200 : 250}>
+                                <div className={`p-2 ${isMobile ? 'min-w-[180px]' : ''}`}>
+                                  <h3 className={`font-semibold text-red-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>Route End</h3>
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     {new Date(historicalRouteData.route[historicalRouteData.route.length - 1].timestamp).toLocaleString()}
                                   </p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     Total Points: {historicalRouteData.metrics.pointCount}
                                   </p>
-                                  <p className="text-sm text-gray-600">
+                                  <p className={`${isMobile ? 'text-[10px]' : 'text-sm'} text-gray-600`}>
                                     Ad Plays: {historicalRouteData.metrics.totalAdPlays}
                                   </p>
                                 </div>

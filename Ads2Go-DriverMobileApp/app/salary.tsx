@@ -380,15 +380,15 @@ const SalaryScreen: React.FC = () => {
       case 'pending':
         return 'time-outline';
       case 'calculated':
-        return 'calculator-outline';
+        return;
       case 'approved':
-        return 'checkmark-circle-outline';
+        return;
       case 'paid':
-        return 'cash-outline';
+        return;
       case 'disputed':
-        return 'alert-circle-outline';
+        return;
       default:
-        return 'time-outline';
+        return;
     }
   };
 
@@ -607,10 +607,10 @@ const SalaryScreen: React.FC = () => {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="arrow-back" size={24} color="#1f2937" />
+          <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Salary</Text>
-        <View style={styles.headerRight} />
+        <View style={styles.placeholder} />
       </View>
 
       <ScrollView
@@ -620,28 +620,25 @@ const SalaryScreen: React.FC = () => {
         }
       >
 
-        {/* Summary Card */}
+        {/* Summary Cards */}
         {summary && (
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Salary Summary</Text>
+          <View style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Distance Salary</Text>
-                <Text style={styles.summaryValue}>
+              <View style={styles.summaryItemCard}>
+              <Text style={styles.summaryValue}>
                   {formatCurrency(summary.totalDistanceSalary || 0)}
                 </Text>
+                <Text style={styles.summaryLabel}>Distance Salary</Text>
               </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Hours Salary</Text>
+              <View style={styles.summaryItemCard}>
                 <Text style={styles.summaryValue}>
                   {formatCurrency(summary.totalHoursSalary || 0)}
                 </Text>
+                <Text style={styles.summaryLabel}>Hours Salary</Text>
               </View>
-            </View>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Earnings</Text>
+              <View style={styles.summaryItemCard}>
                 <Text style={styles.summaryValue}>{formatCurrency(summary.totalSalary)}</Text>
+                <Text style={styles.summaryLabel}>Total Salary</Text> 
               </View>
             </View>
           </View>
@@ -785,30 +782,6 @@ const SalaryScreen: React.FC = () => {
                   <Text style={styles.detailLabel}>Days Worked:</Text>
                   <Text style={styles.detailValue}>{selectedCalculation.rawData?.daysWorked || 0} days</Text>
                 </View>
-              </View>
-
-              {/* Raw Data */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Raw Data</Text>
-                <View style={styles.rawDataGrid}>
-                  <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalDistance || 0}</Text>
-                    <Text style={styles.rawDataLabel}>Total Distance (km)</Text>
-                  </View>
-                  <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalHours || 0}</Text>
-                    <Text style={styles.rawDataLabel}>Total Hours</Text>
-                  </View>
-                  <View style={styles.rawDataItem}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.daysWorked || 0}</Text>
-                    <Text style={styles.rawDataLabel}>Days Worked</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Pricing Configuration */}
-              <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Pricing Configuration</Text>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Distance Rate:</Text>
                   <Text style={styles.detailValue}>
@@ -823,27 +796,48 @@ const SalaryScreen: React.FC = () => {
                 </View>
               </View>
 
+              {/* Raw Data */}
+              <View style={styles.detailSection}>
+                <Text style={styles.detailSectionTitle}>Raw Data</Text>
+                <View style={styles.rawDataGrid}>
+                  <View style={styles.rawDataItemCard}>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalDistance || 0}</Text>
+                    <Text style={styles.rawDataLabel}>Total Distance</Text>
+                  </View>
+                  <View style={styles.rawDataItemCard}>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalHours || 0}</Text>
+                    <Text style={styles.rawDataLabel}>Total Hours</Text>
+                  </View>
+                  <View style={styles.rawDataItemCard}>
+                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.daysWorked || 0}</Text>
+                    <Text style={styles.rawDataLabel}>Days Worked</Text>
+                  </View>
+                </View>
+              </View>
+
               {/* Calculations */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailSectionTitle}>Salary Calculations</Text>
                 <View style={styles.calculationGrid}>
-                  <View style={styles.calculationItem}>
-                    <Text style={styles.calculationValue}>
-                      {formatCurrency(selectedCalculation.calculations?.distanceComputation || 0)}
-                    </Text>
-                    <Text style={styles.calculationLabel}>Distance Computation</Text>
-                    <Text style={styles.calculationFormula}>
-                      {selectedCalculation.rawData?.totalDistance || 0} km × {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
-                    </Text>
-                  </View>
-                  <View style={styles.calculationItem}>
-                    <Text style={styles.calculationValue}>
-                      {formatCurrency(selectedCalculation.calculations?.hoursComputation || 0)}
-                    </Text>
-                    <Text style={styles.calculationLabel}>Hours Computation</Text>
-                    <Text style={styles.calculationFormula}>
-                      {selectedCalculation.rawData?.totalHours || 0} hrs × {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
-                    </Text>
+                  <View style={styles.calculationRow}>
+                    <View style={styles.calculationItem}>
+                      <Text style={styles.calculationValue}>
+                        {formatCurrency(selectedCalculation.calculations?.distanceComputation || 0)}
+                      </Text>
+                      <Text style={styles.calculationLabel}>Distance Computation</Text>
+                      <Text style={styles.calculationFormula}>
+                        {selectedCalculation.rawData?.totalDistance || 0} km × {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
+                      </Text>
+                    </View>
+                    <View style={styles.calculationItem}>
+                      <Text style={styles.calculationValue}>
+                        {formatCurrency(selectedCalculation.calculations?.hoursComputation || 0)}
+                      </Text>
+                      <Text style={styles.calculationLabel}>Hours Computation</Text>
+                      <Text style={styles.calculationFormula}>
+                        {selectedCalculation.rawData?.totalHours || 0} hrs × {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
+                      </Text>
+                    </View>
                   </View>
                   <View style={[styles.calculationItem, styles.totalCalculationItem]}>
                     <Text style={styles.totalCalculationValue}>
@@ -872,7 +866,10 @@ const SalaryScreen: React.FC = () => {
                           <Text style={styles.dailyBreakdownDate}>
                             {formatDate(day.date)}
                           </Text>
-                          <Text style={styles.dailyBreakdownSalary}>
+                          <Text style={[
+                            styles.dailyBreakdownSalary,
+                            day.dailySalary > 1 ? styles.dailyBreakdownSalaryGreen : styles.dailyBreakdownSalaryZero
+                          ]}>
                             {formatCurrency(day.dailySalary)}
                           </Text>
                         </View>
@@ -882,7 +879,10 @@ const SalaryScreen: React.FC = () => {
                             <Text style={styles.dailyBreakdownValue}>
                               {day.totalDistance.toFixed(2)} km
                             </Text>
-                            <Text style={styles.dailyBreakdownSalary}>
+                            <Text style={[
+                              styles.dailyBreakdownSalary,
+                              day.distanceSalary > 1 ? styles.dailyBreakdownSalaryGreen : styles.dailyBreakdownSalaryZero
+                            ]}>
                               {formatCurrency(day.distanceSalary)}
                             </Text>
                           </View>
@@ -891,7 +891,10 @@ const SalaryScreen: React.FC = () => {
                             <Text style={styles.dailyBreakdownValue}>
                               {day.totalHours.toFixed(2)} hrs
                             </Text>
-                            <Text style={styles.dailyBreakdownSalary}>
+                            <Text style={[
+                              styles.dailyBreakdownSalary,
+                              day.hoursSalary > 1 ? styles.dailyBreakdownSalaryGreen : styles.dailyBreakdownSalaryZero
+                            ]}>
                               {formatCurrency(day.hoursSalary)}
                             </Text>
                           </View>
@@ -899,7 +902,7 @@ const SalaryScreen: React.FC = () => {
                       </View>
                     ))}
                     <View style={styles.dailyBreakdownTotal}>
-                      <Text style={styles.dailyBreakdownTotalLabel}>Total Days:</Text>
+                      <Text style={styles.dailyBreakdownTotalLabel}>Total Days</Text>
                       <Text style={styles.dailyBreakdownTotalValue}>
                         {dailyBreakdown.length} days
                       </Text>
@@ -979,24 +982,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    paddingTop: 7,
+    paddingBottom: 16,
   },
   backButton: {
-    padding: 8,
-    marginLeft: -8,
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-    textAlign: 'center',
+    color: '#1f2937',
   },
-  headerRight: {
-    width: 40,
+  placeholder: {
+    width: 36,
+    color: '#000000',
   },
   header: {
     padding: 20,
@@ -1007,40 +1006,32 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
-  summaryCard: {
+  summaryContainer: {
     margin: 20,
-    padding: 20,
-    backgroundColor: '#3674B5',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 16,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 6,
   },
-  summaryItem: {
+  summaryItemCard: {
     flex: 1,
+    backgroundColor: '#3674B5',
+    borderRadius: 5,
+    padding: 12,
+    alignItems: 'center',
   },
   summaryLabel: {
     fontSize: 12,
     color: '#ffffff',
-    marginBottom: 4,
+    textAlign: 'center',
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: '600',
     color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   calculationsSection: {
     padding: 20,
@@ -1101,6 +1092,7 @@ const styles = StyleSheet.create({
   calculationStatus: {
     flexDirection: 'row',
     alignItems: 'center',
+    fontWeight: '600',
   },
   statusText: {
     fontSize: 12,
@@ -1188,19 +1180,17 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#9CA3AF',
+    justifyContent: 'flex-end',
+    textAlign: 'right',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 18,
@@ -1212,13 +1202,14 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
-    padding: 20,
+    padding: 16,
   },
   detailSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: 10,
+    marginBottom: 0,
+    
   },
   detailSectionTitle: {
     fontSize: 16,
@@ -1229,26 +1220,35 @@ const styles = StyleSheet.create({
   rawDataGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 6,
   },
-  rawDataItem: {
-    alignItems: 'center',
+  rawDataItemCard: {
     flex: 1,
+    backgroundColor: '#3674B5',
+    borderRadius: 5,
+    padding: 12,
+    alignItems: 'center',
   },
   rawDataValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#3B82F6',
+    color: '#ffffff',
+    marginBottom: 4,
   },
   rawDataLabel: {
     fontSize: 12,
-    color: '#6B7280',
+    color: '#ffffff',
     textAlign: 'center',
-    marginTop: 4,
   },
   calculationGrid: {
     gap: 12,
   },
+  calculationRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   calculationItem: {
+    flex: 1,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
     padding: 12,
@@ -1256,8 +1256,8 @@ const styles = StyleSheet.create({
   },
   totalCalculationItem: {
     backgroundColor: '#ECFDF5',
-    borderWidth: 2,
     borderColor: '#10B981',
+    
   },
   calculationValue: {
     fontSize: 18,
@@ -1277,7 +1277,7 @@ const styles = StyleSheet.create({
   totalCalculationLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#059669',
+    color: '#6B7280',
     marginTop: 4,
   },
   calculationFormula: {
@@ -1310,11 +1310,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dailyBreakdownItem: {
-    backgroundColor: '#F9FAFB',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
   },
   dailyBreakdownHeader: {
     flexDirection: 'row',
@@ -1358,19 +1362,25 @@ const styles = StyleSheet.create({
     minWidth: 80,
     textAlign: 'right',
   },
+  dailyBreakdownSalaryZero: {
+    color: '#000000',
+  },
+  dailyBreakdownSalaryGreen: {
+    color: '#059669',
+  },
   dailyBreakdownTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
     paddingTop: 12,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     borderTopColor: '#D1D5DB',
   },
   dailyBreakdownTotalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
   },
   dailyBreakdownTotalValue: {
     fontSize: 14,

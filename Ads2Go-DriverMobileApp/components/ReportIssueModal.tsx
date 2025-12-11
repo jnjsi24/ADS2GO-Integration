@@ -98,6 +98,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; description?: string; category?: string }>({});
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   
   // Profile update specific states
   const [driverProfile, setDriverProfile] = useState<any>(null);
@@ -112,6 +113,13 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
       loadDriverProfile();
     }
   }, [visible, formData.category]);
+
+  // Close dropdown when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setIsCategoryDropdownOpen(false);
+    }
+  }, [visible]);
 
   const loadDriverProfile = async () => {
     try {
@@ -470,6 +478,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
                 setFieldValues({});
                 setUploadedFiles({});
                 setErrors({});
+                setIsCategoryDropdownOpen(false);
                 onClose();
               },
             },
@@ -502,12 +511,14 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
               setFieldValues({});
               setUploadedFiles({});
               setErrors({});
+              setIsCategoryDropdownOpen(false);
               onClose();
             },
           },
         ]
       );
     } else {
+      setIsCategoryDropdownOpen(false);
       onClose();
     }
   };
@@ -533,29 +544,59 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
           {/* Category Selection */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>
-              Category <Text style={styles.required}>*</Text>
+              Category 
             </Text>
-            <View style={styles.categoryGrid}>
-              {categories.map((category) => (
-                <TouchableOpacity
-                  key={category.value}
+            <View style={styles.dropdownContainer}>
+              <TouchableOpacity
+                style={[styles.dropdownButton, errors.category && styles.inputError]}
+                onPress={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                disabled={isSubmitting}
+              >
+                <Text
                   style={[
-                    styles.categoryButton,
-                    formData.category === category.value && styles.categoryButtonSelected,
+                    styles.dropdownButtonText,
+                    !formData.category && styles.dropdownButtonPlaceholder,
                   ]}
-                  onPress={() => handleInputChange('category', category.value)}
-                  disabled={isSubmitting}
                 >
-                  <Text
-                    style={[
-                      styles.categoryButtonText,
-                      formData.category === category.value && styles.categoryButtonTextSelected,
-                    ]}
-                  >
-                    {category.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                  {formData.category
+                    ? categories.find((cat) => cat.value === formData.category)?.label
+                    : 'Select a category'}
+                </Text>
+                <Ionicons
+                  name={isCategoryDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+              {isCategoryDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  <ScrollView style={styles.dropdownScrollView} nestedScrollEnabled>
+                    {categories.map((category) => (
+                      <TouchableOpacity
+                        key={category.value}
+                        style={[
+                          styles.dropdownItem,
+                          formData.category === category.value && styles.dropdownItemSelected,
+                        ]}
+                        onPress={() => {
+                          handleInputChange('category', category.value);
+                          setIsCategoryDropdownOpen(false);
+                        }}
+                        disabled={isSubmitting}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            formData.category === category.value && styles.dropdownItemTextSelected,
+                          ]}
+                        >
+                          {category.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
             {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
           </View>
@@ -566,7 +607,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
               {/* Profile Update Fields */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  Select Fields to Update <Text style={styles.required}>*</Text>
+                  Select Fields to Update 
                 </Text>
                 <Text style={styles.helperText}>
                   Choose the fields you want to update and provide the new values.
@@ -642,7 +683,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
               {/* Title Input (for non-profile-update categories) */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  Title <Text style={styles.required}>*</Text>
+                  Title 
                 </Text>
                 <TextInput
                   style={[styles.input, errors.title && styles.inputError]}
@@ -660,7 +701,7 @@ export default function ReportIssueModal({ visible, onClose }: ReportIssueModalP
               {/* Description Input */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>
-                  Description <Text style={styles.required}>*</Text>
+                  Description 
                 </Text>
                 <TextInput
                   style={[styles.textArea, errors.description && styles.inputError]}
@@ -764,9 +805,6 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 8,
   },
-  required: {
-    color: '#ef4444',
-  },
   helperText: {
     fontSize: 14,
     color: '#6b7280',
@@ -801,38 +839,69 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  dropdownContainer: {
+    position: 'relative',
+    zIndex: 1000,
   },
-  categoryButton: {
-    flex: 1,
-    minWidth: '45%',
+  dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 48,
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    color: '#1f2937',
+    flex: 1,
+  },
+  dropdownButtonPlaceholder: {
+    color: '#6b7280',
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
     backgroundColor: '#fff',
     borderRadius: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 300,
+    overflow: 'hidden',
+    zIndex: 1001,
+  },
+  dropdownScrollView: {
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
-    gap: 12,
   },
-  categoryButtonSelected: {
-    backgroundColor: '#3674B5',
-    borderColor: '#3674B5',
+  dropdownItemSelected: {
+    backgroundColor: '#eff6ff',
   },
-  categoryButtonText: {
-    flex: 1,
+  dropdownItemText: {
     fontSize: 14,
-    fontWeight: '500',
     color: '#1f2937',
+    flex: 1,
   },
-  categoryButtonTextSelected: {
-    color: '#fff',
+  dropdownItemTextSelected: {
+    color: '#3674B5',
+    fontWeight: '500',
   },
   fieldContainer: {
     padding: 12,

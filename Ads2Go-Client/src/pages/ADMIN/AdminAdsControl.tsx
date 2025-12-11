@@ -1439,7 +1439,7 @@ const AdminAdsControl: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-4 mb-6">
         {/* LEFT – stretch to fill the row height */}
         <div className="lg:w-1/2 flex flex-col">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 flex-1">
+          <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 flex-1">
             {/* Total Screens */}
             <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
               <div className="flex items-center justify-center gap-2">
@@ -1454,7 +1454,6 @@ const AdminAdsControl: React.FC = () => {
                 <p className="text-3xl font-semibold">
                   {screens.filter(s => s.isOnline).length}
                 </p>
-                <Monitor className="w-6 h-6 pt-1" />
               </div>
               <p className="text-xs text-gray-600 font-medium mt-1">Online Screens</p>
             </div>
@@ -1472,7 +1471,6 @@ const AdminAdsControl: React.FC = () => {
                     );
                   }).length}
                 </p>
-                <PlayCircle className="w-6 h-6 pt-1" />
               </div>
               <p className="text-xs text-gray-600 font-medium mt-1">Playing Ads</p>
             </div>
@@ -1522,7 +1520,7 @@ const AdminAdsControl: React.FC = () => {
             <button
               onClick={handleToggleLock}
               disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
-              className={`flex flex-col items-center justify-center p-4 bg-red-200 rounded-lg disabled:opacity-50 ${
+              className={`flex flex-col items-center justify-center p-4 rounded-lg disabled:opacity-50 ${
                 isLocked
                   ? 'bg-green-50 hover:bg-green-100'
                   : 'bg-red-50 hover:bg-red-100'

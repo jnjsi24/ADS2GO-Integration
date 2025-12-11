@@ -474,14 +474,15 @@ export default function PhotoSubmission() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.back()}  style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Photo Submission</Text>
+          <View style={styles.placeholder} />
         </View>
         
         <View style={styles.notPhotoDayContainer}>
-          <Ionicons name="camera-outline" size={64} color="#CCCCCC" />
+          <Ionicons name="camera-outline" size={64} color="#666" />
           <Text style={styles.notPhotoDayTitle}>No Photos Needed</Text>
           <Text style={styles.notPhotoDayText}>
             Photo submissions are available when your next inspection due date arrives.
@@ -504,10 +505,11 @@ export default function PhotoSubmission() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+        <TouchableOpacity onPress={() => router.back()}  style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Photo Submission</Text>
+          <View style={styles.placeholder} />
           <View style={styles.headerRight} />
         </View>
       <View style={styles.loadingContainer}>
@@ -521,10 +523,11 @@ export default function PhotoSubmission() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()}  style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Photo Submission</Text>
+        <View style={styles.placeholder} />
         <View style={styles.headerRight}>
           <Ionicons name="camera" size={24} color="#007AFF" />
         </View>
@@ -678,15 +681,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingTop: 50,
+    paddingBottom: 16,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#1f2937',
+  },
+  backButton: {
+    padding: 4,
+  },
+  placeholder: {
+    width: 36,
+    color: '#000000',
   },
   headerRight: {
     width: 24,
@@ -752,6 +760,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
+    textAlign: 'center',
+    paddingTop: 30,
   },
   materialCard: {
     backgroundColor: '#FFFFFF',
