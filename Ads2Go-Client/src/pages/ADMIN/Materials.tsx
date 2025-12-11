@@ -1263,15 +1263,15 @@ const Materials: React.FC = () => {
               />
             </button>
           </nav>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className={`py-3 bg-[#feb011] text-xs text-white rounded-lg ${
-              isMobile ? 'w-36' : 'w-40'
-            } hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2`}
-          >
-            <Plus size={16} />
-            Create Device
-          </button>
+          {!isMobile && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="py-3 bg-[#feb011] text-xs text-white rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+            >
+              <Plus size={16} />
+              Create Device
+            </button>
+          )}
         </div>
 
         {/* Bulk Actions Bar */}
@@ -1316,9 +1316,10 @@ const Materials: React.FC = () => {
         {/* Table */}
         <div className="rounded-xl mb-5 overflow-hidden">
           {/* Table Header */}
-          <div className={`grid gap-4 px-5 py-3 text-sm font-semibold text-gray-500 ${
-            activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
-          }`}>
+          {!isMobile && (
+            <div className={`grid gap-4 px-5 py-3 text-sm font-semibold text-gray-500 ${
+              activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+            }`}>
             <div className="flex items-center gap-6 col-span-2">
               <input
                 type="checkbox"
@@ -1335,6 +1336,7 @@ const Materials: React.FC = () => {
             <div className="col-span-2 pl-24">Vehicle Plate</div>
             <div className="col-span-1 ml-28">Action</div>
           </div>
+          )}
           
           {/* Table Body */}
           {loading ? (
@@ -1346,101 +1348,190 @@ const Materials: React.FC = () => {
                 
                 return (
                   <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
-                    <div
-                      className={`grid items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer ${
-                        activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
-                      }`}
-                      onClick={() => handleRowClick(material)}
-                    >
-                      <div className="col-span-2 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox"
-                          checked={selectedMaterials.includes(material.id)}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleMaterialSelect(material.id);
-                          }}
-                        />
-                        <span className="pl-5 truncate">{material.materialType}</span>
-                      </div>
+                     {isMobile ? (
+                       // Mobile Card View
+                       <div className="p-4" onClick={() => handleRowClick(material)}>
+                         {/* Top row: checkbox, material ID, and material type */}
+                         <div className="flex items-center justify-between mb-3">
+                           <div className="flex items-center gap-3">
+                             <input
+                               type="checkbox"
+                               className="form-checkbox"
+                               checked={selectedMaterials.includes(material.id)}
+                               onChange={(e) => {
+                                 e.stopPropagation();
+                                 handleMaterialSelect(material.id);
+                               }}
+                               onClick={(e) => e.stopPropagation()}
+                             />
+                             <div>
+                               <div className="font-semibold text-gray-800 text-sm">
+                                 {material.materialId}
+                               </div>
+                               <div className="text-xs text-gray-500">
+                                 {material.materialType}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
 
-                      <div className="col-span-2 pl-1">{material.materialId}</div>
+                         {/* Middle row: Driver and Vehicle Plate */}
+                         <div className="flex items-center justify-between mt-2 mb-3">
+                           <div className="text-xs text-gray-700">
+                             <span className="font-medium">Driver:</span> {material.driver?.fullName || 'N/A'}
+                           </div>
+                           <div className="text-xs text-gray-700">
+                             <div className="font-medium">Vehicle Plate</div>
+                             <div>{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                           </div>
+                         </div>
 
-                      <div className="col-span-1 text-center">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            status === 'Used'
-                              ? 'bg-red-200 text-red-800'
-                              : 'bg-green-200 text-green-800'
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </div>
-                      
-                      {activeTab === 'archived' && (
-                        <div className="col-span-1 text-sm text-red-600 font-medium">
-                          {material.scheduledDeletionDate ? formatDate(material.scheduledDeletionDate) : 'N/A'}
+                         {/* Actions row with Status */}
+                         <div className="flex items-center justify-between gap-2 mt-3 pt-3">
+                           <span
+                             className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                               status === 'Used'
+                                 ? 'bg-red-100 text-red-800'
+                                 : 'bg-green-100 text-green-800'
+                             }`}
+                           >
+                             {status}
+                           </span>
+                           <div className="flex items-center gap-2">
+                             {activeTab === 'archived' ? (
+                               <button
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   setMaterialToRestore(material.id);
+                                   setShowRestoreModal(true);
+                                 }}
+                                 className="flex items-center justify-center text-green-700 p-2 rounded border border-green-200 hover:bg-green-50"
+                               >
+                                 <RotateCcw size={16} />
+                               </button>
+                             ) : (
+                               <>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleViewDetails(material);
+                                   }}
+                                   className="flex items-center justify-center text-gray-700 p-2 hover:bg-gray-50"
+                                 >
+                                   <Pencil size={16} />
+                                 </button>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     handleDeleteMaterial(material.id);
+                                   }}
+                                   className="flex items-center justify-center text-red-700 p-2 hover:bg-red-50"
+                                 >
+                                   <Trash size={16} />
+                                 </button>
+                               </>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                    ) : (
+                      // Desktop Grid View
+                      <div
+                        className={`grid items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer ${
+                          activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
+                        }`}
+                        onClick={() => handleRowClick(material)}
+                      >
+                        <div className="col-span-2 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox"
+                            checked={selectedMaterials.includes(material.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleMaterialSelect(material.id);
+                            }}
+                          />
+                          <span className="pl-5 truncate">{material.materialType}</span>
                         </div>
-                      )}
 
-                      <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                      <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                        <div className="col-span-2 pl-1">{material.materialId}</div>
 
-                      <div className="col-span-1 flex justify-center gap-1 ml-">
-                      {activeTab === 'archived' ? (
-                        /* Restore button for archived tab */
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMaterialToRestore(material.id);
-                            setShowRestoreModal(true);
-                          }}
-                          className="group flex items-center text-green-700 overflow-hidden h-8 w-5 hover:w-20 transition-[width] duration-300"
-                        >
-                          <RotateCcw 
-                            className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
-                            size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Restore
+                        <div className="col-span-1 text-center">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              status === 'Used'
+                                ? 'bg-red-200 text-red-800'
+                                : 'bg-green-200 text-green-800'
+                            }`}
+                          >
+                            {status}
                           </span>
-                        </button>
-                      ) : (
-                        <>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewDetails(material);
-                          }}
-                          className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
-                        >
-                          <Pencil 
-                            className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                        </div>
+                        
+                        {activeTab === 'archived' && (
+                          <div className="col-span-1 text-sm text-red-600 font-medium">
+                            {material.scheduledDeletionDate ? formatDate(material.scheduledDeletionDate) : 'N/A'}
+                          </div>
+                        )}
+
+                        <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
+                        <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+
+                        <div className="col-span-1 flex justify-center gap-1 ml-">
+                        {activeTab === 'archived' ? (
+                          /* Restore button for archived tab */
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMaterialToRestore(material.id);
+                              setShowRestoreModal(true);
+                            }}
+                            className="group flex items-center text-green-700 overflow-hidden h-8 w-5 hover:w-20 transition-[width] duration-300"
+                          >
+                            <RotateCcw 
+                              className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
                               size={16} />
                             <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                              Edit
+                              Restore
                             </span>
-                        </button> 
+                          </button>
+                        ) : (
+                          <>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewDetails(material);
+                            }}
+                            className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
+                          >
+                            <Pencil 
+                              className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                                size={16} />
+                              <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                                Edit
+                              </span>
+                          </button> 
 
-                        <button
-                          onClick={(e) => {
-                          e.stopPropagation(); // ✅ stop row click
-                          handleDeleteMaterial(material.id); // ✅ delete action
-                        }}
-                          className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
-                        >
-                          <Trash 
-                            className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
-                            size={16} />
-                            <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Delete
-                          </span>
-                        </button>
-                        </>
-                      )}
+                          <button
+                            onClick={(e) => {
+                            e.stopPropagation(); // ✅ stop row click
+                            handleDeleteMaterial(material.id); // ✅ delete action
+                          }}
+                            className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
+                          >
+                            <Trash 
+                              className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                              size={16} />
+                              <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                              Delete
+                            </span>
+                          </button>
+                          </>
+                        )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}
@@ -1516,6 +1607,17 @@ const Materials: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Floating Action Button for Mobile */}
+      {isMobile && (
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-[#feb011] text-white rounded-full shadow-lg hover:bg-[#FF9B45] hover:scale-110 transition-all duration-300 flex items-center justify-center z-50"
+          aria-label="Create Device"
+        >
+          <Plus size={24} />
+        </button>
+      )}
 
       {/* Create Device Modal */}
       <CreateMaterialModal
