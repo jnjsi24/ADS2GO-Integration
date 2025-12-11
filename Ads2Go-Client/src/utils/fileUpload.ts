@@ -8,8 +8,11 @@ export const uploadFileToFirebase = async (file: File, folder: string): Promise<
     const fileName = `${timestamp}_${file.name}`;
     const storageRef = ref(storage, `${folder}/${fileName}`);
     
-    // Upload the file
-    const snapshot = await uploadBytes(storageRef, file);
+    // Upload the file with metadata to ensure content type is set
+    const metadata = {
+      contentType: file.type || 'image/jpeg', // Default to image/jpeg if type is not available
+    };
+    const snapshot = await uploadBytes(storageRef, file, metadata);
     
     // Get the download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
@@ -32,7 +35,11 @@ export const uploadFileToFirebaseWithProgress = (
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const storageRef = ref(storage, `${folder}/${fileName}`);
-      const task = uploadBytesResumable(storageRef, file);
+      // Include metadata to ensure content type is set
+      const metadata = {
+        contentType: file.type || 'image/jpeg', // Default to image/jpeg if type is not available
+      };
+      const task = uploadBytesResumable(storageRef, file, metadata);
 
       task.on(
         'state_changed',
