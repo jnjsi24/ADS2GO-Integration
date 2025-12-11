@@ -4,6 +4,7 @@
 
 const AdsDeployment = require('../models/adsDeployment');
 const Material = require('../models/Material');
+const Driver = require('../models/Driver');
 const { v4: uuidv4 } = require('uuid');
 const Ad = require('../models/Ad');
 const Payment = require('../models/Payment');
@@ -178,7 +179,106 @@ const adsDeploymentResolvers = {
         }
       }));
 
-      return plainDeployments;
+      // ✅ NEW: Find materials with drivers but no deployments
+      // Get all materialIds that already have deployments
+      // Handle both string materialId and populated materialId object
+      const existingMaterialIds = new Set(
+        plainDeployments.map(d => {
+          if (typeof d.materialId === 'string') {
+            return d.materialId;
+          } else if (d.materialId && typeof d.materialId === 'object' && d.materialId.materialId) {
+            return d.materialId.materialId;
+          }
+          return d.materialId;
+        })
+      );
+      
+      // Find all materials with drivers assigned that don't have deployments
+      const materialQuery = {
+        driverId: { $ne: null, $exists: true, $ne: '' },
+        isArchived: { $ne: true }
+      };
+      if (!includeArchived) {
+        materialQuery.isArchived = { $ne: true };
+      }
+      
+      const materialsWithDrivers = await Material.find(materialQuery);
+      
+      // Create virtual deployments for materials with drivers but no deployments
+      const virtualDeployments = await Promise.all(
+        materialsWithDrivers
+          .filter(material => !existingMaterialIds.has(material.materialId))
+          .map(async (material) => {
+            // Find the driver by driverId string
+            const driver = await Driver.findOne({ driverId: material.driverId })
+              .select('_id driverId firstName lastName email contactNumber vehiclePlateNumber');
+            
+            if (!driver) {
+              // Skip if driver not found
+              return null;
+            }
+            
+            // Create a virtual deployment object
+            const now = new Date();
+            const virtualDeployment = {
+              id: `virtual-${material.materialId}`, // Virtual ID
+              adDeploymentId: `virtual-${material.materialId}`,
+              materialId: material.materialId,
+              driverId: driver._id.toString(), // Use ObjectId string for GraphQL ID type
+              adId: null,
+              lcdSlots: [], // Empty slots array
+              currentStatus: 'RUNNING', // Use RUNNING status as per schema enum
+              startTime: null,
+              endTime: null,
+              deployedAt: null,
+              completedAt: null,
+              removedAt: null,
+              removedBy: null,
+              removalReason: null,
+              createdAt: toISOString(material.createdAt || now),
+              updatedAt: toISOString(material.updatedAt || now),
+              lastFrameUpdate: null,
+              isArchived: false,
+              // Populate driver info
+              driver: {
+                id: driver._id.toString(),
+                driverId: driver.driverId,
+                firstName: driver.firstName,
+                lastName: driver.lastName,
+                email: driver.email,
+                contactNumber: driver.contactNumber,
+                vehiclePlateNumber: driver.vehiclePlateNumber
+              },
+              // Populate material info
+              material: {
+                id: material._id.toString(),
+                materialId: material.materialId,
+                materialType: material.materialType,
+                vehicleType: material.vehicleType,
+                category: material.category
+              },
+              // Empty ad object
+              ad: null
+            };
+            
+            return virtualDeployment;
+          })
+      );
+      
+      // Filter out null values (materials without valid drivers)
+      const validVirtualDeployments = virtualDeployments.filter(d => d !== null);
+      
+      // Combine existing deployments with virtual deployments
+      const allDeployments = [...plainDeployments, ...validVirtualDeployments];
+      
+      // Sort by createdAt descending (most recent first)
+      allDeployments.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return dateB - dateA;
+      });
+
+      return allDeployments;
     },
 
     getDeploymentsByDriver: async (_, { driverId }, { user }) => {
