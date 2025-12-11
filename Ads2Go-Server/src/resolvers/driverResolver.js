@@ -12,7 +12,7 @@ const { verifyDriverForMaterialAssignment } = require('../middleware/driverMater
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 const { GraphQLUpload } = require('graphql-upload');
-const { uploadToFirebase, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } = require('../utils/firebaseStorage');
+const { uploadToFirebase, deleteFromFirebase, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } = require('../utils/firebaseStorage');
 const DriverSalaryService = require('../services/driverSalaryService');
 
 // ===== VEHICLE MATERIAL MAP =====
@@ -403,6 +403,21 @@ createDriver: async (_, { input }) => {
 
     // Handle file uploads to Firebase Storage with proper folder structure
     // Support new split uploads while remaining backward compatible with legacy fields
+    // Use Promise.allSettled to handle partial failures gracefully
+    const uploadPromises = [
+      input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : Promise.resolve(null),
+      input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : Promise.resolve(null),
+      input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : Promise.resolve(null),
+      input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : Promise.resolve(null),
+      input.licenseFront ? uploadToFirebase(input.licenseFront, 'drivers', normalizedEmail, 'licenses/front') : Promise.resolve(null),
+      input.licenseBack ? uploadToFirebase(input.licenseBack, 'drivers', normalizedEmail, 'licenses/back') : Promise.resolve(null),
+      input.orPicture ? uploadToFirebase(input.orPicture, 'drivers', normalizedEmail, 'documents/or') : Promise.resolve(null),
+      input.crPicture ? uploadToFirebase(input.crPicture, 'drivers', normalizedEmail, 'documents/cr') : Promise.resolve(null),
+    ];
+
+    const uploadResults = await Promise.allSettled(uploadPromises);
+    
+    // Extract results and track successful uploads for cleanup if needed
     const [
       legacyLicenseUrl,
       vehiclePhotoUrl,
@@ -412,16 +427,46 @@ createDriver: async (_, { input }) => {
       licenseBackUrl,
       orUrl,
       crUrl,
-    ] = await Promise.all([
-      input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : null,
-      input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : null,
-      input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : null,
-      input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null,
-      input.licenseFront ? uploadToFirebase(input.licenseFront, 'drivers', normalizedEmail, 'licenses/front') : null,
-      input.licenseBack ? uploadToFirebase(input.licenseBack, 'drivers', normalizedEmail, 'licenses/back') : null,
-      input.orPicture ? uploadToFirebase(input.orPicture, 'drivers', normalizedEmail, 'documents/or') : null,
-      input.crPicture ? uploadToFirebase(input.crPicture, 'drivers', normalizedEmail, 'documents/cr') : null,
-    ]);
+    ] = uploadResults.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        const fileNames = ['licensePicture', 'vehiclePhoto', 'orCrPicture', 'profilePicture', 'licenseFront', 'licenseBack', 'orPicture', 'crPicture'];
+        console.error(`❌ Failed to upload ${fileNames[index]}:`, result.reason?.message || 'Unknown error');
+        return null;
+      }
+    });
+
+    // Check if any critical uploads failed
+    const failedUploads = uploadResults
+      .map((result, index) => ({ result, index }))
+      .filter(({ result }) => result.status === 'rejected');
+    
+    if (failedUploads.length > 0) {
+      const fileNames = ['licensePicture', 'vehiclePhoto', 'orCrPicture', 'profilePicture', 'licenseFront', 'licenseBack', 'orPicture', 'crPicture'];
+      const failedNames = failedUploads.map(({ index }) => fileNames[index]).filter(Boolean);
+      
+      // Clean up any successfully uploaded files
+      const successfulUploads = [
+        legacyLicenseUrl,
+        vehiclePhotoUrl,
+        legacyOrCrUrl,
+        profilePictureUrl,
+        licenseFrontUrl,
+        licenseBackUrl,
+        orUrl,
+        crUrl,
+      ].filter(Boolean);
+
+      if (successfulUploads.length > 0) {
+        console.log(`🧹 Cleaning up ${successfulUploads.length} successfully uploaded file(s) due to partial failure...`);
+        await Promise.allSettled(
+          successfulUploads.map(upload => deleteFromFirebase(upload.url))
+        );
+      }
+
+      throw new Error(`Failed to upload ${failedNames.join(', ')}. Please try again. If the problem persists, check your internet connection.`);
+    }
 
     // Create driver (PENDING until approved)
     const newDriver = new Driver({

@@ -46,7 +46,46 @@ const validateFile = (file) => {
 };
 
 /**
- * Uploads a file to Firebase Storage
+ * Retry helper function with exponential backoff
+ * @param {Function} fn - Function to retry
+ * @param {number} maxRetries - Maximum number of retries
+ * @param {number} baseDelay - Base delay in milliseconds
+ * @returns {Promise} - Result of the function
+ */
+const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      // Check if error is retryable (network errors)
+      const isRetryable = 
+        error.code === 'ECONNRESET' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND' ||
+        error.code === 'ECONNREFUSED' ||
+        error.message?.includes('ECONNRESET') ||
+        error.message?.includes('ETIMEDOUT') ||
+        error.message?.includes('network') ||
+        error.message?.includes('timeout');
+      
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff
+      const delay = baseDelay * Math.pow(2, attempt);
+      console.log(`⚠️ Upload attempt ${attempt + 1} failed, retrying in ${delay}ms...`, error.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+};
+
+/**
+ * Uploads a file to Firebase Storage with retry logic
  * @param {Object} file - File object with createReadStream and filename
  * @param {'drivers'|'advertisements'|'admin'} type - The type of upload (determines folder structure)
  * @param {string} userId - ID of the user uploading the file
@@ -55,6 +94,8 @@ const validateFile = (file) => {
  */
 const uploadToFirebase = async (file, type, userId, subfolder = '') => {
   let effectiveName = 'unknown';
+  let storagePath = null;
+  let firebaseFile = null;
   
   try {
     // Handle the case where file is a Promise
@@ -83,7 +124,6 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
     const newFilename = `${uuidv4()}${fileExt}`;
     
     // Build storage path based on upload type
-    let storagePath;
     if (type === 'drivers') {
       if (!subfolder) throw new Error('Subfolder is required for driver uploads');
       storagePath = `drivers/${userId}/${subfolder}/${newFilename}`;
@@ -95,7 +135,7 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
       storagePath = `advertisements/${userId}/${newFilename}`;
     }
 
-    const firebaseFile = bucket.file(storagePath);
+    firebaseFile = bucket.file(storagePath);
 
     // Create a write stream with proper metadata
     const metadata = {
@@ -108,36 +148,49 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
       }
     };
     
-    let stream;
+    // Buffer the file if it's a stream (needed for retry logic)
+    let fileBuffer = null;
     if (createReadStream) {
-      // Handle GraphQL file uploads with createReadStream
+      // Convert stream to buffer for retry capability
+      const chunks = [];
       const readStream = createReadStream();
-      stream = readStream.pipe(firebaseFile.createWriteStream({
-        metadata,
-        public: false,
-        validation: 'md5'
-      }));
-    } else if (fileObj.buffer || fileObj.arrayBuffer) {
-      // Handle Buffer or ArrayBuffer
-      const buffer = fileObj.buffer || Buffer.from(await fileObj.arrayBuffer());
-      await firebaseFile.save(buffer, {
-        metadata,
-        public: false
+      
+      fileBuffer = await new Promise((resolve, reject) => {
+        let timeoutId;
+        
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+        };
+        
+        readStream.on('data', (chunk) => chunks.push(chunk));
+        readStream.on('end', () => {
+          cleanup();
+          resolve(Buffer.concat(chunks));
+        });
+        readStream.on('error', (error) => {
+          cleanup();
+          reject(error);
+        });
+        
+        // Set timeout for reading the stream (2 minutes)
+        timeoutId = setTimeout(() => {
+          readStream.destroy();
+          reject(new Error('Stream read timeout: exceeded 2 minutes'));
+        }, 2 * 60 * 1000);
       });
+    } else if (fileObj.buffer || fileObj.arrayBuffer) {
+      fileBuffer = fileObj.buffer || Buffer.from(await fileObj.arrayBuffer());
     } else {
       throw new Error('Unsupported file format: missing createReadStream or buffer');
     }
 
-    // Handle upload progress/errors
-    if (stream) {
-      await new Promise((resolve, reject) => {
-        stream.on('finish', resolve);
-        stream.on('error', (error) => {
-          console.error('Upload error:', error);
-          reject(new Error('File upload failed'));
-        });
+    // Upload with retry logic (now we can retry since we have the buffer)
+    await retryWithBackoff(async () => {
+      await firebaseFile.save(fileBuffer, {
+        metadata,
+        public: false
       });
-    }
+    }, 3, 1000); // 3 retries with 1s base delay
 
     // Generate a signed URL for temporary access
     const [signedUrl] = await firebaseFile.getSignedUrl({
@@ -154,6 +207,20 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
     };
   } catch (error) {
     console.error('❌ File upload error:', error.message, 'for file:', effectiveName || 'unknown');
+    
+    // Clean up partially uploaded file if it exists
+    if (firebaseFile && storagePath) {
+      try {
+        const [exists] = await firebaseFile.exists();
+        if (exists) {
+          await firebaseFile.delete();
+          console.log(`🧹 Cleaned up partially uploaded file: ${storagePath}`);
+        }
+      } catch (cleanupError) {
+        console.error('⚠️ Failed to clean up partial upload:', cleanupError.message);
+      }
+    }
+    
     throw new Error(`Upload failed: ${error.message}`);
   }
 };

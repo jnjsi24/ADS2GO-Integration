@@ -24,6 +24,10 @@ try {
   // Resend not installed, will use SMTP only
   console.log('📦 Resend package not found - will use SMTP only');
   console.log('   Error:', error.message);
+  console.log('   Code:', error.code);
+  if (error.code === 'MODULE_NOT_FOUND') {
+    console.log('   💡 To fix: Run npm install resend');
+  }
 }
 
 class EmailService {
