@@ -4028,7 +4028,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           {currentAd?.adTitle || 'No Ad'}
           {isPaused && ' ⏸️ PAUSED'}
           {isSyncing && ' 🔄 SYNCING'}
-          {isLocked && ' 🔒 LOCKED'}
           {slotNumber === 2 && masterConnected && ' 🪞 MIRROR'}
           {slotNumber === 2 && !masterConnected && !waitingForMaster && ' ⚡ FAILOVER'}
         </Text>
@@ -4099,6 +4098,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             <Text style={styles.qrSubLabel}>Point your camera at this QR code</Text>
           </View>
         )}
+
+        {/* Online/Offline Status Dot Indicator - Top Right */}
+        <View style={styles.statusDotContainer}>
+          <View style={[
+            styles.statusDot,
+            networkStatus ? styles.statusDotOnline : styles.statusDotOffline
+          ]} />
+        </View>
 
         {/* Debug Info Overlay */}
         {showDebugInfo && (
@@ -4283,7 +4290,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    right: 10,
+    right: 50, // Leave space for status dot on the right
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 8,
     borderRadius: 6,
@@ -4433,6 +4440,33 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  statusDotContainer: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 2001, // Ensure status dot is always visible above video and other overlays
+    backgroundColor: 'rgba(0, 0, 0, 0.7)', // Add background for better visibility
+    borderRadius: 12,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  statusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 1)',
+  },
+  statusDotOnline: {
+    backgroundColor: '#22c55e', // Green for online
+  },
+  statusDotOffline: {
+    backgroundColor: '#ef4444', // Red for offline
   },
 });
 

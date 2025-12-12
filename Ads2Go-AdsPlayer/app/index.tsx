@@ -801,27 +801,6 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Lock indicator - only show when locked and fullscreen */}
-      {isLocked && isFullscreen && (
-        <View style={{
-          position: 'absolute',
-          top: 20,
-          right: 20,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          paddingHorizontal: 16,
-          paddingVertical: 8,
-          borderRadius: 8,
-          zIndex: 2000,
-        }}>
-          <Text style={{
-            color: '#ff4444',
-            fontSize: 16,
-            fontWeight: 'bold',
-          }}>
-            🔒 LOCKED
-          </Text>
-        </View>
-      )}
 
       {/* Settings button - only show when unlocked and in video-only mode */}
       {(!showFullInterface || isFullscreen) && !isLocked && (
@@ -875,9 +854,7 @@ export default function HomeScreen() {
           <View style={styles.statusContent}>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Status:</Text>
-              <Text style={[styles.statusValue, { color: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]}>
-                {deviceStatus.isOnline ? 'Online' : 'Offline'}
-              </Text>
+              <View style={[styles.statusIndicator, { backgroundColor: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]} />
             </View>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Material ID:</Text>

@@ -71,12 +71,8 @@ export const DeviceStatusBar: React.FC = () => {
     textColor = '#856404'; // Dark yellow
   }
 
-  return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <MaterialIcons name={iconName} size={16} color={textColor} style={styles.icon} />
-      <Text style={[styles.text, { color: textColor }]}>{statusText}</Text>
-    </View>
-  );
+  // Hide the status bar text - status is now shown as a dot in AdPlayer
+  return null;
 };
 
 const styles = StyleSheet.create<Styles>({
