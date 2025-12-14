@@ -2006,21 +2006,21 @@ const ManageDrivers: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-6 flex flex-wrap gap-3 justify-end pt-6">
+              <div className="mt-6 flex flex-wrap gap-2 justify-end pt-6">
                 {selectedDriverDetails.accountStatus === 'PENDING' && (
                   <>
                     <button
                       onClick={() => openApprovalWithMaterialSelection(selectedDriverDetails)}
-                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-green-200 text-green-600 font-medium rounded hover:bg-green-100 transition-colors flex items-center gap-2"
                     >
-                      <CheckCircle size={16} />
+                      <Check size={16} />
                       Approve
                     </button>
                     <button
                       onClick={() => handleReject(selectedDriverDetails.driverId)}
-                      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-red-200 text-red-500 font-medium rounded hover:bg-red-100 transition-colors flex items-center gap-2"
                     >
-                      <XCircle size={16} />
+                      <X size={16} />
                       Reject
                     </button>
                   </>
@@ -2028,7 +2028,7 @@ const ManageDrivers: React.FC = () => {
                 {selectedDriverDetails.accountStatus === 'ACTIVE' && (
                   <button
                     onClick={() => handleSuspend(selectedDriverDetails.driverId)}
-                    className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-orange-200 text-orange-600 font-medium rounded hover:bg-orange-100 transition-colors flex items-center gap-2"
                   >
                     <AlertCircle size={16} />
                     Suspend Driver
@@ -2055,7 +2055,7 @@ const ManageDrivers: React.FC = () => {
                 )}
                 <button
                   onClick={() => handleDelete(selectedDriverDetails.driverId)}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                  className="px-1 text-red-600 font-medium rounded hover:bg-red-700 transition-colors flex items-center gap-2"
                 >
                   <Trash size={16} />
                   Delete
@@ -2084,10 +2084,10 @@ const ManageDrivers: React.FC = () => {
               className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
               rows={4}
             />
-            <div className="mt-4 flex justify-end gap-3">
+            <div className="mt-4 flex justify-between gap-3">
               <button
                 onClick={cancelSuspend}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
@@ -2097,7 +2097,7 @@ const ManageDrivers: React.FC = () => {
                 className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
                   isProcessingSuspension
                     ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-orange-600 hover:bg-orange-700'
+                    : 'bg-orange-600 hover:bg-orange-500'
                 }`}
               >
                 {isProcessingSuspension && (

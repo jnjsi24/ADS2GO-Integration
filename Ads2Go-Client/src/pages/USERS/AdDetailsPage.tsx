@@ -21,7 +21,8 @@ import {
   MoreVertical,
   Trash2,
   CreditCard,
-  WalletCards
+  WalletCards,
+  BarChart3
 } from 'lucide-react';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -162,6 +163,9 @@ const AdDetailsPage: React.FC = () => {
   // Delete success tracking
   const [deleteSuccess, setDeleteSuccess] = useState(false);
   
+  // Archived ad banner visibility
+  const [showArchivedBanner, setShowArchivedBanner] = useState(true);
+  
   // Close tooltip when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -209,6 +213,11 @@ const AdDetailsPage: React.FC = () => {
   const [materialSlots, setMaterialSlots] = useState<MaterialSlotInfo[]>([]); // Track slots for each material
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  
+  // Analytics data states
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   
   // ✅ Use cache-and-network to ensure fresh data while maintaining cache benefits
   // This ensures material assignments are always up-to-date
@@ -277,8 +286,9 @@ const AdDetailsPage: React.FC = () => {
   
   // Strict requirements: Both PAID and APPROVED/RUNNING to show detailed information
   const isFullyPaidAndApproved = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
-  // Mobile tab visibility rules by status - Analytics only shows for PAID ads
-  const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
+  // Mobile tab visibility rules by status - Analytics shows for PAID ads (including archived ads for historical data)
+  // ✅ Allow archived ads to show analytics so users can view historical data
+  const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING' || adStatus === 'ARCHIVED');
   const showDevicesTab = adStatus === 'RUNNING';
 
   const shouldFetchPaymentDetails = paymentStatus === 'PAID';
@@ -945,6 +955,46 @@ const AdDetailsPage: React.FC = () => {
   
   // State for active tab
   const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity' | 'TabletActivity' | 'Analytics'>('Details');
+
+  // Fetch analytics data for the ad (works for archived ads too)
+  useEffect(() => {
+    if (showAnalyticsTab && ad?.id && activeTab === 'Analytics') {
+      const fetchAnalytics = async () => {
+        setAnalyticsLoading(true);
+        setAnalyticsError(null);
+        try {
+          const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+          const url = `${baseUrl}/api/adAnalytics/${ad.id}`;
+          
+          console.log('📊 Fetching analytics from:', url);
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch analytics: ${response.statusText}`);
+          }
+          
+          const result = await response.json();
+          if (result.success && result.data) {
+            setAnalyticsData(result.data);
+            console.log('✅ Analytics data loaded:', {
+              totalPlays: result.data.totalPlays,
+              totalQRScans: result.data.totalQRScans,
+              devices: result.data.devicePerformance?.length || 0,
+              daily: result.data.dailyPerformance?.length || 0
+            });
+          } else {
+            throw new Error(result.message || 'Failed to fetch analytics');
+          }
+        } catch (error: any) {
+          console.error('Error fetching ad analytics:', error);
+          setAnalyticsError(error.message || 'Failed to load analytics');
+        } finally {
+          setAnalyticsLoading(false);
+        }
+      };
+
+      fetchAnalytics();
+    }
+  }, [showAnalyticsTab, ad?.id, activeTab]);
   
   // Ensure mobile active tab is valid for current status
   useEffect(() => {
@@ -1104,6 +1154,43 @@ const AdDetailsPage: React.FC = () => {
                   <X size={16} />
                 </button>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Archived Ad Banner - Show when ad is archived but still viewable */}
+      <AnimatePresence>
+        {ad?.isArchived && showArchivedBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 max-w-2xl w-full mx-4"
+          >
+            <div className="bg-amber-50 border border-amber-200 rounded-lg shadow-lg p-4 flex items-start space-x-3">
+              <AlertTriangle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-900 mb-1">
+                  Advertisement Archived
+                </h4>
+                <p className="text-sm text-amber-800">
+                  This advertisement has been deleted. You can still view its historical data and analytics, but it will be permanently removed after 30 days.
+                  {ad.archivedAt && (
+                    <span className="block mt-1 text-xs text-amber-700">
+                      Archived on: {new Date(ad.archivedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowArchivedBanner(false)}
+                className="flex-shrink-0 text-amber-600 hover:text-amber-800 transition-colors"
+                aria-label="Dismiss banner"
+              >
+                <X size={16} />
+              </button>
             </div>
           </motion.div>
         )}
@@ -1313,6 +1400,63 @@ const AdDetailsPage: React.FC = () => {
                 </tr>
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Analytics (mobile) */}
+        {activeTab === 'Analytics' && showAnalyticsTab && (
+          <div className="space-y-4 mb-20 p-3">
+            {analyticsLoading ? (
+              <div className="text-center bg-white/60 rounded-lg text-black/90 py-8">
+                <RefreshCw className="w-10 h-10 mx-auto mb-3 text-gray-400 animate-spin" />
+                <p className="text-base font-medium mb-1">Loading Analytics...</p>
+                <p className="text-xs text-gray-600">Fetching historical data...</p>
+              </div>
+            ) : analyticsError ? (
+              <div className="text-center bg-white/60 rounded-lg text-black/90 py-8">
+                <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-red-400" />
+                <p className="text-base font-medium mb-1 text-red-600">Error Loading Analytics</p>
+                <p className="text-xs text-gray-600">{analyticsError}</p>
+              </div>
+            ) : analyticsData ? (
+              <div className="space-y-4 bg-white/60 rounded-lg p-4 shadow-md">
+                {/* Simple Text Display */}
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-black/80">Ads Play:</span>
+                    <span className="font-semibold text-black">{analyticsData.totalPlays || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-black/80">Play Time:</span>
+                    <span className="font-semibold text-black">
+                      {analyticsData.totalPlayTime 
+                        ? `${Math.floor(analyticsData.totalPlayTime / 3600)}h ${Math.floor((analyticsData.totalPlayTime % 3600) / 60)}m`
+                        : '0h 0m'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-black/80">QR Scans:</span>
+                    <span className="font-semibold text-black">{analyticsData.totalQRScans || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-black/80">Devices:</span>
+                    <span className="font-semibold text-black">{analyticsData.devicePerformance?.length || 0}</span>
+                  </div>
+                </div>
+
+                {/* Show message only if truly no data */}
+                {(!analyticsData.totalPlays || analyticsData.totalPlays === 0) && 
+                 (!analyticsData.totalQRScans || analyticsData.totalQRScans === 0) && (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-gray-600">No analytics data available for this advertisement.</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center bg-white/60 rounded-lg text-black/90 py-8">
+                <p className="text-sm text-gray-600">No analytics data available for this advertisement.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1776,6 +1920,32 @@ const AdDetailsPage: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* Analytics tab - Show for PAID ads (including archived) */}
+              {showAnalyticsTab && (
+                <div className="relative">
+                  <button
+                    onClick={() => setActiveTab('Analytics')}
+                    className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                      activeTab === 'Analytics' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+                    }`}
+                  >
+                    Analytics
+
+                    {/* Hover underline with framer-motion */}
+                    <motion.div
+                      className="absolute left-0 bottom-0 h-1 rounded-full"
+                      style={{
+                        background: '#FF9D3D',
+                      }}
+                      initial={{ width: 0 }}
+                      animate={{ width: activeTab === 'Analytics' ? '100%' : 0 }}
+                      whileHover={{ width: '100%' }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1975,6 +2145,63 @@ const AdDetailsPage: React.FC = () => {
                   <p className="text-sm text-gray-600">
                     Device activity and QR scans will appear here in real-time.
                   </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Analytics Tab Content (Desktop) */}
+          {activeTab === 'Analytics' && showAnalyticsTab && (
+            <div className="space-y-4 bg-white/60 rounded-lg p-6 shadow-md">
+              {analyticsLoading ? (
+                <div className="text-center py-12">
+                  <RefreshCw className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-spin" />
+                  <p className="text-lg font-medium mb-2">Loading Analytics...</p>
+                  <p className="text-sm text-gray-600">Fetching historical data...</p>
+                </div>
+              ) : analyticsError ? (
+                <div className="text-center py-12">
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-400" />
+                  <p className="text-lg font-medium mb-2 text-red-600">Error Loading Analytics</p>
+                  <p className="text-sm text-gray-600">{analyticsError}</p>
+                </div>
+              ) : analyticsData ? (
+                <div className="space-y-6">
+                  {/* Simple Text Display */}
+                  <div className="space-y-4 text-base">
+                    <div className="flex justify-between items-center">
+                      <span className="text-black/80">Ads Play:</span>
+                      <span className="font-semibold text-black">{analyticsData.totalPlays || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-black/80">Play Time:</span>
+                      <span className="font-semibold text-black">
+                        {analyticsData.totalPlayTime 
+                          ? `${Math.floor(analyticsData.totalPlayTime / 3600)}h ${Math.floor((analyticsData.totalPlayTime % 3600) / 60)}m`
+                          : '0h 0m'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-black/80">QR Scans:</span>
+                      <span className="font-semibold text-black">{analyticsData.totalQRScans || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-black/80">Devices:</span>
+                      <span className="font-semibold text-black">{analyticsData.devicePerformance?.length || 0}</span>
+                    </div>
+                  </div>
+
+                  {/* Show message only if truly no data */}
+                  {(!analyticsData.totalPlays || analyticsData.totalPlays === 0) && 
+                   (!analyticsData.totalQRScans || analyticsData.totalQRScans === 0) && (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-gray-600">No analytics data available for this advertisement.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-sm text-gray-600">No analytics data available for this advertisement.</p>
                 </div>
               )}
             </div>

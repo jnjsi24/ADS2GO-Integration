@@ -1324,6 +1324,123 @@ const adResolvers = {
           // Don't fail the archive if cleanup fails - ad is already archived
         }
 
+        // 3. Remove ad data from UserAnalytics (detailed analytics) immediately
+        try {
+          const UserAnalytics = require('../models/userAnalytics');
+          
+          console.log(`🧹 Cleaning up UserAnalytics for archived ad ${id}...`);
+          
+          // Find all UserAnalytics documents that contain this ad
+          const userAnalyticsDocs = await UserAnalytics.find({
+            $or: [
+              { 'ads.adId': id },
+              { 'dailyStats.ads.adId': id }
+            ]
+          });
+
+          console.log(`   📊 Found ${userAnalyticsDocs.length} UserAnalytics documents containing ad ${id}`);
+
+          for (const userAnalytics of userAnalyticsDocs) {
+            let modified = false;
+
+            // Remove ad from ads array - ONLY the specific deleted ad
+            const initialAdsCount = userAnalytics.ads.length;
+            const adIdsBefore = userAnalytics.ads.map(ad => ad.adId.toString());
+            userAnalytics.ads = userAnalytics.ads.filter(
+              ad => ad.adId.toString() !== id.toString()  // Only removes the specific deleted ad
+            );
+            const adIdsAfter = userAnalytics.ads.map(ad => ad.adId.toString());
+            if (userAnalytics.ads.length < initialAdsCount) {
+              modified = true;
+              const removedCount = initialAdsCount - userAnalytics.ads.length;
+              console.log(`   ✅ Removed ${removedCount} ad(s) from ads array in UserAnalytics for user ${userAnalytics.userId}`);
+              console.log(`      Deleted ad ID: ${id}`);
+              console.log(`      Remaining ad IDs: ${adIdsAfter.join(', ') || 'none'}`);
+              console.log(`      ✅ All other ads preserved: ${adIdsBefore.filter(adId => adId !== id.toString()).length} ads`);
+            }
+
+            // Remove ad from dailyStats array
+            if (userAnalytics.dailyStats && Array.isArray(userAnalytics.dailyStats)) {
+              for (const dailyStat of userAnalytics.dailyStats) {
+                if (dailyStat.ads && Array.isArray(dailyStat.ads)) {
+                  const initialDailyAdsCount = dailyStat.ads.length;
+                  dailyStat.ads = dailyStat.ads.filter(
+                    ad => ad.adId.toString() !== id.toString()
+                  );
+                  if (dailyStat.ads.length < initialDailyAdsCount) {
+                    modified = true;
+                    
+                    // Recalculate daily totals after removing ad
+                    dailyStat.totals = {
+                      impressions: 0,
+                      adsPlayed: 0,
+                      displayTime: 0,
+                      qrScans: 0,
+                      completionRate: 0
+                    };
+                    
+                    dailyStat.ads.forEach(ad => {
+                      if (ad.totals) {
+                        dailyStat.totals.impressions += ad.totals.impressions || 0;
+                        dailyStat.totals.adsPlayed += ad.totals.adsPlayed || 0;
+                        dailyStat.totals.displayTime += ad.totals.displayTime || 0;
+                        dailyStat.totals.qrScans += ad.totals.qrScans || 0;
+                      }
+                    });
+                    
+                    // Calculate average completion rate
+                    if (dailyStat.ads.length > 0) {
+                      const totalCompletion = dailyStat.ads.reduce((sum, ad) => 
+                        sum + (ad.totals?.completionRate || 0), 0
+                      );
+                      dailyStat.totals.completionRate = totalCompletion / dailyStat.ads.length;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Recalculate user-level totals
+            if (modified) {
+              userAnalytics.totalAds = userAnalytics.ads.length;
+              
+              // Recalculate aggregated totals from remaining ads
+              userAnalytics.totalDevices = 0;
+              userAnalytics.totalAdPlays = 0;
+              userAnalytics.totalAdPlayTime = 0;
+              userAnalytics.totalAdImpressions = 0;
+              userAnalytics.totalQRScans = 0;
+              
+              userAnalytics.ads.forEach(ad => {
+                userAnalytics.totalDevices += ad.totalDevices || 0;
+                userAnalytics.totalAdPlays += ad.totalAdPlays || 0;
+                userAnalytics.totalAdPlayTime += ad.totalAdPlayTime || 0;
+                userAnalytics.totalAdImpressions += ad.totalAdImpressions || 0;
+                userAnalytics.totalQRScans += ad.totalQRScans || 0;
+              });
+              
+              // Calculate average completion rate
+              if (userAnalytics.ads.length > 0) {
+                const totalCompletion = userAnalytics.ads.reduce((sum, ad) => 
+                  sum + (ad.averageAdCompletionRate || 0), 0
+                );
+                userAnalytics.averageAdCompletionRate = totalCompletion / userAnalytics.ads.length;
+              } else {
+                userAnalytics.averageAdCompletionRate = 0;
+              }
+              
+              userAnalytics.lastUpdated = new Date();
+              await userAnalytics.save();
+              console.log(`   ✅ Updated UserAnalytics totals for user ${userAnalytics.userId}`);
+            }
+          }
+
+          console.log(`✅ UserAnalytics cleanup completed for ad ${id}`);
+        } catch (userAnalyticsError) {
+          console.error(`❌ Error cleaning up UserAnalytics (non-critical):`, userAnalyticsError);
+          // Don't fail the archive if UserAnalytics cleanup fails
+        }
+
         // ✅ SEND NOTIFICATION: Notify user when ad is deleted
         try {
           const UserNotificationService = require('../services/notifications/UserNotificationService');
