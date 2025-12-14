@@ -286,9 +286,9 @@ const AdDetailsPage: React.FC = () => {
   
   // Strict requirements: Both PAID and APPROVED/RUNNING to show detailed information
   const isFullyPaidAndApproved = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
-  // Mobile tab visibility rules by status - Analytics shows for PAID ads (including archived ads for historical data)
-  // ✅ Allow archived ads to show analytics so users can view historical data
-  const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING' || adStatus === 'ARCHIVED');
+  // Mobile tab visibility rules by status - Analytics shows only for deleted (ARCHIVED) and ended (ENDED) ads
+  // ✅ Analytics tab should only appear for historical data on completed/deleted ads
+  const showAnalyticsTab = paymentStatus === 'PAID' && (adStatus === 'ENDED' || adStatus === 'ARCHIVED');
   const showDevicesTab = adStatus === 'RUNNING';
 
   const shouldFetchPaymentDetails = paymentStatus === 'PAID';
@@ -998,15 +998,18 @@ const AdDetailsPage: React.FC = () => {
   
   // Ensure mobile active tab is valid for current status
   useEffect(() => {
-    if (!showAnalyticsTab && activeTab === 'AdActivity') {
+    // Only switch away from Analytics tab if it's not available
+    if (!showAnalyticsTab && activeTab === 'Analytics') {
       setActiveTab('Details');
       return;
     }
+    // Only switch away from TabletActivity tab if it's not available
     if (!showDevicesTab && activeTab === 'TabletActivity') {
-      setActiveTab(showAnalyticsTab ? 'AdActivity' : 'Details');
+      // Switch to AdActivity if available, otherwise Details
+      setActiveTab(isFullyPaidAndApproved ? 'AdActivity' : 'Details');
       return;
     }
-  }, [showAnalyticsTab, showDevicesTab, activeTab]);
+  }, [showAnalyticsTab, showDevicesTab, activeTab, isFullyPaidAndApproved]);
   
   // Fixed format date function to handle both timestamp strings and date strings
   const formatDate = (dateValue: string | number) => {
