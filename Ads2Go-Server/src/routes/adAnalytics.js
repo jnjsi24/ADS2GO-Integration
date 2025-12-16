@@ -41,7 +41,7 @@ router.get('/:adId', async (req, res) => {
     // Get the ad details to find associated materials (optimized query)
     const queryStart = Date.now();
     const ad = await Ad.findById(adId)
-      .select('title description adFormat status startTime endTime adLengthSeconds materialId')
+      .select('title description adFormat status startTime endTime adLengthSeconds materialId isArchived')
       .populate({
         path: 'materialId',
         select: 'materialId'
@@ -55,6 +55,9 @@ router.get('/:adId', async (req, res) => {
         message: 'Ad not found'
       });
     }
+
+    // ✅ Allow archived ads to show analytics (they're just archived, not deleted)
+    // Archived ads should still be able to display historical analytics data
 
     // Get material IDs from the ad
     const materialIds = ad.materialId.map(m => m.materialId);
@@ -336,13 +339,21 @@ router.get('/:adId/summary', async (req, res) => {
 
     // Get the ad details
     const ad = await Ad.findById(adId)
-      .select('title description adFormat status')
+      .select('title description adFormat status isArchived')
       .lean();
     
     if (!ad) {
       return res.status(404).json({
         success: false,
         message: 'Ad not found'
+      });
+    }
+
+    // ✅ Exclude archived/deleted ads from analytics
+    if (ad.isArchived) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ad not found or has been deleted'
       });
     }
 

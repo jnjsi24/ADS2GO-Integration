@@ -2406,6 +2406,7 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
         userId: effectiveUserId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       const userAdIds = userAds.map(ad => ad._id.toString());

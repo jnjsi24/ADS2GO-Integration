@@ -968,11 +968,20 @@ const AdDetailsPage: React.FC = () => {
           
           console.log('📊 Fetching analytics from:', url);
           const response = await fetch(url);
-          if (!response.ok) {
+          
+          // Try to parse JSON even if response is not ok to get the error message
+          let result;
+          try {
+            result = await response.json();
+          } catch (parseError) {
+            // If JSON parsing fails, use status text
             throw new Error(`Failed to fetch analytics: ${response.statusText}`);
           }
           
-          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.message || `Failed to fetch analytics: ${response.statusText}`);
+          }
+          
           if (result.success && result.data) {
             setAnalyticsData(result.data);
             console.log('✅ Analytics data loaded:', {
@@ -2462,3 +2471,4 @@ const AdDetailsPage: React.FC = () => {
 };
 
 export default AdDetailsPage;
+

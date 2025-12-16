@@ -73,6 +73,15 @@ router.get('/qr-scans', async (req, res) => {
       });
     }
 
+    // ✅ Exclude archived/deleted ads from analytics
+    if (ad.isArchived) {
+      return res.status(404).json({
+        success: false,
+        data: [],
+        message: 'Ad not found or has been deleted'
+      });
+    }
+
     // Extract materialId strings from the populated material documents
     let materialIdStrings = [];
     if (ad.materialId && Array.isArray(ad.materialId)) {

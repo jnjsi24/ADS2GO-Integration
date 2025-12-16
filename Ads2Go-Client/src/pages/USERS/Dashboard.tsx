@@ -1060,13 +1060,32 @@ const Dashboard = () => {
   const lastValidAds = useRef<any[]>([]);
   const currentAds = periodAnalyticsData?.getUserAnalytics?.adPerformance || overallAnalyticsData?.getUserAnalytics?.adPerformance || [];
   
+  // ✅ Filter out archived/deleted ads - create a set of archived ad IDs from myAdsData
+  const archivedAdIds = useMemo(() => {
+    const archivedIds = new Set<string>();
+    if (myAdsData?.getMyAds) {
+      myAdsData.getMyAds.forEach((ad: any) => {
+        if (ad.isArchived) {
+          archivedIds.add(ad.id?.toString() || '');
+        }
+      });
+    }
+    return archivedIds;
+  }, [myAdsData]);
+  
+  // Filter out archived ads from current ads
+  const filteredCurrentAds = currentAds.filter((ad: any) => {
+    const adId = ad.adId?.toString() || '';
+    return !archivedAdIds.has(adId);
+  });
+  
   // Update ref when we get new data
-  if (currentAds.length > 0) {
-    lastValidAds.current = currentAds;
+  if (filteredCurrentAds.length > 0) {
+    lastValidAds.current = filteredCurrentAds;
   }
   
   // Always use the last valid ad list (or current if we have it)
-  const userAds = currentAds.length > 0 ? currentAds : lastValidAds.current;
+  const userAds = filteredCurrentAds.length > 0 ? filteredCurrentAds : lastValidAds.current;
   
   const adOptions = [
     { id: null, title: 'All Ads', qrScans: analyticsSummary?.totalQRScans || 0 },
@@ -1093,8 +1112,10 @@ const Dashboard = () => {
 
   // Get user's ads for route selector (only RUNNING ads with materials)
   // Only RUNNING ads have route history, APPROVED ads haven't started yet
+  // ✅ Exclude archived/deleted ads
   const userAdsForRoute = (myAdsData?.getMyAds || []).filter((ad: any) => 
     ad.status === 'RUNNING' && 
+    !ad.isArchived && // ✅ Exclude archived/deleted ads
     ad.materialId && 
     ad.materialId.length > 0
   );
@@ -1104,7 +1125,8 @@ const Dashboard = () => {
     if (!selectedAdForRoute || !myAdsData?.getMyAds) return [];
     
     const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
-    if (!selectedAd || !selectedAd.materialId || selectedAd.materialId.length === 0) return [];
+    // ✅ Exclude archived/deleted ads
+    if (!selectedAd || selectedAd.isArchived || !selectedAd.materialId || selectedAd.materialId.length === 0) return [];
     
     // Return array of all materialId strings
     return selectedAd.materialId
@@ -1134,6 +1156,8 @@ const Dashboard = () => {
     if (!selectedAdForRoute || !myAdsData?.getMyAds) return undefined;
     
     const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
+    // ✅ Exclude archived/deleted ads
+    if (!selectedAd || selectedAd.isArchived) return undefined;
     return selectedAd?.startTime || undefined;
   }, [selectedAdForRoute, myAdsData?.getMyAds]);
 

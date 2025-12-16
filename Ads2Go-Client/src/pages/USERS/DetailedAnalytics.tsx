@@ -542,16 +542,17 @@ const DetailedAnalytics: React.FC = () => {
 
   // ✅ Memoized ad extraction - use myAdsData for consistency (same source as mapping)
   // This ensures ad IDs match between selection and materialId mapping
-  // ✅ Filter to only show active/paid ads with assigned materials (exclude PENDING, REJECTED)
+  // ✅ Filter to only show active/paid ads with assigned materials (exclude PENDING, REJECTED, ARCHIVED)
   const extractedAds = useMemo(() => {
     // Prefer myAdsData since it has materialId information
     if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
-      // Filter ads: only show APPROVED, RUNNING, or SCHEDULED ads that are PAID and have materials assigned
+      // Filter ads: only show APPROVED, RUNNING, or SCHEDULED ads that are PAID, not archived, and have materials assigned
       const activeAds = myAdsData.getMyAds.filter((ad: any) => {
         const hasValidStatus = ad.status === 'APPROVED' || ad.status === 'RUNNING' || ad.status === 'SCHEDULED';
         const isPaid = ad.paymentStatus === 'PAID';
+        const isNotArchived = !ad.isArchived && ad.status !== 'ARCHIVED'; // ✅ Exclude archived/deleted ads (both isArchived flag and ARCHIVED status)
         const hasMaterials = ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0;
-        return hasValidStatus && isPaid && hasMaterials;
+        return hasValidStatus && isPaid && isNotArchived && hasMaterials;
       });
       
       return activeAds.map((ad: any) => ({
@@ -565,10 +566,25 @@ const DetailedAnalytics: React.FC = () => {
     const adPerformance = overallAnalyticsData?.getUserAnalytics?.adPerformance || directAnalyticsData?.adPerformance || analyticsData?.getUserAnalytics?.adPerformance || [];
     
     if (adPerformance.length > 0) {
-      const ads = adPerformance.map((ad: any) => ({
-        id: ad.adId || `ad-${ad.adTitle}`,
-        title: ad.adTitle || 'Unknown Ad'
-      }));
+      // ✅ Safety check: Filter out archived ads from analytics data (backend should already filter, but double-check)
+      const archivedAdIds = new Set<string>();
+      if (myAdsData?.getMyAds) {
+        myAdsData.getMyAds.forEach((ad: any) => {
+          if (ad.isArchived || ad.status === 'ARCHIVED') {
+            archivedAdIds.add(ad.id?.toString() || '');
+          }
+        });
+      }
+      
+      const ads = adPerformance
+        .filter((ad: any) => {
+          const adId = (ad.adId || '').toString();
+          return !archivedAdIds.has(adId);
+        })
+        .map((ad: any) => ({
+          id: ad.adId || `ad-${ad.adTitle}`,
+          title: ad.adTitle || 'Unknown Ad'
+        }));
       return ads;
     }
     return [];
@@ -1369,9 +1385,25 @@ const DetailedAnalytics: React.FC = () => {
       materialsCount: ads[0].materials?.length || 0
     } : 'No ads');
     
+    // ✅ Filter out archived/deleted ads - check against myAdsData
+    const archivedAdIds = new Set<string>();
+    if (myAdsData?.getMyAds) {
+      myAdsData.getMyAds.forEach((ad: any) => {
+        if (ad.isArchived) {
+          archivedAdIds.add(ad.id?.toString() || '');
+        }
+      });
+    }
+    
+    // Filter out archived ads
+    const nonArchivedAds = ads.filter((ad: any) => {
+      const adId = ad.adId?.toString() || '';
+      return !archivedAdIds.has(adId);
+    });
+    
     // ✅ Trust backend data - backend now always fetches fresh QR scan data
     // The backend's getUserAnalytics already fetches fresh QR scans and populates ad.totalQRScans
-    const mappedAds = ads.map((ad: any) => {
+    const mappedAds = nonArchivedAds.map((ad: any) => {
       // Use the QR scans directly from backend (already fresh data)
       const qrScans = ad.totalQRScans || 0;
       

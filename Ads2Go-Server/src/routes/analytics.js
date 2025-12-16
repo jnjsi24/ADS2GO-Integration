@@ -907,6 +907,18 @@ router.get('/user/:userId/direct', async (req, res) => {
         defaultEndDate = now;
       }
       
+      // ✅ Get valid (non-archived) ad IDs first to filter dailyStats
+      const Ad = require('../models/Ad');
+      const allUserAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
+        status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+      }).select('_id');
+      
+      const validAdIds = new Set(allUserAds.map(ad => ad._id.toString()));
+      
       // Filter dailyStats by date range if provided
       // ✅ When period='all', use ALL dailyStats (no date filtering)
       let filteredDailyStats = userAnalytics.dailyStats || [];
@@ -920,12 +932,40 @@ router.get('/user/:userId/direct', async (req, res) => {
       }
       // When period='all' (defaultStartDate and defaultEndDate are null), use all dailyStats
       
+      // ✅ Filter out archived ads from dailyStats before calculating totals
+      filteredDailyStats = filteredDailyStats.map(dateEntry => {
+        // Filter ads array to exclude archived ads
+        const validAds = (dateEntry.ads || []).filter(ad => {
+          if (!ad.adId) return false;
+          return validAdIds.has(ad.adId.toString());
+        });
+        
+        // Recalculate totals from only valid (non-archived) ads
+        const recalculatedTotals = validAds.reduce((acc, ad) => {
+          const adTotals = ad.totals || {};
+          return {
+            impressions: acc.impressions + (adTotals.impressions || 0),
+            adsPlayed: acc.adsPlayed + (adTotals.adsPlayed || 0),
+            displayTime: acc.displayTime + (adTotals.displayTime || 0),
+            qrScans: acc.qrScans + (adTotals.qrScans || 0),
+            completionRate: 0 // Will be calculated separately if needed
+          };
+        }, { impressions: 0, adsPlayed: 0, displayTime: 0, qrScans: 0, completionRate: 0 });
+        
+        return {
+          date: dateEntry.date,
+          ads: validAds,
+          totals: recalculatedTotals
+        };
+      });
+      
       console.log('📊 [UserAnalytics] Processing dailyStats:', {
         totalDailyStats: userAnalytics.dailyStats?.length || 0,
         filteredCount: filteredDailyStats.length,
         period: period || 'all',
         hasDateFilter: !!(defaultStartDate && defaultEndDate),
-        adId: adId || 'all'
+        adId: adId || 'all',
+        validAdIdsCount: validAdIds.size
       });
       
       // Filter by adId if provided
@@ -955,7 +995,7 @@ router.get('/user/:userId/direct', async (req, res) => {
           };
         }).filter(dateEntry => dateEntry.ads.length > 0);
       }
-      // When adId='all', use all ads (no filtering needed)
+      // When adId='all', use all valid (non-archived) ads
       
       // Format dailyStats for frontend (convert nested structure to flat array)
       const formattedDailyStats = filteredDailyStats.flatMap(dateEntry => {
@@ -984,12 +1024,18 @@ router.get('/user/:userId/direct', async (req, res) => {
       });
       
       // Filter ads array by adId if provided
-      let filteredAds = userAnalytics.ads || [];
-      if (adId && adId !== 'all') {
-        filteredAds = filteredAds.filter(ad => 
-          ad.adId && ad.adId.toString() === adId
-        );
-      }
+      // ✅ Use the same validAdIds Set from above (already filtered for archived ads)
+      let filteredAds = (userAnalytics.ads || []).filter(ad => {
+        if (!ad.adId) return false;
+        const adIdStr = ad.adId.toString();
+        // ✅ Exclude archived ads
+        if (!validAdIds.has(adIdStr)) return false;
+        // Filter by adId if provided
+        if (adId && adId !== 'all') {
+          return adIdStr === adId;
+        }
+        return true;
+      });
       
       // Calculate summary from UserAnalytics data
       // ✅ Always prefer dailyStats totals when available (more accurate)

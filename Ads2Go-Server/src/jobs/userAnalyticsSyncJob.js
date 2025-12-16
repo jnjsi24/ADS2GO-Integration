@@ -229,6 +229,7 @@ class UserAnalyticsSyncJob {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED'] },
         // Explicitly exclude deleted ads (status: 'DELETED' or null/undefined)
         $and: [
@@ -980,6 +981,7 @@ class UserAnalyticsSyncJob {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       }).select('_id title');
       

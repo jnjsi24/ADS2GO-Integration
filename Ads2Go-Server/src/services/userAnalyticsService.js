@@ -2265,7 +2265,11 @@ class UserAnalyticsService {
       
       // ✅ PERFORMANCE OPTIMIZATION: Get user's adIds and materialIds first
       // If filtering by specific adId, get materialIds for that ad to reduce dataset size
-      const userAds = await Ad.find({ userId: userId }).select('_id materialId targetDevices');
+      // ✅ Exclude archived/deleted ads to ensure their data is not included in totals
+      const userAds = await Ad.find({ 
+        userId: userId,
+        isArchived: false  // ✅ Exclude archived/deleted ads
+      }).select('_id materialId targetDevices');
       const userAdIds = userAds.map(ad => ad._id.toString());
       
       if (userAdIds.length === 0) {
@@ -2952,7 +2956,11 @@ class UserAnalyticsService {
       const Ad = require('../models/Ad');
       
       // Get user's ads to find associated materials - optimized query
-      const userAds = await Ad.find({ userId: userId }).select('_id targetDevices createdAt').sort({ createdAt: 1 });
+      // ✅ Exclude archived/deleted ads to ensure their data is not included in totals
+      const userAds = await Ad.find({ 
+        userId: userId,
+        isArchived: false  // ✅ Exclude archived/deleted ads
+      }).select('_id targetDevices createdAt').sort({ createdAt: 1 });
       if (!userAds || userAds.length === 0) {
         return {
           success: false,
@@ -3365,6 +3373,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       }).select('_id title');
       
@@ -4455,6 +4464,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       
@@ -4982,6 +4992,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       
@@ -5089,6 +5100,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       
@@ -5315,6 +5327,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       }).populate('materialId', 'materialId'); // ✅ Populate Material documents to get materialId strings
       
@@ -5715,6 +5728,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       
@@ -5915,6 +5929,7 @@ class UserAnalyticsService {
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
+        isArchived: false,  // ✅ Exclude archived/deleted ads
         status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
       });
       
