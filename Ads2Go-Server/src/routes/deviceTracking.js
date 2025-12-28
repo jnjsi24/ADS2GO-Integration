@@ -634,16 +634,25 @@ router.post('/qr-scan', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
+    // ✅ FIX: Use today's date to ensure we update the correct day's record
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     // Find existing device tracking record for this material
-    // Use the most recent record to prevent duplicates
     let deviceTracking = await DeviceTracking.findOne({
-      materialId: materialId
-    }).sort({ date: -1 }); // Get the most recent record
+      materialId: materialId,
+      date: today
+    });
+    
+    // If no record for today, try to get the most recent one
+    if (!deviceTracking) {
+      deviceTracking = await DeviceTracking.findOne({
+        materialId: materialId
+      }).sort({ date: -1 });
+    }
     
     if (!deviceTracking) {
       // Create new car record for today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       
       deviceTracking = new DeviceTracking({
         materialId,
@@ -726,6 +735,40 @@ router.post('/qr-scan', async (req, res) => {
       // Mark qrScans as modified to ensure post-save hook triggers archiving
       deviceTracking.markModified('qrScans');
       deviceTracking.markModified('totalQRScans');
+      
+      // ✅ FIX: Update QR scans by ad (only for master slot) - fetch userId from Ad if not provided
+      if (isMasterSlot && qrScanData.adId) {
+        let userId = qrScanData.userId;
+        if (!userId) {
+          try {
+            const Ad = require('../models/Ad');
+            const ad = await Ad.findById(qrScanData.adId).select('userId');
+            if (ad) {
+              userId = ad.userId.toString();
+            }
+          } catch (error) {
+            console.warn(`⚠️ [QRScan] Could not fetch userId for ad ${qrScanData.adId}:`, error.message);
+          }
+        }
+        
+        if (userId) {
+          const existingAdScan = deviceTracking.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+          if (existingAdScan) {
+            existingAdScan.scanCount += 1;
+            existingAdScan.lastScanned = new Date();
+          } else {
+            deviceTracking.qrScansByAd.push({
+              adId: qrScanData.adId,
+              userId: userId, // ✅ FIX: Include userId which is required by schema
+              adTitle: qrScanData.adTitle || 'Unknown',
+              scanCount: 1,
+              lastScanned: new Date(),
+              firstScanned: new Date()
+            });
+          }
+          deviceTracking.markModified('qrScansByAd');
+        }
+      }
       
       if (isMasterSlot) {
         console.log(`✅ [QRScan] Master slot - counted in analytics (total: ${deviceTracking.totalQRScans})`);

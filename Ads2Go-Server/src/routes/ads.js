@@ -802,15 +802,24 @@ router.post('/qr-scan', async (req, res) => {
       const DeviceTracking = require('../models/deviceTracking');
       
       // Find existing device tracking record for this material
-      // Use the most recent record to prevent duplicates
+      // ✅ FIX: Use today's date to ensure we update the correct day's record
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
       let deviceTracking = await DeviceTracking.findOne({
-        materialId: materialId
-      }).sort({ date: -1 }); // Get the most recent record
+        materialId: materialId,
+        date: today
+      });
+      
+      // If no record for today, try to get the most recent one
+      if (!deviceTracking) {
+        deviceTracking = await DeviceTracking.findOne({
+          materialId: materialId
+        }).sort({ date: -1 });
+      }
       
       if (!deviceTracking) {
-        // ✅ FIX: Use today's date instead of hardcoded date
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // Create new record for today (today variable already set above)
         const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value for offline devices
         
         deviceTracking = new DeviceTracking({
@@ -904,6 +913,7 @@ router.post('/qr-scan', async (req, res) => {
         } else {
           deviceTracking.qrScansByAd.push({
             adId: qrScanData.adId,
+            userId: qrScanData.userId, // ✅ FIX: Include userId which is required by schema
             adTitle: qrScanData.adTitle,
             scanCount: 1,
             lastScanned: new Date(),

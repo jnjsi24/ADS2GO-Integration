@@ -2308,6 +2308,12 @@ class UserAnalyticsService {
         { $eq: [{ $toString: '$$scan.adId' }, adIdStr] }
       ]);
       
+      // ✅ Build match conditions for qrScansByAd - similar to qrScanMatchConditions but for adScan
+      const qrScansByAdMatchConditions = userAdIds.flatMap(adIdStr => [
+        { $eq: ['$$adScan.adId', adIdStr] },
+        { $eq: [{ $toString: '$$adScan.adId' }, adIdStr] }
+      ]);
+      
       console.log('📊 [getDeviceStatsFromHistory] Building optimized aggregation pipeline:', {
         userAdIdsCount: userAdIds.length,
         hasAdIdFilter: !!adId,
@@ -2369,6 +2375,29 @@ class UserAnalyticsService {
               } : { $ne: ['$$playback.adId', null] }) // Include all if no filter
             }
           },
+          // ✅ FIX: Prefer qrScansByAd when available, fallback to qrScans
+          // This prevents double-counting when both exist
+          hasQrScansByAd: {
+            $gt: [{ $size: { $ifNull: ['$dailyData.qrScansByAd', []] } }, 0]
+          },
+          filteredQrScansByAd: {
+            $filter: {
+              input: { $ifNull: ['$dailyData.qrScansByAd', []] },
+              as: 'adScan',
+              cond: adId ? {
+                // Filter by specific adId
+                $or: [
+                  { $eq: ['$$adScan.adId', adId] },
+                  { $eq: ['$$adScan.adId', adId.toString()] },
+                  { $eq: [{ $toString: '$$adScan.adId' }, adId] },
+                  { $eq: [{ $toString: '$$adScan.adId' }, adId.toString()] }
+                ]
+              } : (qrScansByAdMatchConditions.length > 0 ? {
+                // Filter by user's adIds
+                $or: qrScansByAdMatchConditions
+              } : { $ne: ['$$adScan.adId', null] }) // Include all if no filter
+            }
+          },
           filteredQrScans: {
             $filter: {
               input: { $ifNull: ['$dailyData.qrScans', []] },
@@ -2417,8 +2446,24 @@ class UserAnalyticsService {
               }
             }
           },
-          totalQRScans: { 
-            $sum: { $size: '$filteredQrScans' }
+          // ✅ FIX: Prefer qrScansByAd count when available, otherwise use raw qrScans count
+          // This prevents double-counting when both qrScansByAd and qrScans exist
+          totalQRScans: {
+            $sum: {
+              $cond: [
+                '$hasQrScansByAd',
+                // Use qrScansByAd: sum the scanCount from filtered entries
+                {
+                  $reduce: {
+                    input: '$filteredQrScansByAd',
+                    initialValue: 0,
+                    in: { $add: ['$$value', { $ifNull: ['$$this.scanCount', 0] }] }
+                  }
+                },
+                // Fallback to raw qrScans count
+                { $size: '$filteredQrScans' }
+              ]
+            }
           },
           lastActivity: { $max: '$date' }
         }
@@ -2539,16 +2584,31 @@ class UserAnalyticsService {
                 });
               }
 
-              // Process QR scans for current day
-              if (device.qrScans && device.qrScans.length > 0) {
+              // ✅ FIX: Process QR scans for current day - prefer qrScansByAd when available to prevent double-counting
+              const hasQrScansByAd = device.qrScansByAd && device.qrScansByAd.length > 0;
+              
+              if (hasQrScansByAd) {
+                // Process aggregated qrScansByAd
+                device.qrScansByAd.forEach(adScan => {
+                  const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
+                  const belongsToUser = adScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
+                  const matchesFilter = !adId || normalizedAdId === adId || normalizedAdId === adId.toString();
+                  
+                  if (belongsToUser && matchesFilter) {
+                    totalQRScans += adScan.scanCount || 0;
+                  }
+                });
+              } else if (device.qrScans && device.qrScans.length > 0) {
+                // Fallback to raw qrScans only if qrScansByAd is empty
                 const deviceTotalScans = device.qrScans.length;
                 let filteredScans = 0;
                 
                 device.qrScans.forEach(qrScan => {
                   // ✅ FIX: Filter by userId AND check if adId belongs to user's ads
                   // This ensures we only count QR scans for the user's ads, not all scans from the device
-                  const belongsToUser = qrScan.userId === userId.toString() || (qrScan.adId && userAdIds.includes(qrScan.adId));
-                  const matchesFilter = !adId || qrScan.adId === adId || qrScan.adId.toString() === adId;
+                  const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
+                  const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
+                  const matchesFilter = !adId || normalizedAdId === adId || normalizedAdId === adId.toString();
                   
                   if (belongsToUser && matchesFilter) {
                     totalQRScans += 1;
@@ -4738,9 +4798,9 @@ class UserAnalyticsService {
       const qrScanMap = {};
       
       filteredDailyData.forEach(day => {
-        // ✅ Process both qrScans (raw) and qrScansByAd (aggregated) to ensure we get all data
-        // First, try qrScansByAd (pre-aggregated, faster)
-        if (day.qrScansByAd && day.qrScansByAd.length > 0) {
+        // ✅ Process qrScansByAd (aggregated data) if available
+        const hasDayQrScansByAd = day.qrScansByAd && day.qrScansByAd.length > 0;
+        if (hasDayQrScansByAd) {
           day.qrScansByAd.forEach(adScan => {
             const scanAdIdStr = adScan.adId?.toString ? adScan.adId.toString() : String(adScan.adId);
             const belongsToUser = adScan.userId?.toString() === userId?.toString() || (scanAdIdStr && userAdIds.includes(scanAdIdStr));
@@ -4760,8 +4820,9 @@ class UserAnalyticsService {
           });
         }
         
-        // ✅ FALLBACK: Also process raw qrScans if qrScansByAd is empty or doesn't have user's data
-        if (day.qrScans && day.qrScans.length > 0) {
+        // ✅ FIX: FALLBACK: Process raw qrScans ONLY if qrScansByAd is empty
+        // This prevents double-counting when both qrScansByAd and qrScans exist
+        if (!hasDayQrScansByAd && day.qrScans && day.qrScans.length > 0) {
           day.qrScans.forEach(scan => {
             // Only process QR scans for the current user (check both userId and adId)
             // AND filter by specific ad if filterAdId is provided
@@ -5448,7 +5509,8 @@ class UserAnalyticsService {
         }
         
         // ✅ Method 1: Process qrScansByAd (aggregated data) if available
-        if (device.qrScansByAd && device.qrScansByAd.length > 0) {
+        const hasQrScansByAd = device.qrScansByAd && device.qrScansByAd.length > 0;
+        if (hasQrScansByAd) {
           device.qrScansByAd.forEach(adScan => {
             // ✅ Normalize adId to string for consistent matching
             const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
@@ -5484,9 +5546,9 @@ class UserAnalyticsService {
           });
         }
         
-        // ✅ Method 2: Process qrScans (individual records) if qrScansByAd is empty
-        // This matches how getDeviceStatsFromHistory processes QR scans
-        if (device.qrScans && device.qrScans.length > 0) {
+        // ✅ FIX: Method 2: Process qrScans (individual records) ONLY if qrScansByAd is empty
+        // This prevents double-counting when both qrScansByAd and qrScans exist
+        if (!hasQrScansByAd && device.qrScans && device.qrScans.length > 0) {
           if (isVerbose) {
             console.log(`🔍 [getTotalQRScans] Processing ${device.qrScans.length} individual QR scan records`);
           }
@@ -5604,7 +5666,8 @@ class UserAnalyticsService {
             
             if (shouldProcess) {
               // ✅ Method 1: Process qrScansByAd (aggregated data) if available
-              if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
+              const hasDailyQrScansByAd = dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0;
+              if (hasDailyQrScansByAd) {
                 dailyData.qrScansByAd.forEach(adScan => {
                   // ✅ Normalize adId to string for consistent matching
                   const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
@@ -5631,8 +5694,9 @@ class UserAnalyticsService {
                 });
               }
               
-              // ✅ Method 2: Process qrScans (individual records) if qrScansByAd is empty
-              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+              // ✅ FIX: Method 2: Process qrScans (individual records) ONLY if qrScansByAd is empty
+              // This prevents double-counting when both qrScansByAd and qrScans exist
+              if (!hasDailyQrScansByAd && dailyData.qrScans && dailyData.qrScans.length > 0) {
                 if (isVerbose) {
                   console.log(`🔍 [getTotalQRScans] Processing ${dailyData.qrScans.length} individual QR scan records for ${dailyData.date}`);
                 }
