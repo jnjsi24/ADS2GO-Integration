@@ -58,6 +58,8 @@ export const AdminAuthProvider: React.FC<{
 }> = ({ children, navigate }) => {
   const hasRedirectedRef = useRef(false);
   const hasInitializedRef = useRef(false);
+  const isInitializingRef = useRef(false); // Prevent multiple simultaneous initializations
+  const initializationAttemptRef = useRef(0); // Track initialization attempts
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -92,10 +94,14 @@ export const AdminAuthProvider: React.FC<{
   const publicPages = ['/admin-login', '/sadmin-login'];
 
   useEffect(() => {
-    // useEffect triggered
-    
     // Prevent multiple initializations
-    if (hasInitializedRef.current) {
+    if (hasInitializedRef.current && isInitialized && admin) {
+      return;
+    }
+    
+    // Prevent multiple simultaneous initializations
+    if (isInitializingRef.current) {
+      console.log('⏸️ [AdminAuth] Initialization already in progress, skipping...');
       return;
     }
     
@@ -106,6 +112,9 @@ export const AdminAuthProvider: React.FC<{
     }
     
     const initializeAuth = async () => {
+      isInitializingRef.current = true;
+      initializationAttemptRef.current += 1;
+      const attemptNumber = initializationAttemptRef.current;
       
       // Starting initialization
       setIsLoading(true);
@@ -118,6 +127,7 @@ export const AdminAuthProvider: React.FC<{
         setAdminEmail('');
         setIsLoading(false);
         setIsInitialized(true);
+        isInitializingRef.current = false;
         return;
       }
 
@@ -132,114 +142,159 @@ export const AdminAuthProvider: React.FC<{
         let freshAdminRaw: any;
         let freshAdmin: Admin;
 
-        // Fetch admin details from backend based on role
-        if (decoded.role === 'ADMIN') {
-          
-          // Double-check that the token is still valid
-          const currentToken = localStorage.getItem('adminToken');
-          if (!currentToken || currentToken !== token) {
-            console.error('❌ AdminAuthContext: Token changed during initialization');
-            throw new Error('Token changed during initialization');
-          }
-          
-          const { data } = await fetchAdminDetailsRef.current();
-          freshAdminRaw = data?.getOwnAdminDetails;
-          
-          if (!freshAdminRaw) {
-            console.error('❌ AdminAuthContext: Admin details not found in response');
-            throw new Error('Admin not found');
-          }
+        // Retry logic for network failures
+        let retries = 3;
+        let lastError: any = null;
 
-          // Helper function to construct full image URL
-          const getImageUrl = (imagePath: string | undefined | null) => {
-            if (!imagePath) return null;
-            // If it's already a full URL, return as is
-            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-              return imagePath;
+        while (retries > 0) {
+          try {
+            // Double-check that the token is still valid
+            const currentToken = localStorage.getItem('adminToken');
+            if (!currentToken || currentToken !== token) {
+              console.log('🔄 [AdminAuth] Token changed during initialization, aborting...');
+              isInitializingRef.current = false;
+              return;
             }
-            // If it starts with /uploads, prepend server URL
-            if (imagePath.startsWith('/uploads')) {
-              const serverUrl = process.env.REACT_APP_SERVER_URL;
-              if (!serverUrl) {
-                console.error('REACT_APP_SERVER_URL not configured');
-                return imagePath; // Return original path as fallback
+
+            // Fetch admin details from backend based on role
+            if (decoded.role === 'ADMIN') {
+              const { data } = await fetchAdminDetailsRef.current({
+                fetchPolicy: retries === 3 ? 'cache-and-network' : 'network-only',
+              });
+              freshAdminRaw = data?.getOwnAdminDetails;
+              
+              if (!freshAdminRaw) {
+                throw new Error('Admin not found');
               }
-              return `${serverUrl}${imagePath}`;
-            }
-            return imagePath;
-          };
 
-          freshAdmin = {
-            userId: freshAdminRaw.id,
-            email: freshAdminRaw.email,
-            role: freshAdminRaw.role,
-            isEmailVerified: freshAdminRaw.isEmailVerified,
-            firstName: freshAdminRaw.firstName,
-            middleName: freshAdminRaw.middleName,
-            lastName: freshAdminRaw.lastName,
-            companyName: freshAdminRaw.companyName,
-            companyAddress: freshAdminRaw.companyAddress,
-            contactNumber: freshAdminRaw.contactNumber,
-            profilePicture: getImageUrl(freshAdminRaw.profilePicture),
-          };
-        } else if (decoded.role === 'SUPERADMIN') {
-          
-          // Double-check that the token is still valid
-          const currentToken = localStorage.getItem('adminToken');
-          if (!currentToken || currentToken !== token) {
-            console.error('❌ AdminAuthContext: Token changed during initialization');
-            throw new Error('Token changed during initialization');
-          }
-          
-          const { data } = await fetchSuperAdminDetailsRef.current();
-          freshAdminRaw = data?.getOwnSuperAdminDetails;
-          
-          if (!freshAdminRaw) {
-            console.error('❌ AdminAuthContext: Superadmin details not found in response');
-            throw new Error('SuperAdmin not found');
-          }
+              // Helper function to construct full image URL
+              const getImageUrl = (imagePath: string | undefined | null) => {
+                if (!imagePath) return null;
+                // If it's already a full URL, return as is
+                if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                  return imagePath;
+                }
+                // If it starts with /uploads, prepend server URL
+                if (imagePath.startsWith('/uploads')) {
+                  const serverUrl = process.env.REACT_APP_SERVER_URL;
+                  if (!serverUrl) {
+                    console.error('REACT_APP_SERVER_URL not configured');
+                    return imagePath; // Return original path as fallback
+                  }
+                  return `${serverUrl}${imagePath}`;
+                }
+                return imagePath;
+              };
 
-          // Helper function to construct full image URL
-          const getImageUrl = (imagePath: string | undefined | null) => {
-            if (!imagePath) return null;
-            // If it's already a full URL, return as is
-            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-              return imagePath;
-            }
-            // If it starts with /uploads, prepend server URL
-            if (imagePath.startsWith('/uploads')) {
-              const serverUrl = process.env.REACT_APP_SERVER_URL;
-              if (!serverUrl) {
-                console.error('REACT_APP_SERVER_URL not configured');
-                return imagePath; // Return original path as fallback
+              freshAdmin = {
+                userId: freshAdminRaw.id,
+                email: freshAdminRaw.email,
+                role: freshAdminRaw.role,
+                isEmailVerified: freshAdminRaw.isEmailVerified,
+                firstName: freshAdminRaw.firstName,
+                middleName: freshAdminRaw.middleName,
+                lastName: freshAdminRaw.lastName,
+                companyName: freshAdminRaw.companyName,
+                companyAddress: freshAdminRaw.companyAddress,
+                contactNumber: freshAdminRaw.contactNumber,
+                profilePicture: getImageUrl(freshAdminRaw.profilePicture),
+              };
+              break; // Success, exit retry loop
+            } else if (decoded.role === 'SUPERADMIN') {
+              const { data } = await fetchSuperAdminDetailsRef.current({
+                fetchPolicy: retries === 3 ? 'cache-and-network' : 'network-only',
+              });
+              freshAdminRaw = data?.getOwnSuperAdminDetails;
+              
+              if (!freshAdminRaw) {
+                throw new Error('SuperAdmin not found');
               }
-              return `${serverUrl}${imagePath}`;
-            }
-            return imagePath;
-          };
 
-          freshAdmin = {
-            userId: freshAdminRaw.id,
-            email: freshAdminRaw.email,
-            recoveryEmail: freshAdminRaw.recoveryEmail,
-            role: freshAdminRaw.role,
-            isEmailVerified: freshAdminRaw.isEmailVerified,
-            firstName: freshAdminRaw.firstName,
-            middleName: freshAdminRaw.middleName,
-            lastName: freshAdminRaw.lastName,
-            companyName: freshAdminRaw.companyName,
-            companyAddress: freshAdminRaw.companyAddress,
-            contactNumber: freshAdminRaw.contactNumber,
-            profilePicture: getImageUrl(freshAdminRaw.profilePicture),
-          };
-        } else {
-          throw new Error('Invalid admin role');
+              // Helper function to construct full image URL
+              const getImageUrl = (imagePath: string | undefined | null) => {
+                if (!imagePath) return null;
+                // If it's already a full URL, return as is
+                if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                  return imagePath;
+                }
+                // If it starts with /uploads, prepend server URL
+                if (imagePath.startsWith('/uploads')) {
+                  const serverUrl = process.env.REACT_APP_SERVER_URL;
+                  if (!serverUrl) {
+                    console.error('REACT_APP_SERVER_URL not configured');
+                    return imagePath; // Return original path as fallback
+                  }
+                  return `${serverUrl}${imagePath}`;
+                }
+                return imagePath;
+              };
+
+              freshAdmin = {
+                userId: freshAdminRaw.id,
+                email: freshAdminRaw.email,
+                recoveryEmail: freshAdminRaw.recoveryEmail,
+                role: freshAdminRaw.role,
+                isEmailVerified: freshAdminRaw.isEmailVerified,
+                firstName: freshAdminRaw.firstName,
+                middleName: freshAdminRaw.middleName,
+                lastName: freshAdminRaw.lastName,
+                companyName: freshAdminRaw.companyName,
+                companyAddress: freshAdminRaw.companyAddress,
+                contactNumber: freshAdminRaw.contactNumber,
+                profilePicture: getImageUrl(freshAdminRaw.profilePicture),
+              };
+              break; // Success, exit retry loop
+            } else {
+              throw new Error('Invalid admin role');
+            }
+          } catch (fetchError: any) {
+            lastError = fetchError;
+            retries--;
+            
+            // Check if it's a network error (should retry) vs token/auth error (should not retry)
+            const isNetworkError = 
+              fetchError?.networkError ||
+              fetchError?.message?.includes('Failed to fetch') ||
+              fetchError?.message?.includes('NetworkError') ||
+              fetchError?.message?.includes('timeout') ||
+              fetchError?.message?.includes('ECONNRESET');
+            
+            const isAuthError = 
+              fetchError?.message?.includes('Not authenticated') ||
+              fetchError?.message?.includes('Unauthorized') ||
+              fetchError?.graphQLErrors?.some((e: any) => 
+                e.message?.includes('Not authenticated') || 
+                e.message?.includes('Unauthorized')
+              );
+            
+            // If it's an auth error, don't retry - token is invalid
+            if (isAuthError) {
+              console.error('❌ [AdminAuth] Authentication error, token is invalid:', fetchError);
+              throw new Error('Invalid admin token');
+            }
+            
+            // If it's a network error and we have retries left, wait and retry
+            if (isNetworkError && retries > 0) {
+              console.log(`🔄 [AdminAuth] Attempt ${attemptNumber}: Network error, retrying... (${retries} attempts left)`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries))); // Exponential backoff
+              continue;
+            }
+            
+            // If no retries left or not a network error, throw
+            throw fetchError;
+          }
         }
+
+        if (!freshAdmin) {
+          throw lastError || new Error('Admin not found');
+        }
+
         setAdminWithDebug(freshAdmin);
         setAdminEmail(freshAdmin.email);
         setIsLoading(false);
         setIsInitialized(true);
         hasInitializedRef.current = true;
+        isInitializingRef.current = false;
 
         if (!hasRedirectedRef.current) {
           if (publicPages.includes(window.location.pathname)) {
@@ -254,26 +309,57 @@ export const AdminAuthProvider: React.FC<{
             }
           }
         }
-      } catch (err) {
-        console.error('Error initializing admin auth:', err);
-        // Don't clear the admin state if there's a GraphQL error during initialization
-        // Only clear if it's a token validation error
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage === 'Invalid admin token' || errorMessage === 'Admin not found' || errorMessage === 'SuperAdmin not found') {
+      } catch (err: any) {
+        console.error('❌ [AdminAuth] Error initializing admin auth:', err);
+        
+        // Only clear token if it's a token validation error, not a network error
+        const isTokenError = 
+          err?.message?.includes('Invalid admin token') ||
+          err?.message?.includes('Admin not found') ||
+          err?.message?.includes('SuperAdmin not found') ||
+          err?.message?.includes('Invalid admin role') ||
+          err?.graphQLErrors?.some((e: any) => 
+            e.message?.includes('Not authenticated') || 
+            e.message?.includes('Unauthorized')
+          );
+        
+        const isNetworkError = 
+          err?.networkError ||
+          err?.message?.includes('Failed to fetch') ||
+          err?.message?.includes('NetworkError') ||
+          err?.message?.includes('timeout') ||
+          err?.message?.includes('ECONNRESET');
+        
+        if (isTokenError) {
+          // Token is invalid - clear it
           localStorage.removeItem('adminToken');
           setAdminWithDebug(null);
           setAdminEmail('');
+        } else if (isNetworkError) {
+          // Network error - don't clear token, just log and keep existing state if available
+          console.warn('⚠️ [AdminAuth] Network error during initialization, keeping existing state:', err);
+          // If we have an admin in state, keep it; otherwise set loading to false
+          if (!admin) {
+            setIsLoading(false);
+            setIsInitialized(true);
+          }
+        } else {
+          // Unknown error - be conservative and don't clear token
+          console.error('❌ [AdminAuth] Unknown error during initialization:', err);
+          setIsLoading(false);
+          setIsInitialized(true);
         }
-        setIsLoading(false);
-        setIsInitialized(true);
+        
         hasInitializedRef.current = true;
+        isInitializingRef.current = false;
       }
     };
 
     initializeAuth().catch((err) => {
-      console.error('Error in initializeAdminAuth:', err);
+      console.error('❌ [AdminAuth] Error in initializeAdminAuth promise catch:', err);
       setIsLoading(false);
       setIsInitialized(true);
+      isInitializingRef.current = false;
     });
   }, []); // Empty dependency array to prevent infinite loops
 

@@ -64,6 +64,8 @@ export const UserAuthProvider: React.FC<{
 }> = ({ children, navigate }) => {
   const hasRedirectedRef = useRef(false);
   const justLoggedInRef = useRef(false); // Track if we just logged in to prevent initializeAuth from overwriting
+  const isInitializingRef = useRef(false); // Prevent multiple simultaneous initializations
+  const initializationAttemptRef = useRef(0); // Track initialization attempts
   const [user, setUser] = useState<User | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -82,44 +84,44 @@ export const UserAuthProvider: React.FC<{
 
   useEffect(() => {
     const initializeAuth = async () => {
-      setIsLoading(true);
-      setIsInitialized(false);
-
-      const token = localStorage.getItem('userToken');
-      const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
-      const loginTimestamp = localStorage.getItem('loginTimestamp');
-
-      if (!token) {
-        setUser(null);
-        setUserEmail('');
-        setIsLoading(false);
-        setIsInitialized(true);
+      // Prevent multiple simultaneous initializations
+      if (isInitializingRef.current) {
+        console.log('⏸️ [UserAuth] Initialization already in progress, skipping...');
         return;
       }
 
-      // Check if persistent login has expired (30 days)
-      if (keepLoggedIn && loginTimestamp) {
-        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-        const isExpired = Date.now() - parseInt(loginTimestamp) > thirtyDaysInMs;
-        
-        if (isExpired) {
-          localStorage.removeItem('userToken');
-          localStorage.removeItem('keepLoggedIn');
-          localStorage.removeItem('loginTimestamp');
+      // If already initialized and user exists, don't re-initialize
+      if (isInitialized && user) {
+        return;
+      }
+
+      isInitializingRef.current = true;
+      initializationAttemptRef.current += 1;
+      const attemptNumber = initializationAttemptRef.current;
+
+      try {
+        setIsLoading(true);
+        setIsInitialized(false);
+
+        const token = localStorage.getItem('userToken');
+        const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
+        const loginTimestamp = localStorage.getItem('loginTimestamp');
+
+        if (!token) {
           setUser(null);
           setUserEmail('');
           setIsLoading(false);
           setIsInitialized(true);
+          isInitializingRef.current = false;
           return;
         }
-      } else if (!keepLoggedIn) {
-        // If not persistent login, check if token is expired (24 hours)
-        try {
-          const decoded = jwtDecode<any>(token);
-          const tokenExpiry = decoded.exp * 1000; // Convert to milliseconds
-          const isTokenExpired = Date.now() > tokenExpiry;
+
+        // Check if persistent login has expired (30 days)
+        if (keepLoggedIn && loginTimestamp) {
+          const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+          const isExpired = Date.now() - parseInt(loginTimestamp) > thirtyDaysInMs;
           
-          if (isTokenExpired) {
+          if (isExpired) {
             localStorage.removeItem('userToken');
             localStorage.removeItem('keepLoggedIn');
             localStorage.removeItem('loginTimestamp');
@@ -127,130 +129,278 @@ export const UserAuthProvider: React.FC<{
             setUserEmail('');
             setIsLoading(false);
             setIsInitialized(true);
+            isInitializingRef.current = false;
             return;
           }
-        } catch (error) {
-          localStorage.removeItem('userToken');
-          localStorage.removeItem('keepLoggedIn');
-          localStorage.removeItem('loginTimestamp');
-          setUser(null);
-          setUserEmail('');
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
-        }
-      }
-
-      try {
-        const decoded = jwtDecode<any>(token);
-        if (!decoded?.email || decoded?.role !== 'USER') {
-          throw new Error('Invalid user token');
-        }
-
-        // If we just logged in, skip fetching (user state is already set from login response)
-        // This prevents overwriting fresh login data with potentially stale cache
-        // The flag is set in login() before setting user state, so if it's true, we just logged in
-        if (justLoggedInRef.current) {
-          // Skip fetching - user state is already set from login response
-          // The login() function already set the user state and initialized flags
-          setIsLoading(false);
-          setIsInitialized(true);
-          // Don't reset the flag here - let login() reset it after navigation
-          return;
-        }
-
-        // Use cache-first for performance on initial load, but verify user matches token
-        // For app reloads, this will use cache if available (faster)
-        const { data } = await fetchUserDetails({
-          fetchPolicy: 'cache-and-network', // Use cache if available, but fetch fresh in background
-        });
-        const freshUserRaw = data?.getOwnUserDetails;
-        
-        if (!freshUserRaw) {
-          throw new Error('User not found');
-        }
-
-        // Helper function to construct full image URL
-        const getImageUrl = (imagePath: string | undefined | null) => {
-          if (!imagePath) return null;
-          // If it's already a full URL, return as is
-          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-            return imagePath;
-          }
-          // If it starts with /uploads, prepend server URL
-          if (imagePath.startsWith('/uploads')) {
-            const serverUrl = process.env.REACT_APP_SERVER_URL;
-            if (!serverUrl) {
-              console.error('REACT_APP_SERVER_URL not configured');
-              return imagePath; // Return original path as fallback
+        } else if (!keepLoggedIn) {
+          // If not persistent login, check if token is expired (24 hours)
+          try {
+            const decoded = jwtDecode<any>(token);
+            const tokenExpiry = decoded.exp * 1000; // Convert to milliseconds
+            const isTokenExpired = Date.now() > tokenExpiry;
+            
+            if (isTokenExpired) {
+              localStorage.removeItem('userToken');
+              localStorage.removeItem('keepLoggedIn');
+              localStorage.removeItem('loginTimestamp');
+              setUser(null);
+              setUserEmail('');
+              setIsLoading(false);
+              setIsInitialized(true);
+              isInitializingRef.current = false;
+              return;
             }
-            return `${serverUrl}${imagePath}`;
+          } catch (error) {
+            // Token is invalid (can't decode) - clear it
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('keepLoggedIn');
+            localStorage.removeItem('loginTimestamp');
+            setUser(null);
+            setUserEmail('');
+            setIsLoading(false);
+            setIsInitialized(true);
+            isInitializingRef.current = false;
+            return;
           }
-          return imagePath;
-        };
-
-        const freshUser: User = {
-          userId: freshUserRaw.id,
-          email: freshUserRaw.email,
-          role: freshUserRaw.role,
-          isEmailVerified: freshUserRaw.isEmailVerified,
-          firstName: freshUserRaw.firstName,
-          middleName: freshUserRaw.middleName,
-          lastName: freshUserRaw.lastName,
-          houseAddress: freshUserRaw.houseAddress,
-          companyName: freshUserRaw.companyName,
-          companyAddress: freshUserRaw.companyAddress,
-          contactNumber: freshUserRaw.contactNumber,
-          profilePicture: getImageUrl(freshUserRaw.profilePicture),
-        };
-        
-        // Only update state if the user email matches the token (prevent showing wrong user)
-        // Also, don't overwrite if we already have the correct user (prevents unnecessary updates)
-        if (freshUser.email === decoded.email) {
-          // Only update if user is null or email doesn't match (prevents overwriting fresh login data)
-          if (!user || user.email !== freshUser.email) {
-            setUser(freshUser);
-            setUserEmail(freshUser.email);
-          }
-        } else {
-          // Token email doesn't match fetched user - clear everything
-          console.error('Token email does not match user email');
-          localStorage.removeItem('userToken');
-          localStorage.removeItem('keepLoggedIn');
-          localStorage.removeItem('loginTimestamp');
-          setUser(null);
-          setUserEmail('');
         }
-        
-        setIsLoading(false);
-        setIsInitialized(true);
 
-        if (!hasRedirectedRef.current) {
-          if (freshUser.email === decoded.email && !freshUser.isEmailVerified) {
-            hasRedirectedRef.current = true;
-            navigate('/verify-email');
-          } else if (freshUser.email === decoded.email && publicPages.includes(window.location.pathname)) {
-            hasRedirectedRef.current = true;
-            console.log('🔄 Redirecting from public page to dashboard');
-            navigate('/dashboard');
+        try {
+          const decoded = jwtDecode<any>(token);
+          if (!decoded?.email || decoded?.role !== 'USER') {
+            throw new Error('Invalid user token');
           }
+
+          // If we just logged in, skip fetching (user state is already set from login response)
+          // This prevents overwriting fresh login data with potentially stale cache
+          // The flag is set in login() before setting user state, so if it's true, we just logged in
+          if (justLoggedInRef.current) {
+            // Skip fetching - user state is already set from login response
+            // The login() function already set the user state and initialized flags
+            setIsLoading(false);
+            setIsInitialized(true);
+            isInitializingRef.current = false;
+            // Don't reset the flag here - let login() reset it after navigation
+            return;
+          }
+
+          // Retry logic for network failures
+          let retries = 3;
+          let lastError: any = null;
+          let freshUserRaw: any = null;
+
+          while (retries > 0) {
+            try {
+              // Check if token still exists (might have been cleared by another initialization)
+              const currentToken = localStorage.getItem('userToken');
+              if (!currentToken || currentToken !== token) {
+                console.log('🔄 [UserAuth] Token changed during initialization, aborting...');
+                isInitializingRef.current = false;
+                return;
+              }
+
+              // Use cache-first for performance on initial load, but verify user matches token
+              // For app reloads, this will use cache if available (faster)
+              const { data } = await fetchUserDetails({
+                fetchPolicy: 'cache-and-network', // Use cache if available, but fetch fresh in background
+              });
+              freshUserRaw = data?.getOwnUserDetails;
+              
+              if (freshUserRaw) {
+                break; // Success, exit retry loop
+              }
+              
+              // If no data but no error, might be a cache issue - try network-only on retry
+              if (retries > 1) {
+                console.log(`🔄 [UserAuth] Attempt ${attemptNumber}: No user data, retrying with network-only...`);
+                const { data: networkData } = await fetchUserDetails({
+                  fetchPolicy: 'network-only',
+                });
+                freshUserRaw = networkData?.getOwnUserDetails;
+                if (freshUserRaw) {
+                  break; // Success
+                }
+              }
+              
+              throw new Error('User not found');
+            } catch (fetchError: any) {
+              lastError = fetchError;
+              retries--;
+              
+              // Check if it's a network error (should retry) vs token/auth error (should not retry)
+              const isNetworkError = 
+                fetchError?.networkError ||
+                fetchError?.message?.includes('Failed to fetch') ||
+                fetchError?.message?.includes('NetworkError') ||
+                fetchError?.message?.includes('timeout') ||
+                fetchError?.message?.includes('ECONNRESET');
+              
+              const isAuthError = 
+                fetchError?.message?.includes('Not authenticated') ||
+                fetchError?.message?.includes('Unauthorized') ||
+                fetchError?.graphQLErrors?.some((e: any) => 
+                  e.message?.includes('Not authenticated') || 
+                  e.message?.includes('Unauthorized')
+                );
+              
+              // If it's an auth error, don't retry - token is invalid
+              if (isAuthError) {
+                console.error('❌ [UserAuth] Authentication error, token is invalid:', fetchError);
+                throw new Error('Invalid user token');
+              }
+              
+              // If it's a network error and we have retries left, wait and retry
+              if (isNetworkError && retries > 0) {
+                console.log(`🔄 [UserAuth] Attempt ${attemptNumber}: Network error, retrying... (${retries} attempts left)`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries))); // Exponential backoff
+                continue;
+              }
+              
+              // If no retries left or not a network error, throw
+              throw fetchError;
+            }
+          }
+
+          if (!freshUserRaw) {
+            throw lastError || new Error('User not found');
+          }
+
+          // Helper function to construct full image URL
+          const getImageUrl = (imagePath: string | undefined | null) => {
+            if (!imagePath) return null;
+            // If it's already a full URL, return as is
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+              return imagePath;
+            }
+            // If it starts with /uploads, prepend server URL
+            if (imagePath.startsWith('/uploads')) {
+              const serverUrl = process.env.REACT_APP_SERVER_URL;
+              if (!serverUrl) {
+                console.error('REACT_APP_SERVER_URL not configured');
+                return imagePath; // Return original path as fallback
+              }
+              return `${serverUrl}${imagePath}`;
+            }
+            return imagePath;
+          };
+
+          const freshUser: User = {
+            userId: freshUserRaw.id,
+            email: freshUserRaw.email,
+            role: freshUserRaw.role,
+            isEmailVerified: freshUserRaw.isEmailVerified,
+            firstName: freshUserRaw.firstName,
+            middleName: freshUserRaw.middleName,
+            lastName: freshUserRaw.lastName,
+            houseAddress: freshUserRaw.houseAddress,
+            companyName: freshUserRaw.companyName,
+            companyAddress: freshUserRaw.companyAddress,
+            contactNumber: freshUserRaw.contactNumber,
+            profilePicture: getImageUrl(freshUserRaw.profilePicture),
+          };
+          
+          // Only update state if the user email matches the token (prevent showing wrong user)
+          // Also, don't overwrite if we already have the correct user (prevents unnecessary updates)
+          if (freshUser.email === decoded.email) {
+            // Only update if user is null or email doesn't match (prevents overwriting fresh login data)
+            if (!user || user.email !== freshUser.email) {
+              setUser(freshUser);
+              setUserEmail(freshUser.email);
+            }
+          } else {
+            // Token email doesn't match fetched user - clear everything
+            console.error('Token email does not match user email');
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('keepLoggedIn');
+            localStorage.removeItem('loginTimestamp');
+            setUser(null);
+            setUserEmail('');
+          }
+          
+          setIsLoading(false);
+          setIsInitialized(true);
+          isInitializingRef.current = false;
+
+          if (!hasRedirectedRef.current) {
+            if (freshUser.email === decoded.email && !freshUser.isEmailVerified) {
+              hasRedirectedRef.current = true;
+              navigate('/verify-email');
+            } else if (freshUser.email === decoded.email && publicPages.includes(window.location.pathname)) {
+              hasRedirectedRef.current = true;
+              console.log('🔄 Redirecting from public page to dashboard');
+              navigate('/dashboard');
+            }
+          }
+        } catch (err: any) {
+          // Only clear token if it's a token validation error, not a network error
+          const isTokenError = 
+            err?.message?.includes('Invalid user token') ||
+            err?.message?.includes('Invalid token') ||
+            err?.message?.includes('User not found') ||
+            err?.graphQLErrors?.some((e: any) => 
+              e.message?.includes('Not authenticated') || 
+              e.message?.includes('Unauthorized')
+            );
+          
+          const isNetworkError = 
+            err?.networkError ||
+            err?.message?.includes('Failed to fetch') ||
+            err?.message?.includes('NetworkError') ||
+            err?.message?.includes('timeout') ||
+            err?.message?.includes('ECONNRESET');
+          
+          if (isTokenError) {
+            // Token is invalid - clear it
+            console.error('❌ [UserAuth] Token validation error:', err);
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('keepLoggedIn');
+            localStorage.removeItem('loginTimestamp');
+            setUser(null);
+            setUserEmail('');
+          } else if (isNetworkError) {
+            // Network error - don't clear token, just log and keep existing state if available
+            console.warn('⚠️ [UserAuth] Network error during initialization, keeping existing state:', err);
+            // If we have a user in state, keep it; otherwise set loading to false
+            if (!user) {
+              setIsLoading(false);
+              setIsInitialized(true);
+            }
+          } else {
+            // Unknown error - be conservative and don't clear token
+            console.error('❌ [UserAuth] Unknown error during initialization:', err);
+            setIsLoading(false);
+            setIsInitialized(true);
+          }
+          
+          isInitializingRef.current = false;
         }
       } catch (err) {
-        console.error('Error initializing user auth:', err);
-        localStorage.removeItem('userToken');
-        localStorage.removeItem('keepLoggedIn');
-        localStorage.removeItem('loginTimestamp');
+        console.error('❌ [UserAuth] Error in initializeAuth outer catch:', err);
+        // Only clear token if it's clearly invalid
+        const isTokenError = 
+          err instanceof Error && (
+            err.message.includes('Invalid') ||
+            err.message.includes('expired')
+          );
+        
+        if (isTokenError) {
+          localStorage.removeItem('userToken');
+          localStorage.removeItem('keepLoggedIn');
+          localStorage.removeItem('loginTimestamp');
+        }
+        
         setUser(null);
         setUserEmail('');
         setIsLoading(false);
         setIsInitialized(true);
+        isInitializingRef.current = false;
       }
     };
 
     initializeAuth().catch((err) => {
-      console.error('Error in initializeUserAuth:', err);
+      console.error('❌ [UserAuth] Error in initializeUserAuth promise catch:', err);
       setIsLoading(false);
       setIsInitialized(true);
+      isInitializingRef.current = false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchUserDetails, navigate]); // Intentionally not including user to avoid re-running on user state changes
