@@ -363,6 +363,15 @@ const UserAnalyticsSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
+// ✅ PERFORMANCE: Create indexes on schema initialization
+UserAnalyticsSchema.index({ userId: 1 }, { unique: true });
+UserAnalyticsSchema.index({ 'dailyStats.date': 1 });
+UserAnalyticsSchema.index({ 'dailyStats.ads.adId': 1 });
+UserAnalyticsSchema.index({ lastUpdated: -1 });
+UserAnalyticsSchema.index({ lastSyncTimestamp: -1 });
+UserAnalyticsSchema.index({ lastAnalyticsAccess: -1 });
+UserAnalyticsSchema.index({ userId: 1, 'dailyStats.date': 1 }); // Compound index
+
 // Pre-save hook to remove redundant fields if they exist
 UserAnalyticsSchema.pre('save', function(next) {
   // Always remove summary field if it exists (it's redundant with individual total fields)

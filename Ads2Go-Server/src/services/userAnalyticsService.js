@@ -8,7 +8,7 @@ const isVerbose = () => process.env.VERBOSE_LOGS === 'true';
 // Simple in-memory cache for analytics data
 const analyticsCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL (increased from 30s for better performance)
-const REALTIME_CACHE_TTL = 30 * 1000; // 30 seconds for real-time viewing (current day)
+const REALTIME_CACHE_TTL = 15 * 1000; // ✅ Reduced from 30s to 15s for faster QR scan updates (current day)
 
 class UserAnalyticsService {
   
@@ -128,10 +128,13 @@ class UserAnalyticsService {
       
       // ✨ Detect if this is a real-time view (current day included)
       const now = new Date();
+      // ✅ FIX: Also treat period='all' as real-time if it includes today (for faster QR scan updates)
+      const isAllPeriodIncludingToday = period === 'all' && (!endDate || new Date(endDate).toDateString() === now.toDateString());
       const isRealtimeView = REALTIME_MODE || 
                             period === '1d' || 
                             period === '7d' || 
                             period === '30d' || 
+                            isAllPeriodIncludingToday || // ✅ Treat 'all' period as real-time when viewing current day
                             (endDate && new Date(endDate).toDateString() === now.toDateString()) ||
                             (!endDate && !period); // Default queries include today
       
@@ -179,12 +182,19 @@ class UserAnalyticsService {
         defaultStartDate = new Date(startDate);
         defaultEndDate = new Date(endDate);
       } else {
-        // Calculate based on period (using calendar days in UTC, not rolling windows)
+        // Calculate based on period (using calendar days in Philippines timezone, not rolling windows)
+        // Helper function to get Philippines midnight (UTC+8)
+        const getPhilippinesMidnight = (date = new Date()) => {
+          const philippinesOffset = 8 * 60; // 8 hours in minutes
+          const phTime = new Date(date.getTime() + (philippinesOffset * 60000));
+          phTime.setUTCHours(0, 0, 0, 0);
+          return new Date(phTime.getTime() - (philippinesOffset * 60000));
+        };
+        
         switch (period) {
           case '1d':
-            // Today only (from midnight UTC to now)
-            defaultStartDate = new Date(now);
-            defaultStartDate.setUTCHours(0, 0, 0, 0);
+            // ✅ Today only (from midnight Philippines time to now)
+            defaultStartDate = getPhilippinesMidnight(now);
             defaultEndDate = now;
             break;
           case '7d':

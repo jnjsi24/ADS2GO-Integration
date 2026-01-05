@@ -25,7 +25,8 @@
     "script:remove-total-materials": "node src/scripts/removeTotalMaterials.js",
     "script:remove-total-materials-from-ads": "node src/scripts/removeTotalMaterialsFromAds.js",
     "script:fix-materials-and-remove-total-materials": "node src/scripts/fixMaterialsAndRemoveTotalMaterials.js",
-    "script:comprehensive-fix": "node src/scripts/comprehensiveFixUserAnalytics.js"
+    "script:comprehensive-fix": "node src/scripts/comprehensiveFixUserAnalytics.js",
+    "script:init-analytics-indexes": "node src/scripts/initializeAnalyticsIndexes.js"
   },
   "author": "",
   "license": "ISC",

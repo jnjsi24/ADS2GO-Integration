@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const AnalyticsService = require('../services/analyticsService');
 const UserAnalyticsService = require('../services/userAnalyticsService');
 const Analytics = require('../models/analytics');
 const { slowConnectionOptimizer, createSummary, parsePagination } = require('../middleware/slowConnectionOptimizer');
+const { AnalyticsOptimizer, optimizer } = require('../utils/analyticsOptimizer');
 
 // Apply slow connection optimizer middleware to all routes
 router.use(slowConnectionOptimizer({
@@ -816,13 +818,36 @@ router.get('/user/:userId/totals-only', async (req, res) => {
 // GET /analytics/user/:userId/direct - Direct API endpoint that fetches from UserAnalytics collection
 // ✅ NEW: Fetches directly from UserAnalytics collection for the logged-in user
 // ✅ Supports filtering by date range, period, adId, and deviceId
+// ✅ OPTIMIZED: Future-proof with performance improvements
 router.get('/user/:userId/direct', async (req, res) => {
+  const requestStartTime = Date.now();
+  // ✅ Declare variables outside try block so they're available in finally
+  const { userId } = req.params;
+  const { startDate, endDate, period, adId, deviceId, realtime } = req.query;
+  
   try {
-    const { userId } = req.params;
-    const { startDate, endDate, period, adId, deviceId, realtime } = req.query;
+    
+    // ✅ Validate userId
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid userId'
+      });
+    }
     
     // ✅ NEW: Check for real-time mode parameter (overrides environment variable)
     const forceRealtime = realtime === 'true' || realtime === '1';
+    
+    // ✅ OPTIMIZED: Validate and normalize date range
+    let dateRange;
+    try {
+      dateRange = AnalyticsOptimizer.validateAndNormalizeDateRange(startDate, endDate, period);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Invalid date range'
+      });
+    }
     
     console.log('🔍 [UserAnalytics] Direct API call for user:', userId, 'period:', period, 'adId:', adId || 'all', 'deviceId:', deviceId || 'all', forceRealtime ? '(REALTIME MODE)' : '(FROM USERANALYTICS COLLECTION)');
     
@@ -865,70 +890,99 @@ router.get('/user/:userId/direct', async (req, res) => {
         }))
       });
       
-      // Calculate date range
-      let defaultStartDate, defaultEndDate;
-      const now = new Date();
+      // ✅ OPTIMIZED: Use normalized date range from optimizer
+      const defaultStartDate = dateRange.startDate;
+      const defaultEndDate = dateRange.endDate;
       
-      if (startDate && endDate) {
-        defaultStartDate = new Date(startDate);
-        defaultEndDate = new Date(endDate);
-      } else if (period) {
-        switch (period) {
-          case '1d':
-            defaultStartDate = new Date(now);
-            defaultStartDate.setUTCHours(0, 0, 0, 0);
-            defaultEndDate = now;
-            break;
-          case '7d':
-            defaultStartDate = new Date(now);
-            defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 6);
-            defaultStartDate.setUTCHours(0, 0, 0, 0);
-            defaultEndDate = now;
-            break;
-          case '30d':
-            defaultStartDate = new Date(now);
-            defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 29);
-            defaultStartDate.setUTCHours(0, 0, 0, 0);
-            defaultEndDate = now;
-            break;
-          case 'all':
-          default:
-            // For 'all', use all available dailyStats (no date filtering)
-            // Set dates to cover all possible data (but we won't filter by them)
-            defaultStartDate = null;
-            defaultEndDate = null;
-            break;
+      // ✅ OPTIMIZED: Get valid (non-archived) ad IDs with caching
+      const Ad = require('../models/Ad');
+      const adCacheKey = `user_ads_${userId}`;
+      let validAdIds = optimizer.getCached(adCacheKey);
+      let firstAdCreationDate = null;
+      
+      if (!validAdIds) {
+        const allUserAds = await Ad.find({ 
+          userId: userId,
+          paymentStatus: 'PAID',
+          adStatus: 'ACTIVE',
+          isArchived: false,  // ✅ Exclude archived/deleted ads
+          status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+        }).select('_id createdAt').lean().sort({ createdAt: 1 }); // Sort to get first ad date
+        
+        validAdIds = new Set(allUserAds.map(ad => ad._id.toString()));
+        
+        // Get the earliest ad creation date to filter out data before ads existed
+        if (allUserAds.length > 0 && allUserAds[0].createdAt) {
+          firstAdCreationDate = new Date(allUserAds[0].createdAt);
+          firstAdCreationDate.setUTCHours(0, 0, 0, 0);
         }
+        
+        optimizer.setCached(adCacheKey, validAdIds);
       } else {
-        // Default to last 7 days
-        defaultStartDate = new Date(now);
-        defaultStartDate.setUTCDate(defaultStartDate.getUTCDate() - 6);
-        defaultStartDate.setUTCHours(0, 0, 0, 0);
-        defaultEndDate = now;
+        // If cached, still need to get first ad date
+        const firstAd = await Ad.findOne({ 
+          userId: userId,
+          isArchived: false
+        }).select('createdAt').lean().sort({ createdAt: 1 });
+        
+        if (firstAd && firstAd.createdAt) {
+          firstAdCreationDate = new Date(firstAd.createdAt);
+          firstAdCreationDate.setUTCHours(0, 0, 0, 0);
+        }
       }
       
-      // ✅ Get valid (non-archived) ad IDs first to filter dailyStats
-      const Ad = require('../models/Ad');
-      const allUserAds = await Ad.find({ 
-        userId: userId,
-        paymentStatus: 'PAID',
-        adStatus: 'ACTIVE',
-        isArchived: false,  // ✅ Exclude archived/deleted ads
-        status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
-      }).select('_id');
-      
-      const validAdIds = new Set(allUserAds.map(ad => ad._id.toString()));
-      
-      // Filter dailyStats by date range if provided
-      // ✅ When period='all', use ALL dailyStats (no date filtering)
+      // ✅ OPTIMIZED: Filter dailyStats by date range with strict filtering
       let filteredDailyStats = userAnalytics.dailyStats || [];
-      if (defaultStartDate && defaultEndDate) {
-        const startDateStr = defaultStartDate.toISOString().split('T')[0];
-        const endDateStr = defaultEndDate.toISOString().split('T')[0];
+      
+      // ✅ CRITICAL: Filter out future dates and dates before first ad creation
+      const today = new Date();
+      today.setUTCHours(23, 59, 59, 999);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      const beforeFilterCount = filteredDailyStats.length;
+      filteredDailyStats = filteredDailyStats.filter(dateEntry => {
+        const entryDateStr = dateEntry.date;
         
-        filteredDailyStats = filteredDailyStats.filter(dateEntry => {
-          return dateEntry.date >= startDateStr && dateEntry.date <= endDateStr;
-        });
+        // Filter out future dates (data shouldn't exist for future dates)
+        if (entryDateStr > todayStr) {
+          console.log(`🚫 [UserAnalytics] Filtering out future date: ${entryDateStr} (today: ${todayStr})`);
+          return false;
+        }
+        
+        // Filter out dates before first ad was created (no ads existed yet)
+        if (firstAdCreationDate) {
+          const firstAdDateStr = firstAdCreationDate.toISOString().split('T')[0];
+          if (entryDateStr < firstAdDateStr) {
+            console.log(`🚫 [UserAnalytics] Filtering out date before first ad: ${entryDateStr} (first ad: ${firstAdDateStr})`);
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      if (beforeFilterCount > filteredDailyStats.length) {
+        console.log(`✅ [UserAnalytics] Filtered out ${beforeFilterCount - filteredDailyStats.length} invalid date entries (future dates or before first ad creation)`);
+      }
+      
+      // Apply date range filtering if provided
+      if (defaultStartDate && defaultEndDate) {
+        const startDateStr = dateRange.startDateStr;
+        const endDateStr = dateRange.endDateStr;
+        
+        // ✅ STRICT FILTERING: If startDate and endDate are the same (single date selection),
+        // only return data for that exact date. Otherwise, return data within the range.
+        if (dateRange.isSingleDate) {
+          // Single date selection - only return exact match
+          filteredDailyStats = filteredDailyStats.filter(dateEntry => {
+            return dateEntry.date === startDateStr;
+          });
+        } else {
+          // Date range selection - return data within range
+          filteredDailyStats = filteredDailyStats.filter(dateEntry => {
+            return dateEntry.date >= startDateStr && dateEntry.date <= endDateStr;
+          });
+        }
       }
       // When period='all' (defaultStartDate and defaultEndDate are null), use all dailyStats
       
@@ -965,7 +1019,19 @@ router.get('/user/:userId/direct', async (req, res) => {
         period: period || 'all',
         hasDateFilter: !!(defaultStartDate && defaultEndDate),
         adId: adId || 'all',
-        validAdIdsCount: validAdIds.size
+        validAdIdsCount: validAdIds.size,
+        firstAdDate: firstAdCreationDate ? firstAdCreationDate.toISOString().split('T')[0] : 'none',
+        today: todayStr,
+        datesInData: filteredDailyStats.map(d => d.date).slice(0, 5),
+        datesFilteredOut: userAnalytics.dailyStats?.filter(d => {
+          const entryDateStr = d.date;
+          if (entryDateStr > todayStr) return true;
+          if (firstAdCreationDate) {
+            const firstAdDateStr = firstAdCreationDate.toISOString().split('T')[0];
+            if (entryDateStr < firstAdDateStr) return true;
+          }
+          return false;
+        }).map(d => d.date) || []
       });
       
       // Filter by adId if provided
@@ -997,6 +1063,8 @@ router.get('/user/:userId/direct', async (req, res) => {
       }
       // When adId='all', use all valid (non-archived) ads
       
+      // ✅ IMPORTANT: formattedDailyStats is created from filteredDailyStats
+      // filteredDailyStats has already been filtered for invalid dates, future dates, and date ranges
       // Format dailyStats for frontend (convert nested structure to flat array)
       const formattedDailyStats = filteredDailyStats.flatMap(dateEntry => {
         if (adId && adId !== 'all') {
@@ -1245,11 +1313,25 @@ router.get('/user/:userId/direct', async (req, res) => {
       });
     }
   } catch (error) {
+    const duration = Date.now() - requestStartTime;
+    optimizer.trackPerformance('user_analytics_direct_error', duration, { 
+      error: error.message,
+      userId: userId || 'unknown',
+      period: period || 'all'
+    });
+    
     console.error('❌ Error in direct API:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    const duration = Date.now() - requestStartTime;
+    optimizer.trackPerformance('user_analytics_direct', duration, {
+      userId: userId || 'unknown',
+      period: period || 'all',
+      hasDateFilter: !!(startDate && endDate)
     });
   }
 });

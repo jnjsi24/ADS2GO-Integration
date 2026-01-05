@@ -112,7 +112,7 @@ export const clearDetailedAnalyticsCache = () => {
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
-  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('1d');
   const [userFirstName, setUserFirstName] = useState('User');
   
   // Device selection state
@@ -131,21 +131,19 @@ const DetailedAnalytics: React.FC = () => {
     selectedDevice: string;
     selectedAd: string;
     selectedPeriod: string;
-    dateRange: { start?: string; end?: string };
+    selectedDate: string;
   }>({
     selectedDevice: 'all',
     selectedAd: 'all',
     selectedPeriod: 'all',
-    dateRange: {}
+    selectedDate: ''
   });
 
   // Date Picker States
-  const [dateRange, setDateRange] = useState<{ start?: string; end?: string }>({});
-  const [isSelectingStart, setIsSelectingStart] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("All Time");
-  const [isCustomDateRange, setIsCustomDateRange] = useState(false);
-  const [tempStartDate, setTempStartDate] = useState<string>('');
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("TODAY");
+  const [isCustomDate, setIsCustomDate] = useState(false);
 
 
   // Device Dropdown States
@@ -170,9 +168,9 @@ const DetailedAnalytics: React.FC = () => {
   const analyticsCacheRef = useRef<Map<string, CacheEntry>>(loadPersistentCache());
   
   // Helper function to generate cache key from filters
-  const getCacheKey = useCallback((ad: string, device: string, period: string, dateRange: { start?: string; end?: string }, isCustom: boolean) => {
-    if (isCustom && dateRange.start && dateRange.end) {
-      return `analytics_${ad}_${device}_custom_${dateRange.start}_${dateRange.end}`;
+  const getCacheKey = useCallback((ad: string, device: string, period: string, selectedDate: string, isCustom: boolean) => {
+    if (isCustom && selectedDate) {
+      return `analytics_${ad}_${device}_custom_${selectedDate}`;
     }
     return `analytics_${ad}_${device}_${period}`;
   }, []);
@@ -232,12 +230,10 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   const handlePresetPeriodSelect = (period: '1d' | '7d' | '30d' | 'all', label: string) => {
-    setIsCustomDateRange(false);
+    setIsCustomDate(false);
     setSelectedPeriod(period);
     setSelectedPeriodLabel(label);
-    setDateRange({});
-    setIsSelectingStart(true);
-    setTempStartDate('');
+    setSelectedDate('');
     setShowDatePicker(false);
   };
 
@@ -246,26 +242,24 @@ const DetailedAnalytics: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    if (isCustomDateRange && dateRange.start && dateRange.end) {
-      const startDate = new Date(dateRange.start);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(dateRange.end);
-      endDate.setHours(0, 0, 0, 0);
-      return today >= startDate && today <= endDate;
+    if (isCustomDate && selectedDate) {
+      const customDate = new Date(selectedDate);
+      customDate.setHours(0, 0, 0, 0);
+      return today.getTime() === customDate.getTime();
     } else {
       // For preset periods, check if period includes today
-      // '1d' = last 1 day (includes today), '7d' = last 7 days (includes today), etc.
+      // '1d' = today only, '7d' = last 7 days (includes today), etc.
       // 'all' = all time (includes today)
       return selectedPeriod === '1d' || selectedPeriod === '7d' || selectedPeriod === '30d' || selectedPeriod === 'all';
     }
-  }, [isCustomDateRange, dateRange, selectedPeriod]);
+  }, [isCustomDate, selectedDate, selectedPeriod]);
 
   // Track initial load to distinguish from background refreshes
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const hasInitiallyLoadedRef = useRef(false);
 
   // ✅ PERFORMANCE: Check if filters are active (used to skip slow GraphQL queries)
-  const hasActiveFilters = selectedAd !== 'all' || selectedDevice !== 'all' || isCustomDateRange;
+  const hasActiveFilters = selectedAd !== 'all' || selectedDevice !== 'all' || isCustomDate;
 
   // Fetch analytics data with optimized cache policy
   // ✅ Add polling when current date is included (for real-time updates)
@@ -274,30 +268,30 @@ const DetailedAnalytics: React.FC = () => {
   // ✅ PERFORMANCE: Skip GraphQL query when filters are active (use direct API instead)
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
-      period: isCustomDateRange ? undefined : selectedPeriod,
-      startDate: isCustomDateRange && dateRange.start ? formatDateForAPI(dateRange.start) : undefined,
-      endDate: isCustomDateRange && dateRange.end ? formatDateForAPI(dateRange.end) : undefined
+      period: isCustomDate ? undefined : selectedPeriod,
+      startDate: isCustomDate && selectedDate ? formatDateForAPI(selectedDate) : undefined,
+      endDate: isCustomDate && selectedDate ? formatDateForAPI(selectedDate) : undefined
     },
     fetchPolicy: 'cache-first', // ✅ Use cache-first to avoid refetching when going back to same period
     nextFetchPolicy: 'cache-only', // ✅ Don't refetch in background - use cache only
     errorPolicy: 'all',
     // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
     // ✅ Skip polling when using custom date range or filters to avoid interfering with direct API data
-    pollInterval: (isCurrentDateIncluded && !isCustomDateRange && !hasActiveFilters) ? 30000 : 0,
+    pollInterval: (isCurrentDateIncluded && !isCustomDate && !hasActiveFilters) ? 30000 : 0,
     // ✅ Don't trigger loading state during polling (silent background refresh)
     notifyOnNetworkStatusChange: false,
-    // ✅ Skip query when custom date range OR when filters are active (use direct API instead)
-    skip: Boolean((isCustomDateRange && dateRange.start && dateRange.end) || hasActiveFilters)
+    // ✅ Skip query when custom date OR when filters are active (use direct API instead)
+    skip: Boolean((isCustomDate && selectedDate) || hasActiveFilters)
   });
 
   // Handle analytics errors using useEffect (replaces deprecated onError callback)
-  // ✅ Suppress network errors when using custom date range (GraphQL query is skipped but may still error)
+  // ✅ Suppress network errors when using custom date (GraphQL query is skipped but may still error)
   useEffect(() => {
     if (analyticsError) {
-      // Only log errors that aren't network errors when using custom date range
+      // Only log errors that aren't network errors when using custom date
       // Network errors are expected when GraphQL query is skipped during polling
-      if (isCustomDateRange && dateRange.start && dateRange.end) {
-        // Silently ignore network errors when using custom date range
+      if (isCustomDate && selectedDate) {
+        // Silently ignore network errors when using custom date
         // These are expected because we skip the GraphQL query
         return;
       }
@@ -305,27 +299,32 @@ const DetailedAnalytics: React.FC = () => {
         console.error('Unexpected analytics error:', analyticsError);
       }
     }
-  }, [analyticsError, isCustomDateRange, dateRange]);
+  }, [analyticsError, isCustomDate, selectedDate]);
 
   // ✅ Fetch overall analytics data for Summary Metrics (only when NO filters are active)
   // This ensures summary metrics (Total Ad Plays, QR Scans, etc.) show cumulative totals
   // Performance Over Time chart uses directAnalyticsData which respects filters
   // ✅ PERFORMANCE: Skip this query when filters are active to avoid slow 'period=all' requests
+  // ✅ FIX: Allow query when period='1d' (TODAY) to ensure QR Scans updates fast
+  // When period='1d' and no ad/device filters, we want to use overallAnalyticsData for fast updates
+  const shouldSkipOverallQuery = (hasActiveFilters && selectedPeriod !== '1d') || (isCustomDate && selectedDate);
+  const shouldPollOverall = isCurrentDateIncluded && !isCustomDate && (!hasActiveFilters || (selectedPeriod === '1d' && selectedAd === 'all' && selectedDevice === 'all'));
+  
   const { data: overallAnalyticsData } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: 'all', // Always fetch overall data for Summary Metrics
       adId: null // No adId filter - show all ads cumulative totals
     },
-    fetchPolicy: 'cache-first', // ✅ Use cache-first to avoid refetching when going back to "all"
-    nextFetchPolicy: 'cache-only', // ✅ Don't refetch in background - use cache only
+    fetchPolicy: 'cache-and-network', // ✅ Use cache-and-network for faster updates while still using cache
+    nextFetchPolicy: 'cache-and-network', // ✅ Always check network for fresh data
     errorPolicy: 'all',
-    // ✅ Poll every 30 seconds when viewing current day data (silent background refresh)
-    // ✅ Skip polling when using custom date range to avoid connection errors
-    pollInterval: (isCurrentDateIncluded && !isCustomDateRange && !hasActiveFilters) ? 30000 : 0,
+    // ✅ Poll every 15 seconds when viewing current day data (faster updates for QR Scans)
+    // ✅ Also poll when period='1d' (TODAY) with no ad/device filters to ensure fast QR Scans updates
+    pollInterval: shouldPollOverall ? 15000 : 0, // ✅ Reduced from 30s to 15s for faster updates
     // ✅ Don't trigger loading state during polling (silent background refresh)
     notifyOnNetworkStatusChange: false,
-    // ✅ Skip query when filters are active OR when using custom date range
-    skip: Boolean(hasActiveFilters || (isCustomDateRange && dateRange.start && dateRange.end))
+    // ✅ Skip query when filters are active (except when period='1d' with no ad/device filters for fast QR Scans updates)
+    skip: Boolean(shouldSkipOverallQuery)
   });
 
   // ✅ Fetch user's ads with materialId to filter devices
@@ -622,62 +621,41 @@ const DetailedAnalytics: React.FC = () => {
   }, [searchParams, availableAds]);
 
   const formatDisplayDate = (date: string) => {
+    // Handle date strings in YYYY-MM-DD format by parsing as local date (not UTC)
+    if (typeof date === 'string' && date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const [year, month, day] = date.split('-').map(Number);
+      const localDate = new Date(year, month - 1, day);
+      return localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
     return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   // Get display text for the date input placeholder
   const getDatePlaceholder = () => {
-    if (!isCustomDateRange) {
+    if (!isCustomDate) {
       return selectedPeriodLabel || "Select a date";
     }
 
-    if (!dateRange.start && !dateRange.end) {
-      return "Select a date";
-    } else if (dateRange.start && !dateRange.end) {
-      return `${formatDisplayDate(dateRange.start)} - Select end date`;
-    } else if (dateRange.start && dateRange.end) {
-      return `${formatDisplayDate(dateRange.start)} - ${formatDisplayDate(dateRange.end)}`;
+    if (selectedDate) {
+      return formatDisplayDate(selectedDate);
     }
     return "Select a date";
   };
 
   // Handle date selection
   const handleDateSelect = (date: string) => {
-    if (isSelectingStart) {
-      setTempStartDate(date);
-      setDateRange({ start: date });
-      setIsSelectingStart(false);
-      // Keep the date picker open after selecting the first date
-    } else {
-      let finalStartDate = tempStartDate;
-      let finalEndDate = date;
-
-      // If second date is before start date, swap them
-      if (new Date(date) < new Date(tempStartDate)) {
-        finalStartDate = date;
-        finalEndDate = tempStartDate;
-      }
-
-      setDateRange({ 
-        start: finalStartDate, 
-        end: finalEndDate 
-      });
-      setIsCustomDateRange(true);
-      setSelectedPeriodLabel(`${formatDisplayDate(finalStartDate)} - ${formatDisplayDate(finalEndDate)}`);
-      setShowDatePicker(false); // Close picker only after selecting the second date
-      setIsSelectingStart(true); // Reset for next selection
-      setTempStartDate(''); // Clear temporary date
-    }
+    setSelectedDate(date);
+    setIsCustomDate(true);
+    setSelectedPeriodLabel(formatDisplayDate(date));
+    setShowDatePicker(false);
   };
 
-  // Reset to selecting start date when clearing range
-  const handleClearRange = () => {
-    setDateRange({});
-    setIsSelectingStart(true);
-    setIsCustomDateRange(false);
-    setTempStartDate('');
-    setSelectedPeriodLabel("All Time");
-    setSelectedPeriod("all");
+  // Reset when clearing date
+  const handleClearDate = () => {
+    setSelectedDate('');
+    setIsCustomDate(false);
+    setSelectedPeriodLabel("TODAY");
+    setSelectedPeriod("1d");
   };
 
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
@@ -688,11 +666,11 @@ const DetailedAnalytics: React.FC = () => {
 
     // ✅ PERFORMANCE: Check cache first before fetching
     // ✅ IMPORTANT: For "All Advertisement" with period="all", always fetch fresh data to ensure accuracy
-    const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, dateRange, isCustomDateRange);
+    const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, selectedDate, isCustomDate);
     const cache = analyticsCacheRef.current;
     const cached = cache.get(cacheKey);
     const now = Date.now();
-    const isAllAdsAllPeriod = selectedAd === 'all' && selectedPeriod === 'all' && selectedDevice === 'all' && !isCustomDateRange;
+    const isAllAdsAllPeriod = selectedAd === 'all' && selectedPeriod === 'all' && selectedDevice === 'all' && !isCustomDate;
     
     // ✅ Skip cache for "All Advertisement" + "All Time" to ensure fresh data from UserAnalytics collection
     if (!isAllAdsAllPeriod && cached && (now - cached.timestamp) < CACHE_TTL) {
@@ -776,11 +754,10 @@ const DetailedAnalytics: React.FC = () => {
 
         let url;
         if (selectedDevice === 'all') {
-          if (isCustomDateRange && dateRange.start && dateRange.end) {
-            const startDateISO = formatDateForAPI(dateRange.start);
-            const endDateISO = formatDateForAPI(dateRange.end);
-            queryParams.append('startDate', startDateISO);
-            queryParams.append('endDate', endDateISO);
+          if (isCustomDate && selectedDate) {
+            const dateISO = formatDateForAPI(selectedDate);
+            queryParams.append('startDate', dateISO);
+            queryParams.append('endDate', dateISO);
             url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           } else if (useDateRange) {
             // Already added date range params above
@@ -790,11 +767,10 @@ const DetailedAnalytics: React.FC = () => {
             url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
           }
         } else {
-          if (isCustomDateRange && dateRange.start && dateRange.end) {
-            const startDateISO = formatDateForAPI(dateRange.start);
-            const endDateISO = formatDateForAPI(dateRange.end);
-            queryParams.append('startDate', startDateISO);
-            queryParams.append('endDate', endDateISO);
+          if (isCustomDate && selectedDate) {
+            const dateISO = formatDateForAPI(selectedDate);
+            queryParams.append('startDate', dateISO);
+            queryParams.append('endDate', dateISO);
             url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           } else if (useDateRange) {
             // Already added date range params above
@@ -840,7 +816,7 @@ const DetailedAnalytics: React.FC = () => {
               } : null,
               selectedAd: selectedAd,
               selectedPeriod: selectedPeriod,
-              dateRange: isCustomDateRange ? { start: dateRange.start, end: dateRange.end } : { period: selectedPeriod },
+              dateRange: isCustomDate ? { date: selectedDate } : { period: selectedPeriod },
               url: url
             });
             
@@ -938,7 +914,7 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
     }, debounceDelay);
-  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDateRange, dateRange, getCacheKey]);
+  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDate, selectedDate, getCacheKey]);
 
   // ✅ Fetch analytics data when device, ad, period, or date range changes
   // ✅ FIX: Ensure this runs immediately on mount with default values
@@ -950,11 +926,10 @@ const DetailedAnalytics: React.FC = () => {
         previousFiltersRef.current.selectedDevice !== selectedDevice ||
         previousFiltersRef.current.selectedAd !== selectedAd ||
         previousFiltersRef.current.selectedPeriod !== selectedPeriod ||
-        previousFiltersRef.current.dateRange.start !== dateRange.start ||
-        previousFiltersRef.current.dateRange.end !== dateRange.end;
+        previousFiltersRef.current.selectedDate !== selectedDate;
       
       // ✅ PERFORMANCE: Check cache FIRST before showing loading state
-      const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, dateRange, isCustomDateRange);
+      const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, selectedDate, isCustomDate);
       const cache = analyticsCacheRef.current;
       const cached = cache.get(cacheKey);
       const now = Date.now();
@@ -998,7 +973,7 @@ const DetailedAnalytics: React.FC = () => {
         selectedDevice,
         selectedAd,
         selectedPeriod,
-        dateRange: { ...dateRange }
+        selectedDate: selectedDate
       };
     }
     
@@ -1007,7 +982,7 @@ const DetailedAnalytics: React.FC = () => {
       hasInitiallyLoadedRef.current = true;
       setIsInitialLoad(false);
     }
-  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDateRange, dateRange.start, dateRange.end, fetchDirectAnalytics, user?.userId, getCacheKey]);
+  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDate, selectedDate, fetchDirectAnalytics, user?.userId, getCacheKey]);
   
   // ✅ Hide loading state when data arrives
   useEffect(() => {
@@ -1028,8 +1003,8 @@ const DetailedAnalytics: React.FC = () => {
   // ✅ Skip polling when using custom date range to avoid interfering with the data
   useEffect(() => {
     if (!isCurrentDateIncluded) return;
-    // ✅ Don't poll when using custom date range (only poll for preset periods)
-    if (isCustomDateRange) return;
+    // ✅ Don't poll when using custom date (only poll for preset periods)
+    if (isCustomDate) return;
     
     // Poll every 30 seconds when viewing current day data (silent refresh)
     const pollInterval = setInterval(() => {
@@ -1037,7 +1012,7 @@ const DetailedAnalytics: React.FC = () => {
     }, 30000); // 30 seconds
     
     return () => clearInterval(pollInterval);
-  }, [isCurrentDateIncluded, isCustomDateRange, fetchDirectAnalytics]);
+  }, [isCurrentDateIncluded, isCustomDate, fetchDirectAnalytics]);
 
   // Cleanup all pending timeouts and abort in-flight requests on unmount
   useEffect(() => {
@@ -1087,7 +1062,7 @@ const DetailedAnalytics: React.FC = () => {
   const analyticsSummary = useMemo(() => {
     // Check if any filters are active
     // Date filter is active if: custom date range is set OR period is not 'all' (default '7d' is considered a filter)
-    const hasDateFilter = (isCustomDateRange && (dateRange.start || dateRange.end)) || (selectedPeriod !== 'all');
+    const hasDateFilter = (isCustomDate && selectedDate) || (selectedPeriod !== 'all');
     const hasAdFilter = selectedAd !== 'all';
     const hasDeviceFilter = selectedDevice !== 'all';
     const hasAnyFilter = hasAdFilter || hasDeviceFilter || hasDateFilter;
@@ -1096,11 +1071,25 @@ const DetailedAnalytics: React.FC = () => {
     // This ensures we use the most up-to-date data from the UserAnalytics collection
     // Only fallback to GraphQL data if directAnalyticsData is not available
     
-    // ✅ When no filters are active (period='all', ad='all', device='all'), prefer directAnalyticsData
-    if (!hasAnyFilter && selectedPeriod === 'all' && !isCustomDateRange) {
-      // First, try directAnalyticsData (from UserAnalytics collection - most accurate)
+    // ✅ When no filters are active (period='all', ad='all', device='all'), prefer overallAnalyticsData for consistency
+    // This ensures QR Scans metric updates at the same rate as Top Performing Ads (both use overallAnalyticsData)
+    if (!hasAnyFilter && selectedPeriod === 'all' && !isCustomDate) {
+      // ✅ Use overallAnalyticsData first for consistency with Top Performing Ads (same polling rate)
+      if (overallAnalyticsData?.getUserAnalytics?.summary) {
+        console.log('✅ [DetailedAnalytics] Using overallAnalyticsData summary for "all" period (consistent with Top Performing Ads):', overallAnalyticsData.getUserAnalytics.summary);
+        return {
+          totalAdsPlayed: overallAnalyticsData.getUserAnalytics.summary.totalAdsPlayed || 0,
+          totalDisplayTime: overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0,
+          averageCompletionRate: overallAnalyticsData.getUserAnalytics.summary.averageCompletionRate || 0,
+          totalAds: overallAnalyticsData.getUserAnalytics.summary.totalAds || 0,
+          activeAds: overallAnalyticsData.getUserAnalytics.summary.activeAds || 0,
+          totalDevices: overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0,
+          totalQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans || 0
+        };
+      }
+      // Fallback to directAnalyticsData if overallAnalyticsData is not available
       if (directAnalyticsData?.summary) {
-        console.log('✅ [DetailedAnalytics] Using directAnalyticsData summary for "all" period (from UserAnalytics collection):', directAnalyticsData.summary);
+        console.log('⚠️ [DetailedAnalytics] Falling back to directAnalyticsData for "all" period:', directAnalyticsData.summary);
         return {
           totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
           totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
@@ -1111,8 +1100,8 @@ const DetailedAnalytics: React.FC = () => {
           totalQRScans: directAnalyticsData.summary.totalQRScans || 0
         };
       }
-      // Fallback to overallAnalyticsData from GraphQL if directAnalyticsData is not available
-      const overallSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
+      // Final fallback: return zeros
+      return {
         totalAdsPlayed: 0,
         totalDisplayTime: 0,
         averageCompletionRate: 0,
@@ -1121,8 +1110,6 @@ const DetailedAnalytics: React.FC = () => {
         totalDevices: 0,
         totalQRScans: 0
       };
-      console.log('⚠️ [DetailedAnalytics] Falling back to overallAnalyticsData (GraphQL) for "all" period:', overallSummary);
-      return overallSummary;
     }
     
     // ✅ When a specific device is selected, use deviceAnalytics (filtered data)
@@ -1154,11 +1141,105 @@ const DetailedAnalytics: React.FC = () => {
       }
     }
     
+    // ✅ When period is '1d' (TODAY) and no ad/device filters, ALWAYS use directAnalyticsData
+    // directAnalyticsData has fresher data and should NEVER be overridden by overallAnalyticsData
+    // This prevents the issue where correct data is shown during load, then replaced with stale data
+    if (selectedPeriod === '1d' && !hasAdFilter && !hasDeviceFilter && !isCustomDate) {
+      // ✅ ALWAYS prefer directAnalyticsData - never fallback to overallAnalyticsData once directAnalyticsData is available
+      if (directAnalyticsData?.summary) {
+        console.log('✅ [DetailedAnalytics] Using directAnalyticsData for "TODAY" period (fresh data):', directAnalyticsData.summary);
+        return {
+          totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
+          totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
+          averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
+          totalAds: directAnalyticsData.summary.totalAds || 0,
+          activeAds: directAnalyticsData.summary.activeAds || 0,
+          totalDevices: directAnalyticsData.summary.totalDevices || 0,
+          totalQRScans: directAnalyticsData.summary.totalQRScans || 0
+        };
+      }
+      // ✅ Only fallback to overallAnalyticsData if directAnalyticsData summary is not available
+      // Check both directAnalyticsData existence AND summary existence to prevent switching
+      if (overallAnalyticsData?.getUserAnalytics?.summary && (!directAnalyticsData || !directAnalyticsData.summary)) {
+        console.log('⚠️ [DetailedAnalytics] Using overallAnalyticsData for "TODAY" period (directAnalyticsData summary not available):', {
+          hasDirectData: !!directAnalyticsData,
+          hasDirectSummary: !!directAnalyticsData?.summary,
+          overallQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans
+        });
+        return {
+          totalAdsPlayed: overallAnalyticsData.getUserAnalytics.summary.totalAdsPlayed || 0,
+          totalDisplayTime: overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0,
+          averageCompletionRate: overallAnalyticsData.getUserAnalytics.summary.averageCompletionRate || 0,
+          totalAds: overallAnalyticsData.getUserAnalytics.summary.totalAds || 0,
+          activeAds: overallAnalyticsData.getUserAnalytics.summary.activeAds || 0,
+          totalDevices: overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0,
+          totalQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans || 0
+        };
+      }
+      // ✅ If directAnalyticsData exists but summary is missing, return zeros to wait for it
+      if (directAnalyticsData && !directAnalyticsData.summary) {
+        console.log('⏳ [DetailedAnalytics] Waiting for directAnalyticsData summary to load...');
+        return {
+          totalAdsPlayed: 0,
+          totalDisplayTime: 0,
+          averageCompletionRate: 0,
+          totalAds: 0,
+          activeAds: 0,
+          totalDevices: 0,
+          totalQRScans: 0
+        };
+      }
+    }
+    
     // ✅ When filters are applied (ad or date) but device is 'all', use filtered data
     // Prefer directAnalyticsData (from direct API call) as it respects all filters including adId
     // DON'T fallback to overallAnalyticsData - wait for directAnalyticsData to load
     if (hasAnyFilter) {
       if (directAnalyticsData?.summary) {
+        // ✅ CRITICAL: If custom date is selected, verify we have valid data for that date
+        // If backend returned data for invalid dates (like future dates), return zeros
+        if (isCustomDate && selectedDate) {
+          const today = new Date();
+          today.setHours(23, 59, 59, 999);
+          const todayStr = today.toISOString().split('T')[0];
+          
+          // Check if selected date is valid (not in future)
+          if (selectedDate > todayStr) {
+            console.warn(`⚠️ [DetailedAnalytics] Selected date ${selectedDate} is in the future, returning zeros`);
+            return {
+              totalAdsPlayed: 0,
+              totalDisplayTime: 0,
+              averageCompletionRate: 0,
+              totalAds: directAnalyticsData.summary.totalAds || 0,
+              activeAds: directAnalyticsData.summary.activeAds || 0,
+              totalDevices: directAnalyticsData.summary.totalDevices || 0,
+              totalQRScans: 0
+            };
+          }
+          
+          // Check if we have any valid dailyStats for this exact date
+          const validDailyStats = directAnalyticsData.dailyStats?.filter((day: any) => {
+            const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+              ? day.date 
+              : new Date(day.date).toISOString().split('T')[0];
+            return dayDateStr === selectedDate && dayDateStr <= todayStr;
+          }) || [];
+          
+          if (validDailyStats.length === 0) {
+            // No valid data for this date - return zeros for metrics
+            console.log(`⚠️ [DetailedAnalytics] No valid data found for date ${selectedDate}, returning zeros for summary`);
+            return {
+              totalAdsPlayed: 0,
+              totalDisplayTime: 0,
+              averageCompletionRate: 0,
+              totalAds: directAnalyticsData.summary.totalAds || 0,
+              activeAds: directAnalyticsData.summary.activeAds || 0,
+              totalDevices: directAnalyticsData.summary.totalDevices || 0,
+              totalQRScans: 0
+            };
+          }
+        }
+        
         return {
           totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
           totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
@@ -1204,7 +1285,7 @@ const DetailedAnalytics: React.FC = () => {
       totalDevices: 0,
       totalQRScans: 0
     };
-  }, [overallAnalyticsData, directAnalyticsData, analyticsData, deviceAnalytics, selectedAd, selectedDevice, selectedPeriod, isCustomDateRange, dateRange, directAnalyticsLoading]);
+  }, [overallAnalyticsData, directAnalyticsData, analyticsData, deviceAnalytics, selectedAd, selectedDevice, selectedPeriod, isCustomDate, selectedDate, directAnalyticsLoading]);
 
   // Format display time helper
   const formatDisplayTime = useCallback((seconds: number) => {
@@ -1221,13 +1302,38 @@ const DetailedAnalytics: React.FC = () => {
       // ✅ When NOT using custom date range, use directAnalyticsData first, then fallback to GraphQL
       let dailyStats: any[] = [];
       
-      if (isCustomDateRange && dateRange.start && dateRange.end) {
-        // Custom date range: ONLY use directAnalyticsData
+      if (isCustomDate && selectedDate) {
+        // Custom date: ONLY use directAnalyticsData
         dailyStats = directAnalyticsData?.dailyStats || [];
-        console.log('📊 [DetailedAnalytics] Using ONLY directAnalyticsData for custom date range:', {
+        
+        // ✅ CRITICAL: If backend returned data for invalid dates, filter it out immediately
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        const todayStr = today.toISOString().split('T')[0];
+        
+        // Filter out future dates immediately
+        const beforeFilter = dailyStats.length;
+        dailyStats = dailyStats.filter((day: any) => {
+          const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+            ? day.date 
+            : new Date(day.date).toISOString().split('T')[0];
+          return dayDateStr <= todayStr;
+        });
+        
+        if (beforeFilter > dailyStats.length) {
+          console.warn(`⚠️ [DetailedAnalytics] Backend returned ${beforeFilter - dailyStats.length} invalid future dates - filtered out`);
+          // Clear cache for this invalid date to force fresh fetch
+          const cacheKey = getCacheKey(selectedAd, selectedDevice, selectedPeriod, selectedDate, isCustomDate);
+          const cache = analyticsCacheRef.current;
+          cache.delete(cacheKey);
+          savePersistentCache(cache);
+        }
+        
+        console.log('📊 [DetailedAnalytics] Using ONLY directAnalyticsData for custom date:', {
           hasDirectData: !!directAnalyticsData,
           dailyStatsCount: dailyStats.length,
-          dateRange: { start: dateRange.start, end: dateRange.end }
+          selectedDate: selectedDate,
+          datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
         });
       } else {
         // Preset period: Use directAnalyticsData first, fallback to GraphQL analyticsData, then overallAnalyticsData
@@ -1271,25 +1377,55 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
       
-      // ✅ Filter dailyStats by date range if custom date range is selected (extra safeguard)
+      // ✅ Filter dailyStats by date if custom date is selected (extra safeguard)
+      // ✅ Also filter out future dates (likely test data or timezone issues)
       let filteredDailyStats = dailyStats;
-      if (isCustomDateRange && dateRange.start && dateRange.end && dailyStats.length > 0) {
-        const startDate = new Date(dateRange.start);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(dateRange.end);
-        endDate.setHours(23, 59, 59, 999);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      // Filter out future dates (data shouldn't exist for future dates)
+      const beforeFutureFilter = filteredDailyStats.length;
+      filteredDailyStats = dailyStats.filter((day: any) => {
+        const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+          ? day.date 
+          : new Date(day.date).toISOString().split('T')[0];
         
-        filteredDailyStats = dailyStats.filter((day: any) => {
-          const dayDate = new Date(day.date);
-          return dayDate >= startDate && dayDate <= endDate;
+        if (dayDateStr > todayStr) {
+          console.log(`🚫 [DetailedAnalytics] Frontend filtering out future date: ${dayDateStr} (today: ${todayStr})`);
+          return false;
+        }
+        return true;
+      });
+      
+      if (beforeFutureFilter > filteredDailyStats.length) {
+        console.log(`✅ [DetailedAnalytics] Frontend filtered out ${beforeFutureFilter - filteredDailyStats.length} future dates`);
+      }
+      
+      if (isCustomDate && selectedDate) {
+        const selectedDateStr = selectedDate;
+        
+        // ✅ STRICT FILTERING: When a custom date is selected, ONLY show data for that exact date
+        // Filter out ALL other dates, even if they exist in the data
+        filteredDailyStats = filteredDailyStats.filter((day: any) => {
+          const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+            ? day.date 
+            : new Date(day.date).toISOString().split('T')[0];
+          return dayDateStr === selectedDateStr;
         });
         
-        console.log('📊 [DetailedAnalytics] Filtered dailyStats by custom date range:', {
+        console.log('📊 [DetailedAnalytics] STRICT filtering by custom date:', {
           originalCount: dailyStats.length,
           filteredCount: filteredDailyStats.length,
-          dateRange: { start: dateRange.start, end: dateRange.end },
-          firstDate: filteredDailyStats[0]?.date,
-          lastDate: filteredDailyStats[filteredDailyStats.length - 1]?.date
+          selectedDate: selectedDate,
+          datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0]),
+          filteredDates: filteredDailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
+        });
+      } else if (filteredDailyStats.length < dailyStats.length) {
+        console.log('📊 [DetailedAnalytics] Filtered out future dates:', {
+          originalCount: dailyStats.length,
+          filteredCount: filteredDailyStats.length,
+          today: todayStr
         });
       }
       
@@ -1340,10 +1476,10 @@ const DetailedAnalytics: React.FC = () => {
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       // ✅ Filter device-specific daily stats by date range if custom date range is selected
       let filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown;
-      if (isCustomDateRange && dateRange.start && dateRange.end) {
-        const startDate = new Date(dateRange.start);
+      if (isCustomDate && selectedDate) {
+        const startDate = new Date(selectedDate);
         startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(dateRange.end);
+        const endDate = new Date(selectedDate);
         endDate.setHours(23, 59, 59, 999);
         
         filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown.filter((day: any) => {
@@ -1351,10 +1487,10 @@ const DetailedAnalytics: React.FC = () => {
           return dayDate >= startDate && dayDate <= endDate;
         });
         
-        console.log('📊 [DetailedAnalytics] Filtered device dailyStats by custom date range:', {
+        console.log('📊 [DetailedAnalytics] Filtered device dailyStats by custom date:', {
           originalCount: deviceAnalytics.dailyBreakdown.length,
           filteredCount: filteredDeviceDailyStats.length,
-          dateRange: { start: dateRange.start, end: dateRange.end }
+          selectedDate: selectedDate
         });
       }
       
@@ -1367,7 +1503,7 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return [];
     }
-  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDateRange, dateRange.start, dateRange.end]);
+  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDate, selectedDate]);
 
   // Top performing ads with proper QR scan calculation - ALWAYS use overall data regardless of device/date selection
   // ✅ RANKING: Sorted by QR scans (descending) - ads with highest QR scans are ranked first
@@ -1510,7 +1646,7 @@ const DetailedAnalytics: React.FC = () => {
                     >
                       <div className="p-2">
                         {[
-                          { period: "1d", label: "Last 24 hours" },
+                          { period: "1d", label: "TODAY" },
                           { period: "7d", label: "Last 7 days" },
                           { period: "30d", label: "Last 30 days" },
                           { period: "all", label: "All Time" },
@@ -1522,7 +1658,7 @@ const DetailedAnalytics: React.FC = () => {
                               setShowDatePicker(false);
                             }}
                             className={`w-full text-left px-3 py-2 text-sm rounded ${
-                              !isCustomDateRange && selectedPeriod === period
+                              !isCustomDate && selectedPeriod === period
                                 ? "bg-blue-50 text-blue-700"
                                 : "text-gray-700 hover:bg-gray-50"
                             }`}
@@ -1750,7 +1886,7 @@ const DetailedAnalytics: React.FC = () => {
                           <div className="border-r pr-4">
                             <div className="grid grid-cols-1 gap-2">
                               {[
-                                { period: "1d", label: "Last 24 hours" },
+                                { period: "1d", label: "TODAY" },
                                 { period: "7d", label: "Last 7 days" },
                                 { period: "30d", label: "Last 30 days" },
                                 { period: "all", label: "All Time" },
@@ -1759,7 +1895,7 @@ const DetailedAnalytics: React.FC = () => {
                                   key={period}
                                   onClick={() => handlePresetPeriodSelect(period as any, label)}
                                   className={`block w-full text-left px-3 py-2 text-xs rounded transition-colors duration-150 ${
-                                    !isCustomDateRange && selectedPeriod === period
+                                    !isCustomDate && selectedPeriod === period
                                       ? "bg-gray-100"
                                       : "text-gray-700 hover:bg-gray-100 border border-transparent"
                                   }`}
@@ -1770,57 +1906,38 @@ const DetailedAnalytics: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* RIGHT SIDE — Custom Range */}
+                          {/* RIGHT SIDE — Custom Date */}
                           <div>
                             <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                              Custom Range
+                              Select Date
                             </h4>
 
                             <div className="mb-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div
-                                  className={`w-3 h-3 rounded-full ${
-                                    isCustomDateRange && isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
-                                  }`}
-                                ></div>
-                                <label className="block text-xs font-medium text-gray-600">
-                                  {isSelectingStart ? "Select Start Date" : "Start Date Selected"}
-                                </label>
-                              </div>
-                              {dateRange.start && (
-                                <div className="text-xs text-gray-500 mb-2 pl-5">
-                                  Start: {formatDisplayDate(dateRange.start)}
+                              <label className="block text-xs font-medium text-gray-600 mb-2">
+                                Choose a date
+                              </label>
+                              {selectedDate && (
+                                <div className="text-xs text-gray-500 mb-2">
+                                  Selected: {formatDisplayDate(selectedDate)}
                                 </div>
                               )}
-                            </div>
-
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <div
-                                  className={`w-3 h-3 rounded-full ${
-                                    isCustomDateRange && !isSelectingStart ? "bg-[#3674B5]" : "bg-gray-300"
-                                  }`}
-                                ></div>
-                                <label className="block text-xs font-medium text-gray-600">
-                                  {!isSelectingStart ? "Select End Date" : "End Date"}
-                                </label>
-                              </div>
                               <input
                                 type="date"
+                                value={selectedDate}
                                 onChange={(e) => handleDateSelect(e.target.value)}
-                                className="w-full px-4 py-1 border-b border-gray-300 text-sm focus:outline-none"
+                                className="w-full px-4 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                               />
                             </div>
-                            <div className='flex justify-between'>
+                            <div className='flex justify-between items-center'>
                               <button
                                 onClick={() => setShowDatePicker(false)}
-                                className="w-10 mt-3 text-gray-600 hover:text-gray-800 text-sm transition-all duration-200 hover:bg-gray-50 rounded"
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm transition-all duration-200 hover:bg-gray-50 rounded"
                               >
                                 Close
                               </button>
-                              {(dateRange.start || dateRange.end) && (
+                              {selectedDate && (
                                 <button
-                                  onClick={handleClearRange}
+                                  onClick={handleClearDate}
                                   onMouseMove={(e) => {
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -1828,14 +1945,14 @@ const DetailedAnalytics: React.FC = () => {
                                     setPos({ x, y });
                                   }}
                                   className="relative group inline-flex items-center justify-center overflow-hidden
-                                            w-32 px-4 py-2 mt-4 text-white text-sm border border-gray-300
+                                            w-28 px-4 py-2 text-white text-sm border border-gray-300
                                             bg-white font-medium transition-all duration-300 hover:scale-[1.03]"
                                   style={{
                                     backgroundImage: `linear-gradient(to right, #1B5087, #3674B5),
                                                       radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0), rgba(255,255,255,0))`,
                                   }}
                                 >
-                                  <span className="inline-flex items-center gap-2 px-2 z-10">Clear Range</span>
+                                  <span className="inline-flex items-center gap-2 px-2 z-10">Clear</span>
 
                                   {/* Shining hover effect */}
                                   <span
@@ -1846,7 +1963,6 @@ const DetailedAnalytics: React.FC = () => {
                                   />
                                 </button>
                               )}
-
                             </div>
                           </div>
                         </div>
