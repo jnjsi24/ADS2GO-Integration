@@ -100,6 +100,7 @@ const typeDefs = gql`
     totalMaterials: Int!
     totalDevices: Int!
     totalAdPlayTime: Float!
+    totalAdPlays: Int!
     totalQRScans: Int!
     averageAdCompletionRate: Float!
     lastUpdated: String!

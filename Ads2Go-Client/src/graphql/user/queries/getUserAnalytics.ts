@@ -17,6 +17,7 @@ export const GET_USER_ANALYTICS = gql`
         adTitle
         totalDevices
         totalAdPlayTime
+        totalAdPlays
         totalQRScans
         averageAdCompletionRate
         lastUpdated

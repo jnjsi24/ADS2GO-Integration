@@ -807,6 +807,7 @@ class UserAnalyticsService {
             adTitle: ad.adTitle || '',
             totalDevices: ad.totalDevices || 0,
             totalAdPlayTime: ad.totalAdPlayTime || 0,
+            totalAdPlays: ad.totalAdPlays || 0, // ✅ Include actual play count
             totalQRScans: freshQRScans, // ✅ Use fresh QR scan data
             averageAdCompletionRate: ad.averageAdCompletionRate || 0,
             // qrScanConversionRate removed
@@ -3494,7 +3495,12 @@ class UserAnalyticsService {
       // ✅ Also calculate totals from ad data to ensure accuracy
       console.log('📊 [fetchAndUpdateUserAnalyticsFromHistory] Ad data totals:');
       for (const [adId, adData] of adDataMap) {
-        console.log(`📊 [fetchAndUpdateUserAnalyticsFromHistory] Ad ${adId} (${adData.adTitle}): QR scans = ${adData.totalQRScans || 0}`);
+        console.log(`📊 [fetchAndUpdateUserAnalyticsFromHistory] Ad ${adId} (${adData.adTitle}):`, {
+          totalPlays: adData.totalPlays || 0,
+          totalViewTime: adData.totalViewTime || 0,
+          totalQRScans: adData.totalQRScans || 0,
+          materialsCount: adData.materials ? adData.materials.size : 0
+        });
       }
 
       // Convert ad data Map to object
@@ -3771,6 +3777,19 @@ class UserAnalyticsService {
           // Find performance data for this ad (if it exists)
           const adPerformance = freshData.ads?.find(a => a.adId === adIdStr);
           
+          // ✅ DEBUG: Log adPerformance data
+          if (adPerformance) {
+            console.log(`📊 [SYNC] Ad ${adIdStr} performance data:`, {
+              adId: adPerformance.adId,
+              adTitle: adPerformance.adTitle,
+              totalPlays: adPerformance.totalPlays || 0,
+              totalViewTime: adPerformance.totalViewTime || 0,
+              totalQRScans: adPerformance.totalQRScans || 0
+            });
+          } else {
+            console.log(`⚠️ [SYNC] No performance data found for ad ${adIdStr} in freshData.ads`);
+          }
+          
           // Find QR scan data for this ad from getTotalQRScans
           const adQRScans = qrScanData.success && qrScanData.ads ? 
             qrScanData.ads.find(qr => {
@@ -3912,6 +3931,7 @@ class UserAnalyticsService {
             adTitle: ad.title,
             totalDevices: finalMaterials.length > 0 ? finalMaterials.length : (adMaterials.length || 0),
             totalAdPlayTime: adPerformance?.totalViewTime || 0,
+            totalAdPlays: adPerformance?.totalPlays || 0, // ✅ Add actual play count
             totalQRScans: totalQRScans,
             averageAdCompletionRate: adPerformance?.completionRate || 0,
             materials: finalMaterials, // ✅ Populate materials array from active deployments (or preserve existing)
@@ -3919,6 +3939,16 @@ class UserAnalyticsService {
             // qrScanConversionRate removed
             lastUpdated: new Date().toISOString()
           };
+          
+          // ✅ DEBUG: Log final ad data being saved
+          console.log(`📊 [SYNC] Final ad ${adIdStr} data:`, {
+            adTitle: newAd.adTitle,
+            totalDevices: newAd.totalDevices,
+            totalAdPlayTime: newAd.totalAdPlayTime,
+            totalAdPlays: newAd.totalAdPlays, // ✅ Log play count
+            totalQRScans: newAd.totalQRScans,
+            materialsCount: newAd.materials.length
+          });
           
           // ✅ Explicitly remove totalMaterials if it exists (shouldn't, but be safe)
           if (newAd.totalMaterials !== undefined) {

@@ -202,6 +202,7 @@ const AdAnalyticsSchema = new mongoose.Schema({
   // Ad-level aggregated analytics
   totalDevices: { type: Number, default: 0 },
   totalAdPlayTime: { type: Number, default: 0 },
+  totalAdPlays: { type: Number, default: 0 }, // ✅ Added for actual play count
   totalAdImpressions: { type: Number, default: 0 },
   totalQRScans: { type: Number, default: 0 },
   averageAdCompletionRate: { type: Number, default: 0 },
