@@ -135,11 +135,10 @@ class AnalyticsOptimizer {
           normalizedEndDate = now;
           break;
         case 'all':
-          // Limit to last 2 years for performance
-          normalizedStartDate = new Date(now);
-          normalizedStartDate.setUTCFullYear(normalizedStartDate.getUTCFullYear() - 2);
-          normalizedStartDate.setUTCHours(0, 0, 0, 0);
-          normalizedEndDate = now;
+          // Return null for startDate/endDate to query all data
+          // This allows fetching all historical data without date constraints
+          normalizedStartDate = null;
+          normalizedEndDate = null;
           break;
         default:
           // Default to last 7 days
@@ -156,12 +155,29 @@ class AnalyticsOptimizer {
       normalizedEndDate = now;
     }
 
+    // 🔥 Handle null dates for "all" period
+    if (normalizedStartDate === null || normalizedEndDate === null) {
+      return {
+        startDate: null,
+        endDate: null,
+        startDateStr: null,
+        endDateStr: null,
+        isSingleDate: false
+      };
+    }
+    
+    // 🔥 FIX: Convert to Philippine timezone before extracting date string
+    // This ensures dates match the Philippine timezone used in dailyStats
+    const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const startDateInPH = new Date(normalizedStartDate.getTime() + phOffset);
+    const endDateInPH = new Date(normalizedEndDate.getTime() + phOffset);
+    
     return {
       startDate: normalizedStartDate,
       endDate: normalizedEndDate,
-      startDateStr: normalizedStartDate.toISOString().split('T')[0],
-      endDateStr: normalizedEndDate.toISOString().split('T')[0],
-      isSingleDate: normalizedStartDate.toISOString().split('T')[0] === normalizedEndDate.toISOString().split('T')[0]
+      startDateStr: startDateInPH.toISOString().split('T')[0],
+      endDateStr: endDateInPH.toISOString().split('T')[0],
+      isSingleDate: startDateInPH.toISOString().split('T')[0] === endDateInPH.toISOString().split('T')[0]
     };
   }
 

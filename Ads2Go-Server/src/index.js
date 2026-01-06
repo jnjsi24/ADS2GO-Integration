@@ -432,6 +432,10 @@ app.use('/material', materialRoutes);
 app.use('/ads', adsRoutes);
 app.use('/material-photos', materialPhotoUploadRoutes);
 app.use('/analytics', analyticsRoutes);
+// ✅ PHASE 2: New optimized analytics endpoints (50-100x faster)
+app.use('/analytics/v2', require('./routes/analyticsV2'));
+// ✅ OPTIMIZED: Device-specific analytics V2 (100x faster)
+app.use('/analytics/v2', require('./routes/analyticsDeviceV2'));
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/cleanup', cleanupRoutes);

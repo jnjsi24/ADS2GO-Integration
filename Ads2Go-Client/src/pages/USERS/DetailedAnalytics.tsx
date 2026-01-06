@@ -109,6 +109,96 @@ export const clearDetailedAnalyticsCache = () => {
   }
 };
 
+// ✅ Helper function to fill in missing dates with zero values for proper chart rendering
+// This ensures the area/line chart has continuous data points to draw lines between
+const fillMissingDates = (data: any[], period: string, customDate?: string | null): any[] => {
+  if (!data || data.length === 0) return [];
+  
+  // For custom date, just return the data as-is (single day)
+  if (customDate) return data;
+  
+  // Calculate date range based on period
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+  let startDate: Date;
+  
+  // First, create a map of existing data by date (aggregate multiple entries per day)
+  const dataMap = new Map<string, any>();
+  data.forEach(item => {
+    const dateStr = typeof item.date === 'string' && item.date.match(/^\d{4}-\d{2}-\d{2}$/)
+      ? item.date
+      : new Date(item.date).toISOString().split('T')[0];
+    
+    // If multiple entries for same date, sum them up
+    if (dataMap.has(dateStr)) {
+      const existing = dataMap.get(dateStr);
+      existing.adPlays = (existing.adPlays || 0) + (item.adPlays || 0);
+      existing.qrScans = (existing.qrScans || 0) + (item.qrScans || 0);
+    } else {
+      dataMap.set(dateStr, { ...item, date: dateStr });
+    }
+  });
+  
+  switch (period) {
+    case '1d':
+      return Array.from(dataMap.values()); // Single day, just aggregate
+    case '7d':
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 6);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case '30d':
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 29);
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'all':
+      // For 'all', find the earliest date in data and add some context before it
+      const sortedDates = Array.from(dataMap.keys()).sort();
+      if (sortedDates.length === 0) return [];
+      
+      // Start from earliest data point, but add 3 days before for visual context
+      const earliestDate = new Date(sortedDates[0]);
+      startDate = new Date(earliestDate);
+      startDate.setDate(startDate.getDate() - 3); // 3 days before first data point
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    default:
+      return Array.from(dataMap.values());
+  }
+  
+  // Fill in missing dates
+  const filledData: any[] = [];
+  const currentDate = new Date(startDate);
+  const todayStr = now.toISOString().split('T')[0];
+  
+  while (currentDate <= now) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    
+    // Don't include future dates
+    if (dateStr <= todayStr) {
+      if (dataMap.has(dateStr)) {
+        filledData.push(dataMap.get(dateStr));
+      } else {
+        // Add zero-value entry for missing date
+        filledData.push({
+          date: dateStr,
+          adPlays: 0,
+          qrScans: 0,
+          completionRate: 0
+        });
+      }
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  // Sort by date ascending for proper chart display
+  filledData.sort((a, b) => a.date.localeCompare(b.date));
+  
+  return filledData;
+};
+
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
@@ -139,11 +229,20 @@ const DetailedAnalytics: React.FC = () => {
     selectedDate: ''
   });
 
+  // 🔥 Helper: Get today's date in Philippine timezone
+  const getTodayInPhilippineTime = () => {
+    const now = new Date();
+    const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const phTime = new Date(now.getTime() + phOffset);
+    return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
+  };
+
   // Date Picker States
-  const [selectedDate, setSelectedDate] = useState<string>('');
+  // 🔥 FIX: Initialize with today's date (PH timezone) since default period is "TODAY" (1d)
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayInPhilippineTime());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("TODAY");
-  const [isCustomDate, setIsCustomDate] = useState(false);
+  const [isCustomDate, setIsCustomDate] = useState(true); // 🔥 FIX: Start with custom date mode for TODAY
 
 
   // Device Dropdown States
@@ -230,11 +329,28 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   const handlePresetPeriodSelect = (period: '1d' | '7d' | '30d' | 'all', label: string) => {
-    setIsCustomDate(false);
-    setSelectedPeriod(period);
-    setSelectedPeriodLabel(label);
-    setSelectedDate('');
-    setShowDatePicker(false);
+    // 🔥 FIX: Make "TODAY" behave like date picker with today's date selected
+    // This ensures correct timezone handling and avoids cache issues
+    if (period === '1d') {
+      // 🔥 TIMEZONE FIX: Convert to Philippine timezone (UTC+8) before getting date
+      const now = new Date();
+      const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+      const phTime = new Date(now.getTime() + phOffset);
+      const todayStr = phTime.toISOString().split('T')[0]; // YYYY-MM-DD in Philippine timezone
+      setIsCustomDate(true); // Use custom date mode (sends startDate/endDate)
+      setSelectedDate(todayStr); // Set to today's date
+      setSelectedPeriod(period); // Keep period for UI state
+      setSelectedPeriodLabel(label);
+      setShowDatePicker(false);
+      console.log('🔥 [TODAY FIX] Using date picker logic for TODAY (PH timezone):', todayStr);
+    } else {
+      // Other periods use normal period-based logic
+      setIsCustomDate(false);
+      setSelectedPeriod(period);
+      setSelectedPeriodLabel(label);
+      setSelectedDate('');
+      setShowDatePicker(false);
+    }
   };
 
   // ✅ Helper function to check if current date is included in the selected range
@@ -788,26 +904,26 @@ const DetailedAnalytics: React.FC = () => {
             const dateISO = formatDateForAPI(selectedDate);
             queryParams.append('startDate', dateISO);
             queryParams.append('endDate', dateISO);
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
           } else if (useDateRange) {
             // Already added date range params above
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
           } else {
             queryParams.append('period', effectivePeriod);
-            url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
           }
         } else {
           if (isCustomDate && selectedDate) {
             const dateISO = formatDateForAPI(selectedDate);
             queryParams.append('startDate', dateISO);
             queryParams.append('endDate', dateISO);
-            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/v2/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           } else if (useDateRange) {
             // Already added date range params above
-            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/v2/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           } else {
             queryParams.append('period', effectivePeriod);
-            url = `${baseUrl}/analytics/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
+            url = `${baseUrl}/analytics/v2/user/${user.userId}/device/${selectedDevice}?${queryParams.toString()}`;
           }
         }
 
@@ -963,7 +1079,14 @@ const DetailedAnalytics: React.FC = () => {
       const cache = analyticsCacheRef.current;
       const cached = cache.get(cacheKey);
       const now = Date.now();
-      const hasValidCache = cached && (now - cached.timestamp) < CACHE_TTL;
+      // 🔥 FIX: NEVER use cache for TODAY filter (period=1d) - always fetch fresh data
+      // Cached data might be from yesterday, showing wrong totals
+      const isTodayFilter = selectedPeriod === '1d';
+      const hasValidCache = cached && (now - cached.timestamp) < CACHE_TTL && !isTodayFilter;
+      
+      if (isTodayFilter && cached) {
+        console.log('🚫 [CACHE DISABLED] Skipping cache for TODAY filter - fetching fresh data', { cachedTimestamp: cached.timestamp, now });
+      }
       
       if (hasValidCache) {
         // ✅ Cache hit - update lastAccessed and use cached data immediately (instant display, no loading)
@@ -1177,6 +1300,12 @@ const DetailedAnalytics: React.FC = () => {
     // directAnalyticsData has fresher data and should NEVER be overridden by overallAnalyticsData
     // This prevents the issue where correct data is shown during load, then replaced with stale data
     if (selectedPeriod === '1d' && !hasAdFilter && !hasDeviceFilter && !isCustomDate) {
+      console.log('🔥 [FIX LOADED] Period is TODAY (1d), checking directAnalyticsData...', {
+        hasDirectData: !!directAnalyticsData,
+        hasSummary: !!directAnalyticsData?.summary,
+        totalAdsPlayed: directAnalyticsData?.summary?.totalAdsPlayed,
+        hasOverallData: !!overallAnalyticsData
+      });
       // ✅ ALWAYS prefer directAnalyticsData - never fallback to overallAnalyticsData once directAnalyticsData is available
       if (directAnalyticsData?.summary) {
         console.log('✅ [DetailedAnalytics] Using directAnalyticsData for "TODAY" period (fresh data):', directAnalyticsData.summary);
@@ -1190,24 +1319,9 @@ const DetailedAnalytics: React.FC = () => {
           totalQRScans: directAnalyticsData.summary.totalQRScans || 0
         };
       }
-      // ✅ Only fallback to overallAnalyticsData if directAnalyticsData summary is not available
-      // Check both directAnalyticsData existence AND summary existence to prevent switching
-      if (overallAnalyticsData?.getUserAnalytics?.summary && (!directAnalyticsData || !directAnalyticsData.summary)) {
-        console.log('⚠️ [DetailedAnalytics] Using overallAnalyticsData for "TODAY" period (directAnalyticsData summary not available):', {
-          hasDirectData: !!directAnalyticsData,
-          hasDirectSummary: !!directAnalyticsData?.summary,
-          overallQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans
-        });
-        return {
-          totalAdsPlayed: overallAnalyticsData.getUserAnalytics.summary.totalAdsPlayed || 0,
-          totalDisplayTime: overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0,
-          averageCompletionRate: overallAnalyticsData.getUserAnalytics.summary.averageCompletionRate || 0,
-          totalAds: overallAnalyticsData.getUserAnalytics.summary.totalAds || 0,
-          activeAds: overallAnalyticsData.getUserAnalytics.summary.activeAds || 0,
-          totalDevices: overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0,
-          totalQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans || 0
-        };
-      }
+      // ❌ REMOVED: Don't fallback to overallAnalyticsData for TODAY filter
+      // It shows ALL TIME data (30, 3, etc.) instead of TODAY data (0, 0, 0)
+      // Just wait for directAnalyticsData to load and show zeros/loading in the meantime
       // ✅ If directAnalyticsData exists but summary is missing, return zeros to wait for it
       if (directAnalyticsData && !directAnalyticsData.summary) {
         console.log('⏳ [DetailedAnalytics] Waiting for directAnalyticsData summary to load...');
@@ -1328,7 +1442,8 @@ const DetailedAnalytics: React.FC = () => {
 
   // Daily stats for charts
   const dailyStats = useMemo(() => {
-    if (!selectedDevice) {
+    // ✅ Fix: Check for 'all' explicitly since it's truthy but means "no specific device"
+    if (!selectedDevice || selectedDevice === 'all') {
       // ✅ When using custom date range, ONLY use directAnalyticsData (don't fall back to GraphQL)
       // ✅ When NOT using custom date range, use directAnalyticsData first, then fallback to GraphQL
       let dailyStats: any[] = [];
@@ -1503,34 +1618,63 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
       
-      return mappedStats;
-    } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
+      // ✅ Fill missing dates with zero values for proper chart line rendering
+      return fillMissingDates(mappedStats, selectedPeriod, isCustomDate ? selectedDate : null);
+    } else if (selectedDevice !== 'all' && (deviceAnalytics?.dailyBreakdown || deviceAnalytics?.dailyStats)) {
+      // ✅ Fix: Support both field names - API returns 'dailyStats', older code expects 'dailyBreakdown'
+      const deviceDailyData = deviceAnalytics.dailyBreakdown || deviceAnalytics.dailyStats || [];
+      
       // ✅ Filter device-specific daily stats by date range if custom date range is selected
-      let filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown;
+      let filteredDeviceDailyStats = deviceDailyData;
+      
+      // ✅ Filter by selected ad if an ad is selected (device data contains entries for ALL ads)
+      if (selectedAd && selectedAd !== 'all') {
+        const beforeAdFilter = filteredDeviceDailyStats.length;
+        filteredDeviceDailyStats = filteredDeviceDailyStats.filter((day: any) => {
+          const dayAdId = day.adId?.toString() || '';
+          return dayAdId === selectedAd;
+        });
+        console.log('📊 [DetailedAnalytics] Filtered device dailyStats by selected ad:', {
+          selectedAd,
+          beforeCount: beforeAdFilter,
+          afterCount: filteredDeviceDailyStats.length
+        });
+      }
+      
       if (isCustomDate && selectedDate) {
         const startDate = new Date(selectedDate);
         startDate.setHours(0, 0, 0, 0);
         const endDate = new Date(selectedDate);
         endDate.setHours(23, 59, 59, 999);
         
-        filteredDeviceDailyStats = deviceAnalytics.dailyBreakdown.filter((day: any) => {
+        filteredDeviceDailyStats = filteredDeviceDailyStats.filter((day: any) => {
           const dayDate = new Date(day.date);
           return dayDate >= startDate && dayDate <= endDate;
         });
         
         console.log('📊 [DetailedAnalytics] Filtered device dailyStats by custom date:', {
-          originalCount: deviceAnalytics.dailyBreakdown.length,
+          originalCount: deviceDailyData.length,
           filteredCount: filteredDeviceDailyStats.length,
           selectedDate: selectedDate
         });
       }
       
-      return filteredDeviceDailyStats.map((day: any) => ({
+      console.log('📊 [DetailedAnalytics] Device dailyStats mapped:', {
+        rawDataCount: deviceDailyData.length,
+        filteredCount: filteredDeviceDailyStats.length,
+        sampleRaw: filteredDeviceDailyStats.slice(0, 2)
+      });
+      
+      const mappedDeviceStats = filteredDeviceDailyStats.map((day: any) => ({
         date: day.date,
-        adPlays: day.totalAdPlays,
-        qrScans: day.totalQRScans,
-        completionRate: day.adCompletionRate
+        // ✅ Support both field names from different API versions
+        adPlays: day.totalAdPlays || day.adsPlayed || 0,
+        qrScans: day.totalQRScans || day.qrScans || 0,
+        completionRate: day.adCompletionRate || day.completionRate || 0
       }));
+      
+      // ✅ Fill missing dates with zero values for proper chart line rendering
+      return fillMissingDates(mappedDeviceStats, selectedPeriod, isCustomDate ? selectedDate : null);
     } else {
       return [];
     }

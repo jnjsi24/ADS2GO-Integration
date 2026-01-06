@@ -357,13 +357,27 @@ const Dashboard = () => {
         
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
         const queryParams = new URLSearchParams();
-        queryParams.append('period', analyticsPeriod);
+        
+        // 🔥 FIX: For "TODAY" (1d), use specific date instead of period for correct timezone handling
+        if (analyticsPeriod === '1d') {
+          // 🔥 TIMEZONE FIX: Convert to Philippine timezone (UTC+8) before getting date
+          const now = new Date();
+          const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+          const phTime = new Date(now.getTime() + phOffset);
+          const today = phTime.toISOString().split('T')[0]; // YYYY-MM-DD in Philippine timezone
+          queryParams.append('startDate', today);
+          queryParams.append('endDate', today);
+          console.log('🔥 [Dashboard TODAY FIX] Using date range for TODAY (PH timezone):', today);
+        } else {
+          queryParams.append('period', analyticsPeriod);
+        }
+        
         if (selectedAdId) {
           queryParams.append('adId', selectedAdId);
         }
         
-        const url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
-        console.log('📡 [Dashboard] Fetching period analytics:', url);
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
+        console.log('📡 [Dashboard] Fetching period analytics (V2):', url);
         
         const response = await fetch(url, {
           signal: abortController.signal
@@ -451,8 +465,8 @@ const Dashboard = () => {
         const queryParams = new URLSearchParams();
         queryParams.append('period', 'all');
         
-        const url = `${baseUrl}/analytics/user/${user.userId}/direct?${queryParams.toString()}`;
-        console.log('📡 [Dashboard] Fetching overall analytics:', url);
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
+        console.log('📡 [Dashboard] Fetching overall analytics (V2):', url);
         
         const response = await fetch(url);
         

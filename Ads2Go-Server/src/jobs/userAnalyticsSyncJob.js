@@ -2,6 +2,8 @@ const cron = require('node-cron');
 const UserAnalyticsService = require('../services/userAnalyticsService');
 const UserAnalytics = require('../models/userAnalytics');
 const User = require('../models/User');
+const DailyUserAnalytics = require('../models/dailyUserAnalytics');
+const UserAnalyticsSummary = require('../models/userAnalyticsSummary');
 const logger = require('../utils/logger');
 
 class UserAnalyticsSyncJob {
@@ -9,6 +11,93 @@ class UserAnalyticsSyncJob {
     this.isRunning = false;
     this.lastSync = null;
     this.isSyncing = false; // Track if a sync operation is currently running
+  }
+
+  // 🔥 NEW: Update flat collections (DailyUserAnalytics & UserAnalyticsSummary)
+  async updateFlatCollections(userAnalytics) {
+    try {
+      const mongoose = require('mongoose');
+      const userId = userAnalytics.userId;
+      
+      console.log(`📊 [FLAT SYNC] Updating flat collections for user ${userId}...`);
+      
+      // 1. Update DailyUserAnalytics (flatten nested dailyStats)
+      const dailyDocs = [];
+      for (const dayData of userAnalytics.dailyStats || []) {
+        for (const ad of dayData.ads || []) {
+          dailyDocs.push({
+            userId: new mongoose.Types.ObjectId(userId),
+            date: dayData.date,
+            adId: new mongoose.Types.ObjectId(ad.adId),
+            adsPlayed: ad.totals?.adsPlayed || 0,
+            displayTime: ad.totals?.displayTime || 0,
+            qrScans: ad.totals?.qrScans || 0,
+            impressions: ad.totals?.impressions || 0,
+            completionRate: ad.totals?.completionRate || 0,
+            materialStats: ad.materials?.map(m => ({
+              materialId: m.materialId,
+              adsPlayed: m.adsPlayed,
+              displayTime: m.displayTime,
+              qrScans: m.qrScans
+            })) || [],
+            lastUpdated: new Date(),
+            dataSource: 'sync'
+          });
+        }
+      }
+      
+      if (dailyDocs.length > 0) {
+        // Delete old dailyUserAnalytics for this user and replace with new ones
+        await DailyUserAnalytics.deleteMany({ userId: new mongoose.Types.ObjectId(userId) });
+        await DailyUserAnalytics.insertMany(dailyDocs, { ordered: false });
+        console.log(`✅ [FLAT SYNC] Updated ${dailyDocs.length} daily analytics records`);
+      }
+      
+      // 2. Update UserAnalyticsSummary (aggregate data)
+      const summaryData = {
+        userId: new mongoose.Types.ObjectId(userId),
+        userName: userAnalytics.userName || null,
+        totalAdsPlayed: userAnalytics.totalAdPlays || 0,
+        totalDisplayTime: userAnalytics.totalAdPlayTime || 0,
+        totalQRScans: userAnalytics.totalQRScans || 0,
+        totalAdImpressions: userAnalytics.totalAdImpressions || 0,
+        totalAds: userAnalytics.totalAds || 0,
+        totalDevices: userAnalytics.totalDevices || 0,
+        averageAdCompletionRate: userAnalytics.averageAdCompletionRate || 0,
+        ads: (userAnalytics.ads || []).map(ad => ({
+          adId: new mongoose.Types.ObjectId(ad.adId),
+          adTitle: ad.adTitle,
+          totalPlays: ad.totalAdPlayTime ? Math.round(ad.totalAdPlayTime / 35) : 0,
+          totalQRScans: ad.totalQRScans || 0,
+          totalViewTime: ad.totalAdPlayTime || 0,
+          impressions: ad.totalAdImpressions || 0,
+          lastActivity: ad.lastActivity || null
+        })),
+        materialBreakdown: (userAnalytics.materialBreakdown || []).map(m => ({
+          materialId: m.materialId,
+          carGroupId: m.carGroupId || null,
+          totalAdPlays: m.totalAdPlays || 0,
+          totalAdPlayTime: m.totalAdPlayTime || 0,
+          totalQRScans: m.totalQRScans || 0,
+          lastActivity: m.lastActivity || null,
+          isOnline: m.isOnline || false
+        })),
+        lastUpdated: new Date(),
+        lastSyncTimestamp: new Date()
+      };
+      
+      await UserAnalyticsSummary.findOneAndUpdate(
+        { userId: new mongoose.Types.ObjectId(userId) },
+        summaryData,
+        { upsert: true, new: true }
+      );
+      
+      console.log(`✅ [FLAT SYNC] Updated user analytics summary for user ${userId}`);
+      
+    } catch (error) {
+      console.error('❌ [FLAT SYNC] Error updating flat collections:', error);
+      // Don't throw - we don't want to break the main sync if flat collection update fails
+    }
   }
 
   // ⚡ PERFORMANCE OPTIMIZATION: Smart sync with active/inactive user separation
@@ -145,6 +234,64 @@ class UserAnalyticsSyncJob {
 
     } catch (error) {
       console.error('❌ [INACTIVE] Error in inactive users sync:', error);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // 🔥 NEW: Sync all users (for manual trigger)
+  async syncAllUsers() {
+    console.log('🔄 Manual sync triggered - syncing ALL users...');
+    
+    if (this.isSyncing) {
+      console.log('⏭️ Sync already in progress, skipping...');
+      return { success: false, message: 'Sync already in progress' };
+    }
+
+    this.isSyncing = true;
+    
+    try {
+      const startTime = new Date();
+      
+      // Get all users with ads
+      const User = require('../models/User');
+      const Ad = require('../models/Ad');
+      
+      const usersWithAds = await Ad.distinct('userId', {
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        isArchived: false
+      });
+      
+      const users = await User.find({ _id: { $in: usersWithAds } })
+        .select('_id firstName lastName')
+        .lean();
+      
+      console.log(`👥 Found ${users.length} users with active ads to sync`);
+      
+      if (users.length === 0) {
+        console.log('ℹ️ No users found for sync');
+        return { success: true, message: 'No users to sync' };
+      }
+
+      // Sync all users (full sync)
+      await this.syncUsersBatch(users, false); // false = full sync, not incremental
+      
+      const endTime = new Date();
+      const duration = (endTime - startTime) / 1000;
+      console.log(`✅ Manual sync completed in ${duration.toFixed(2)}s`);
+      
+      this.lastSync = endTime;
+      
+      return { 
+        success: true, 
+        message: `Successfully synced ${users.length} users`,
+        duration: `${duration.toFixed(2)}s`
+      };
+
+    } catch (error) {
+      console.error('❌ Error in manual sync:', error);
+      return { success: false, message: error.message };
     } finally {
       this.isSyncing = false;
     }
@@ -851,6 +998,9 @@ class UserAnalyticsSyncJob {
         }
       );
 
+      // 🔥 NEW: Also update flat collections (Phase 2)
+      await this.updateFlatCollections(userAnalytics);
+
       return {
         success: true,
         message: 'User analytics synced with fresh data from DeviceDataHistoryV2',
@@ -1184,6 +1334,12 @@ class UserAnalyticsSyncJob {
       summaryUpdate.$set.materialBreakdown = filteredMaterialBreakdown;
 
       await UserAnalytics.updateOne({ userId }, summaryUpdate, { upsert: true });
+
+      // 🔥 NEW: Also update flat collections (Phase 2)
+      const updatedUserAnalytics = await UserAnalytics.findOne({ userId }).lean();
+      if (updatedUserAnalytics) {
+        await this.updateFlatCollections(updatedUserAnalytics);
+      }
 
       return {
         success: true,

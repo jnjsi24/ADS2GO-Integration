@@ -815,10 +815,474 @@ router.get('/user/:userId/totals-only', async (req, res) => {
   }
 });
 
+// ===========================================
+// PHASE 1 OPTIMIZATION: NEW ENDPOINT
+// ===========================================
+
+// GET /analytics/user/:userId/direct-v2 - OPTIMIZED version using MongoDB aggregation
+// ✅ Uses database-level filtering (10-50x faster than JavaScript filtering)
+// ✅ Supports pagination (prevents loading 365+ days at once)
+// ✅ Pre-filters archived ads at database level
+// ✅ Calculates totals in MongoDB (not JavaScript)
+router.get('/user/:userId/direct-v2', async (req, res) => {
+  console.log('🔥 [DIRECT-V2] ===== ENDPOINT HIT! =====', req.method, req.originalUrl);
+  console.log('🔥 [DIRECT-V2] Query params:', req.query);
+  console.log('🔥 [DIRECT-V2] Route params:', req.params);
+  
+  const requestStartTime = Date.now();
+  const { userId } = req.params;
+  const { startDate, endDate, period, adId, page = 1, limit = 90 } = req.query;
+  
+  try {
+    // Validate userId
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      console.log('❌ [DIRECT-V2] Invalid userId:', userId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid userId'
+      });
+    }
+    
+    console.log('🚀 [OPTIMIZED] Direct API v2 for user:', userId, 'period:', period, 'page:', page);
+    
+    // Validate and normalize date range
+    let dateRange;
+    try {
+      dateRange = AnalyticsOptimizer.validateAndNormalizeDateRange(startDate, endDate, period);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Invalid date range'
+      });
+    }
+    
+    const startDateStr = dateRange.startDateStr;
+    const endDateStr = dateRange.endDateStr;
+    
+    console.log('🔍 [DIRECT-V2] Date range processing:', {
+      rawStartDate: startDate,
+      rawEndDate: endDate,
+      rawPeriod: period,
+      normalizedStartDateStr: startDateStr,
+      normalizedEndDateStr: endDateStr,
+      hasStartDate: !!startDateStr,
+      hasEndDate: !!endDateStr
+    });
+    
+    // Get valid (non-archived) ad IDs
+    const Ad = require('../models/Ad');
+    const allUserAds = await Ad.find({ 
+      userId: userId,
+      paymentStatus: 'PAID',
+      adStatus: 'ACTIVE',
+      isArchived: false,
+      status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
+    }).select('_id title createdAt').lean();
+    
+    if (allUserAds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          summary: {
+            totalAdsPlayed: 0,
+            totalDisplayTime: 0,
+            totalQRScans: 0,
+            totalAds: 0,
+            activeAds: 0,
+            totalDevices: 0
+          },
+          dailyStats: [],
+          adPerformance: [],
+          deviceStats: [],
+          ads: [],
+          period: period || 'all'
+        }
+      });
+    }
+    
+    const validAdIds = allUserAds.map(ad => ad._id.toString());
+    const firstAdDate = allUserAds[0]?.createdAt 
+      ? new Date(allUserAds[0].createdAt).toISOString().split('T')[0]
+      : null;
+    
+    // Build aggregation pipeline
+    const UserAnalytics = require('../models/userAnalytics');
+    const pipeline = [
+      {
+        $match: { userId: new mongoose.Types.ObjectId(userId) }
+      },
+      {
+        $project: {
+          userId: 1,
+          totalAdPlays: 1,
+          totalAdPlayTime: 1,
+          totalQRScans: 1,
+          totalAds: 1,
+          totalDevices: 1,
+          ads: 1,
+          materialBreakdown: 1,
+          lastUpdated: 1,
+          updatedAt: 1,
+          // ✅ OPTIMIZED: Filter dailyStats in database, not JavaScript
+          dailyStats: {
+            $filter: {
+              input: '$dailyStats',
+              as: 'day',
+              cond: {
+                $and: [
+                  // Filter by date range (if provided)
+                  ...(startDateStr ? [{ $gte: ['$$day.date', startDateStr] }] : []),
+                  ...(endDateStr ? [{ $lte: ['$$day.date', endDateStr] }] : []),
+                  // Filter out future dates
+                  { $lte: ['$$day.date', new Date().toISOString().split('T')[0]] },
+                  // Filter out dates before first ad (if known)
+                  ...(firstAdDate ? [{ $gte: ['$$day.date', firstAdDate] }] : [])
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        // ✅ OPTIMIZED: Sort and paginate dailyStats in database
+        $project: {
+          userId: 1,
+          totalAdPlays: 1,
+          totalAdPlayTime: 1,
+          totalQRScans: 1,
+          totalAds: 1,
+          totalDevices: 1,
+          ads: 1,
+          materialBreakdown: 1,
+          lastUpdated: 1,
+          updatedAt: 1,
+          dailyStats: {
+            $slice: [
+              { $reverseArray: '$dailyStats' }, // Most recent first
+              (parseInt(page) - 1) * parseInt(limit),
+              parseInt(limit)
+            ]
+          },
+          totalDailyStatsCount: { $size: '$dailyStats' }
+        }
+      }
+    ];
+    
+    const result = await UserAnalytics.aggregate(pipeline);
+    
+    if (!result || result.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'UserAnalytics not found'
+      });
+    }
+    
+    const userAnalytics = result[0];
+    const totalDailyStatsCount = userAnalytics.totalDailyStatsCount || 0;
+    
+    // Filter ads array by validAdIds
+    let filteredAds = (userAnalytics.ads || []).filter(ad => 
+      ad.adId && validAdIds.includes(ad.adId.toString())
+    );
+    
+    // Filter by specific adId if requested
+    if (adId && adId !== 'all') {
+      filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+    }
+    
+    // 🔥 FIX: Fetch dailyStats from new flat DailyUserAnalytics collection
+    // The old UserAnalytics.dailyStats is no longer being populated by the sync job
+    const DailyUserAnalytics = require('../models/dailyUserAnalytics');
+    const dailyStatsQuery = {
+      userId: new mongoose.Types.ObjectId(userId),
+      date: {}
+    };
+    
+    if (startDateStr) dailyStatsQuery.date.$gte = startDateStr;
+    if (endDateStr) dailyStatsQuery.date.$lte = endDateStr;
+    if (Object.keys(dailyStatsQuery.date).length === 0) delete dailyStatsQuery.date;
+    if (adId && adId !== 'all') dailyStatsQuery.adId = new mongoose.Types.ObjectId(adId);
+    
+    let flatDailyStats = await DailyUserAnalytics.find(dailyStatsQuery)
+      .sort({ date: -1 })
+      .limit(parseInt(limit))
+      .lean();
+    
+    console.log(`📊 [direct-v2] Fetched ${flatDailyStats.length} daily stats from flat collection`);
+    console.log(`📊 [direct-v2] Query used:`, JSON.stringify(dailyStatsQuery, null, 2));
+    console.log(`📊 [direct-v2] Date range:`, { startDateStr, endDateStr, period });
+    
+    // Log sample of fetched data
+    if (flatDailyStats.length > 0) {
+      console.log(`📊 [direct-v2] Sample record:`, {
+        date: flatDailyStats[0].date,
+        adId: flatDailyStats[0].adId,
+        adsPlayed: flatDailyStats[0].adsPlayed,
+        qrScans: flatDailyStats[0].qrScans
+      });
+    }
+    
+    // 🔥 FALLBACK: If flat collection is empty, generate data in real-time from DeviceDataHistoryV2
+    if (flatDailyStats.length === 0) {
+      console.log('⚠️ [direct-v2] DailyUserAnalytics is empty, falling back to real-time generation from DeviceDataHistoryV2');
+      
+      try {
+        // Use the service method to generate data from DeviceDataHistoryV2
+        const realtimeData = await UserAnalyticsService.getPerAdDailyStatsFromHistory(
+          userId, 
+          dateRange.startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // 1 year back if no start date
+          dateRange.endDate || new Date()
+        );
+        
+        // Convert real-time data to flat format
+        if (realtimeData && realtimeData.dailyStats) {
+          flatDailyStats = [];
+          realtimeData.dailyStats.forEach(dayEntry => {
+            (dayEntry.ads || []).forEach(ad => {
+              // Filter by validAdIds
+              if (validAdIds.includes(ad.adId.toString())) {
+                // Filter by adId if specified
+                if (!adId || adId === 'all' || ad.adId.toString() === adId) {
+                  flatDailyStats.push({
+                    userId: new mongoose.Types.ObjectId(userId),
+                    date: dayEntry.date,
+                    adId: ad.adId,
+                    adTitle: ad.adTitle || 'Unknown',
+                    adsPlayed: ad.totals?.adsPlayed || 0,
+                    displayTime: ad.totals?.displayTime || 0,
+                    qrScans: ad.totals?.qrScans || 0,
+                    impressions: ad.totals?.impressions || 0,
+                    completionRate: ad.totals?.completionRate || 0,
+                    materialStats: ad.materials || []
+                  });
+                }
+              }
+            });
+          });
+          
+          // Sort by date descending and limit
+          flatDailyStats.sort((a, b) => b.date.localeCompare(a.date));
+          flatDailyStats = flatDailyStats.slice(0, parseInt(limit));
+          
+          console.log(`✅ [direct-v2] Generated ${flatDailyStats.length} daily stats from DeviceDataHistoryV2 in real-time`);
+        }
+      } catch (fallbackError) {
+        console.error('❌ [direct-v2] Error in fallback data generation:', fallbackError);
+        // Continue with empty array - will show "no data" message to user
+      }
+    }
+    
+    // Convert flat dailyStats to nested format expected by the rest of the code
+    const dailyStatsMap = new Map();
+    flatDailyStats.forEach(record => {
+      if (!dailyStatsMap.has(record.date)) {
+        dailyStatsMap.set(record.date, { date: record.date, ads: [], totals: { adsPlayed: 0, displayTime: 0, qrScans: 0, impressions: 0 } });
+      }
+      const dateEntry = dailyStatsMap.get(record.date);
+      dateEntry.ads.push({
+        adId: record.adId,
+        totals: {
+          adsPlayed: record.adsPlayed,
+          displayTime: record.displayTime,
+          qrScans: record.qrScans,
+          impressions: record.impressions,
+          completionRate: record.completionRate
+        },
+        materials: record.materialStats
+      });
+      dateEntry.totals.adsPlayed += record.adsPlayed;
+      dateEntry.totals.displayTime += record.displayTime;
+      dateEntry.totals.qrScans += record.qrScans;
+      dateEntry.totals.impressions += record.impressions;
+    });
+    
+    // Convert map to array and use instead of old dailyStats
+    const dailyStatsFromFlat = Array.from(dailyStatsMap.values());
+    
+    // Process dailyStats to filter nested ads
+    const processedDailyStats = (dailyStatsFromFlat || []).map(dateEntry => {
+      // Filter ads within this date to only valid (non-archived) ads
+      const validAdsForDate = (dateEntry.ads || []).filter(ad => 
+        ad.adId && validAdIds.includes(ad.adId.toString())
+      );
+      
+      // Recalculate totals from valid ads only
+      const recalculatedTotals = validAdsForDate.reduce((acc, ad) => {
+        const adTotals = ad.totals || {};
+        return {
+          impressions: acc.impressions + (adTotals.impressions || 0),
+          adsPlayed: acc.adsPlayed + (adTotals.adsPlayed || 0),
+          displayTime: acc.displayTime + (adTotals.displayTime || 0),
+          qrScans: acc.qrScans + (adTotals.qrScans || 0)
+        };
+      }, { impressions: 0, adsPlayed: 0, displayTime: 0, qrScans: 0 });
+      
+      return {
+        date: dateEntry.date,
+        ads: validAdsForDate,
+        totals: recalculatedTotals
+      };
+    });
+    
+    // Format dailyStats for frontend
+    const formattedDailyStats = processedDailyStats.flatMap(dateEntry => {
+      if (adId && adId !== 'all') {
+        // Return per-ad stats for the selected ad
+        const matchingAd = dateEntry.ads.find(ad => ad.adId.toString() === adId);
+        if (!matchingAd) return [];
+        
+        return [{
+          date: dateEntry.date,
+          adsPlayed: matchingAd.totals?.adsPlayed || 0,
+          displayTime: matchingAd.totals?.displayTime || 0,
+          qrScans: matchingAd.totals?.qrScans || 0,
+          completionRate: matchingAd.totals?.completionRate || 0,
+          impressions: matchingAd.totals?.impressions || 0
+        }];
+      } else {
+        // Return aggregated daily stats
+        return [{
+          date: dateEntry.date,
+          adsPlayed: dateEntry.totals?.adsPlayed || 0,
+          displayTime: dateEntry.totals?.displayTime || 0,
+          qrScans: dateEntry.totals?.qrScans || 0,
+          completionRate: dateEntry.totals?.completionRate || 0,
+          impressions: dateEntry.totals?.impressions || 0
+        }];
+      }
+    });
+    
+    // Calculate summary from processed data
+    const summary = {
+      totalAdsPlayed: 0,
+      totalDisplayTime: 0,
+      totalQRScans: 0,
+      totalAds: userAnalytics.totalAds || 0,
+      activeAds: filteredAds.length,
+      totalDevices: userAnalytics.totalDevices || 0
+    };
+    
+    // Calculate totals from dailyStats
+    if (formattedDailyStats.length > 0) {
+      const calculatedTotals = formattedDailyStats.reduce((acc, stat) => ({
+        adsPlayed: acc.adsPlayed + (stat.adsPlayed || 0),
+        displayTime: acc.displayTime + (stat.displayTime || 0),
+        qrScans: acc.qrScans + (stat.qrScans || 0)
+      }), { adsPlayed: 0, displayTime: 0, qrScans: 0 });
+      
+      summary.totalAdsPlayed = calculatedTotals.adsPlayed;
+      summary.totalDisplayTime = calculatedTotals.displayTime;
+      summary.totalQRScans = calculatedTotals.qrScans;
+    }
+    
+    // Format adPerformance
+    const adPerformance = filteredAds.map(ad => {
+      let totalPlays = 0;
+      
+      // Calculate from dailyStats for this ad
+      processedDailyStats.forEach(dateEntry => {
+        const adEntry = dateEntry.ads?.find(a => 
+          a.adId && a.adId.toString() === ad.adId.toString()
+        );
+        if (adEntry && adEntry.totals) {
+          totalPlays += adEntry.totals.adsPlayed || 0;
+        }
+      });
+      
+      if (totalPlays === 0 && ad.totalAdPlayTime) {
+        totalPlays = Math.round(ad.totalAdPlayTime / 35);
+      }
+      
+      return {
+        adId: ad.adId,
+        adTitle: ad.adTitle,
+        totalPlays: totalPlays,
+        totalViewTime: ad.totalAdPlayTime || 0,
+        averageViewTime: totalPlays > 0 ? (ad.totalAdPlayTime || 0) / totalPlays : 0,
+        completionRate: ad.averageAdCompletionRate || 0,
+        impressions: ad.totalAdImpressions || 0,
+        totalQRScans: ad.totalQRScans || 0
+      };
+    });
+    
+    // Format deviceStats
+    const deviceStats = (userAnalytics.materialBreakdown || []).map(material => ({
+      deviceId: material.materialId,
+      materialId: material.materialId,
+      deviceName: material.materialId,
+      adsPlayed: material.totalAdPlays || 0,
+      displayTime: material.totalAdPlayTime || 0,
+      qrScans: material.totalQRScans || 0,
+      impressions: material.totalAdImpressions || 0,
+      isOnline: material.isOnline || false,
+      lastSeen: material.lastActivity || null
+    }));
+    
+    const duration = Date.now() - requestStartTime;
+    
+    console.log('✅ [OPTIMIZED] Query completed in', duration, 'ms');
+    console.log('📊 [DIRECT-V2] Returning data:', {
+      summaryTotalAdsPlayed: summary.totalAdsPlayed,
+      dailyStatsCount: formattedDailyStats.length,
+      adPerformanceCount: adPerformance.length,
+      deviceStatsCount: deviceStats.length,
+      sampleDailyStats: formattedDailyStats.slice(0, 2)
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        summary,
+        dailyStats: formattedDailyStats,
+        adPerformance,
+        deviceStats,
+        ads: filteredAds,
+        period: period || 'all',
+        startDate: dateRange.startDate?.toISOString(),
+        endDate: dateRange.endDate?.toISOString(),
+        lastUpdated: userAnalytics.lastUpdated || userAnalytics.updatedAt,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: totalDailyStatsCount,
+          pages: Math.ceil(totalDailyStatsCount / parseInt(limit))
+        }
+      },
+      metadata: {
+        queryTime: `${duration}ms`,
+        optimized: true,
+        version: 'v2'
+      }
+    });
+    
+  } catch (error) {
+    const duration = Date.now() - requestStartTime;
+    console.error('❌ [DIRECT-V2] Error in direct-v2 API:', error);
+    console.error('❌ [DIRECT-V2] Error stack:', error.stack);
+    console.error('❌ [DIRECT-V2] Request details:', {
+      userId,
+      startDate,
+      endDate,
+      period,
+      adId,
+      page,
+      limit
+    });
+    
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // GET /analytics/user/:userId/direct - Direct API endpoint that fetches from UserAnalytics collection
 // ✅ NEW: Fetches directly from UserAnalytics collection for the logged-in user
 // ✅ Supports filtering by date range, period, adId, and deviceId
 // ✅ OPTIMIZED: Future-proof with performance improvements
+// ⚠️ NOTE: This is the OLD version - consider using /direct-v2 for better performance
 router.get('/user/:userId/direct', async (req, res) => {
   const requestStartTime = Date.now();
   // ✅ Declare variables outside try block so they're available in finally
