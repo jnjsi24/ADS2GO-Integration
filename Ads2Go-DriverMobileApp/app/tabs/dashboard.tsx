@@ -314,6 +314,7 @@ const Dashboard: React.FC = () => {
         return;
       }
 
+      // Fetch salary calculations to calculate current month's salary
       const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
@@ -322,12 +323,20 @@ const Dashboard: React.FC = () => {
         },
         body: JSON.stringify({
           query: `
-            query GetMySalarySummary {
-              getMySalarySummary {
+            query GetMySalaryCalculations {
+              getMySalaryCalculations {
                 success
                 message
-                summary {
-                  totalSalary
+                calculations {
+                  id
+                  calculationPeriod {
+                    startDate
+                    endDate
+                    periodType
+                  }
+                  calculations {
+                    totalSalary
+                  }
                 }
               }
             }
@@ -337,8 +346,30 @@ const Dashboard: React.FC = () => {
 
       const data = await response.json();
       
-      if (data.data?.getMySalarySummary?.success && data.data.getMySalarySummary.summary) {
-        setTotalEarnings(data.data.getMySalarySummary.summary.totalSalary || 0);
+      if (data.data?.getMySalaryCalculations?.success && data.data.getMySalaryCalculations.calculations) {
+        const calculations = data.data.getMySalaryCalculations.calculations;
+        
+        // Calculate current month's salary
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const currentMonthCalculations = calculations.filter((calc: any) => {
+          if (!calc.calculationPeriod?.startDate) return false;
+          
+          const startDate = new Date(calc.calculationPeriod.startDate);
+          const calcMonth = startDate.getMonth();
+          const calcYear = startDate.getFullYear();
+          
+          // Check if the calculation period is in the current month
+          return calcMonth === currentMonth && calcYear === currentYear;
+        });
+
+        const totalSalary = currentMonthCalculations.reduce((sum: number, calc: any) => {
+          return sum + (calc.calculations?.totalSalary || 0);
+        }, 0);
+
+        setTotalEarnings(Math.round(totalSalary * 100) / 100);
       }
     } catch (error) {
       console.log('Error fetching salary summary:', error);

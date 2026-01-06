@@ -9,7 +9,7 @@ import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER, RESTORE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
 import { SUSPEND_DRIVER } from '../../graphql/admin/mutations/suspendDriver';
-import { GET_DRIVER_SALARY_SUMMARY } from '../../graphql/superadmin/queries/driverSalaryQueries';
+import { GET_DRIVER_SALARY_SUMMARY, GET_DRIVER_SALARY_CALCULATIONS_BY_DRIVER } from '../../graphql/superadmin/queries/driverSalaryQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -316,6 +316,40 @@ const ManageDrivers: React.FC = () => {
     skip: !selectedDriverDetails?.driverId,
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
+
+  const { data: driverSalaryCalculationsData } = useQuery(GET_DRIVER_SALARY_CALCULATIONS_BY_DRIVER, {
+    variables: { driverId: selectedDriverDetails?.driverId || '' },
+    skip: !selectedDriverDetails?.driverId,
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  // Calculate current month's salary
+  const getCurrentMonthSalary = () => {
+    if (!driverSalaryCalculationsData?.getDriverSalaryCalculationsByDriver?.calculations) {
+      return 0;
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const currentMonthCalculations = driverSalaryCalculationsData.getDriverSalaryCalculationsByDriver.calculations.filter((calc: any) => {
+      if (!calc.calculationPeriod?.startDate) return false;
+      
+      const startDate = new Date(calc.calculationPeriod.startDate);
+      const calcMonth = startDate.getMonth();
+      const calcYear = startDate.getFullYear();
+      
+      // Check if the calculation period is in the current month
+      return calcMonth === currentMonth && calcYear === currentYear;
+    });
+
+    const totalSalary = currentMonthCalculations.reduce((sum: number, calc: any) => {
+      return sum + (calc.calculations?.totalSalary || 0);
+    }, 0);
+
+    return totalSalary;
+  };
 
   // Fetch all materials to compute live availability counts by type for the selected driver's vehicle
   const { data: materialsInventoryData } = useQuery(GET_ALL_MATERIALS, {
@@ -1701,9 +1735,9 @@ const ManageDrivers: React.FC = () => {
                     </div>
 
                     <div>
-                      <p className="text-xs sm:text-sm text-gray-500">Total Earnings</p>
+                      <p className="text-xs sm:text-sm text-gray-500">Total Earnings (This Month)</p>
                       <p className="text-gray-900 font-bold text-sm sm:text-base text-green-600">
-                        ₱{driverSalaryData?.getDriverSalarySummary?.summary?.totalSalary?.toFixed(2) || '0.00'}
+                        ₱{getCurrentMonthSalary().toFixed(2)}
                       </p>
                     </div>
                   </div>
