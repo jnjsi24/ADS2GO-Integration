@@ -908,11 +908,14 @@ export class TabletRegistrationService {
           // If we can't check, continue anyway
         }
         
-        if (nextAppState === 'background' || nextAppState === 'inactive') {
-          console.log('App is going to background, stopping location tracking');
+        // ✅ FIX: Only stop tracking and cancel requests on TRUE background (not 'inactive')
+        // 'inactive' state can happen with screen dimming in kiosk mode - this is normal
+        // Only cancel on 'background' (home button, app switcher, true background)
+        if (nextAppState === 'background') {
+          console.log('App is going to TRUE background, stopping location tracking');
           await this.stopLocationTracking();
           
-          // Cancel all pending requests when going to background
+          // Cancel all pending requests when going to TRUE background
           requestManager.cancelAllRequests();
           
           // ✅ FIX: Don't mark device as offline when app goes to background
@@ -923,6 +926,11 @@ export class TabletRegistrationService {
           
           // Note: We intentionally don't call updateTabletStatus(false) here
           // The device status should be managed by WebSocket connection status, not app state
+        } else if (nextAppState === 'inactive') {
+          // App is inactive (screen dim, power management) but not truly backgrounded
+          // For kiosk apps, this is normal - continue operations
+          console.log('📱 [AppState] App is inactive (screen dim/power management) - continuing operations (kiosk mode)');
+          // Don't stop tracking or cancel requests - kiosk should continue running
         } else if (nextAppState === 'active') {
           console.log('App is active, restarting location tracking if needed');
           if (this.registration) {
