@@ -497,11 +497,11 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
   if (loading) return <AdminLoader />;
   if (error) {
     console.log('GraphQL query error:', error);
-    return <p className="ml-64 p-8 text-red-500">Error: {error.message || 'An error occurred'}</p>;
+    return <p className="ml-0 lg:ml-64 p-4 sm:p-8 text-red-500 text-sm sm:text-base">Error: {error.message || 'An error occurred'}</p>;
   }
 
   return (
-  <div className="min-h-screen ml-60 bg-gray-50">
+  <div className="min-h-screen ml-0 lg:ml-60 bg-gray-50">
 
       {/* Header Section */}
       <AdminSearchHeader
@@ -513,11 +513,11 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
       />
 
       {/* Tabs Section */}
-      <div className="p-6 pb-0">
-        <nav className="flex space-x-8">
+      <div className="p-4 sm:p-6 pb-0">
+        <nav className="flex space-x-4 sm:space-x-8">
           <button
             onClick={() => setActiveTab('active')}
-            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+            className={`relative flex items-center py-3 sm:py-4 px-1 font-medium text-xs sm:text-sm transition-colors group ${
               activeTab === 'active' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -530,7 +530,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
           </button>
           <button
             onClick={() => setActiveTab('archived')}
-            className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+            className={`relative flex items-center py-3 sm:py-4 px-1 font-medium text-xs sm:text-sm transition-colors group ${
               activeTab === 'archived' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
@@ -597,22 +597,22 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+              className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full mx-4"
             >
-              <h3 className="text-lg font-semibold mb-4">Restore Admin</h3>
-              <p className="text-gray-600 mb-6">
+              <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Restore Admin</h3>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                 Are you sure you want to restore <strong>{adminToRestore.firstName} {adminToRestore.lastName}</strong>?
               </p>
-              <div className="flex justify-end space-x-3">
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 sm:space-x-3">
                 <button
                   onClick={() => setAdminToRestore(null)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 text-sm sm:text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={executeRestoreAdmin}
-                  className="px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  className="px-4 py-2 text-sm sm:text-base text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <RotateCcw size={16} />
                   Restore

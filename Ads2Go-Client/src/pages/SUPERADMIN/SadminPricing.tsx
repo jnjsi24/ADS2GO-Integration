@@ -343,23 +343,23 @@ const SadminPricing: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen ml-60 bg-gray-50">
+    <div className="min-h-screen ml-0 lg:ml-60 bg-gray-50">
       {/* Header */}
       <div>
-        <div className="px-8 py-6">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-semibold text-gray-900 mt-10">Pricing Management</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 mt-10 sm:mt-8 lg:mt-10">Pricing Management</h1>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-8 ">
+      <div className="px-4 sm:px-6 lg:px-8">
         {/* Tabs */}
-        <div className="flex items-center justify-between p-1 w-full mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0 p-1 w-full mb-4 sm:mb-6">
           {/* Tabs on the left */}
-          <div className="flex space-x-1 rounded-lg p-1">
+          <div className="flex space-x-1 rounded-lg p-1 overflow-x-auto">
             {["active", "inactive", "archived"].map((tab) => {
               const isActive = activeTab === tab;
               const count =
@@ -384,7 +384,7 @@ const SadminPricing: React.FC = () => {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab as "active" | "inactive" | "archived")}
-                  className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
+                  className={`relative group px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium transition-colors duration-300 whitespace-nowrap ${
                     isActive
                       ? "text-[#3674B5]" : "text-gray-500 hover:text-gray-700"
                   }`}
@@ -404,35 +404,36 @@ const SadminPricing: React.FC = () => {
             })}
           </div>
 
-          {/* Create button on the right */}
+          {/* Create button on the right - Hidden on mobile */}
           <button
             onClick={handleCreateConfig}
-            className="bg-[#3674B5] hover:bg-[#3674B5]/80 text-sm text-white px-6 py-3 rounded-md transition-all duration-200 flex items-center gap-2"
+            className="hidden sm:flex bg-[#3674B5] hover:bg-[#3674B5]/80 text-xs sm:text-sm text-white px-3 sm:px-6 py-2 sm:py-3 rounded-md transition-all duration-200 items-center justify-center gap-2 whitespace-nowrap"
           >
-            <Plus className="w-5 h-5" />
-            Create Pricing Config
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Create Pricing Config</span>
+            <span className="sm:hidden">Create</span>
           </button>
         </div>
 
 
         {/* Error Message */}
         {errorMsg && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-            {errorMsg}
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 border border-red-200 text-red-700 text-sm sm:text-base rounded-xl flex items-center gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
+            <span>{errorMsg}</span>
           </div>
         )}
 
         {/* Configurations List */}
         {filteredConfigs.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
-              <DollarSign className="w-8 h-8 text-black/80" />
+          <div className="text-center py-8 sm:py-12">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-black/80" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
               No {activeTab} pricing configurations found
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 px-4">
               {activeTab === 'active' 
                 ? "Create a new pricing configuration to get started"
                 : activeTab === 'inactive'
@@ -443,25 +444,25 @@ const SadminPricing: React.FC = () => {
             {activeTab === 'active' && (
               <button
                 onClick={handleCreateConfig}
-                className="bg-[#3674B5] text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
+                className="bg-[#3674B5] text-white text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 mx-auto"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                 Create Pricing Config
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
             {filteredConfigs.map((config) => (
-              <div key={config.id} className="bg-white rounded-md p-6 shadow-md">
+              <div key={config.id} className="bg-white rounded-md p-4 sm:p-6 shadow-md">
                 {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
+                <div className="flex justify-between items-start mb-3 sm:mb-4">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
                         {config.materialType} {config.vehicleType}
                       </h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                      <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium border flex-shrink-0 ${
                         config.isActive 
                           ? 'bg-green-100 text-green-800 border-green-200'
                           : 'bg-gray-100 text-gray-800 border-gray-200'
@@ -469,9 +470,9 @@ const SadminPricing: React.FC = () => {
                         {config.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm">{config.category}</p>
+                    <p className="text-gray-600 text-xs sm:text-sm">{config.category}</p>
                   </div>
-                  <div className="flex items-center">
+                  <div className="flex items-center flex-shrink-0">
                     {/* Show Restore button only for archived config */}
                     {config.isArchived ? (
                       <button
@@ -514,16 +515,16 @@ const SadminPricing: React.FC = () => {
                 </div>
 
                 {/* Configuration Details */}
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {/* Base Price */}
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between text-sm">
+                  <div className="border-t pt-2 sm:pt-3">
+                    <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-gray-600">Base Price:</span>
                       <span className="font-medium text-green-600">
                         {formatCurrency(config.basePrice)}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
                       For 20-second ad / 1 month / 1 device
                     </p>
                   </div>
@@ -531,8 +532,8 @@ const SadminPricing: React.FC = () => {
 
                 {/* Footer — shows deletion date for archived items */}
                 {config.isArchived && config.scheduledDeletionDate && (
-                  <div className="border-t pt-3 mt-4">
-                    <p className="text-xs text-red-600 font-medium">
+                  <div className="border-t pt-2 sm:pt-3 mt-3 sm:mt-4">
+                    <p className="text-[10px] sm:text-xs text-red-600 font-medium">
                       Scheduled for deletion: <span className="font-medium">
                         {(() => {
                           try {
@@ -555,28 +556,28 @@ const SadminPricing: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-[9999]">
-        <div className="bg-white rounded-md shadow-md w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900">
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-[9999] p-1 sm:p-4">
+        <div className="bg-white rounded-md shadow-md w-full max-w-2xl mx-2 sm:mx-4 p-3 sm:p-6 lg:p-8 max-h-[85vh] sm:max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-2 sm:mb-6">
+            <h2 className="text-sm sm:text-xl font-bold text-gray-900 leading-tight">
               {editingConfig ? 'Edit Pricing Configuration' : 'Create Pricing Configuration'}
             </h2>
-            <button onClick={handleModalClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-6 h-6" />
+            <button onClick={handleModalClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-2">
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
 
           {errorMsg && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <p className="text-red-800 text-sm">{errorMsg}</p>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2 sm:p-4 mb-3 sm:mb-6">
+              <p className="text-red-800 text-xs sm:text-sm">{errorMsg}</p>
             </div>
           )}
 
           <form onSubmit={handleFormSubmit}>
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {/* Vehicle Type Dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                   Vehicle Type
                 </label>
                 <div className="relative w-full">
@@ -624,7 +625,7 @@ const SadminPricing: React.FC = () => {
 
               {/* Material Type Dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                   Material Type
                 </label>
                 <div className="relative w-full">
@@ -674,11 +675,11 @@ const SadminPricing: React.FC = () => {
               {/* Category (Auto-determined) */}
               <div className="relative">
                 <div className="w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent border-gray-300 focus:outline-none focus:border-[#3674B5] focus:ring-0 transition">
-                  <div className="text-sm text-gray-600">
+                  <div className="text-xs sm:text-sm text-gray-600">
                     {formData.category || 'Will be determined automatically'}
                   </div>
                 </div>
-                <label className="absolute left-0 -top-2 text-sm text-gray-700 font-semibold">
+                <label className="absolute left-0 -top-2 text-xs sm:text-sm text-gray-700 font-semibold">
                   Category
                 </label>
                 {validationErrors.category && (
@@ -689,7 +690,7 @@ const SadminPricing: React.FC = () => {
             </div>
 
             {/* Base Price Input */}
-            <div className="mt-6">
+            <div className="mt-4 sm:mt-6">
               <div className="relative">
                 <input
                   type="number"
@@ -699,16 +700,16 @@ const SadminPricing: React.FC = () => {
                   min="0.01"
                   value={formData.basePrice}
                   onChange={(e) => setFormData(prev => ({ ...prev, basePrice: parseFloat(e.target.value) || 0 }))}
-                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
+                  className={`peer w-full px-0 pt-5 pb-2 text-sm sm:text-base text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
                   required
                 />
                 <label
                   htmlFor="basePrice"
-                  className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.basePrice ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                  className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.basePrice ? '-top-2 text-xs sm:text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm sm:peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-xs sm:peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                 >
                   Base Price (for 20-second ad / 1 month / 1 device)
                 </label>
-                <span className="text-xs text-[#3674B5] mt-1 block">
+                <span className="text-[10px] sm:text-xs text-[#3674B5] mt-1 block">
                   This is the starting price for the smallest possible ad package. For example: $50.00 for Car/LCD, $30.00 for Car/Headdress.
                 </span>
                 {validationErrors.basePrice && (
@@ -717,37 +718,37 @@ const SadminPricing: React.FC = () => {
               </div>
 
               {/* Ad Length Multipliers - Display Only (Hardcoded) */}
-              <div className="mt-6 border-t pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Ad Length Multipliers</h3>
-                <p className="text-sm text-gray-600 mb-3">
+              <div className="mt-4 sm:mt-6 border-t pt-4 sm:pt-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Ad Length Multipliers</h3>
+                <p className="text-xs sm:text-sm text-gray-600 mb-3">
                   These multipliers are automatically calculated based on ad length and cannot be changed.
                 </p>
-                <div className="bg-gray-50 rounded-md p-4 space-y-3">
+                <div className="bg-gray-50 rounded-md p-3 sm:p-4 space-y-2 sm:space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700">20-second Ad:</span>
-                    <span className="text-sm font-semibold text-gray-900">1.0x (Base)</span>
+                    <span className="text-xs sm:text-sm text-gray-700">20-second Ad:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">1.0x (Base)</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700">40-second Ad:</span>
-                    <span className="text-sm font-semibold text-gray-900">2.0x (Double)</span>
+                    <span className="text-xs sm:text-sm text-gray-700">40-second Ad:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">2.0x (Double)</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700">60-second Ad:</span>
-                    <span className="text-sm font-semibold text-gray-900">3.0x (Triple)</span>
+                    <span className="text-xs sm:text-sm text-gray-700">60-second Ad:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">3.0x (Triple)</span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-2">
                   These values are fixed because a 40-second ad uses 2x the screen time, and a 60-second ad uses 3x the screen time.
                 </p>
               </div>
 
               {/* Duration Discount Multipliers */}
-              <div className="mt-6 border-t pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Duration Discount Multipliers</h3>
-                <p className="text-sm text-gray-600 mb-4">
+              <div className="mt-4 sm:mt-6 border-t pt-4 sm:pt-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Duration Discount Multipliers</h3>
+                <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
                   These multipliers provide discounts for longer durations. 1 month is the base (1.0 = no discount).
                 </p>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {([
                     { key: 'months1', months: '1' },
                     { key: 'months2', months: '2' },
@@ -785,12 +786,12 @@ const SadminPricing: React.FC = () => {
                           }));
                         }}
                         disabled={key === 'months1'}
-                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300 ${key === 'months1' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`peer w-full px-0 pt-5 pb-2 text-sm sm:text-base text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300 ${key === 'months1' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         required
                       />
                       <label
                         htmlFor={`duration_${months}`}
-                        className="absolute left-0 text-gray-700 bg-transparent transition-all duration-200 -top-2 text-sm text-gray-700 font-semibold"
+                        className="absolute left-0 text-gray-700 bg-transparent transition-all duration-200 -top-2 text-xs sm:text-sm text-gray-700 font-semibold"
                       >
                         {months} Month{months !== '1' ? 's' : ''} Discount Multiplier {key === 'months1' && '(Base - Fixed at 1.0)'}
                       </label>
@@ -801,23 +802,29 @@ const SadminPricing: React.FC = () => {
             </div>
 
             {/* Form Actions */}
-            {/* <div className="flex justify-end gap-4 mt-8"> */}
-              
-
-            <div className="flex justify-between mt-8 space-x-3">
+            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 mt-6 sm:mt-8 space-y-0 sm:space-x-3">
             <button
               type="button"
               onClick={handleModalClose}
-              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className="px-4 py-2 text-sm sm:text-base text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors order-2 sm:order-1"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createLoading || updateLoading}
-              className="px-4 py-2 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm sm:text-base bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors order-1 sm:order-2"
             >
-              {createLoading || updateLoading ? 'Saving...' : editingConfig ? 'Update Configuration & Multipliers' : 'Create Configuration & Save Multipliers'}
+              {createLoading || updateLoading ? 'Saving...' : editingConfig ? (
+                <span className="hidden sm:inline">Update Configuration & Multipliers</span>
+              ) : (
+                <span className="hidden sm:inline">Create Configuration & Save Multipliers</span>
+              )}
+              {createLoading || updateLoading ? 'Saving...' : editingConfig ? (
+                <span className="sm:hidden">Update</span>
+              ) : (
+                <span className="sm:hidden">Create</span>
+              )}
             </button>
           </div>
           </form>
@@ -848,6 +855,15 @@ const SadminPricing: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-green-600 hover:bg-green-700"
       />
+
+      {/* Floating Action Button - Mobile Only */}
+      <button
+        onClick={handleCreateConfig}
+        className="sm:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#3674B5] hover:bg-[#3674B5]/90 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95"
+        aria-label="Create Pricing Config"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
     </div>
   );

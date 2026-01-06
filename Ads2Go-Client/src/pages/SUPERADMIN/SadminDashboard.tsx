@@ -68,8 +68,8 @@ const Dashboard = () => {
 
   if (loading || statsLoading) return <AdminLoader />;
   if (error) return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="text-red-500">Error loading superadmin details: {error.message}</div>
+    <div className="p-4 sm:p-8 pl-4 sm:pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+      <div className="text-red-500 text-sm sm:text-base">Error loading superadmin details: {error.message}</div>
     </div>
   );
 
@@ -80,21 +80,21 @@ const Dashboard = () => {
   ) || 1; // Avoid division by zero
 
   return (
-    <div className="p-8 ml-60 bg-gray-50 min-h-screen text-gray-800 font-sans">
+    <div className="p-4 sm:p-6 lg:p-8 ml-0 lg:ml-60 bg-gray-50 min-h-screen text-gray-800 font-sans">
       {/* Header */}
-      <div className="flex justify-between items-center pt-7 mb-8">
+      <div className="flex justify-between items-center pt-12 sm:pt-6 lg:pt-7 mb-4 sm:mb-6 lg:mb-8">
         <div>
-          <h2 className="text-3xl font-semibold text-gray-800">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-800">
             Welcome back, {adminName}!
           </h2>
-          <p className="text-sm text-black/70">
+          <p className="text-xs sm:text-sm text-black/70">
             It is the best time to manage your finances
           </p>
         </div>
       </div>
 
       {/* ROW 1: Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-5">
         {[
           { 
             label: "Total Admins", 
@@ -136,19 +136,19 @@ const Dashboard = () => {
           return (
             <div
               key={i}
-              className={`p-6 rounded-md shadow-md border flex items-center justify-between bg-white`}
+              className={`p-4 sm:p-5 lg:p-6 rounded-md shadow-md border flex items-center justify-between bg-white`}
             >
               {/* Left side: Icon */}
               <div>
-                <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+                <Icon className={`h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
               </div>
 
               {/* Right side: Label + Value */}
               <div className="flex flex-col items-end text-right">
-                <p className={`text-3xl font-bold`}>
+                <p className={`text-xl sm:text-2xl lg:text-3xl font-bold`}>
                   {stat.value.toLocaleString()}
                 </p>
-                <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+                <h3 className="text-xs sm:text-sm font-medium text-gray-600">{stat.label}</h3>
               </div>
             </div>
           );
@@ -156,33 +156,33 @@ const Dashboard = () => {
       </div>
 
       {/* ROW 2: Analytics Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* Users Analytics */}
-        <div className="bg-white p-6 rounded-md shadow-md">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-800">Users Analytics</h3>
+        <div className="bg-white p-4 sm:p-5 lg:p-6 rounded-md shadow-md">
+          <div className="flex justify-between items-center mb-4 sm:mb-5 lg:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-gray-800">Users Analytics</h3>
             <Link
               to="/sadmin-analytics?tab=users"
-              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
+              className="text-xs sm:text-sm flex font-semibold items-center hover:text-black transition-colors"
             >
-              <ArrowRight className="h-4 w-4 ml-1" />
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
             </Link>
           </div>
 
-          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+          <div className="flex items-end justify-between space-x-2 sm:space-x-3 h-36 sm:h-40 lg:h-48 mt-4">
             {usersData.map((item, index) => (
               <div key={index} className="flex flex-col items-center flex-1">
-                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                <div className="w-full max-w-12 sm:max-w-16 lg:max-w-20 bg-gray-100 rounded-t-lg h-28 sm:h-32 lg:h-40 flex items-end relative mx-auto">
                   <div
                     className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
                     style={{ height: `${item.value}%` }}
                   />
                 </div>
-                <div className="text-center">
-                  <span className="text-sm font-semibold text-gray-900 block">
+                <div className="text-center mt-2">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-900 block">
                     {item.value.toLocaleString()}
                   </span>
-                  <span className="text-xs text-gray-600 mt-1 block">
+                  <span className="text-[10px] sm:text-xs text-gray-600 mt-1 block">
                     {item.label}
                   </span>
                 </div>
@@ -192,31 +192,31 @@ const Dashboard = () => {
         </div>
 
         {/* Drivers Analytics */}
-        <div className="bg-white p-6 rounded-md shadow-md">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-800">Drivers Analytics</h3>
+        <div className="bg-white p-4 sm:p-5 lg:p-6 rounded-md shadow-md">
+          <div className="flex justify-between items-center mb-4 sm:mb-5 lg:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-gray-800">Drivers Analytics</h3>
             <Link
               to="/sadmin-analytics?tab=drivers"
-              className="text-sm flex font-semibold items-center hover:text-black transition-colors"
+              className="text-xs sm:text-sm flex font-semibold items-center hover:text-black transition-colors"
             >
-              <ArrowRight className="h-4 w-4 ml-1" />
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
             </Link>
           </div>
 
-          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+          <div className="flex items-end justify-between space-x-2 sm:space-x-3 h-36 sm:h-40 lg:h-48 mt-4">
             {driversData.map((item, index) => (
               <div key={index} className="flex flex-col items-center flex-1">
-                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                <div className="w-full max-w-12 sm:max-w-16 lg:max-w-20 bg-gray-100 rounded-t-lg h-28 sm:h-32 lg:h-40 flex items-end relative mx-auto">
                   <div
                     className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
                     style={{ height: `${item.value}%` }}
                   />
                 </div>
-                <div className="text-center">
-                  <span className="text-sm font-semibold text-gray-900 block">
+                <div className="text-center mt-2">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-900 block">
                     {item.value.toLocaleString()}
                   </span>
-                  <span className="text-xs text-gray-600 mt-1 block">
+                  <span className="text-[10px] sm:text-xs text-gray-600 mt-1 block">
                     {item.label}
                   </span>
                 </div>
@@ -228,29 +228,29 @@ const Dashboard = () => {
         {/* Ads Analytics */}
         <Link
           to="/sadmin-analytics?tab=advertisements"
-          className="bg-white p-6 rounded-md shadow-md block cursor-pointer hover:shadow-lg transition-shadow"
+          className="bg-white p-4 sm:p-5 lg:p-6 rounded-md shadow-md block cursor-pointer hover:shadow-lg transition-shadow"
         >
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-800">Advertisements Analytics</h3>
-            <div className="text-sm flex font-semibold items-center hover:text-black transition-colors">
-              <ArrowRight className="h-4 w-4 ml-1" />
+          <div className="flex justify-between items-center mb-4 sm:mb-5 lg:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-gray-800">Advertisements Analytics</h3>
+            <div className="text-xs sm:text-sm flex font-semibold items-center hover:text-black transition-colors">
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
             </div>
           </div>
 
-          <div className="flex items-end justify-between space-x-3 h-48 mt-4">
+          <div className="flex items-end justify-between space-x-2 sm:space-x-3 h-36 sm:h-40 lg:h-48 mt-4">
             {adsData.map((item, index) => (
               <div key={index} className="flex flex-col items-center flex-1">
-                <div className="w-20 bg-gray-100 rounded-t-lg h-40 flex items-end relative">
+                <div className="w-full max-w-12 sm:max-w-16 lg:max-w-20 bg-gray-100 rounded-t-lg h-28 sm:h-32 lg:h-40 flex items-end relative mx-auto">
                   <div
                     className={`w-full ${item.color} rounded-t-lg transition-all duration-700 ease-out`}
                     style={{ height: `${item.value}%` }}
                   />
                 </div>
-                <div className="text-center">
-                  <span className="text-sm font-semibold text-gray-900 block">
+                <div className="text-center mt-2">
+                  <span className="text-xs sm:text-sm font-semibold text-gray-900 block">
                     {item.value.toLocaleString()}
                   </span>
-                  <span className="text-xs text-gray-600 mt-1 block">
+                  <span className="text-[10px] sm:text-xs text-gray-600 mt-1 block">
                     {item.label}
                   </span>
                 </div>

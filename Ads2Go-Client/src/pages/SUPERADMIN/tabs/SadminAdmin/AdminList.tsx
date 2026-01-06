@@ -37,9 +37,9 @@ const AdminList: React.FC<AdminListProps> = ({
     return tenDigits ? `+63 ${tenDigits}` : 'N/A';
   };
   return (
-    <div className="mx-6 mt-4 rounded-md overflow-hidden">
-      {/* Header */}
-      <div className={`grid gap-4 px-6 py-3 text-sm font-semibold text-black/80 ${
+    <div className="mx-4 sm:mx-6 mt-4 rounded-md overflow-hidden">
+      {/* Header - Hidden on mobile, shown on desktop */}
+      <div className={`hidden lg:grid gap-4 px-4 sm:px-6 py-3 text-xs sm:text-sm font-semibold text-black/80 ${
         activeTab === 'archived' ? 'grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_1fr_120px]' : 'grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px]'
       }`}>
         <span>Name</span>
@@ -56,12 +56,104 @@ const AdminList: React.FC<AdminListProps> = ({
           {admins.map((admin) => (
             <li
               key={admin.id}
-              className={`grid gap-4 px-6 py-4 bg-white rounded-xl shadow-md items-center hover:shadow-lg transition-colors ${
-                activeTab === 'archived' ? 'grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_1fr_120px]' : 'grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px]'
+              className={`lg:grid gap-4 px-4 sm:px-6 py-4 bg-white rounded-xl shadow-md hover:shadow-lg transition-colors ${
+                activeTab === 'archived' 
+                  ? 'lg:grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_1fr_120px]' 
+                  : 'lg:grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px]'
               }`}
             >
+              {/* Mobile Card Layout */}
+              <div className="lg:hidden space-y-3">
+                {/* Name + Avatar */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold overflow-hidden">
+                      {admin.profilePicture ? (
+                        <img
+                          src={admin.profilePicture}
+                          alt={`${admin.firstName} ${admin.lastName}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `${admin.firstName.charAt(0)}${admin.lastName.charAt(0)}`;
+                            }
+                          }}
+                        />
+                      ) : (
+                        `${admin.firstName.charAt(0)}${admin.lastName.charAt(0)}`
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm text-gray-900">
+                        {admin.firstName} {admin.lastName}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate max-w-[200px]">{admin.email}</p>
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    {activeTab === 'archived' ? (
+                      <button
+                        onClick={() => onRestoreAdmin(admin)}
+                        className="p-2 text-green-700 rounded-md hover:bg-green-50 transition-colors"
+                        title="Restore"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onEditAdmin(admin)}
+                          className="p-2 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteAdmin(admin)}
+                          className="p-2 text-red-700 rounded-md hover:bg-red-50 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Details */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-500">Company:</span>
+                    <p className="text-gray-900 font-medium">{admin.companyName || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Contact:</span>
+                    <p className="text-gray-900 font-medium">{formatContactNumber(admin.contactNumber)}</p>
+                  </div>
+                  {activeTab === 'archived' && (
+                    <div>
+                      <span className="text-gray-500">Deletion Date:</span>
+                      <p className="text-red-600 font-medium">
+                        {admin.scheduledDeletionDate ? formatDate(admin.scheduledDeletionDate) : 'N/A'}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-gray-500">Created:</span>
+                    <p className="text-gray-600 font-medium">
+                      {admin.createdAt ? formatDate(admin.createdAt) : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop Grid Layout */}
               {/* Name + Avatar */}
-              <div className="flex items-center space-x-3">
+              <div className="hidden lg:flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold overflow-hidden">
                   {admin.profilePicture ? (
                     <img
@@ -87,20 +179,20 @@ const AdminList: React.FC<AdminListProps> = ({
               </div>
 
               {/* Other Columns */}
-              <p className="text-sm text-gray-900">{admin.companyName || 'N/A'}</p>
-              <p className="text-sm text-gray-900">{formatContactNumber(admin.contactNumber)}</p>
-              <p className="text-sm text-gray-900 truncate">{admin.email}</p>
+              <p className="hidden lg:block text-sm text-gray-900">{admin.companyName || 'N/A'}</p>
+              <p className="hidden lg:block text-sm text-gray-900">{formatContactNumber(admin.contactNumber)}</p>
+              <p className="hidden lg:block text-sm text-gray-900 truncate">{admin.email}</p>
               {activeTab === 'archived' && (
-                <div className="text-sm text-red-600 font-medium">
+                <div className="hidden lg:block text-sm text-red-600 font-medium">
                   {admin.scheduledDeletionDate ? formatDate(admin.scheduledDeletionDate) : 'N/A'}
                 </div>
               )}
-              <div className="text-sm text-gray-600">
+              <div className="hidden lg:block text-sm text-gray-600">
                 {admin.createdAt ? formatDate(admin.createdAt) : 'N/A'}
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-center gap-2">
+              <div className="hidden lg:flex items-center justify-center gap-2">
                 {activeTab === 'archived' ? (
                   /* Restore button for archived tab */
                   <button
@@ -142,7 +234,7 @@ const AdminList: React.FC<AdminListProps> = ({
           ))}
         </ul>
       ) : (
-        <div className="text-center py-8 text-gray-500">No admins found.</div>
+        <div className="text-center py-8 text-sm sm:text-base text-gray-500">No admins found.</div>
       )}
     </div>
   );

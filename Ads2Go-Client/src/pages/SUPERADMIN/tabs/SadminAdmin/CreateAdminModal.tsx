@@ -30,15 +30,15 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div
         className="fixed inset-0 bg-black bg-opacity-30"
         onClick={onClose}
       ></div>
       <div className="relative w-full max-w-xl bg-gray-100 shadow-lg rounded-lg transform transition-all duration-300 ease-in-out animate-popUp">
-        <div className="p-6 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-[#3674B5]">Add New Admin</h2>
+        <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#3674B5]">Add New Admin</h2>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700"
@@ -50,12 +50,12 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({
           </div>
           <form onSubmit={onSubmit} className="space-y-6">
             {/* Profile Picture */}
-            <div className="flex flex-col items-center mb-6">
-              <label htmlFor="newAdminProfilePicture" className="block text-sm font-medium text-gray-500 mb-2">
+            <div className="flex flex-col items-center mb-4 sm:mb-6">
+              <label htmlFor="newAdminProfilePicture" className="block text-xs sm:text-sm font-medium text-gray-500 mb-2">
                 Profile Picture
               </label>
               <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#3674B5]">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#3674B5]">
                   {formData.profilePicture ? (
                     <img 
                       src={URL.createObjectURL(formData.profilePicture as Blob)} 
@@ -85,7 +85,7 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({
               <span className="mt-2 text-xs text-gray-500">Click to upload</span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-6">
               {/* First Name */}
               <div className="relative">
                 <input
@@ -206,7 +206,7 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({
                 <p className="text-red-500 text-xs mt-1">{errors.companyName}</p>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-6">
               {/* Password */}
               <div className="relative">
                 <input
@@ -329,17 +329,17 @@ const CreateAdminModal: React.FC<CreateAdminModalProps> = ({
                 )}
               </div>
             </div>
-            <div className="flex justify-between pt-6">
+            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 pt-4 sm:pt-6">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
+                className="px-4 sm:px-5 py-2 text-sm sm:text-base rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="px-5 sm:px-6 py-2 text-sm sm:text-base rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 Create Admin
               </button>
