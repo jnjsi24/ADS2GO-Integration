@@ -57,8 +57,12 @@ class RequestManager {
     const previousState = this.appState;
     this.appState = nextAppState;
 
-    if (nextAppState === 'background' || nextAppState === 'inactive') {
-      // Cancel all pending requests when going to background
+    // ✅ FIX: For kiosk/digital signage apps, only cancel on true background
+    // "inactive" can happen with screen dimming, which shouldn't cancel requests
+    if (nextAppState === 'background') {
+      // Only cancel on true background (home button, app switcher, etc.)
+      // Don't cancel on 'inactive' as this can happen with screen dim/lock in kiosk mode
+      console.log('🛑 [RequestManager] App going to background - cancelling requests');
       this.cancelAllRequests();
     } else if (nextAppState === 'active' && previousState !== 'active') {
       // App came to foreground - resume queue processing
@@ -131,7 +135,8 @@ class RequestManager {
    */
   private async processQueue(): Promise<void> {
     if (this.isProcessingQueue) return;
-    if (this.appState !== 'active') return; // Don't process queue in background
+    // ✅ FIX: Allow queue processing in 'active' and 'inactive' states for kiosk apps
+    if (this.appState === 'background') return; // Only block in true background
 
     this.isProcessingQueue = true;
 
@@ -324,9 +329,11 @@ class RequestManager {
       }
     }
 
-    // ✅ FIX: Don't queue requests if app is in background (unless explicitly allowed)
-    // Allow requests during grace period after app becomes active, or if explicitly allowed
+    // ✅ FIX: Don't queue requests if app is in true background (unless explicitly allowed)
+    // For kiosk apps, allow requests in 'active' and 'inactive' states
+    // 'inactive' can happen with screen dimming in kiosk mode and shouldn't block requests
     const allowRequest = this.appState === 'active' || 
+                        this.appState === 'inactive' ||
                         (options as any).allowInBackground;
     
     if (!allowRequest) {
