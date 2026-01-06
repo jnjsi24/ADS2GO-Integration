@@ -533,6 +533,25 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       return;
     }
 
+    // Check if target deployment already has any of the ads being moved
+    const selectedAdIds = selectedSlots
+      .map((slot) => extractAdIdFromSlot(slot))
+      .filter((id): id is string => id !== null);
+    
+    if (deploymentHasAd(targetDeployment, selectedAdIds)) {
+      const duplicateAds = selectedSlots
+        .filter((slot) => {
+          const adId = extractAdIdFromSlot(slot);
+          return adId && deploymentHasAd(targetDeployment, [adId]);
+        })
+        .map((slot) => slot.ad?.title || 'Unknown Ad');
+      
+      alert(
+        `Cannot move ads to ${targetDeployment.materialId || 'this device'}. The following ad(s) are already deployed on this device: ${duplicateAds.join(', ')}`
+      );
+      return;
+    }
+
     setIsSlotSelectionProcessing(true);
     try {
       for (const slot of selectedSlots) {
@@ -574,6 +593,25 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       ['SCHEDULED', 'RUNNING'].includes(slot.status)
     ).length || 0;
     return 5 - activeSlots;
+  };
+
+  // Check if a deployment already has any of the given ad IDs
+  const deploymentHasAd = (deployment: AdDeployment, adIds: string[]): boolean => {
+    if (!deployment.lcdSlots || adIds.length === 0) return false;
+    
+    const deploymentAdIds = new Set<string>();
+    deployment.lcdSlots.forEach((slot: LCDSlot) => {
+      // Only check active slots (SCHEDULED or RUNNING) to avoid conflicts
+      if (['SCHEDULED', 'RUNNING'].includes(slot.status)) {
+        const slotAdId = extractAdIdFromSlot(slot);
+        if (slotAdId) {
+          deploymentAdIds.add(slotAdId);
+        }
+      }
+    });
+    
+    // Check if any of the ads being moved already exists in this deployment
+    return adIds.some(adId => deploymentAdIds.has(adId));
   };
 
   // Handle delete icon click
@@ -663,6 +701,13 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       return;
     }
 
+    // Check if target deployment already has this ad
+    const draggedAdId = extractAdIdFromSlot(draggedSlot.slot);
+    if (draggedAdId && deploymentHasAd(targetDeployment, [draggedAdId])) {
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+
     e.dataTransfer.dropEffect = 'move';
     setDragOverDeployment(targetDeploymentId);
   };
@@ -687,6 +732,14 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
     const availableSlots = getAvailableSlots(targetDeployment);
     if (availableSlots <= 0) {
       alert('Target device is full (5/5 slots). Cannot move ad.');
+      setDraggedSlot(null);
+      return;
+    }
+
+    // Check if target deployment already has this ad
+    const draggedAdId = extractAdIdFromSlot(draggedSlot.slot);
+    if (draggedAdId && deploymentHasAd(targetDeployment, [draggedAdId])) {
+      alert('This ad is already deployed on the target device. Cannot move duplicate ad.');
       setDraggedSlot(null);
       return;
     }
@@ -734,6 +787,15 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
       }
 
       const slot = moveConfirmation.slot;
+      
+      // Additional safety check: verify the target doesn't already have this ad
+      const slotAdId = extractAdIdFromSlot(slot);
+      if (slotAdId && deploymentHasAd(targetDeployment, [slotAdId])) {
+        alert('This ad is already deployed on the target device. Cannot move duplicate ad.');
+        setIsProcessing(false);
+        return;
+      }
+      
       await moveSlotBetweenDevices(
         slot,
         moveConfirmation.sourceMaterialId,
@@ -810,11 +872,21 @@ const DeploymentTab: React.FC<DeploymentTabProps> = ({
   const selectedSlotCount = slotActionSelection.selectedSlotIds.length;
   const requiresTargetDeviceSelection =
     slotActionSelection.action === 'move' && selectedSlotCount >= 1;
+  
+  // Get ad IDs from selected slots
+  const selectedAdIds = requiresTargetDeviceSelection
+    ? slotActionSelection.slots
+        .filter((slot) => slotActionSelection.selectedSlotIds.includes(getSlotKey(slot)))
+        .map((slot) => extractAdIdFromSlot(slot))
+        .filter((id): id is string => id !== null)
+    : [];
+  
   const eligibleTargetDeployments = requiresTargetDeviceSelection
     ? filteredDeployments.filter(
         (deployment: AdDeployment) =>
           deployment.id !== slotActionSelection.deploymentId &&
-          getAvailableSlots(deployment) >= selectedSlotCount
+          getAvailableSlots(deployment) >= selectedSlotCount &&
+          !deploymentHasAd(deployment, selectedAdIds) // Exclude deployments that already have the same ads
       )
     : [];
 

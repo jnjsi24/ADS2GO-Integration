@@ -119,11 +119,11 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[51] flex items-end justify-center mr-11 p-6"
+      className="fixed inset-0 bg-black bg-opacity-30 z-[10000] flex items-end justify-center"
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100" 
+        className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 mb-6 mr-36 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100 relative z-[10001]" 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Target Material Details */}

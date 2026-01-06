@@ -8,6 +8,7 @@ import { GET_DRIVER_MATERIALS } from '../../graphql/admin/queries/driverMaterial
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../graphql/admin/mutations/compliance';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER, RESTORE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { UPDATE_DRIVER } from '../../graphql/admin/mutations/updateDriver';
+import { SUSPEND_DRIVER } from '../../graphql/admin/mutations/suspendDriver';
 import { GET_DRIVER_SALARY_SUMMARY } from '../../graphql/superadmin/queries/driverSalaryQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -42,6 +43,7 @@ interface Driver {
   dateJoined: string;
   approvalDate?: string;
   rejectedReason?: string;
+  suspensionReason?: string;
   createdAt: string;
   lastLogin?: string;
   material?: {
@@ -343,6 +345,10 @@ const ManageDrivers: React.FC = () => {
   });
 
   const [updateDriver] = useMutation(UPDATE_DRIVER, {
+    context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  const [suspendDriver] = useMutation(SUSPEND_DRIVER, {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
@@ -690,21 +696,18 @@ const ManageDrivers: React.FC = () => {
     setIsProcessingSuspension(true);
     
     try {
-      const result = await updateDriver({
+      const result = await suspendDriver({
         variables: {
           driverId: driverToSuspend,
-          input: {
-            accountStatus: 'SUSPENDED',
-            rejectedReason: suspendReason.trim() || undefined
-          }
+          reason: suspendReason.trim() || 'No reason provided'
         }
       });
       
-      if (result.data?.updateDriver?.success) {
+      if (result.data?.suspendDriver?.success) {
         addToast({
           type: 'success',
           title: 'Success!',
-          message: 'Driver has been suspended successfully.',
+          message: 'Driver has been suspended successfully. An email notification has been sent.',
           duration: 4000
         });
         refetch();
@@ -712,13 +715,18 @@ const ManageDrivers: React.FC = () => {
         setSuspendReason('');
         setDriverToSuspend(null);
         if (selectedDriverDetails?.driverId === driverToSuspend) {
-          setSelectedDriverDetails({ ...selectedDriverDetails, accountStatus: 'SUSPENDED' });
+          const trimmedReason = suspendReason.trim();
+          setSelectedDriverDetails({ 
+            ...selectedDriverDetails, 
+            accountStatus: 'SUSPENDED',
+            suspensionReason: trimmedReason ? trimmedReason : undefined
+          });
         }
       } else {
         addToast({
           type: 'error',
           title: 'Suspension Failed',
-          message: result.data?.updateDriver?.message || 'Failed to suspend driver',
+          message: result.data?.suspendDriver?.message || 'Failed to suspend driver',
           duration: 6000
         });
       }
@@ -1498,7 +1506,7 @@ const ManageDrivers: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
-            <p className="text-sm text-gray-600 mb-3">Choose one or more materials to approve for this driver. If you leave it empty, the current server default will be used.</p>
+            <p className="text-sm text-gray-600 mb-3">Choose one or more materials to approve for this driver. At least one material must be selected to proceed.</p>
             <div className="grid grid-cols-1 gap-2 mb-4">
               {(() => {
                 // Derive available material types and counts for this driver's vehicle type
@@ -1555,12 +1563,12 @@ const ManageDrivers: React.FC = () => {
               </button>
               <button
                 className={`px-4 py-2 text-white rounded hover:shadow-md transition-colors flex items-center gap-2 ${
-                  isProcessingApproval
+                  isProcessingApproval || selectedMaterials.length === 0
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700'
                 }`}
                 onClick={handleConfirmApproveWithMaterials}
-                disabled={isProcessingApproval}
+                disabled={isProcessingApproval || selectedMaterials.length === 0}
               >
                 {isProcessingApproval && (
                   <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />

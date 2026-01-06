@@ -32,6 +32,7 @@ const LOGIN_MUTATION = `
       success
       message
       token
+      suspensionReason
       driver {
         id
         driverId
@@ -51,6 +52,7 @@ type LoginResponse = {
     success: boolean;
     message: string;
     token: string | null;
+    suspensionReason?: string | null;
     driver: {
       id: string;
       driverId: string;
@@ -313,19 +315,26 @@ export default function Login() {
         router.replace("/tabs/dashboard");
       } else {
         // Show error message if login failed
+        let errorMessage = loginResponse.loginDriver?.message || "Login failed. Please try again.";
+        
+        // If account is suspended and there's a suspension reason, include it in the message
+        if (loginResponse.loginDriver?.suspensionReason) {
+          errorMessage = `${errorMessage}\n\nReason: ${loginResponse.loginDriver.suspensionReason}`;
+        }
+        
         setFormState(prev => ({
           ...prev,
           loading: false,
-          errorMessage: loginResponse.loginDriver?.message || "Login failed. Please try again."
+          errorMessage: errorMessage
         }));
         
-        // Clear the error message after 5 seconds
+        // Clear the error message after 8 seconds (longer for suspension messages)
         setTimeout(() => {
           setFormState(prev => ({
             ...prev,
             errorMessage: null
           }));
-        }, 5000);
+        }, 8000);
       }
     } catch (error: any) {
       console.error("Login error:", error);

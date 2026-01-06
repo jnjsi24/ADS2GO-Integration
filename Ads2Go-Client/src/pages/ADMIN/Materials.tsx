@@ -7,6 +7,7 @@ import {
   GET_TABLET_CONNECTION_STATUS, 
   GET_DRIVERS_FOR_MATERIALS 
 } from '../../graphql/admin/queries/materials';
+import { GET_ALL_DEPLOYMENTS } from '../../graphql/admin/ads';
 import { 
   CREATE_MATERIAL, 
   DELETE_MATERIAL, 
@@ -242,6 +243,16 @@ const Materials: React.FC = () => {
       console.error('Error loading drivers:', driversError);
     }
   }, [driversError]);
+
+  // Query all deployments to check if materials have ads assigned
+  const { data: deploymentsData, loading: deploymentsLoading } = useQuery(GET_ALL_DEPLOYMENTS, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    errorPolicy: 'all',
+  });
 
   const [createMaterial, { loading: creating }] = useMutation(CREATE_MATERIAL, {
     context: {
@@ -726,6 +737,34 @@ const Materials: React.FC = () => {
 
   const materials: Material[] = data?.getAllMaterials || [];
   const drivers: DriverWithVehicleType[] = driversData?.getAllDrivers || [];
+  const deployments = deploymentsData?.getAllDeployments || [];
+
+  // Helper function to check if a material can be deleted
+  const canDeleteMaterial = (material: Material): boolean => {
+    // Cannot delete if material has a driver assigned
+    if (material.driverId) {
+      return false;
+    }
+    
+    // Cannot delete if material has ads deployed
+    const hasDeployments = deployments.some((deployment: any) => {
+      // Check if deployment has this materialId and has active slots
+      if (deployment.materialId === material.materialId) {
+        // Check if there are any active slots (not removed/completed)
+        const hasActiveSlots = deployment.lcdSlots?.some((slot: any) => {
+          return slot.status !== 'REMOVED' && slot.status !== 'COMPLETED' && slot.adId;
+        });
+        return hasActiveSlots;
+      }
+      return false;
+    });
+    
+    if (hasDeployments) {
+      return false;
+    }
+    
+    return true;
+  };
 
   // Debug logging
   useEffect(() => {
@@ -819,8 +858,37 @@ const Materials: React.FC = () => {
     setIsBulkProcessing(true);
 
     try {
+      // Filter out materials that cannot be deleted
+      const materialsToDelete = selectedMaterials.filter(id => {
+        const material = materials.find(m => m.id === id);
+        return material && canDeleteMaterial(material);
+      });
+
+      const skippedCount = selectedMaterials.length - materialsToDelete.length;
+
+      if (materialsToDelete.length === 0) {
+        addToast({
+          type: 'error',
+          title: 'Cannot Delete',
+          message: 'None of the selected devices can be deleted. They may have drivers or ads assigned.',
+          duration: 5000
+        });
+        setIsBulkProcessing(false);
+        setShowBulkDeleteModal(false);
+        return;
+      }
+
+      if (skippedCount > 0) {
+        addToast({
+          type: 'warning',
+          title: 'Some Devices Skipped',
+          message: `${skippedCount} device(s) were skipped because they have drivers or ads assigned.`,
+          duration: 5000
+        });
+      }
+
       const results = await Promise.allSettled(
-        selectedMaterials.map(id =>
+        materialsToDelete.map(id =>
           deleteMaterial({
             variables: { id, reason: reason || null }
           })
@@ -985,6 +1053,27 @@ const Materials: React.FC = () => {
   };
 
   const handleDeleteMaterial = (id: string) => {
+    const material = materials.find(m => m.id === id);
+    if (!material) return;
+    
+    // Check if material can be deleted
+    if (!canDeleteMaterial(material)) {
+      let reason = '';
+      if (material.driverId) {
+        reason = 'This device has a driver assigned. Please unassign the driver first.';
+      } else {
+        reason = 'This device has ads assigned. Please remove all ads first.';
+      }
+      
+      addToast({
+        type: 'error',
+        title: 'Cannot Delete Device',
+        message: reason,
+        duration: 5000
+      });
+      return;
+    }
+    
     setMaterialToDelete(id);
     setShowDeleteModal(true);
   };
@@ -1425,7 +1514,19 @@ const Materials: React.FC = () => {
                                      e.stopPropagation();
                                      handleDeleteMaterial(material.id);
                                    }}
-                                   className="flex items-center justify-center text-red-700 p-2 hover:bg-red-50"
+                                   disabled={!canDeleteMaterial(material)}
+                                   className={`flex items-center justify-center p-2 ${
+                                     canDeleteMaterial(material)
+                                       ? 'text-red-700 hover:bg-red-50'
+                                       : 'text-gray-400 cursor-not-allowed opacity-50'
+                                   }`}
+                                   title={
+                                     !canDeleteMaterial(material)
+                                       ? material.driverId
+                                         ? 'Cannot delete: Device has a driver assigned'
+                                         : 'Cannot delete: Device has ads assigned'
+                                       : 'Delete device'
+                                   }
                                  >
                                    <Trash size={16} />
                                  </button>
@@ -1518,7 +1619,19 @@ const Materials: React.FC = () => {
                             e.stopPropagation(); // ✅ stop row click
                             handleDeleteMaterial(material.id); // ✅ delete action
                           }}
-                            className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
+                            disabled={!canDeleteMaterial(material)}
+                            className={`group flex items-center overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300 ${
+                              canDeleteMaterial(material)
+                                ? 'text-red-700'
+                                : 'text-gray-400 cursor-not-allowed opacity-50'
+                            }`}
+                            title={
+                              !canDeleteMaterial(material)
+                                ? material.driverId
+                                  ? 'Cannot delete: Device has a driver assigned'
+                                  : 'Cannot delete: Device has ads assigned'
+                                : 'Delete device'
+                            }
                           >
                             <Trash 
                               className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"

@@ -594,12 +594,16 @@ createDriver: async (_, { input }) => {
         // Provide specific messages for different account statuses
         if (driver.accountStatus !== 'ACTIVE') {
           let statusMessage = '';
+          let suspensionReason = null;
           switch (driver.accountStatus) {
             case 'PENDING':
               statusMessage = 'Your account is still under review. Please wait for approval.';
               break;
             case 'SUSPENDED':
-              statusMessage = 'Your account has been suspended. Please contact support for assistance.';
+              suspensionReason = driver.suspensionReason || null;
+              statusMessage = suspensionReason 
+                ? `Your account has been suspended. Reason: ${suspensionReason}. Please contact support for assistance.`
+                : 'Your account has been suspended. Please contact support for assistance.';
               break;
             case 'REJECTED':
               statusMessage = 'Your account application was rejected. Please contact support for more information.';
@@ -610,7 +614,13 @@ createDriver: async (_, { input }) => {
             default:
               statusMessage = `Your account status is ${driver.accountStatus}. Please contact support for assistance.`;
           }
-          return { success: false, message: statusMessage, token: null, driver: null };
+          return { 
+            success: false, 
+            message: statusMessage, 
+            token: null, 
+            driver: null,
+            suspensionReason: suspensionReason
+          };
         }
 
         const valid = await bcrypt.compare(password.trim(), driver.password);
@@ -1000,6 +1010,62 @@ createDriver: async (_, { input }) => {
       }
     },
 
+    suspendDriver: async (_, { driverId, reason }, { user }) => {
+      try {
+        checkAdmin(user);
+
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { 
+            success: false, 
+            message: 'Driver not found',
+            driver: null
+          };
+        }
+
+        // Check if driver is already suspended
+        if (driver.accountStatus === 'SUSPENDED') {
+          return { 
+            success: false, 
+            message: 'Driver is already suspended',
+            driver 
+          };
+        }
+
+        // Update driver status to suspended
+        driver.accountStatus = 'SUSPENDED';
+        driver.suspensionReason = reason || null;
+        driver.tokenVersion += 1; // Invalidate all sessions
+        
+        await driver.save();
+
+        console.log(`Driver ${driver.driverId} suspended. Reason: ${reason || 'No reason provided'}`);
+
+        // Send driver suspension notification (both in-app and email)
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendDriverStatusChangeNotification(driver._id, 'SUSPENDED', reason);
+          console.log('✅ Driver suspension notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending driver suspension notification:', notificationError);
+          // Don't fail the suspension if notification fails
+        }
+
+        return {
+          success: true,
+          message: 'Driver suspended successfully',
+          driver
+        };
+      } catch (error) {
+        console.error('suspendDriver error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to suspend driver',
+          driver: null
+        };
+      }
+    },
+
     updateDriver: async (_, { driverId, input }, { user }) => {
       try {
         checkAdmin(user);
@@ -1017,6 +1083,12 @@ createDriver: async (_, { input }) => {
         const oldReviewStatus = driver.reviewStatus;
 
         Object.assign(driver, input);
+        
+        // Clear suspension reason if driver is being unsuspended (status changed from SUSPENDED to ACTIVE)
+        if (oldStatus === 'SUSPENDED' && input.accountStatus === 'ACTIVE') {
+          driver.suspensionReason = null;
+        }
+        
         await driver.save();
 
         // Send notification if status changed

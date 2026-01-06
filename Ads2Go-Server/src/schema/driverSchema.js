@@ -120,6 +120,7 @@ const typeDefs = gql`
     adminOverride: Boolean
     approvalDate: String
     rejectedReason: String
+    suspensionReason: String
     editRequestStatus: String
     editRequestData: EditRequestData
     profilePicture: String
@@ -176,6 +177,7 @@ const typeDefs = gql`
     message: String!
     token: String
     driver: Driver
+    suspensionReason: String
   }
 
   type Response {
@@ -380,6 +382,7 @@ const typeDefs = gql`
     ): DriverMutationResponse!
 
     rejectDriver(driverId: ID!, reason: String!): DriverResponse!
+    suspendDriver(driverId: ID!, reason: String!): DriverResponse!
     resubmitDriver(driverId: ID!, input: ResubmitDriverInput!): DriverResponse!
 
     unassignAndReassignMaterials(driverId: ID!): DriverResponseWithMaterials!

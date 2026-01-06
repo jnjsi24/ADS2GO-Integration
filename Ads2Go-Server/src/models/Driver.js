@@ -102,6 +102,7 @@ const DriverSchema = new mongoose.Schema(
     reviewStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
     approvalDate: Date,
     rejectedReason: String,
+    suspensionReason: String,
     resubmissionFiles: { type: [String], default: [] },
     
     // Admin tracking fields
