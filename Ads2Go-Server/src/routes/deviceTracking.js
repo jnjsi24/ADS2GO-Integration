@@ -722,15 +722,72 @@ router.post('/qr-scan', async (req, res) => {
     // Track QR scan using the new schema (always store, with slotNumber)
     const slot = deviceTracking.getSlot(parseInt(deviceSlot));
     if (slot) {
+      // Check if this is a new day - if so, we need to ensure we're using today's record
+      const recordDate = new Date(deviceTracking.date);
+      recordDate.setHours(0, 0, 0, 0);
+      const isNewDay = recordDate.getTime() !== today.getTime();
+      
+      // If it's a new day and we're using an old record, create a new record for today
+      if (isNewDay) {
+        console.log(`📅 [QRScan] New day detected. Creating new record for today.`);
+        
+        // Create a new record for today (per-day tracking)
+        deviceTracking = new DeviceTracking({
+          materialId,
+          carGroupId,
+          screenType: deviceTracking.screenType || 'HEADDRESS',
+          date: today,
+          isOnline: true,
+          lastSeen: new Date(),
+          slots: deviceTracking.slots || [{
+            slotNumber: parseInt(deviceSlot),
+            deviceId,
+            isOnline: true,
+            lastSeen: new Date(),
+            deviceInfo: {}
+          }],
+          currentSession: {
+            date: today,
+            startTime: new Date(),
+            lastOnlineUpdate: new Date(),
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            targetHours: 8,
+            complianceStatus: 'NON_COMPLIANT',
+            isActive: true
+          },
+          // Start fresh for the new day
+          totalQRScans: 0,
+          qrScans: [],
+          qrScansByAd: []
+        });
+        await deviceTracking.save();
+      }
+      
+      // Store the current count before adding the new scan
+      const currentCount = deviceTracking.totalQRScans || 0;
+      
       // Add QR scan to the device tracking (always store, regardless of master/slave)
       deviceTracking.qrScans.push({
         ...qrScanData,
         slotNumber: parseInt(deviceSlot)
       });
       
-      // ✅ FIX: Always recalculate totalQRScans from actual qrScans array length
-      // This ensures accuracy even if scans come from slave slots
-      deviceTracking.totalQRScans = deviceTracking.qrScans.length;
+      // ✅ FIX: Increment totalQRScans instead of recalculating from array length
+      // This ensures persistence and prevents reset issues when the array might be filtered
+      // Only increment if this is the master slot (to avoid double counting)
+      if (isMasterSlot) {
+        // Increment the count - this ensures it persists correctly
+        deviceTracking.totalQRScans = currentCount + 1;
+        console.log(`✅ [QRScan] Incremented count: ${currentCount} → ${deviceTracking.totalQRScans}`);
+      } else {
+        // For slave slots, don't increment the count (only master slot counts)
+        // But ensure the count is at least set to the array length if it's unset
+        if (deviceTracking.totalQRScans === undefined || deviceTracking.totalQRScans === null) {
+          deviceTracking.totalQRScans = deviceTracking.qrScans.length;
+        }
+        console.log(`💤 [QRScan] Slave slot - count remains: ${deviceTracking.totalQRScans}`);
+      }
       
       // Mark qrScans as modified to ensure post-save hook triggers archiving
       deviceTracking.markModified('qrScans');
@@ -752,10 +809,33 @@ router.post('/qr-scan', async (req, res) => {
         }
         
         if (userId) {
-          const existingAdScan = deviceTracking.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+          // ✅ FIX: Normalize adId to string for comparison (handles ObjectId vs string)
+          const adIdStr = qrScanData.adId ? qrScanData.adId.toString() : null;
+          const existingAdScan = deviceTracking.qrScansByAd.find(scan => {
+            const scanAdIdStr = scan.adId ? scan.adId.toString() : null;
+            return scanAdIdStr === adIdStr;
+          });
+          
           if (existingAdScan) {
-            existingAdScan.scanCount += 1;
+            // ✅ CRITICAL FIX: Before incrementing, validate against actual array count
+            // Count how many scans exist in the array for this ad
+            const actualArrayCount = deviceTracking.qrScans.filter(scan => {
+              const scanAdId = scan.adId ? scan.adId.toString() : null;
+              return scanAdId === adIdStr;
+            }).length;
+            
+            const previousCount = existingAdScan.scanCount || 0;
+            
+            // If array count is higher than scanCount, the count was reset - repair it
+            if (actualArrayCount > previousCount) {
+              console.log(`🔧 [QRScan] REPAIR: Ad "${qrScanData.adTitle || 'Unknown'}" (${adIdStr}) - scanCount was ${previousCount}, but array has ${actualArrayCount} scans. Repairing...`);
+              existingAdScan.scanCount = actualArrayCount; // Set to actual count first
+            }
+            
+            // Now increment from the repaired/correct count
+            existingAdScan.scanCount = (existingAdScan.scanCount || 0) + 1;
             existingAdScan.lastScanned = new Date();
+            console.log(`✅ [QRScan] Updated existing ad scan: ${qrScanData.adTitle || 'Unknown'} (${adIdStr}) - count: ${previousCount} → ${existingAdScan.scanCount}`);
           } else {
             deviceTracking.qrScansByAd.push({
               adId: qrScanData.adId,
@@ -765,8 +845,11 @@ router.post('/qr-scan', async (req, res) => {
               lastScanned: new Date(),
               firstScanned: new Date()
             });
+            console.log(`✅ [QRScan] Created new ad scan entry: ${qrScanData.adTitle || 'Unknown'} (${adIdStr}) - count: 1`);
           }
           deviceTracking.markModified('qrScansByAd');
+        } else {
+          console.warn(`⚠️ [QRScan] Skipping qrScansByAd update - no userId found for ad ${qrScanData.adId}`);
         }
       }
       

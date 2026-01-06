@@ -856,12 +856,21 @@ DeviceTrackingSchema.statics.findByMaterialAndSlot = function(materialId, slotNu
 };
 
 // Post-save hook to trigger archiving when DeviceTracking data changes
-// ✅ FIX: Pre-save hook to ensure totalQRScans is always in sync with qrScans array
+// ✅ FIX: Pre-save hook to ensure totalQRScans stays in sync, but only if it's not already set correctly
+// We don't want to recalculate if totalQRScans was explicitly set (incremented) in the route handlers
 DeviceTrackingSchema.pre('save', function(next) {
-  // Always recalculate totalQRScans from actual qrScans array length
-  // This ensures accuracy even if scans were added manually or from slave slots
+  // Only recalculate if totalQRScans is undefined/null or if it's significantly out of sync
+  // This prevents the hook from overriding explicit increments made in route handlers
   if (this.qrScans && Array.isArray(this.qrScans)) {
-    this.totalQRScans = this.qrScans.length;
+    // If totalQRScans is not set or is 0 but we have scans, set it to array length
+    // But if totalQRScans is already set and greater than array length, keep it (might be intentional)
+    if (this.totalQRScans === undefined || this.totalQRScans === null) {
+      this.totalQRScans = this.qrScans.length;
+    } else if (this.totalQRScans === 0 && this.qrScans.length > 0) {
+      // If count is 0 but we have scans, sync it (might have been reset incorrectly)
+      this.totalQRScans = this.qrScans.length;
+    }
+    // Otherwise, trust the explicitly set value from route handlers
   }
   next();
 });
