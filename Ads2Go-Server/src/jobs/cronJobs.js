@@ -86,6 +86,19 @@ class CronJobs {
     const dailyResetTask = cron.schedule('0 0 * * *', async () => {
       console.log('🔄 Daily reset job triggered at midnight (Philippines time)');
       try {
+        // ✅ SAFEGUARD: Wait a bit to ensure archive job completes (archive runs at 11:55 PM)
+        // Check if archive is still running and wait if needed (max 2 minutes)
+        let waitCount = 0;
+        while (dailyArchiveJobV2.isRunning && waitCount < 24) {
+          console.log(`⏳ Waiting for archive job to complete... (${waitCount * 5}s)`);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+          waitCount++;
+        }
+        
+        if (dailyArchiveJobV2.isRunning) {
+          console.warn('⚠️ Archive job still running after 2 minutes, proceeding with reset anyway');
+        }
+        
         await this.resetAllDeviceTracking();
         // Reset daily notification tracking
         deviceHoursNotificationService.resetDailyTracking();

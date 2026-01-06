@@ -17,19 +17,36 @@ class DailyArchiveJobV2 {
     logger.database('🔄 Starting daily archive job V2 (Array Structure)...');
 
     try {
-      // Get today's date in Philippines timezone for archiving
+      // ✅ FIX: Get the date in Philippines timezone properly
+      // At 11:55 PM PH time, we want to archive the current day's data
+      // We need to calculate the UTC midnight date that corresponds to "today" in PH timezone
       const now = new Date();
-      const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
       
-      const year = philippinesTime.getFullYear();
-      const month = String(philippinesTime.getMonth() + 1).padStart(2, '0');
-      const day = String(philippinesTime.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
+      // Get date components directly from Philippines timezone using Intl.DateTimeFormat
+      const phDateFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
       
-      logger.database(`📅 Archiving data for date: ${dateStr} (Current day)`);
+      const phDateParts = phDateFormatter.formatToParts(now);
+      const year = parseInt(phDateParts.find(p => p.type === 'year').value);
+      const month = parseInt(phDateParts.find(p => p.type === 'month').value) - 1; // 0-indexed
+      const day = parseInt(phDateParts.find(p => p.type === 'day').value);
+      
+      // Create UTC midnight date directly from Philippines date components
+      // This matches how dates are stored in the database (UTC midnight)
+      const targetUTCDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      
+      // Format date string for logging
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      logger.database(`📅 Archiving data for date: ${dateStr} (Philippines time)`);
+      logger.database(`📅 Target UTC date: ${targetUTCDate.toISOString()}`);
 
-      // Get all device tracking records using flexible date matching
-      const devices = await this.getDevicesForArchiving(philippinesTime);
+      // Get all device tracking records using the correct UTC midnight date
+      const devices = await this.getDevicesForArchiving(targetUTCDate);
 
       logger.database(`📊 Found ${devices.length} device records to archive`);
 
@@ -57,29 +74,50 @@ class DailyArchiveJobV2 {
   }
 
   // ✅ FIX: Simplified date matching using single UTC midnight format
-  async getDevicesForArchiving(philippinesTime) {
+  async getDevicesForArchiving(targetUTCDate) {
     try {
-      const { getUTCMidnight } = require('../utils/dateUtils');
+      logger.database(`🔍 Searching for devices with date: ${targetUTCDate.toISOString()}`);
       
-      // ✅ SINGLE FORMAT: UTC midnight Date object
-      const targetDate = getUTCMidnight(philippinesTime);
-      
-      logger.database(`🔍 Searching for devices with date: ${targetDate.toISOString()}`);
-      
-      // Simple query - exact match on UTC midnight
-      const devices = await DeviceTracking.find({
-        date: targetDate
+      // ✅ FIX: Use exact match first (most efficient)
+      let devices = await DeviceTracking.find({
+        date: targetUTCDate
       });
+      
+      // If no devices found with exact match, try range query as fallback
+      // This handles edge cases where dates might be slightly off
+      if (devices.length === 0) {
+        logger.database(`⚠️ No exact match found, trying range query...`);
+        const startOfDay = new Date(targetUTCDate);
+        const endOfDay = new Date(targetUTCDate);
+        endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+        
+        devices = await DeviceTracking.find({
+          date: { 
+            $gte: startOfDay, 
+            $lt: endOfDay 
+          }
+        });
+      }
       
       logger.database(`📊 Found ${devices.length} devices for archiving`);
       
       if (devices.length === 0) {
         // ⚠️ WARNING: No devices found - possible issue
-        console.warn(`⚠️ WARNING: No devices found for ${targetDate.toISOString().split('T')[0]}`);
+        console.warn(`⚠️ WARNING: No devices found for ${targetUTCDate.toISOString().split('T')[0]}`);
         console.warn(`   This might indicate:`);
         console.warn(`   1. No devices were online today`);
-        console.warn(`   2. Daily reset hasn't run yet`);
-        console.warn(`   3. Date format mismatch (run migration script if needed)`);
+        console.warn(`   2. Daily reset already ran and cleared the data`);
+        console.warn(`   3. Date format mismatch (check database date format)`);
+        console.warn(`   4. Archive job timing issue (running too late)`);
+        
+        // Try to find any devices with recent dates to help debug
+        const recentDevices = await DeviceTracking.find({}).limit(5).select('materialId date');
+        if (recentDevices.length > 0) {
+          console.warn(`   Sample device dates in database:`);
+          recentDevices.forEach(d => {
+            console.warn(`     ${d.materialId}: ${d.date ? d.date.toISOString() : 'null'}`);
+          });
+        }
       }
       
       return devices;

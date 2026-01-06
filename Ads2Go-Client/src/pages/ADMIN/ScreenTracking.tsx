@@ -605,11 +605,11 @@ const ScreenTracking: React.FC = () => {
     }
   }, [activeTab, selectedDate]);
 
-  // Auto-update current time display every 30 seconds
+  // Auto-update current time display every seconds
   useEffect(() => {
     const timeUpdateInterval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 30000); // Update every 30 seconds
+    }, 1000); // Update every seconds
     
     return () => clearInterval(timeUpdateInterval);
   }, []);
