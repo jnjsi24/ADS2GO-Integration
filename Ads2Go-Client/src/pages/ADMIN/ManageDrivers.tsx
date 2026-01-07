@@ -317,7 +317,7 @@ const ManageDrivers: React.FC = () => {
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
-  const { data: driverSalaryCalculationsData } = useQuery(GET_DRIVER_SALARY_CALCULATIONS_BY_DRIVER, {
+  const { data: driverSalaryCalculationsData, loading: salaryCalculationsLoading, error: salaryCalculationsError } = useQuery(GET_DRIVER_SALARY_CALCULATIONS_BY_DRIVER, {
     variables: { driverId: selectedDriverDetails?.driverId || '' },
     skip: !selectedDriverDetails?.driverId,
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
@@ -325,23 +325,66 @@ const ManageDrivers: React.FC = () => {
 
   // Calculate current month's salary
   const getCurrentMonthSalary = () => {
-    if (!driverSalaryCalculationsData?.getDriverSalaryCalculationsByDriver?.calculations) {
+    // Don't calculate if query is still loading
+    if (salaryCalculationsLoading) {
       return 0;
     }
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+    // Check if query has been executed and has data
+    if (!driverSalaryCalculationsData) {
+      return 0;
+    }
 
-    const currentMonthCalculations = driverSalaryCalculationsData.getDriverSalaryCalculationsByDriver.calculations.filter((calc: any) => {
-      if (!calc.calculationPeriod?.startDate) return false;
+    const response = driverSalaryCalculationsData.getDriverSalaryCalculationsByDriver;
+    
+    if (!response || !response.success || !response.calculations || response.calculations.length === 0) {
+      return 0;
+    }
+
+    const calculations = response.calculations;
+
+    // Use UTC to avoid timezone issues
+    const now = new Date();
+    const currentMonth = now.getUTCMonth(); // 0-indexed (0 = January, 11 = December)
+    const currentYear = now.getUTCFullYear();
+
+    const currentMonthCalculations = calculations.filter((calc: any) => {
+      if (!calc.calculationPeriod?.startDate) {
+        return false;
+      }
       
-      const startDate = new Date(calc.calculationPeriod.startDate);
-      const calcMonth = startDate.getMonth();
-      const calcYear = startDate.getFullYear();
+      // Parse date - handle both ISO strings and timestamps
+      let startDate: Date;
+      const startDateValue = calc.calculationPeriod.startDate;
       
-      // Check if the calculation period is in the current month
-      return calcMonth === currentMonth && calcYear === currentYear;
+      try {
+        if (typeof startDateValue === 'string') {
+          // Check if it's a numeric string (timestamp)
+          if (/^\d+$/.test(startDateValue)) {
+            startDate = new Date(parseInt(startDateValue, 10));
+          } else {
+            startDate = new Date(startDateValue);
+          }
+        } else if (typeof startDateValue === 'number') {
+          startDate = new Date(startDateValue);
+        } else {
+          startDate = new Date(startDateValue);
+        }
+        
+        // Validate date
+        if (isNaN(startDate.getTime())) {
+          return false;
+        }
+        
+        // Use UTC month and year for comparison to avoid timezone issues
+        const calcMonth = startDate.getUTCMonth();
+        const calcYear = startDate.getUTCFullYear();
+        
+        // Check if the calculation period is in the current month (using UTC)
+        return calcMonth === currentMonth && calcYear === currentYear;
+      } catch (error) {
+        return false;
+      }
     });
 
     const totalSalary = currentMonthCalculations.reduce((sum: number, calc: any) => {

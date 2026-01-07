@@ -361,14 +361,8 @@ const Dashboard: React.FC = () => {
         const currentYear = now.getUTCFullYear();
         const currentMonth = now.getUTCMonth(); // 0-indexed (0 = January, 11 = December)
 
-        console.log('📅 Current month (UTC):', {
-          month: currentMonth + 1,
-          year: currentYear
-        });
-
         const currentMonthCalculations = calculations.filter((calc: any) => {
           if (!calc.calculationPeriod?.startDate) {
-            console.log('⚠️ Calculation missing startDate:', calc.id);
             return false;
           }
           
@@ -392,59 +386,32 @@ const Dashboard: React.FC = () => {
             
             // Validate date
             if (isNaN(startDate.getTime())) {
-              console.warn('⚠️ Invalid date for calculation:', calc.id, startDateValue);
               return false;
             }
             
             // Use UTC month and year for comparison to avoid timezone issues
             const calcMonth = startDate.getUTCMonth();
             const calcYear = startDate.getUTCFullYear();
-            const salary = calc.calculations?.totalSalary || 0;
             
             // Check if the calculation's startDate is in the current month (using UTC)
-            const isInCurrentMonth = calcMonth === currentMonth && calcYear === currentYear;
-            
-            console.log(`📊 Calculation ${calc.id}:`, {
-              startDate: startDate.toISOString(),
-              calcMonth: calcMonth + 1,
-              calcYear: calcYear,
-              currentMonth: currentMonth + 1,
-              currentYear: currentYear,
-              isInCurrentMonth,
-              salary: salary
-            });
-            
-            return isInCurrentMonth;
+            return calcMonth === currentMonth && calcYear === currentYear;
           } catch (error) {
-            console.warn('⚠️ Error parsing date for calculation:', calc.id, error);
             return false;
           }
         });
 
-        console.log(`✅ Filtered ${currentMonthCalculations.length} calculations for current month out of ${calculations.length} total`);
-
         // Sum up current month calculations only
         const currentMonthSalary = currentMonthCalculations.reduce((sum: number, calc: any) => {
-          const salary = calc.calculations?.totalSalary || 0;
-          console.log(`💰 Adding salary: ₱${salary} from calculation ${calc.id}`);
-          return sum + salary;
+          return sum + (calc.calculations?.totalSalary || 0);
         }, 0);
 
         // Only show current month's salary (no fallback to past months)
         const finalSalary = Math.round(currentMonthSalary * 100) / 100;
         setTotalEarnings(finalSalary);
-        console.log('✅ Current month salary calculated:', {
-          totalSalary: finalSalary,
-          calculationsCount: currentMonthCalculations.length,
-          month: currentMonth + 1,
-          year: currentYear
-        });
       } else {
-        console.warn('⚠️ getMySalaryCalculations returned success: false', data.data?.getMySalaryCalculations?.message);
         setTotalEarnings(0);
       }
     } catch (error) {
-      console.error('❌ Error fetching salary summary:', error);
       // Don't show error to user, just keep default value
       setTotalEarnings(0);
     }

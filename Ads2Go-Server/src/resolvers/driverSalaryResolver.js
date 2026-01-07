@@ -368,9 +368,17 @@ const resolvers = {
       checkAuth(user);
       
       try {
-        const calculations = await DriverSalaryCalculation.find({ driverId })
+        // Filter by isActive: true to match mobile app behavior
+        const calculations = await DriverSalaryCalculation.find({ 
+          driverId,
+          isActive: true 
+        })
           .populate('driver', 'driverId firstName lastName email vehicleType')
-          .populate('material', 'materialId materialType category vehicleType')
+          .populate({
+            path: 'material',
+            select: 'materialId materialType category vehicleType',
+            strictPopulate: false // Don't throw error if material is missing
+          })
           .populate('approvedBy', 'firstName lastName email')
           .sort({ 'calculationPeriod.startDate': -1 });
         
