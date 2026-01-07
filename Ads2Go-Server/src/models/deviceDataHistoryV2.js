@@ -423,19 +423,19 @@ DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
   return this;
 };
 
-// Post-save hook to trigger real-time salary updates when tracking data changes
+// Post-save hook to trigger real-time salary updates and analytics sync when tracking data changes
 DeviceDataHistoryV2Schema.post('save', async function(doc) {
   try {
-    // Only trigger salary updates for significant data changes
+    // Only trigger updates for significant data changes
     if (this.isModified('dailyData') || this.isModified('lifetimeTotals')) {
-      console.log(`💰 DeviceDataHistoryV2 data changed for ${this.materialId}, triggering salary update...`);
+      console.log(`💰 DeviceDataHistoryV2 data changed for ${this.materialId}, triggering real-time updates...`);
       
-      // Import and trigger salary update (use setTimeout to avoid blocking the save operation)
+      // Import and trigger updates (use setTimeout to avoid blocking the save operation)
       setTimeout(async () => {
         try {
+          // 1. Trigger salary update
           const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
           
-          // Get the latest daily data date
           if (this.dailyData && this.dailyData.length > 0) {
             const latestDailyData = this.dailyData.sort((a, b) => b.date - a.date)[0];
             const dateStr = latestDailyData.date.toISOString().split('T')[0];
@@ -443,8 +443,54 @@ DeviceDataHistoryV2Schema.post('save', async function(doc) {
             await realTimeSalaryUpdateService.updateSalaryCalculations(this.materialId, dateStr);
             console.log(`✅ Real-time salary update triggered for ${this.materialId} on ${dateStr}`);
           }
+          
+          // 2. Trigger analytics sync for all users with ads on this device
+          try {
+            const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+            
+            // Get unique userIds from deployedAds or from dailyData adPerformance
+            const userIds = new Set();
+            
+            // Get userIds from deployedAds
+            if (this.deployedAds && Array.isArray(this.deployedAds)) {
+              this.deployedAds.forEach(ad => {
+                if (ad.userId) userIds.add(ad.userId.toString());
+              });
+            }
+            
+            // Get userIds from dailyData adPerformance (for QR scans and ad plays)
+            if (this.dailyData && Array.isArray(this.dailyData)) {
+              this.dailyData.forEach(day => {
+                if (day.adPerformance && Array.isArray(day.adPerformance)) {
+                  day.adPerformance.forEach(perf => {
+                    if (perf.userId) userIds.add(perf.userId.toString());
+                  });
+                }
+                if (day.qrScansByAd && Array.isArray(day.qrScansByAd)) {
+                  day.qrScansByAd.forEach(qr => {
+                    if (qr.userId) userIds.add(qr.userId.toString());
+                  });
+                }
+              });
+            }
+            
+            // Trigger sync for each user (debounced to avoid too many syncs)
+            if (userIds.size > 0) {
+              console.log(`⚡ [REALTIME] Triggering analytics sync for ${userIds.size} user(s) from ${this.materialId}`);
+              userIds.forEach(userId => {
+                // Use a small delay to batch multiple updates
+                setTimeout(() => {
+                  userAnalyticsSyncJob.syncUserImmediately(userId).catch(err => {
+                    console.error(`❌ Real-time analytics sync failed for user ${userId}:`, err.message);
+                  });
+                }, Math.random() * 1000); // Random delay 0-1s to spread out syncs
+              });
+            }
+          } catch (analyticsError) {
+            console.error(`❌ Real-time analytics sync trigger failed for ${this.materialId}:`, analyticsError.message);
+          }
         } catch (error) {
-          console.error(`❌ Real-time salary update failed for ${this.materialId}:`, error.message);
+          console.error(`❌ Real-time update failed for ${this.materialId}:`, error.message);
         }
       }, 2000); // 2 second delay to ensure save is complete
     }

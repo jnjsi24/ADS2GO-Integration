@@ -3798,13 +3798,14 @@ class UserAnalyticsService {
               return qrAdId === adIdStr;
             }) : null;
           
-          // ✅ Use QR scans from dailyStats if getTotalQRScans didn't find any (more reliable)
-          // Prefer getTotalQRScans if available, otherwise use dailyStats aggregation
-          let totalQRScans = 0;
-          if (adQRScans && adQRScans.totalScans > 0) {
-            totalQRScans = adQRScans.totalScans;
-          } else if (qrScansFromDailyStats[adIdStr]) {
-            totalQRScans = qrScansFromDailyStats[adIdStr];
+          // ✅ FIX: Use Math.max to ensure we get the highest QR scan count
+          // This prevents undercounting when API returns partial data but dailyStats has complete data
+          const qrFromAPI = adQRScans?.totalScans || 0;
+          const qrFromDailyStats = qrScansFromDailyStats[adIdStr] || 0;
+          const totalQRScans = Math.max(qrFromAPI, qrFromDailyStats);
+          
+          if (qrFromAPI !== qrFromDailyStats && (qrFromAPI > 0 || qrFromDailyStats > 0)) {
+            console.log(`⚠️ [SYNC] QR scan count mismatch for ad ${adIdStr}: API=${qrFromAPI}, dailyStats=${qrFromDailyStats}, using max=${totalQRScans}`);
           }
           
           // ✅ Get actively deployed devices for this ad from AdsDeployment
@@ -4683,6 +4684,119 @@ class UserAnalyticsService {
       } else {
         // Clear cache for this user since data has been synced
         this.clearUserCache(userId);
+        
+        // ✅ CRITICAL FIX: Fetch QR scan data using getTotalQRScans (includes both DeviceTracking and DeviceDataHistoryV2)
+        // This ensures we get complete QR scan data, including current day data from DeviceTracking
+        // This must happen BEFORE updateFlatCollections so the flat collections have the latest data
+        try {
+          console.log(`📊 [SYNC] Fetching QR scan data for user ${userId}...`);
+          const qrScanData = await this.getTotalQRScans(userId, startDate, endDate);
+          
+          console.log(`📊 [SYNC] getTotalQRScans result:`, {
+            success: qrScanData.success,
+            totalScans: qrScanData.totalScans,
+            adsCount: qrScanData.ads?.length || 0
+          });
+          
+          if (qrScanData.success && qrScanData.ads && qrScanData.ads.length > 0) {
+            // Reload userAnalytics to get the latest saved version
+            const savedUserAnalytics = await UserAnalytics.findOne({ userId });
+            if (savedUserAnalytics) {
+              // Create a map of QR scan data by adId
+              const qrScanMap = new Map();
+              qrScanData.ads.forEach(qrAd => {
+                const adId = qrAd.adId ? (qrAd.adId.toString ? qrAd.adId.toString() : String(qrAd.adId)) : '';
+                if (adId) {
+                  qrScanMap.set(adId, qrAd.totalScans || 0);
+                }
+              });
+              
+              console.log(`📊 [SYNC] QR scan map:`, Array.from(qrScanMap.entries()));
+              console.log(`📊 [SYNC] Current userAnalytics.ads QR scans:`, savedUserAnalytics.ads.map(ad => ({
+                adId: String(ad.adId),
+                currentQRScans: ad.totalQRScans || 0
+              })));
+              
+              // Update ads array with QR scan data from getTotalQRScans
+              // ✅ CRITICAL FIX: Use Math.max to preserve the higher value (don't overwrite with lower value)
+              // This prevents getTotalQRScans from overwriting a correct value calculated from dailyStats
+              let updatedCount = 0;
+              savedUserAnalytics.ads = savedUserAnalytics.ads.map(ad => {
+                const adId = ad.adId.toString ? ad.adId.toString() : String(ad.adId);
+                const qrScans = qrScanMap.get(adId);
+                if (qrScans !== undefined) {
+                  const oldValue = ad.totalQRScans || 0;
+                  // ✅ Use Math.max to preserve the higher value (dailyStats might have more accurate count)
+                  const newValue = Math.max(oldValue, qrScans);
+                  if (newValue !== oldValue) {
+                    ad.totalQRScans = newValue;
+                    console.log(`✅ [SYNC] Updating ad ${adId} (${ad.adTitle}) QR scans: ${oldValue} → ${newValue} (using max of ${oldValue} and ${qrScans})`);
+                    updatedCount++;
+                  } else if (qrScans < oldValue) {
+                    console.log(`⚠️ [SYNC] Preserving higher QR scan count for ad ${adId} (${ad.adTitle}): ${oldValue} (getTotalQRScans returned ${qrScans}, but dailyStats has ${oldValue})`);
+                  }
+                }
+                return ad;
+              });
+              
+              // ✅ Calculate user-level totalQRScans from ads array to ensure consistency
+              const calculatedTotalQRScans = savedUserAnalytics.ads.reduce((sum, ad) => sum + (ad.totalQRScans || 0), 0);
+              const oldTotal = savedUserAnalytics.totalQRScans || 0;
+              savedUserAnalytics.totalQRScans = calculatedTotalQRScans;
+              
+              if (oldTotal !== calculatedTotalQRScans || updatedCount > 0) {
+                console.log(`✅ [SYNC] Updating totalQRScans: ${oldTotal} → ${calculatedTotalQRScans} (${updatedCount} ads updated)`);
+                
+                // ✅ CRITICAL: Save the updated QR scan data before updating flat collections
+                savedUserAnalytics.markModified('ads');
+                savedUserAnalytics.markModified('totalQRScans');
+                await savedUserAnalytics.save();
+                console.log(`✅ [SYNC] Saved updated QR scans: ${qrScanData.totalScans} total scans across ${qrScanData.ads.length} ads`);
+              } else {
+                console.log(`ℹ️ [SYNC] No QR scan updates needed (already up-to-date)`);
+              }
+              
+              // Reload again to get the latest saved version with QR scan updates
+              const finalUserAnalytics = await UserAnalytics.findOne({ userId }).lean();
+              
+              // ✅ FIX: Update flat collections (UserAnalyticsSummary & DailyUserAnalytics) after sync
+              const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+              if (finalUserAnalytics) {
+                await userAnalyticsSyncJob.updateFlatCollections(finalUserAnalytics);
+                console.log(`✅ [SYNC] Updated flat collections (UserAnalyticsSummary & DailyUserAnalytics) for user ${userId}`);
+              }
+            }
+          } else {
+            console.warn(`⚠️ [SYNC] getTotalQRScans returned no data or failed:`, {
+              success: qrScanData.success,
+              message: qrScanData.message,
+              adsCount: qrScanData.ads?.length || 0
+            });
+            
+            // Still update flat collections even if QR scan fetch failed
+            const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+            const savedUserAnalytics = await UserAnalytics.findOne({ userId }).lean();
+            if (savedUserAnalytics) {
+              await userAnalyticsSyncJob.updateFlatCollections(savedUserAnalytics);
+              console.log(`✅ [SYNC] Updated flat collections (without QR scan update) for user ${userId}`);
+            }
+          }
+        } catch (qrScanError) {
+          console.error(`❌ [SYNC] Error fetching QR scan data:`, qrScanError.message);
+          console.error(`❌ [SYNC] QR scan error stack:`, qrScanError.stack);
+          
+          // Still update flat collections even if QR scan fetch failed
+          try {
+            const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+            const savedUserAnalytics = await UserAnalytics.findOne({ userId }).lean();
+            if (savedUserAnalytics) {
+              await userAnalyticsSyncJob.updateFlatCollections(savedUserAnalytics);
+              console.log(`✅ [SYNC] Updated flat collections (QR scan fetch failed) for user ${userId}`);
+            }
+          } catch (flatCollectionError) {
+            console.error('❌ [SYNC] Error updating flat collections:', flatCollectionError.message);
+          }
+        }
       }
 
       // ✅ Return freshData with all the processed totals (totalAdPlays, etc.)
@@ -5756,15 +5870,25 @@ class UserAnalyticsService {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      // ✅ Try both exact match and range query to ensure we find the records
-      // Records are created with date: today (Date object with hours set to 0)
+      // ✅ FIX: Use range query to find today's records (handles timezone and date format differences)
+      // Records might have date stored as Date object or string, so use range query
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
       const currentData = await DeviceTracking.find({
         materialId: { $in: materialIds },
-        date: today
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
       });
       
       // ✅ Always log current day data for debugging
-      console.log('🔍 [getTotalQRScans] Current day data found:', currentData.length, 'devices');
+      console.log('🔍 [getTotalQRScans] Current day data found:', currentData.length, 'devices', {
+        today: today.toISOString(),
+        materialIds: materialIds.length,
+        query: { materialId: { $in: materialIds }, date: { $gte: today, $lt: tomorrow } }
+      });
       if (currentData.length > 0) {
         currentData.forEach((device, idx) => {
           console.log(`🔍 [getTotalQRScans] Current day device ${idx + 1}:`, {
@@ -5791,6 +5915,9 @@ class UserAnalyticsService {
         
         // ✅ Method 1: Process qrScansByAd (aggregated data) if available
         const hasQrScansByAd = device.qrScansByAd && device.qrScansByAd.length > 0;
+        // ✅ Track which ads were found in qrScansByAd to avoid double-counting
+        const adsFoundInQrScansByAd = new Set();
+        
         if (hasQrScansByAd) {
           device.qrScansByAd.forEach(adScan => {
             // ✅ Normalize adId to string for consistent matching
@@ -5806,6 +5933,8 @@ class UserAnalyticsService {
             }
             
             if (normalizedAdId && userAdIds.includes(normalizedAdId)) {
+              adsFoundInQrScansByAd.add(normalizedAdId); // Track that this ad was found in qrScansByAd
+              
               if (!qrScansByAd[normalizedAdId]) {
                 qrScansByAd[normalizedAdId] = {
                   adId: normalizedAdId, // ✅ Store as normalized string
@@ -5829,10 +5958,16 @@ class UserAnalyticsService {
                   return scanAdId === normalizedAdId && belongsToUser;
                 }).length;
                 
-                // Use the maximum of scanCount or array count (repair if needed)
-                if (actualArrayCount > scanCountToAdd) {
-                  console.log(`🔧 [getTotalQRScans] REPAIR Current Day: Ad "${adScan.adTitle}" (${normalizedAdId}) - scanCount was ${scanCountToAdd}, but array has ${actualArrayCount}. Using array count.`);
-                  scanCountToAdd = actualArrayCount;
+                // ✅ FIX: Always use array count if it exists (more accurate than scanCount field)
+                // The array is the source of truth - scanCount field can be stale or incorrect
+                if (actualArrayCount > 0) {
+                  if (actualArrayCount !== scanCountToAdd) {
+                    console.log(`🔧 [getTotalQRScans] REPAIR Current Day: Ad "${adScan.adTitle}" (${normalizedAdId}) - scanCount was ${scanCountToAdd}, but array has ${actualArrayCount}. Using array count (source of truth).`);
+                  }
+                  scanCountToAdd = actualArrayCount; // Always use array count when available
+                } else if (scanCountToAdd > 0) {
+                  // If array is empty but scanCount > 0, log a warning but use scanCount (might be valid if array was cleared)
+                  console.log(`⚠️ [getTotalQRScans] Current Day: Ad "${adScan.adTitle}" (${normalizedAdId}) - scanCount is ${scanCountToAdd} but array is empty. Using scanCount.`);
                 }
               }
               
@@ -5847,56 +5982,63 @@ class UserAnalyticsService {
           });
         }
         
-        // ✅ FIX: Method 2: Validate scanCount against array BEFORE adding to total
-        // This prevents double-counting - we validate during qrScansByAd processing, not after
-        // The validation happens inline in the qrScansByAd loop above (lines 5548-5564)
-        // So we don't need separate repair logic here that would cause double-counting
-        
-        // ✅ FIX: Method 3: Process qrScans (individual records) ONLY if qrScansByAd is empty
-        // This prevents double-counting when both qrScansByAd and qrScans exist
-        if (!hasQrScansByAd && device.qrScans && device.qrScans.length > 0) {
-          if (isVerbose) {
-            console.log(`🔍 [getTotalQRScans] Processing ${device.qrScans.length} individual QR scan records`);
-          }
+        // ✅ FIX: Method 2: Process qrScans (individual records) for ads NOT found in qrScansByAd
+        // This ensures we count scans for ads that exist in the array but not in qrScansByAd
+        // Example: If qrScansByAd has FREDDIE but not EFFICASCENT, we still count EFFICASCENT from the array
+        if (device.qrScans && device.qrScans.length > 0) {
+          // Only process if qrScansByAd is empty OR if there are ads in the array that aren't in qrScansByAd
+          const shouldProcessArray = !hasQrScansByAd || adsFoundInQrScansByAd.size === 0;
           
-          device.qrScans.forEach(qrScan => {
-            // ✅ Filter by userId AND check if adId belongs to user's ads
-            const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
-            const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
-            
-            if (belongsToUser && normalizedAdId) {
-              if (!qrScansByAd[normalizedAdId]) {
-                // Try to get ad title from userAds
-                const ad = userAds.find(a => a._id.toString() === normalizedAdId);
-                qrScansByAd[normalizedAdId] = {
-                  adId: normalizedAdId,
-                  adTitle: ad?.title || 'Unknown',
-                  totalScans: 0,
-                  firstScanned: qrScan.scannedAt || qrScan.timestamp || null,
-                  lastScanned: qrScan.scannedAt || qrScan.timestamp || null,
-                  scans: []
-                };
-              }
-              qrScansByAd[normalizedAdId].totalScans += 1; // Count individual scans
-              totalScans += 1;
-              
-              // Update first/last scanned timestamps
-              const scanTime = qrScan.scannedAt || qrScan.timestamp;
-              if (scanTime) {
-                if (!qrScansByAd[normalizedAdId].firstScanned || new Date(scanTime) < new Date(qrScansByAd[normalizedAdId].firstScanned)) {
-                  qrScansByAd[normalizedAdId].firstScanned = scanTime;
-                }
-                if (!qrScansByAd[normalizedAdId].lastScanned || new Date(scanTime) > new Date(qrScansByAd[normalizedAdId].lastScanned)) {
-                  qrScansByAd[normalizedAdId].lastScanned = scanTime;
-                }
-              }
-              
-              if (isVerbose) {
-                console.log(`✅ [getTotalQRScans] Current day (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-              }
+          if (shouldProcessArray || adsFoundInQrScansByAd.size < userAdIds.length) {
+            if (isVerbose || !hasQrScansByAd) {
+              console.log(`🔍 [getTotalQRScans] Processing ${device.qrScans.length} individual QR scan records for current day (qrScansByAd had ${adsFoundInQrScansByAd.size} ads, looking for missing ads)`);
             }
-            // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
-          });
+            
+            device.qrScans.forEach(qrScan => {
+              // ✅ Filter by userId AND check if adId belongs to user's ads
+              const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
+              const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
+              
+              // ✅ CRITICAL FIX: Only process if this ad was NOT found in qrScansByAd (to avoid double-counting)
+              // If qrScansByAd exists and has this ad, skip it (already counted above)
+              const adAlreadyCounted = hasQrScansByAd && adsFoundInQrScansByAd.has(normalizedAdId);
+              
+              if (belongsToUser && normalizedAdId && !adAlreadyCounted) {
+                if (!qrScansByAd[normalizedAdId]) {
+                  // Try to get ad title from userAds
+                  const ad = userAds.find(a => a._id.toString() === normalizedAdId);
+                  qrScansByAd[normalizedAdId] = {
+                    adId: normalizedAdId,
+                    adTitle: ad?.title || 'Unknown',
+                    totalScans: 0,
+                    firstScanned: qrScan.scannedAt || qrScan.timestamp || null,
+                    lastScanned: qrScan.scannedAt || qrScan.timestamp || null,
+                    scans: []
+                  };
+                }
+                qrScansByAd[normalizedAdId].totalScans += 1; // Count individual scans
+                totalScans += 1;
+                
+                // Update first/last scanned timestamps
+                const scanTime = qrScan.scannedAt || qrScan.timestamp;
+                if (scanTime) {
+                  if (!qrScansByAd[normalizedAdId].firstScanned || new Date(scanTime) < new Date(qrScansByAd[normalizedAdId].firstScanned)) {
+                    qrScansByAd[normalizedAdId].firstScanned = scanTime;
+                  }
+                  if (!qrScansByAd[normalizedAdId].lastScanned || new Date(scanTime) > new Date(qrScansByAd[normalizedAdId].lastScanned)) {
+                    qrScansByAd[normalizedAdId].lastScanned = scanTime;
+                  }
+                }
+                
+                if (isVerbose || (!hasQrScansByAd && qrScansByAd[normalizedAdId].totalScans <= 5)) {
+                  console.log(`✅ [getTotalQRScans] Current day (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+                }
+              }
+              // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
+            });
+          } else if (hasQrScansByAd && isVerbose) {
+            console.log(`⏭️ [getTotalQRScans] Skipping qrScans array processing for current day - all user ads already found in qrScansByAd`);
+          }
         }
         // ✅ Removed warning log - empty QR scan data is expected for many devices
       });
@@ -5942,21 +6084,35 @@ class UserAnalyticsService {
             // ✅ Always exclude today's date from historical data to avoid double-counting
             // Current day data (DeviceTracking) already includes today, so we don't want to count it again from historical data
             const dailyDate = new Date(dailyData.date);
+            // ✅ FIX: Use Philippine timezone for "today" comparison to match data storage
             const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dailyDateOnly = new Date(dailyDate);
-            dailyDateOnly.setHours(0, 0, 0, 0);
-            const isToday = dailyDateOnly.getTime() === today.getTime();
+            // Convert to Philippine time (UTC+8)
+            const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+            const phTime = new Date(today.getTime() + phOffset);
+            phTime.setUTCHours(0, 0, 0, 0);
             
-            // ✅ Always exclude today from historical data (current day data handles today)
-            // For all-time: process all dates except today
-            // For date-filtered: process dates in range except today
+            const dailyDateOnly = new Date(dailyDate);
+            dailyDateOnly.setUTCHours(0, 0, 0, 0);
+            
+            // Compare dates as strings (YYYY-MM-DD) to avoid timezone issues
+            const todayStr = phTime.toISOString().split('T')[0];
+            const dailyDateStr = dailyDateOnly.toISOString().split('T')[0];
+            const isToday = dailyDateStr === todayStr;
+            
+            // ✅ FIX: Include today from historical data if current day data wasn't found
+            // This ensures today's scans are counted even if DeviceTracking query fails or hasn't been archived yet
             let shouldProcess = false;
             if (isToday) {
-              shouldProcess = false; // Never process today from historical data
-              console.log(`⏭️ [getTotalQRScans] Skipping today's date in historical data: ${dailyData.date}`);
+              // ✅ FIX: Include today from historical data if current day data wasn't found
+              // This prevents missing today's scans when DeviceTracking query returns 0 devices
+              shouldProcess = currentData.length === 0; // Only skip if we found current day data
+              if (!shouldProcess) {
+                console.log(`⏭️ [getTotalQRScans] Skipping today's date in historical data (current day data found): ${dailyData.date} (today: ${todayStr}, daily: ${dailyDateStr})`);
+              } else {
+                console.log(`✅ [getTotalQRScans] Including today's date from historical data (no current day data found): ${dailyData.date} (today: ${todayStr}, daily: ${dailyDateStr})`);
+              }
             } else if (isAllTime) {
-              shouldProcess = true; // Process all historical dates except today
+              shouldProcess = true; // Process all historical dates except today (if current day data exists)
             } else if (defaultStartDate && defaultEndDate) {
               shouldProcess = dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate);
             }
@@ -5989,12 +6145,17 @@ class UserAnalyticsService {
             if (shouldProcess) {
               // ✅ Method 1: Process qrScansByAd (aggregated data) if available
               const hasDailyQrScansByAd = dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0;
+              // ✅ Track which ads were found in qrScansByAd to avoid double-counting
+              const adsFoundInQrScansByAd = new Set();
+              
               if (hasDailyQrScansByAd) {
                 dailyData.qrScansByAd.forEach(adScan => {
                   // ✅ Normalize adId to string for consistent matching
                   const normalizedAdId = adScan.adId ? adScan.adId.toString() : '';
                   
                   if (normalizedAdId && userAdIds.includes(normalizedAdId)) {
+                    adsFoundInQrScansByAd.add(normalizedAdId); // Track that this ad was found in qrScansByAd
+                    
                     if (!qrScansByAd[normalizedAdId]) {
                       qrScansByAd[normalizedAdId] = {
                         adId: normalizedAdId, // ✅ Store as normalized string
@@ -6017,10 +6178,16 @@ class UserAnalyticsService {
                         return scanAdId === normalizedAdId && belongsToUser;
                       }).length;
                       
-                      // Use the maximum of scanCount or array count (repair if needed)
-                      if (actualArrayCount > scanCountToAdd) {
-                        console.log(`🔧 [getTotalQRScans] REPAIR Historical: Ad "${adScan.adTitle}" (${normalizedAdId}) on ${dailyData.date} - scanCount was ${scanCountToAdd}, but array has ${actualArrayCount}. Using array count.`);
-                        scanCountToAdd = actualArrayCount;
+                      // ✅ FIX: Always use array count if it exists (more accurate than scanCount field)
+                      // The array is the source of truth - scanCount field can be stale or incorrect
+                      if (actualArrayCount > 0) {
+                        if (actualArrayCount !== scanCountToAdd) {
+                          console.log(`🔧 [getTotalQRScans] REPAIR Historical: Ad "${adScan.adTitle}" (${normalizedAdId}) on ${dailyData.date} - scanCount was ${scanCountToAdd}, but array has ${actualArrayCount}. Using array count (source of truth).`);
+                        }
+                        scanCountToAdd = actualArrayCount; // Always use array count when available
+                      } else if (scanCountToAdd > 0) {
+                        // If array is empty but scanCount > 0, log a warning but use scanCount (might be valid if array was cleared)
+                        console.log(`⚠️ [getTotalQRScans] Historical: Ad "${adScan.adTitle}" (${normalizedAdId}) on ${dailyData.date} - scanCount is ${scanCountToAdd} but array is empty. Using scanCount.`);
                       }
                     }
                     
@@ -6035,55 +6202,63 @@ class UserAnalyticsService {
                 });
               }
               
-              // ✅ REMOVED: The repair logic above already handles validation during qrScansByAd processing
-              // We don't need to process the array again here as it would cause double-counting
-              // The validation in the qrScansByAd loop (lines 5761-5773) already ensures we use the correct count
-              
-              // ✅ FIX: Method 2: Process qrScans (individual records) ONLY if qrScansByAd is empty
-              // This prevents double-counting when both qrScansByAd and qrScans exist
-              if (!hasDailyQrScansByAd && dailyData.qrScans && dailyData.qrScans.length > 0) {
-                if (isVerbose) {
-                  console.log(`🔍 [getTotalQRScans] Processing ${dailyData.qrScans.length} individual QR scan records for ${dailyData.date}`);
-                }
+              // ✅ FIX: Method 2: Process qrScans (individual records) for ads NOT found in qrScansByAd
+              // This ensures we count scans for ads that exist in the array but not in qrScansByAd
+              // Example: If qrScansByAd has FREDDIE but not EFFICASCENT, we still count EFFICASCENT from the array
+              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+                // Only process if qrScansByAd is empty OR if there are ads in the array that aren't in qrScansByAd
+                const shouldProcessArray = !hasDailyQrScansByAd || adsFoundInQrScansByAd.size === 0;
                 
-                dailyData.qrScans.forEach(qrScan => {
-                  // ✅ Filter by userId AND check if adId belongs to user's ads
-                  const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
-                  const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
-                  
-                  if (belongsToUser && normalizedAdId) {
-                    if (!qrScansByAd[normalizedAdId]) {
-                      // Try to get ad title from userAds
-                      const ad = userAds.find(a => a._id.toString() === normalizedAdId);
-                      qrScansByAd[normalizedAdId] = {
-                        adId: normalizedAdId,
-                        adTitle: ad?.title || 'Unknown',
-                        totalScans: 0,
-                        firstScanned: qrScan.scannedAt || qrScan.timestamp || dailyData.date,
-                        lastScanned: qrScan.scannedAt || qrScan.timestamp || dailyData.date,
-                        scans: []
-                      };
-                    }
-                    qrScansByAd[normalizedAdId].totalScans += 1; // Count individual scans
-                    totalScans += 1;
-                    
-                    // Update first/last scanned timestamps
-                    const scanTime = qrScan.scannedAt || qrScan.timestamp || dailyData.date;
-                    if (scanTime) {
-                      if (!qrScansByAd[normalizedAdId].firstScanned || new Date(scanTime) < new Date(qrScansByAd[normalizedAdId].firstScanned)) {
-                        qrScansByAd[normalizedAdId].firstScanned = scanTime;
-                      }
-                      if (!qrScansByAd[normalizedAdId].lastScanned || new Date(scanTime) > new Date(qrScansByAd[normalizedAdId].lastScanned)) {
-                        qrScansByAd[normalizedAdId].lastScanned = scanTime;
-                      }
-                    }
-                    
-                    if (isVerbose) {
-                      console.log(`✅ [getTotalQRScans] Historical (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
-                    }
+                if (shouldProcessArray || adsFoundInQrScansByAd.size < userAdIds.length) {
+                  if (isVerbose || !hasDailyQrScansByAd) {
+                    console.log(`🔍 [getTotalQRScans] Processing ${dailyData.qrScans.length} individual QR scan records for ${dailyData.date} (qrScansByAd had ${adsFoundInQrScansByAd.size} ads, looking for missing ads)`);
                   }
-                  // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
-                });
+                  
+                  dailyData.qrScans.forEach(qrScan => {
+                    // ✅ Filter by userId AND check if adId belongs to user's ads
+                    const normalizedAdId = qrScan.adId ? qrScan.adId.toString() : '';
+                    const belongsToUser = qrScan.userId === userId.toString() || (normalizedAdId && userAdIds.includes(normalizedAdId));
+                    
+                    // ✅ CRITICAL FIX: Only process if this ad was NOT found in qrScansByAd (to avoid double-counting)
+                    // If qrScansByAd exists and has this ad, skip it (already counted above)
+                    const adAlreadyCounted = hasDailyQrScansByAd && adsFoundInQrScansByAd.has(normalizedAdId);
+                    
+                    if (belongsToUser && normalizedAdId && !adAlreadyCounted) {
+                      if (!qrScansByAd[normalizedAdId]) {
+                        // Try to get ad title from userAds
+                        const ad = userAds.find(a => a._id.toString() === normalizedAdId);
+                        qrScansByAd[normalizedAdId] = {
+                          adId: normalizedAdId,
+                          adTitle: ad?.title || 'Unknown',
+                          totalScans: 0,
+                          firstScanned: qrScan.scannedAt || qrScan.timestamp || dailyData.date,
+                          lastScanned: qrScan.scannedAt || qrScan.timestamp || dailyData.date,
+                          scans: []
+                        };
+                      }
+                      qrScansByAd[normalizedAdId].totalScans += 1; // Count individual scans
+                      totalScans += 1;
+                      
+                      // Update first/last scanned timestamps
+                      const scanTime = qrScan.scannedAt || qrScan.timestamp || dailyData.date;
+                      if (scanTime) {
+                        if (!qrScansByAd[normalizedAdId].firstScanned || new Date(scanTime) < new Date(qrScansByAd[normalizedAdId].firstScanned)) {
+                          qrScansByAd[normalizedAdId].firstScanned = scanTime;
+                        }
+                        if (!qrScansByAd[normalizedAdId].lastScanned || new Date(scanTime) > new Date(qrScansByAd[normalizedAdId].lastScanned)) {
+                          qrScansByAd[normalizedAdId].lastScanned = scanTime;
+                        }
+                      }
+                      
+                      if (isVerbose || (!hasDailyQrScansByAd && qrScansByAd[normalizedAdId].totalScans <= 5)) {
+                        console.log(`✅ [getTotalQRScans] Historical (individual): Ad "${qrScansByAd[normalizedAdId].adTitle}" (${normalizedAdId}): +1 scan on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
+                      }
+                    }
+                    // ✅ Removed warning log - skipping scans is expected behavior when filtering by user
+                  });
+                } else if (hasDailyQrScansByAd && isVerbose) {
+                  console.log(`⏭️ [getTotalQRScans] Skipping qrScans array processing for ${dailyData.date} - all user ads already found in qrScansByAd`);
+                }
               }
               // ✅ Removed warning log - empty QR scan data is expected for many days
             }

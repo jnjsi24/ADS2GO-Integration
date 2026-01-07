@@ -238,11 +238,12 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   // Date Picker States
-  // 🔥 FIX: Initialize with today's date (PH timezone) since default period is "TODAY" (1d)
+  // ✅ FIX: Initialize with today's date in custom mode (faster data fetching)
+  // Custom date mode fetches data faster and shows correct values compared to period mode
   const [selectedDate, setSelectedDate] = useState<string>(getTodayInPhilippineTime());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("TODAY");
-  const [isCustomDate, setIsCustomDate] = useState(true); // 🔥 FIX: Start with custom date mode for TODAY
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>(''); // Will be set by formatDisplayDate
+  const [isCustomDate, setIsCustomDate] = useState(true); // ✅ Start with custom date mode for faster loading
 
 
   // Device Dropdown States
@@ -266,13 +267,15 @@ const DetailedAnalytics: React.FC = () => {
   // This allows instant display when returning to Detailed Analytics after navigation
   const analyticsCacheRef = useRef<Map<string, CacheEntry>>(loadPersistentCache());
   
-  // Helper function to generate cache key from filters
-  const getCacheKey = useCallback((ad: string, device: string, period: string, selectedDate: string, isCustom: boolean) => {
+  // ✅ FIX: Helper function to generate cache key - MUST include userId to prevent cross-user data leakage
+  // ✅ FIX: Removed useCallback to prevent dependency issues - this is a pure function that doesn't need memoization
+  const getCacheKey = (ad: string, device: string, period: string, selectedDate: string, isCustom: boolean) => {
+    const userId = user?.userId || 'unknown';
     if (isCustom && selectedDate) {
-      return `analytics_${ad}_${device}_custom_${selectedDate}`;
+      return `analytics_${userId}_${ad}_${device}_custom_${selectedDate}`;
     }
-    return `analytics_${ad}_${device}_${period}`;
-  }, []);
+    return `analytics_${userId}_${ad}_${device}_${period}`;
+  };
   
   // ✅ MEMORY MANAGEMENT: Clean expired entries and enforce size limit with LRU eviction
   // ✅ PERSISTENT CACHE: Saves to localStorage after cleanup
@@ -310,6 +313,23 @@ const DetailedAnalytics: React.FC = () => {
     // ✅ PERSISTENT CACHE: Save to localStorage after cleanup
     savePersistentCache(cache);
   }, []);
+
+  // ✅ FIX: Clear cache when user changes to prevent showing data from previous user
+  const previousUserIdRef = useRef<string | undefined>(user?.userId);
+  useEffect(() => {
+    const currentUserId = user?.userId;
+    const previousUserId = previousUserIdRef.current;
+    
+    // If user changed (and we had a previous user), clear all cache entries
+    if (previousUserId && currentUserId && previousUserId !== currentUserId) {
+      console.log('🔄 [DetailedAnalytics] User changed - clearing analytics cache');
+      analyticsCacheRef.current.clear();
+      savePersistentCache(analyticsCacheRef.current);
+    }
+    
+    // Update the ref for next comparison
+    previousUserIdRef.current = currentUserId;
+  }, [user?.userId]);
 
   const [pos, setPos] = useState({ x: 50, y: 50 });
 
@@ -419,38 +439,142 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [analyticsError, isCustomDate, selectedDate]);
 
-  // ✅ Fetch all-time analytics data for Top Performing Ads using GraphQL with network-only policy
-  // This ensures Top Performing Ads always shows all-time QR scans regardless of filter selection
-  // Using network-only to avoid Apollo cache conflicts with filtered queries
-  const { data: allTimeAnalyticsData, error: allTimeAnalyticsError, loading: allTimeAnalyticsLoading } = useQuery(GET_USER_ANALYTICS, {
-    variables: { 
-      period: 'all', // Always fetch overall data for Top Performing Ads
-      adId: undefined // Don't filter by specific ad - get all ads
-    },
-    fetchPolicy: 'network-only', // ✅ CRITICAL: Always fetch from network, never use cache
-    nextFetchPolicy: 'network-only', // ✅ CRITICAL: Always fetch from network on subsequent requests
-    errorPolicy: 'all',
-    // ✅ Poll every 30 seconds to keep Top Performing Ads updated with latest QR scans
-    pollInterval: 30000,
-    // ✅ Don't trigger loading state during polling (silent background refresh)
-    notifyOnNetworkStatusChange: false,
-    // ✅ Never skip this query - Top Performing Ads needs all-time data
-    skip: false
-  });
+  // ✅ PERFORMANCE FIX: Fetch all-time analytics data for Top Performing Ads using direct API (faster than GraphQL)
+  // This ensures Top Performing Ads always shows all-time totals regardless of filter selection
+  const [allTimeAnalyticsData, setAllTimeAnalyticsData] = useState<any>(null);
+  const [allTimeAnalyticsLoading, setAllTimeAnalyticsLoading] = useState(false);
+  const allTimeAnalyticsErrorRef = useRef<any>(null);
+  const allTimeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const allTimeLastFetchRef = useRef<number>(0);
   
-  // ✅ Debug logging for all-time analytics
-  useEffect(() => {
-    console.log('🔍 [AllTimeAnalytics] Query state:', {
-      loading: allTimeAnalyticsLoading,
-      hasData: !!allTimeAnalyticsData,
-      hasError: !!allTimeAnalyticsError,
-      error: allTimeAnalyticsError?.message,
-      adPerformanceCount: allTimeAnalyticsData?.getUserAnalytics?.adPerformance?.length || 0
-    });
-    if (allTimeAnalyticsError) {
-      console.error('❌ [AllTimeAnalytics] Error:', allTimeAnalyticsError);
+  // ✅ Fetch all-time analytics using direct API (same as Dashboard - faster and more reliable)
+  const fetchAllTimeAnalytics = useCallback(async (silent: boolean = false) => {
+    if (!user?.userId) return;
+    
+    // Throttle: Don't fetch more than once every 2 seconds
+    const now = Date.now();
+    if (!silent && (now - allTimeLastFetchRef.current) < 2000) {
+      return;
     }
-  }, [allTimeAnalyticsData, allTimeAnalyticsError, allTimeAnalyticsLoading]);
+    allTimeLastFetchRef.current = now;
+    
+    // Cancel previous request
+    if (allTimeFetchTimeoutRef.current) {
+      clearTimeout(allTimeFetchTimeoutRef.current);
+    }
+    
+    // Debounce rapid changes
+    allTimeFetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        if (!silent) {
+          setAllTimeAnalyticsLoading(true);
+          // ✅ Clear previous data to prevent showing stale data during refresh
+          setAllTimeAnalyticsData(null);
+        }
+        
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+        const queryParams = new URLSearchParams();
+        queryParams.append('period', 'all'); // Always fetch all-time data
+        queryParams.append('_t', Date.now().toString()); // ✅ Cache-busting timestamp
+        
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
+        console.log('📡 [TopPerformingAds] Fetching all-time analytics (V2):', url);
+        
+        // ✅ Force fresh fetch - prevent browser caching (using cache: 'no-store' and timestamp parameter)
+        // Note: Not using custom headers to avoid CORS preflight issues
+        const response = await fetch(url, {
+          cache: 'no-store' // Don't cache the response
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          // ✅ Transform to match GraphQL structure for compatibility
+          // Use adPerformance if available (has all fields), otherwise use ads
+          const adPerformance = result.data.adPerformance || result.data.ads || [];
+          
+          const transformedData = {
+            getUserAnalytics: {
+              summary: result.data.summary || {},
+              adPerformance: adPerformance.map((ad: any) => ({
+                adId: ad.adId || ad._id,
+                adTitle: ad.adTitle || ad.title,
+                totalAdPlays: ad.totalAdPlays || ad.totalPlays || 0,
+                totalAdPlayTime: ad.totalAdPlayTime || ad.totalViewTime || 0,
+                totalQRScans: ad.totalQRScans || 0,
+                totalDevices: ad.totalDevices || 0,
+                averageAdCompletionRate: ad.completionRate || ad.averageAdCompletionRate || 0,
+                materials: ad.materials || []
+              })),
+              period: 'all',
+              startDate: null,
+              endDate: null
+            }
+          };
+          
+          setAllTimeAnalyticsData(transformedData);
+          allTimeAnalyticsErrorRef.current = null;
+          console.log('✅ [TopPerformingAds] All-time analytics loaded:', {
+            adsCount: adPerformance.length,
+            totalQRScans: result.data.summary?.totalQRScans || 0,
+            sampleAd: adPerformance[0] ? {
+              title: adPerformance[0].adTitle || adPerformance[0].title,
+              plays: adPerformance[0].totalAdPlays || adPerformance[0].totalPlays,
+              qrScans: adPerformance[0].totalQRScans
+            } : null
+          });
+        } else {
+          throw new Error(result.message || 'Failed to fetch all-time analytics');
+        }
+      } catch (error: any) {
+        console.error('❌ [TopPerformingAds] Error fetching all-time analytics:', error);
+        allTimeAnalyticsErrorRef.current = error;
+      } finally {
+        if (!silent) {
+          setAllTimeAnalyticsLoading(false);
+        }
+      }
+    }, silent ? 100 : 200);
+  }, [user?.userId]);
+  
+  // ✅ Fetch on mount and when user changes
+  useEffect(() => {
+    if (user?.userId) {
+      fetchAllTimeAnalytics(false);
+    }
+  }, [user?.userId, fetchAllTimeAnalytics]);
+  
+  // ✅ Background refresh every 10 seconds (silent) for real-time updates
+  // ⚡ REAL-TIME: Reduced from 15s to 10s for faster Top Performing Ads updates (matches TODAY filter polling)
+  useEffect(() => {
+    if (!user?.userId) return;
+    
+    const pollInterval = setInterval(() => {
+      console.log('🔄 [TopPerformingAds] Background refresh triggered');
+      fetchAllTimeAnalytics(true); // Silent refresh - always fetches fresh data (no cache)
+    }, 10000); // 10 seconds for faster near real-time updates (matches TODAY filter polling rate)
+    
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [user?.userId, fetchAllTimeAnalytics]);
+  
+  // ✅ Refresh when page regains focus (user returns to tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 [TopPerformingAds] Page focus detected, refreshing data');
+      fetchAllTimeAnalytics(false); // Non-silent refresh when user returns
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [fetchAllTimeAnalytics]);
   
   // Keep backward compatibility reference
   const overallAnalyticsData = allTimeAnalyticsData;
@@ -820,8 +944,14 @@ const DetailedAnalytics: React.FC = () => {
     const cached = cache.get(cacheKey);
     const now = Date.now();
     
-    // ✅ Use cache if available and not expired
-    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+    // ✅ CRITICAL FIX: Skip cache for:
+    // 1. Silent refreshes (polling) - always fetch fresh data for real-time updates
+    // 2. TODAY filter (period=1d) - always fetch fresh data to show latest scans
+    const isTodayFilter = selectedPeriod === '1d';
+    const shouldSkipCache = silent || isTodayFilter;
+    
+    // ✅ Use cache if available and not expired, AND not skipping cache
+    if (!shouldSkipCache && cached && (now - cached.timestamp) < CACHE_TTL) {
       // ✅ Cache hit - update lastAccessed and use cached data immediately
       cached.lastAccessed = now; // Update LRU timestamp
       // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
@@ -837,6 +967,15 @@ const DetailedAnalytics: React.FC = () => {
       setDirectAnalyticsLoading(false);
       setIsFiltersLoading(false);
       return; // Skip fetch - use cache
+    }
+    
+    // ✅ Log when skipping cache
+    if (shouldSkipCache && cached) {
+      console.log(`🚫 [CACHE DISABLED] Skipping cache for ${silent ? 'silent refresh (polling)' : 'TODAY filter'} - fetching fresh data`, { 
+        cachedTimestamp: cached.timestamp, 
+        now,
+        cacheKey 
+      });
     }
 
     // ✅ Cancel previous request if it's still in progress
@@ -1060,7 +1199,7 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
     }, debounceDelay);
-  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDate, selectedDate, getCacheKey]);
+  }, [selectedDevice, selectedPeriod, selectedAd, user?.userId, isCustomDate, selectedDate]);
 
   // ✅ Fetch analytics data when device, ad, period, or date range changes
   // ✅ FIX: Ensure this runs immediately on mount with default values
@@ -1135,7 +1274,18 @@ const DetailedAnalytics: React.FC = () => {
       hasInitiallyLoadedRef.current = true;
       setIsInitialLoad(false);
     }
-  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDate, selectedDate, fetchDirectAnalytics, user?.userId, getCacheKey]);
+  }, [selectedDevice, selectedAd, selectedPeriod, isCustomDate, selectedDate, fetchDirectAnalytics, user?.userId]);
+  
+  // ✅ Refresh handler for manual refresh button (defined after fetchDirectAnalytics)
+  const handleRefresh = useCallback(() => {
+    console.log('🔄 [DetailedAnalytics] Manual refresh triggered');
+    // Clear cache
+    analyticsCacheRef.current.clear();
+    savePersistentCache(analyticsCacheRef.current);
+    // Refresh all data
+    fetchDirectAnalytics(false);
+    fetchAllTimeAnalytics(false); // Refresh Top Performing Ads (this is the key fix!)
+  }, [fetchDirectAnalytics, fetchAllTimeAnalytics]);
   
   // ✅ Hide loading state when data arrives
   useEffect(() => {
@@ -1154,15 +1304,16 @@ const DetailedAnalytics: React.FC = () => {
 
   // ✅ Poll direct analytics when current date is included (silent background refresh)
   // ✅ Skip polling when using custom date range to avoid interfering with the data
+  // ⚡ REAL-TIME: Poll more frequently (10 seconds) when viewing today's data for faster updates
   useEffect(() => {
     if (!isCurrentDateIncluded) return;
     // ✅ Don't poll when using custom date (only poll for preset periods)
     if (isCustomDate) return;
     
-    // Poll every 30 seconds when viewing current day data (silent refresh)
+    // Poll every 10 seconds when viewing current day data (silent refresh) for faster real-time updates
     const pollInterval = setInterval(() => {
       fetchDirectAnalytics(true); // Silent background refresh
-    }, 30000); // 30 seconds
+    }, 10000); // 10 seconds for today's data (faster than 30s for historical data)
     
     return () => clearInterval(pollInterval);
   }, [isCurrentDateIncluded, isCustomDate, fetchDirectAnalytics]);
@@ -1710,19 +1861,34 @@ const DetailedAnalytics: React.FC = () => {
     } : 'No ads');
     
     // ✅ Filter out archived/deleted ads - check against myAdsData
+    // ⚠️ IMPORTANT: Only filter if myAdsData is loaded, otherwise show all ads
     const archivedAdIds = new Set<string>();
-    if (myAdsData?.getMyAds) {
+    if (myAdsData?.getMyAds && Array.isArray(myAdsData.getMyAds) && myAdsData.getMyAds.length > 0) {
       myAdsData.getMyAds.forEach((ad: any) => {
         if (ad.isArchived) {
           archivedAdIds.add(ad.id?.toString() || '');
         }
       });
+      console.log('📊 [TopPerformingAds] Archived ad IDs:', Array.from(archivedAdIds));
+    } else {
+      console.log('⚠️ [TopPerformingAds] myAdsData not loaded yet - showing all ads (not filtering archived)');
     }
     
-    // Filter out archived ads
-    const nonArchivedAds = ads.filter((ad: any) => {
+    // Filter out archived ads (only if myAdsData is loaded)
+    const nonArchivedAds = myAdsData?.getMyAds ? ads.filter((ad: any) => {
       const adId = ad.adId?.toString() || '';
-      return !archivedAdIds.has(adId);
+      const isArchived = archivedAdIds.has(adId);
+      if (isArchived) {
+        console.log(`⏭️ [TopPerformingAds] Filtering out archived ad: ${ad.adTitle} (${adId})`);
+      }
+      return !isArchived;
+    }) : ads; // ✅ If myAdsData not loaded, show all ads
+    
+    console.log('📊 [TopPerformingAds] After filtering archived ads:', {
+      originalCount: ads.length,
+      filteredCount: nonArchivedAds.length,
+      filteredOut: ads.length - nonArchivedAds.length,
+      myAdsDataLoaded: !!myAdsData?.getMyAds
     });
     
     // ✅ Trust backend data - backend now always fetches fresh QR scan data
@@ -1978,7 +2144,7 @@ const DetailedAnalytics: React.FC = () => {
               {/* Mobile Refresh Button */}
               <div className="w-full flex justify-end mt-2">
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={handleRefresh}
                   className="flex items-center justify-center px-4 py-2 bg-[#3674B5] hover:bg-[#2c5d94] 
                               font-medium text-white text-xs shadow-md rounded transition-colors duration-300"
                 >
@@ -2272,7 +2438,7 @@ const DetailedAnalytics: React.FC = () => {
             {/* Row 2: Refresh Button */}
             <div className="mt-4 flex justify-end mb-4">
               <button
-                onClick={() => window.location.reload()}
+                onClick={handleRefresh}
                 onMouseMove={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -2559,15 +2725,22 @@ const DetailedAnalytics: React.FC = () => {
               </div>
             </div>
 
-            {/* Top Performing Ads */}
-            {topPerformingAds.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-black/80 mb-1">Top Performing Ads</h3>
-                    <p className="text-sm text-black/60">Your best performing advertisements</p>
+            {/* Top Performing Ads - Always show all-time totals regardless of filters */}
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-black/80 mb-1">Top Performing Ads</h3>
+                  <p className="text-sm text-black/60">Your best performing advertisements (All-time totals)</p>
+                </div>
+              </div>
+              {allTimeAnalyticsLoading && topPerformingAds.length === 0 ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <LoaderCircle className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-2" />
+                    <p className="text-xs text-gray-600">Loading top performing ads...</p>
                   </div>
                 </div>
+              ) : topPerformingAds.length > 0 ? (
                 <div className="space-y-3">
                   {topPerformingAds.slice(0, 5).map((ad: any, index: number) => (
                     <div 
@@ -2623,8 +2796,14 @@ const DetailedAnalytics: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">No ads found</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Error State */}

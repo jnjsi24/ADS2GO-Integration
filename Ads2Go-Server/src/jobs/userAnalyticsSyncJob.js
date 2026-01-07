@@ -67,10 +67,11 @@ class UserAnalyticsSyncJob {
         ads: (userAnalytics.ads || []).map(ad => ({
           adId: new mongoose.Types.ObjectId(ad.adId),
           adTitle: ad.adTitle,
-          totalPlays: ad.totalAdPlayTime ? Math.round(ad.totalAdPlayTime / 35) : 0,
+          totalPlays: ad.totalAdPlays || (ad.totalAdPlayTime ? Math.round(ad.totalAdPlayTime / 35) : 0),
           totalQRScans: ad.totalQRScans || 0,
-          totalViewTime: ad.totalAdPlayTime || 0,
-          impressions: ad.totalAdImpressions || 0,
+          totalDisplayTime: ad.totalAdPlayTime || 0,
+          totalImpressions: ad.totalAdImpressions || 0,
+          averageCompletionRate: ad.averageAdCompletionRate || 0,
           lastActivity: ad.lastActivity || null
         })),
         materialBreakdown: (userAnalytics.materialBreakdown || []).map(m => ({
@@ -86,13 +87,26 @@ class UserAnalyticsSyncJob {
         lastSyncTimestamp: new Date()
       };
       
-      await UserAnalyticsSummary.findOneAndUpdate(
+      console.log(`📊 [FLAT SYNC] Summary data for ${userId}:`, {
+        adsCount: summaryData.ads.length,
+        totalQRScans: summaryData.totalQRScans,
+        ads: summaryData.ads.map(a => ({
+          adId: String(a.adId),
+          adTitle: a.adTitle,
+          totalQRScans: a.totalQRScans
+        }))
+      });
+      
+      const result = await UserAnalyticsSummary.findOneAndUpdate(
         { userId: new mongoose.Types.ObjectId(userId) },
-        summaryData,
+        { $set: summaryData },
         { upsert: true, new: true }
       );
       
-      console.log(`✅ [FLAT SYNC] Updated user analytics summary for user ${userId}`);
+      console.log(`✅ [FLAT SYNC] Updated user analytics summary for user ${userId}`, {
+        resultExists: !!result,
+        adsCount: result?.ads?.length
+      });
       
     } catch (error) {
       console.error('❌ [FLAT SYNC] Error updating flat collections:', error);
@@ -108,15 +122,15 @@ class UserAnalyticsSyncJob {
       return;
     }
 
-    console.log('🚀 Starting UserAnalyticsSyncJob - Smart sync mode');
-    console.log('   - Active users: Every 5 minutes');
+    console.log('🚀 Starting UserAnalyticsSyncJob - Real-time sync mode');
+    console.log('   - Active users: Every 30 seconds (real-time)');
     console.log('   - Inactive users: Every hour');
     
     // Run immediately on start
     this.syncActiveUsers();
     
-    // ⚡ PERFORMANCE OPTIMIZATION: Sync active users frequently (5 minutes)
-    this.activeUsersCronJob = cron.schedule('*/5 * * * *', () => {
+    // ⚡ REAL-TIME: Sync active users every 30 seconds for near real-time updates
+    this.activeUsersCronJob = cron.schedule('*/30 * * * * *', () => {
       this.syncActiveUsers();
     }, {
       scheduled: true,
@@ -146,6 +160,40 @@ class UserAnalyticsSyncJob {
     }
     this.isRunning = false;
     console.log('🛑 UserAnalyticsSyncJob stopped');
+  }
+
+  // ⚡ REAL-TIME: Sync a specific user immediately (called when data changes)
+  async syncUserImmediately(userId) {
+    try {
+      const User = require('../models/User');
+      const user = await User.findById(userId).select('_id firstName lastName lastAnalyticsAccess');
+      
+      if (!user) {
+        console.log(`⚠️ [REALTIME] User ${userId} not found, skipping sync`);
+        return;
+      }
+
+      console.log(`⚡ [REALTIME] Triggering immediate sync for user ${user.firstName} (${userId})`);
+      const startTime = new Date();
+      
+      const UserAnalyticsService = require('../services/userAnalyticsService');
+      const result = await UserAnalyticsService.syncUserAnalyticsFromHistory(
+        userId.toString(),
+        null, // startDate - will use incremental sync
+        null, // endDate
+        null, // adId
+        false // forceFullSync = false (use incremental for speed)
+      );
+      
+      const duration = (Date.now() - startTime) / 1000;
+      if (result.success) {
+        console.log(`✅ [REALTIME] User ${user.firstName} synced in ${duration.toFixed(2)}s: ${result.data?.totalQRScans || 0} QR scans`);
+      } else {
+        console.log(`⚠️ [REALTIME] User ${user.firstName} sync failed: ${result.message}`);
+      }
+    } catch (error) {
+      console.error(`❌ [REALTIME] Error syncing user ${userId}:`, error.message);
+    }
   }
 
   // ⚡ PERFORMANCE OPTIMIZATION: Sync active users (accessed analytics in last 24 hours)
@@ -998,8 +1046,118 @@ class UserAnalyticsSyncJob {
         }
       );
 
-      // 🔥 NEW: Also update flat collections (Phase 2)
-      await this.updateFlatCollections(userAnalytics);
+      // ✅ FIX: Fetch QR scan data using getTotalQRScans (includes both DeviceTracking and DeviceDataHistoryV2)
+      // This ensures we get complete QR scan data, including current day data from DeviceTracking
+      let qrScanUpdateSuccess = false;
+      try {
+        console.log(`📊 [SYNC-WITH-ALL-MATERIALS] Fetching QR scan data for user ${userId}...`);
+        const UserAnalyticsService = require('../services/userAnalyticsService');
+        const qrScanData = await UserAnalyticsService.getTotalQRScans(userId, startDate, endDate);
+        
+        console.log(`📊 [SYNC-WITH-ALL-MATERIALS] getTotalQRScans result:`, {
+          success: qrScanData.success,
+          totalScans: qrScanData.totalScans,
+          adsCount: qrScanData.ads?.length || 0
+        });
+        
+        if (qrScanData.success && qrScanData.ads && qrScanData.ads.length > 0) {
+          // Create a map of QR scan data by adId
+          const qrScanMap = new Map();
+          qrScanData.ads.forEach(qrAd => {
+            const adId = qrAd.adId ? (qrAd.adId.toString ? qrAd.adId.toString() : String(qrAd.adId)) : '';
+            if (adId) {
+              qrScanMap.set(adId, qrAd.totalScans || 0);
+            }
+          });
+          
+          console.log(`📊 [SYNC-WITH-ALL-MATERIALS] QR scan map:`, Array.from(qrScanMap.entries()));
+          console.log(`📊 [SYNC-WITH-ALL-MATERIALS] Current userAnalytics.ads QR scans:`, userAnalytics.ads.map(ad => ({
+            adId: String(ad.adId),
+            currentQRScans: ad.totalQRScans || 0
+          })));
+          
+          // Update ads array with QR scan data from getTotalQRScans
+          // ✅ CRITICAL FIX: Use Math.max to preserve the higher value (don't overwrite with lower value)
+          // This prevents getTotalQRScans from overwriting a correct value calculated from dailyStats
+          let updatedCount = 0;
+          userAnalytics.ads = userAnalytics.ads.map(ad => {
+            const adId = ad.adId.toString ? ad.adId.toString() : String(ad.adId);
+            const qrScans = qrScanMap.get(adId);
+            if (qrScans !== undefined) {
+              const oldValue = ad.totalQRScans || 0;
+              // ✅ Use Math.max to preserve the higher value (dailyStats might have more accurate count)
+              const newValue = Math.max(oldValue, qrScans);
+              if (newValue !== oldValue) {
+                ad.totalQRScans = newValue;
+                console.log(`✅ [SYNC-WITH-ALL-MATERIALS] Updating ad ${adId} (${ad.adTitle}) QR scans: ${oldValue} → ${newValue} (using max of ${oldValue} and ${qrScans})`);
+                updatedCount++;
+              } else if (qrScans < oldValue) {
+                console.log(`⚠️ [SYNC-WITH-ALL-MATERIALS] Preserving higher QR scan count for ad ${adId} (${ad.adTitle}): ${oldValue} (getTotalQRScans returned ${qrScans}, but dailyStats has ${oldValue})`);
+              }
+            }
+            return ad;
+          });
+          
+          // ✅ Calculate user-level totalQRScans from ads array to ensure consistency
+          const calculatedTotalQRScans = userAnalytics.ads.reduce((sum, ad) => sum + (ad.totalQRScans || 0), 0);
+          const oldTotal = userAnalytics.totalQRScans || 0;
+          userAnalytics.totalQRScans = calculatedTotalQRScans;
+          
+          if (oldTotal !== calculatedTotalQRScans || updatedCount > 0) {
+            console.log(`✅ [SYNC-WITH-ALL-MATERIALS] Updating totalQRScans: ${oldTotal} → ${calculatedTotalQRScans} (${updatedCount} ads updated)`);
+            
+            // ✅ CRITICAL: Save the updated QR scan data before updating flat collections
+            userAnalytics.markModified('ads');
+            userAnalytics.markModified('totalQRScans');
+            await userAnalytics.save();
+            qrScanUpdateSuccess = true;
+            console.log(`✅ [SYNC-WITH-ALL-MATERIALS] Saved updated QR scans: ${qrScanData.totalScans} total scans across ${qrScanData.ads.length} ads`);
+          } else {
+            console.log(`ℹ️ [SYNC-WITH-ALL-MATERIALS] No QR scan updates needed (already up-to-date)`);
+          }
+        } else {
+          console.warn(`⚠️ [SYNC-WITH-ALL-MATERIALS] getTotalQRScans returned no data or failed:`, {
+            success: qrScanData.success,
+            message: qrScanData.message,
+            adsCount: qrScanData.ads?.length || 0
+          });
+        }
+      } catch (qrScanError) {
+        console.error(`❌ [SYNC-WITH-ALL-MATERIALS] Error fetching QR scan data:`, qrScanError.message);
+        console.error(`❌ [SYNC-WITH-ALL-MATERIALS] Error stack:`, qrScanError.stack);
+        // Continue with existing data if QR scan fetch fails
+      }
+      
+      // ✅ CRITICAL: Reload userAnalytics to get the latest saved data before updating flat collections
+      // Use a small delay to ensure MongoDB has committed the changes
+      await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay for MongoDB write to complete
+      
+      const freshUserAnalytics = await UserAnalytics.findOne({ userId }).lean();
+      if (!freshUserAnalytics) {
+        console.warn(`⚠️ [SYNC-WITH-ALL-MATERIALS] Could not reload UserAnalytics for flat collection update`);
+      } else {
+        // ✅ VERIFY: Log the QR scan data to ensure we're using the correct values
+        console.log(`📊 [SYNC-WITH-ALL-MATERIALS] Reloaded UserAnalytics - QR scans:`, freshUserAnalytics.ads?.map(ad => ({
+          adId: String(ad.adId),
+          adTitle: ad.adTitle,
+          totalQRScans: ad.totalQRScans
+        })));
+      }
+      
+      // ✅ CRITICAL: Use the in-memory userAnalytics object if it has more recent QR scan data
+      // This ensures we use the data that was just updated by getTotalQRScans
+      // Convert to plain object if it's a Mongoose document
+      const dataToUse = qrScanUpdateSuccess 
+        ? (userAnalytics.toObject ? userAnalytics.toObject() : userAnalytics)
+        : (freshUserAnalytics || (userAnalytics.toObject ? userAnalytics.toObject() : userAnalytics));
+      
+      console.log(`📊 [SYNC-WITH-ALL-MATERIALS] Using data for updateFlatCollections - QR scan update success: ${qrScanUpdateSuccess}`);
+      console.log(`📊 [SYNC-WITH-ALL-MATERIALS] EFFICASCENT OIL QR scans in dataToUse:`, 
+        dataToUse.ads?.find(ad => String(ad.adId) === '695bbb2fefe78bace15c6e7f')?.totalQRScans
+      );
+      
+      // 🔥 NEW: Also update flat collections (Phase 2) - use the most up-to-date data
+      await this.updateFlatCollections(dataToUse);
 
       return {
         success: true,
@@ -1010,7 +1168,7 @@ class UserAnalyticsSyncJob {
           totalAdPlays: processedData.totalAdPlays,
           totalAdPlayTime: processedData.totalAdPlayTime,
           totalAdImpressions: processedData.totalAdImpressions,
-          totalQRScans: processedData.totalQRScans,
+          totalQRScans: userAnalytics.totalQRScans || processedData.totalQRScans, // ✅ Use updated totalQRScans from getTotalQRScans (includes today's DeviceTracking data)
           averageAdCompletionRate,
           // qrScanConversionRate removed
           ads: adsArray.length,

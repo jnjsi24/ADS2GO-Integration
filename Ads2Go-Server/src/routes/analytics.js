@@ -843,6 +843,20 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       });
     }
     
+    // ✅ CRITICAL: Update lastAnalyticsAccess to mark user as "active" for sync job
+    // This ensures the user is included in the 30-second active users sync
+    try {
+      const User = require('../models/User');
+      await User.updateOne(
+        { _id: new mongoose.Types.ObjectId(userId) },
+        { $set: { lastAnalyticsAccess: new Date() } }
+      );
+      console.log(`✅ [DIRECT-V2] Updated lastAnalyticsAccess for user ${userId} - user is now marked as active`);
+    } catch (userUpdateError) {
+      console.warn(`⚠️ [DIRECT-V2] Failed to update lastAnalyticsAccess:`, userUpdateError.message);
+      // Don't fail the request if user update fails
+    }
+    
     console.log('🚀 [OPTIMIZED] Direct API v2 for user:', userId, 'period:', period, 'page:', page);
     
     // Validate and normalize date range
@@ -980,14 +994,65 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     const userAnalytics = result[0];
     const totalDailyStatsCount = userAnalytics.totalDailyStatsCount || 0;
     
-    // Filter ads array by validAdIds
-    let filteredAds = (userAnalytics.ads || []).filter(ad => 
-      ad.adId && validAdIds.includes(ad.adId.toString())
-    );
-    
-    // Filter by specific adId if requested
-    if (adId && adId !== 'all') {
-      filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+    // ✅ FIX: For period=all, use UserAnalyticsSummary for accurate all-time totals
+    // This collection has pre-aggregated all-time totals per ad (updated by sync job)
+    let filteredAds;
+    if (period === 'all' || !period) {
+      try {
+        const UserAnalyticsSummary = require('../models/userAnalyticsSummary');
+        const summary = await UserAnalyticsSummary.findOne({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+        
+        if (summary && summary.ads && summary.ads.length > 0) {
+          // Use summary.ads which has accurate all-time totals
+          filteredAds = summary.ads
+            .filter(ad => ad.adId && validAdIds.includes(ad.adId.toString()))
+            .map(ad => ({
+              adId: ad.adId,
+              adTitle: ad.adTitle,
+              totalAdPlayTime: ad.totalDisplayTime || 0,
+              totalAdPlays: ad.totalPlays || 0,
+              totalQRScans: ad.totalQRScans || 0, // ✅ All-time totals from summary
+              totalAdImpressions: ad.totalImpressions || 0,
+              averageAdCompletionRate: ad.averageCompletionRate || 0,
+              materials: [] // Summary doesn't have materials
+            }));
+          
+          // Filter by specific adId if requested
+          if (adId && adId !== 'all') {
+            filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+          }
+          
+          console.log(`✅ [direct-v2] Using UserAnalyticsSummary for all-time totals: ${filteredAds.length} ads`);
+        } else {
+          // Fallback to userAnalytics.ads if summary not available
+          filteredAds = (userAnalytics.ads || []).filter(ad => 
+            ad.adId && validAdIds.includes(ad.adId.toString())
+          );
+          if (adId && adId !== 'all') {
+            filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+          }
+          console.log(`⚠️ [direct-v2] UserAnalyticsSummary not found, using userAnalytics.ads: ${filteredAds.length} ads`);
+        }
+      } catch (summaryError) {
+        console.warn('⚠️ [direct-v2] Error fetching UserAnalyticsSummary, using userAnalytics.ads:', summaryError.message);
+        // Fallback to userAnalytics.ads
+        filteredAds = (userAnalytics.ads || []).filter(ad => 
+          ad.adId && validAdIds.includes(ad.adId.toString())
+        );
+        if (adId && adId !== 'all') {
+          filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+        }
+      }
+    } else {
+      // For date-filtered periods, use userAnalytics.ads (will be calculated from dailyStats)
+      filteredAds = (userAnalytics.ads || []).filter(ad => 
+        ad.adId && validAdIds.includes(ad.adId.toString())
+      );
+      
+      // Filter by specific adId if requested
+      if (adId && adId !== 'all') {
+        filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
+      }
     }
     
     // 🔥 FIX: Fetch dailyStats from new flat DailyUserAnalytics collection
@@ -1178,19 +1243,40 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     // Format adPerformance
     const adPerformance = filteredAds.map(ad => {
       let totalPlays = 0;
+      let totalQRScans = 0;
       
-      // Calculate from dailyStats for this ad
-      processedDailyStats.forEach(dateEntry => {
-        const adEntry = dateEntry.ads?.find(a => 
-          a.adId && a.adId.toString() === ad.adId.toString()
-        );
-        if (adEntry && adEntry.totals) {
-          totalPlays += adEntry.totals.adsPlayed || 0;
+      // ✅ FIX: For period=all, use pre-aggregated all-time totals (from UserAnalyticsSummary or userAnalytics.ads)
+      // For date-filtered periods, calculate from dailyStats
+      if (period === 'all' || !period) {
+        // All-time: Use pre-aggregated totals (most accurate, includes all historical data)
+        totalPlays = ad.totalAdPlays || 0;
+        totalQRScans = ad.totalQRScans || 0;
+        
+        // Fallback calculation if not available
+        if (totalPlays === 0 && ad.totalAdPlayTime) {
+          totalPlays = Math.round(ad.totalAdPlayTime / 35);
         }
-      });
-      
-      if (totalPlays === 0 && ad.totalAdPlayTime) {
-        totalPlays = Math.round(ad.totalAdPlayTime / 35);
+        
+        console.log(`📊 [direct-v2] Ad "${ad.adTitle}" all-time totals: ${totalPlays} plays, ${totalQRScans} QR scans`);
+      } else {
+        // Date-filtered: Calculate from dailyStats for this ad
+        processedDailyStats.forEach(dateEntry => {
+          const adEntry = dateEntry.ads?.find(a => 
+            a.adId && a.adId.toString() === ad.adId.toString()
+          );
+          if (adEntry && adEntry.totals) {
+            totalPlays += adEntry.totals.adsPlayed || 0;
+            totalQRScans += adEntry.totals.qrScans || 0;
+          }
+        });
+        
+        // Fallback to ad totals if no dailyStats data
+        if (totalPlays === 0 && ad.totalAdPlayTime) {
+          totalPlays = Math.round(ad.totalAdPlayTime / 35);
+        }
+        if (totalQRScans === 0) {
+          totalQRScans = ad.totalQRScans || 0;
+        }
       }
       
       return {
@@ -1201,7 +1287,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
         averageViewTime: totalPlays > 0 ? (ad.totalAdPlayTime || 0) / totalPlays : 0,
         completionRate: ad.averageAdCompletionRate || 0,
         impressions: ad.totalAdImpressions || 0,
-        totalQRScans: ad.totalQRScans || 0
+        totalQRScans: totalQRScans // ✅ Use all-time totals when period=all
       };
     });
     

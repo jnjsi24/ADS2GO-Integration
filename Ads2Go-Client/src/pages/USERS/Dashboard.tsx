@@ -279,10 +279,11 @@ const Dashboard = () => {
   const lastAnalyticsRefreshRef = useRef<number>(0);
   const analyticsRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Helper function to generate cache key
+  // ✅ FIX: Helper function to generate cache key - MUST include userId to prevent cross-user data leakage
   const getCacheKey = useCallback((period: string, adId: string | null, type: 'period' | 'overall') => {
-    return `dashboard_${type}_${period}_${adId || 'all'}`;
-  }, []);
+    const userId = user?.userId || 'unknown';
+    return `dashboard_${userId}_${type}_${period}_${adId || 'all'}`;
+  }, [user?.userId]);
   
   // ✅ PERFORMANCE OPTIMIZATION: Manage cache (clean expired entries, enforce size limit)
   const manageCache = useCallback(() => {
@@ -311,6 +312,27 @@ const Dashboard = () => {
     // Save to localStorage
     savePersistentCache(cache);
   }, []);
+
+  // ✅ FIX: Clear cache when user changes to prevent showing data from previous user
+  const previousUserIdRef = useRef<string | undefined>(user?.userId);
+  useEffect(() => {
+    const currentUserId = user?.userId;
+    const previousUserId = previousUserIdRef.current;
+    
+    // If user changed (and we had a previous user), clear all cache entries
+    if (previousUserId && currentUserId && previousUserId !== currentUserId) {
+      console.log('🔄 [Dashboard] User changed - clearing analytics cache');
+      analyticsCacheRef.current.clear();
+      savePersistentCache(analyticsCacheRef.current);
+      
+      // Reset analytics data to prevent stale data display
+      setPeriodAnalyticsData(null);
+      setOverallAnalyticsData(null);
+    }
+    
+    // Update the ref for next comparison
+    previousUserIdRef.current = currentUserId;
+  }, [user?.userId]);
   
   // ✅ PERFORMANCE OPTIMIZATION: Fetch period-filtered analytics via direct API
   const fetchPeriodAnalytics = useCallback(async (silent: boolean = false) => {
