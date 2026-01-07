@@ -154,8 +154,15 @@ const FitBounds: React.FC<{ bounds: RouteBounds | null }> = ({ bounds }) => {
 };
 
 // Function to smooth GPS points using an improved algorithm (no API required)
+// ✅ PERFORMANCE: Limit smoothing for very large routes to prevent freezing
 const smoothRoute = (points: [number, number][]): [number, number][] => {
   if (points.length < 3) return points;
+  
+  // ✅ PERFORMANCE FIX: For very large routes (>2000 points), skip smoothing to prevent freezing
+  if (points.length > 2000) {
+    console.log(`⚡ [MultiMaterialRouteMap] Large route detected (${points.length} points) - skipping smoothing for performance`);
+    return points;
+  }
   
   const smoothed: [number, number][] = [points[0]]; // Keep first point
   
@@ -234,8 +241,15 @@ const smoothRoute = (points: [number, number][]): [number, number][] => {
 };
 
 // Function to add intermediate points for better road following
+// ✅ PERFORMANCE: Skip intermediate points for large routes
 const addIntermediatePoints = (points: [number, number][]): [number, number][] => {
   if (points.length < 2) return points;
+  
+  // ✅ PERFORMANCE FIX: For large routes, skip intermediate points to prevent freezing
+  if (points.length > 1000) {
+    console.log(`⚡ [MultiMaterialRouteMap] Large route (${points.length} points) - skipping intermediate points for performance`);
+    return points;
+  }
   
   const enhanced: [number, number][] = [];
   enhanced.push(points[0]);
@@ -404,8 +418,106 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   // ✅ IMPROVED: Track processed point counts per material per segment for incremental updates
   // Map: materialId -> array of point counts per segment
   const lastProcessedPointCountsRef = useRef<Map<string, number[]>>(new Map());
+  
+  // ✅ FIX: Memoize materialIds and date EARLY to prevent "before initialization" errors
+  const stableMaterialIds = useMemo(() => materialIds, [materialIds.join(',')]);
+  const stableDate = useMemo(() => date, [date]);
+  
+  // ✅ CACHE: Route data cache using sessionStorage (persists across component remounts)
+  const CACHE_PREFIX = 'route_cache_';
+  const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+  
+  // Helper functions for cache management
+  const getCacheKey = (materialId: string, date: string, adStartTime?: string, adId?: string): string => {
+    // Include adStartTime and adId in cache key for today's data to differentiate filtered vs unfiltered
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = date === today;
+    let key = `${CACHE_PREFIX}${materialId}_${date}`;
+    if (isToday && adStartTime) {
+      key += `_${adStartTime}`;
+    }
+    if (isToday && adId) {
+      key += `_${adId}`;
+    }
+    return key;
+  };
+  
+  const getCachedRoute = (materialId: string, date: string, adStartTime?: string, adId?: string): MaterialRoute | null => {
+    try {
+      const cacheKey = getCacheKey(materialId, date, adStartTime, adId);
+      const cached = sessionStorage.getItem(cacheKey);
+      
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Check if cache is expired
+        if (parsed.timestamp && (now - parsed.timestamp) < CACHE_EXPIRY_MS) {
+          console.log(`💾 [MultiMaterialRouteMap] Cache HIT for ${materialId} on ${date}`);
+          return parsed.data;
+        } else {
+          // Cache expired, remove it
+          sessionStorage.removeItem(cacheKey);
+          console.log(`⏰ [MultiMaterialRouteMap] Cache EXPIRED for ${materialId} on ${date}`);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ [MultiMaterialRouteMap] Error reading cache:', error);
+    }
+    return null;
+  };
+  
+  const setCachedRoute = (materialId: string, date: string, route: MaterialRoute, adStartTime?: string, adId?: string): void => {
+    try {
+      const cacheKey = getCacheKey(materialId, date, adStartTime, adId);
+      const cacheData = {
+        data: route,
+        timestamp: Date.now()
+      };
+      sessionStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      console.log(`💾 [MultiMaterialRouteMap] Cache STORED for ${materialId} on ${date}`);
+    } catch (error) {
+      console.warn('⚠️ [MultiMaterialRouteMap] Error storing cache:', error);
+      // If storage is full, try to clear old entries
+      if (error instanceof DOMException && error.code === 22) {
+        console.warn('⚠️ [MultiMaterialRouteMap] Storage full, clearing old cache entries...');
+        clearOldCacheEntries();
+      }
+    }
+  };
+  
+  const clearOldCacheEntries = (): void => {
+    try {
+      const keysToRemove: string[] = [];
+      const now = Date.now();
+      
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith(CACHE_PREFIX)) {
+          try {
+            const cached = sessionStorage.getItem(key);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (!parsed.timestamp || (now - parsed.timestamp) >= CACHE_EXPIRY_MS) {
+                keysToRemove.push(key);
+              }
+            }
+          } catch (e) {
+            // Invalid cache entry, remove it
+            keysToRemove.push(key);
+          }
+        }
+      }
+      
+      keysToRemove.forEach(key => sessionStorage.removeItem(key));
+      console.log(`🧹 [MultiMaterialRouteMap] Cleared ${keysToRemove.length} old cache entries`);
+    } catch (error) {
+      console.warn('⚠️ [MultiMaterialRouteMap] Error clearing old cache:', error);
+    }
+  };
 
   // Convert route points to segments (handle offline periods)
+  // ✅ PERFORMANCE: Optimize for large routes by decimating points if needed
   const processRouteSegments = (route: RoutePoint[]): [number, number][][] => {
     const validPoints = route.filter((point: RoutePoint) => 
       point && typeof point.lat === 'number' && typeof point.lng === 'number'
@@ -413,11 +525,21 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     
     if (validPoints.length === 0) return [];
     
+    // ✅ PERFORMANCE FIX: For very large routes (>3000 points), decimate to prevent freezing
+    let pointsToProcess = validPoints;
+    if (validPoints.length > 3000) {
+      console.log(`⚡ [MultiMaterialRouteMap] Large route detected (${validPoints.length} points) - decimating to prevent freezing`);
+      // Keep every Nth point to reduce to ~2000 points max
+      const decimationFactor = Math.ceil(validPoints.length / 2000);
+      pointsToProcess = validPoints.filter((_, index) => index % decimationFactor === 0 || index === 0 || index === validPoints.length - 1);
+      console.log(`⚡ [MultiMaterialRouteMap] Decimated to ${pointsToProcess.length} points (factor: ${decimationFactor})`);
+    }
+    
     const segments: [number, number][][] = [];
     let currentSegment: [number, number][] = [];
     
-    for (let i = 0; i < validPoints.length; i++) {
-      const point = validPoints[i];
+    for (let i = 0; i < pointsToProcess.length; i++) {
+      const point = pointsToProcess[i];
       
       // If this point starts a new segment (after offline period), save current segment
       if (i > 0 && (point.isSegmentBreak || point.isSegmentStart)) {
@@ -444,6 +566,7 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   };
 
   // ✅ IMPROVED: Apply incremental road snapping - only process new points
+  // ✅ PERFORMANCE FIX: Skip road snapping for historical dates to prevent freezing
   useEffect(() => {
     if (materialRoutes.length === 0) {
       setIsSnappingInProgress(false);
@@ -451,11 +574,19 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
       return;
     }
 
-    if (!snapToRoads) {
-      // If snapping is disabled, clear any existing snapped routes
+    // ✅ PERFORMANCE FIX: Disable road snapping for historical dates (past dates)
+    // Road snapping is expensive and can freeze the browser with large routes
+    const today = new Date().toISOString().split('T')[0];
+    const isHistoricalDate = stableDate && stableDate !== today;
+    
+    if (!snapToRoads || isHistoricalDate) {
+      // If snapping is disabled or it's a historical date, use raw route segments
       setMaterialRoutes(routes => routes.map(r => ({ ...r, snappedRoute: undefined })));
       setIsSnappingInProgress(false);
       lastProcessedPointCountsRef.current.clear();
+      if (isHistoricalDate) {
+        console.log(`⚡ [MultiMaterialRouteMap] Skipping road snapping for historical date ${stableDate} (performance optimization)`);
+      }
       return;
     }
 
@@ -715,11 +846,13 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
     };
 
     applyRoadSnapping();
-  }, [materialRoutes, snapToRoads]);
-
-  // ✅ Memoize materialIds to prevent unnecessary re-fetches
-  const stableMaterialIds = useMemo(() => materialIds, [materialIds.join(',')]);
-  const stableDate = useMemo(() => date, [date]);
+    
+    // ✅ PERFORMANCE: Cleanup function to prevent memory leaks
+    return () => {
+      // Cancel any ongoing snapping operations
+      setIsSnappingInProgress(false);
+    };
+  }, [materialRoutes, snapToRoads, stableDate]);
 
   useEffect(() => {
     const fetchAllRoutes = async (silentRefresh = false) => {
@@ -739,45 +872,97 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
 
         try {
-          // ✅ Add adStartTime and adId to query if provided (filter route to only show after ad deployment)
+          // ✅ CACHE: Check cache first before making API call
+          const today = new Date().toISOString().split('T')[0];
+          const isToday = stableDate === today;
+          const cachedRoute = getCachedRoute(materialId, stableDate, isToday ? adStartTime : undefined, isToday ? adId : undefined);
+          
+          if (cachedRoute) {
+            // Use cached route data
+            console.log(`💾 [MultiMaterialRouteMap] Using cached route for ${materialId} on ${stableDate}`);
+            return {
+              materialId,
+              route: cachedRoute.route,
+              color,
+              totalDistance: cachedRoute.totalDistance,
+              duration: cachedRoute.duration,
+              avgSpeed: cachedRoute.avgSpeed
+            };
+          }
+          
+          // ✅ FIX: Only add adStartTime and adId for TODAY's data, not for historical dates
+          // For historical dates, we want to show all route data regardless of ad deployment time
           let url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${stableDate}`;
-          if (adStartTime) {
+          // Only add adStartTime and adId for today's data
+          if (isToday && adStartTime) {
             url += `&adStartTime=${encodeURIComponent(adStartTime)}`;
           }
-          if (adId) {
+          if (isToday && adId) {
             url += `&adId=${encodeURIComponent(adId)}`;
           }
-          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId}${adStartTime ? ` (filtered after ${adStartTime})` : ''}${adId ? ` (adId: ${adId})` : ''}`);
+          console.log(`📡 [MultiMaterialRouteMap] Fetching route ${i + 1}/${stableMaterialIds.length}: ${materialId} on ${stableDate}${isToday && adStartTime ? ` (filtered after ${adStartTime})` : ' (showing all route data for historical date)'}${isToday && adId ? ` (adId: ${adId})` : ''}`);
           
           const response = await fetch(url);
           
           // Handle server errors
           if (!response.ok) {
-            console.error(`❌ [MultiMaterialRouteMap] Server error ${response.status} for ${materialId}`);
+            console.error(`❌ [MultiMaterialRouteMap] Server error ${response.status} for ${materialId} on ${stableDate}`);
+            console.error(`❌ [MultiMaterialRouteMap] Response status: ${response.status}, statusText: ${response.statusText}`);
+            try {
+              const errorText = await response.text();
+              console.error(`❌ [MultiMaterialRouteMap] Error response body:`, errorText);
+            } catch (e) {
+              console.error(`❌ [MultiMaterialRouteMap] Could not read error response`);
+            }
             return null;
           }
           
           const result = await response.json();
+          
+          // ✅ IMPROVED: Better logging for debugging
+          console.log(`📦 [MultiMaterialRouteMap] API response for ${materialId}:`, {
+            success: result.success,
+            hasData: !!result.data,
+            hasRoute: !!(result.data?.route),
+            routeLength: result.data?.route?.length || 0,
+            message: result.message
+          });
 
           // Check if the API returned success: false (no route data)
           if (!result.success || !result.data) {
             console.log(`⚠️ [MultiMaterialRouteMap] No route found for ${materialId} on ${stableDate}`);
+            console.log(`⚠️ [MultiMaterialRouteMap] API message: ${result.message || 'No message'}`);
             return null;
           }
 
           // Check if route has valid data
           if (result.data?.route && result.data.route.length > 0) {
             console.log(`✅ [MultiMaterialRouteMap] Found route for ${materialId}: ${result.data.route.length} points`);
-            return {
+            // ✅ FIX: Metrics are in result.data.metrics, not directly in result.data
+            const metrics = result.data.metrics || {};
+            const routeData: MaterialRoute = {
               materialId,
               route: result.data.route,
               color,
-              totalDistance: result.data.totalDistance,
-              duration: result.data.duration,
-              avgSpeed: result.data.avgSpeed,
+              totalDistance: metrics.totalDistance || 0,
+              duration: metrics.totalDuration || 0,
+              avgSpeed: metrics.averageSpeed || 0,
             };
+            
+            // ✅ CACHE: Store successful route data in cache
+            setCachedRoute(materialId, stableDate, routeData, isToday ? adStartTime : undefined, isToday ? adId : undefined);
+            
+            return routeData;
           } else {
-            console.log(`⚠️ [MultiMaterialRouteMap] No valid route data for ${materialId}`);
+            console.log(`⚠️ [MultiMaterialRouteMap] No valid route data for ${materialId} - route array is empty or missing`);
+            console.log(`⚠️ [MultiMaterialRouteMap] Data structure:`, {
+              hasData: !!result.data,
+              hasRoute: !!(result.data?.route),
+              routeType: Array.isArray(result.data?.route) ? 'array' : typeof result.data?.route,
+              routeLength: result.data?.route?.length || 0,
+              hasMetrics: !!(result.data?.metrics),
+              metrics: result.data?.metrics
+            });
             return null;
           }
         } catch (error) {
@@ -961,8 +1146,35 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
 
     return () => {
       clearInterval(refreshInterval);
+      // ✅ PERFORMANCE: Cleanup to prevent memory leaks
+      console.log('🧹 [MultiMaterialRouteMap] Cleaning up auto-refresh interval');
     };
   }, [stableMaterialIds, stableDate, disableAutoRefresh]);
+  
+  // ✅ PERFORMANCE: Cleanup on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Clear all refs and state on unmount
+      lastProcessedPointCountsRef.current.clear();
+      setIsSnappingInProgress(false);
+      console.log('🧹 [MultiMaterialRouteMap] Component unmounting - cleaning up');
+    };
+  }, []);
+  
+  // ✅ CACHE: Periodically clean up expired cache entries (every 5 minutes)
+  useEffect(() => {
+    // Clean up on mount
+    clearOldCacheEntries();
+    
+    // Set up interval to clean up expired entries every 5 minutes
+    const cleanupInterval = setInterval(() => {
+      clearOldCacheEntries();
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    return () => {
+      clearInterval(cleanupInterval);
+    };
+  }, []);
 
   // Create custom markers for start/end points
   const createMarkerIcon = (type: 'start' | 'end', color: string) => {
@@ -997,12 +1209,16 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
   // ✅ IMPROVED: Get final route coordinates - keep existing snapped routes visible during updates
   // Show existing snapped routes even while processing new points (smooth updates)
   const getFinalRouteCoords = (materialRoute: MaterialRoute): [number, number][][] => {
-    if (snapToRoads && materialRoute.snappedRoute && materialRoute.snappedRoute.length > 0) {
-      // Show existing snapped route, even if snapping is in progress
+    // ✅ PERFORMANCE FIX: For historical dates, always use raw segments (no snapping)
+    const today = new Date().toISOString().split('T')[0];
+    const isHistoricalDate = stableDate && stableDate !== today;
+    
+    if (!isHistoricalDate && snapToRoads && materialRoute.snappedRoute && materialRoute.snappedRoute.length > 0) {
+      // Show existing snapped route, even if snapping is in progress (only for today's data)
       return materialRoute.snappedRoute;
     }
     
-    // If no snapping or snapping not complete, use raw segments
+    // If no snapping or snapping not complete, or historical date, use raw segments
     return processRouteSegments(materialRoute.route);
   };
 
@@ -1081,6 +1297,12 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
                 // This prevents re-rendering the entire polyline and allows smooth incremental updates
                 const segmentKey = `${materialRoute.materialId}-segment-${segmentIndex}`;
                 
+                // ✅ PERFORMANCE FIX: Limit segment size to prevent rendering issues
+                // If segment is too large, it may cause performance issues
+                if (segment.length > 5000) {
+                  console.warn(`⚠️ [MultiMaterialRouteMap] Large segment detected (${segment.length} points) - this may cause performance issues`);
+                }
+                
                 return (
                   <Polyline
                     key={segmentKey}
@@ -1088,6 +1310,8 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
                     color={materialRoute.color}
                     weight={4}
                     opacity={0.8}
+                    // ✅ PERFORMANCE: Disable smooth factor for large segments to improve performance
+                    smoothFactor={segment.length > 1000 ? 0 : 1}
                     // ✅ IMPROVED: React Leaflet will smoothly update positions when segment changes
                     // Using stable key ensures React updates the existing polyline instead of replacing it
                   />
@@ -1163,11 +1387,6 @@ const MultiMaterialRouteMap: React.FC<MultiMaterialRouteMapProps> = ({
                 style={{ backgroundColor: materialRoute.color }}
               />
               <span className="font-medium text-gray-700">{materialRoute.materialId}</span>
-              {materialRoute.totalDistance && (
-                <span className="text-gray-500">
-                  {(materialRoute.totalDistance / 1000).toFixed(1)} km
-                </span>
-              )}
             </div>
           ))}
         </div>

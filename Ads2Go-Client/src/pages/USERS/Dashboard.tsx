@@ -1688,7 +1688,7 @@ const Dashboard = () => {
                         date={selectedRouteDate}
                         className="h-full w-full"
                         style={{ height: '100%', position: 'relative', zIndex: 0 }}
-                        snapToRoads={true}
+                        snapToRoads={false}
                         disableAutoRefresh={shouldDisableAutoRefresh}
                         adStartTime={selectedAdStartTime}
                         adId={selectedAdIdForRoute}

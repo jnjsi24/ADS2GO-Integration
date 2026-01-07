@@ -231,54 +231,82 @@ router.get('/route/:materialId', async (req, res) => {
       // 📅 PAST DATE or DATE RANGE: Use historical data only
       console.log(`📅 [Enhanced Route API] Requesting ${date ? 'PAST date' : 'date range'} - using historical data only`);
       
-      // Build query for DeviceDataHistoryV2
-      let query = { materialId };
-      
-      // Filter by date range
-      if (date) {
-        const targetDate = new Date(date);
-        targetDate.setHours(0, 0, 0, 0);
-        const nextDay = new Date(targetDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        
-        query['dailyData.date'] = {
-          $gte: targetDate,
-          $lt: nextDay
-        };
-      } else if (startDate && endDate) {
-        query['dailyData.date'] = {
-          $gte: new Date(startDate),
-          $lt: new Date(endDate)
-        };
-      }
-
-      // Find device data
-      const deviceData = await DeviceDataHistoryV2.findOne(query);
+      // ✅ FIX: Always fetch the full document by materialId only, then filter in JavaScript
+      // This ensures we get ALL fields including locationHistory which might be filtered out by MongoDB queries
+      console.log(`🔍 [Enhanced Route API] Fetching DeviceDataHistoryV2 for materialId: ${materialId}`);
+      // ✅ IMPORTANT: Don't use .lean() - we need Mongoose document methods and proper field access
+      // Fetch full document - locationHistory should be included by default
+      const deviceData = await DeviceDataHistoryV2.findOne({ materialId });
       
       if (!deviceData) {
+        console.log(`❌ [Enhanced Route API] No DeviceDataHistoryV2 record found for materialId: ${materialId}`);
+        // Debug: Check if material exists with different date
+        const anyDeviceData = await DeviceDataHistoryV2.findOne({ materialId });
+        if (anyDeviceData) {
+          console.log(`ℹ️ [Enhanced Route API] Found DeviceDataHistoryV2 record for materialId ${materialId}, but no data for date ${date}`);
+          console.log(`ℹ️ [Enhanced Route API] Available dates: ${anyDeviceData.dailyData?.map(d => new Date(d.date).toISOString().split('T')[0]).join(', ') || 'none'}`);
+        } else {
+          console.log(`❌ [Enhanced Route API] No DeviceDataHistoryV2 record exists at all for materialId: ${materialId}`);
+        }
         return res.status(200).json({
           success: false,
           message: 'No device data found for the specified material and date range',
           data: null
         });
       }
+      
+      console.log(`✅ [Enhanced Route API] Found DeviceDataHistoryV2 record for materialId: ${materialId}`);
+      console.log(`📅 [Enhanced Route API] Total dailyData entries: ${deviceData.dailyData?.length || 0}`);
+      
+      // ✅ FIX: Convert Mongoose document to plain object to ensure all nested fields are accessible
+      // This is important because Mongoose documents might not expose nested arrays properly
+      const deviceDataPlain = deviceData.toObject ? deviceData.toObject() : deviceData;
+      const dailyDataArray = deviceDataPlain.dailyData || [];
+      
+      console.log(`📦 [Enhanced Route API] Converted to plain object, dailyData entries: ${dailyDataArray.length}`);
+      
+      // ✅ DEBUG: Log sample of dailyData to verify structure
+      if (dailyDataArray.length > 0) {
+        const sampleDay = dailyDataArray[0];
+        console.log(`🔍 [Enhanced Route API] Sample dailyData entry:`, {
+          date: sampleDay.date,
+          hasLocationHistory: !!sampleDay.locationHistory,
+          locationHistoryType: typeof sampleDay.locationHistory,
+          locationHistoryIsArray: Array.isArray(sampleDay.locationHistory),
+          locationHistoryLength: sampleDay.locationHistory?.length || 0,
+          keys: Object.keys(sampleDay || {})
+        });
+      }
 
       // Filter dailyData to only include the selected date(s)
-      let filteredDailyData = deviceData.dailyData;
+      // ✅ FIX: Use the plain object array instead of Mongoose document array
+      let filteredDailyData = dailyDataArray;
       
       if (date) {
         // Single date filter
+        // ✅ FIX: Use proper date comparison - normalize both dates to start of day for accurate matching
         const targetDate = new Date(date);
-        targetDate.setHours(0, 0, 0, 0);
+        targetDate.setUTCHours(0, 0, 0, 0); // Use UTC to avoid timezone issues
         const nextDay = new Date(targetDate);
-        nextDay.setDate(nextDay.getDate() + 1);
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
         
         filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
+          if (!dailyRecord.date) return false;
           const recordDate = new Date(dailyRecord.date);
-          return recordDate >= targetDate && recordDate < nextDay;
+          recordDate.setUTCHours(0, 0, 0, 0); // Normalize to start of day
+          return recordDate.getTime() === targetDate.getTime();
         });
         
-        console.log(`🗓️ [Enhanced Route API] Filtering for date ${date}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
+        console.log(`🗓️ [Enhanced Route API] Filtering for date ${date}: Found ${filteredDailyData.length} matching day(s) out of ${dailyDataArray.length} total days`);
+        
+        // ✅ DEBUG: Log available dates if no match found
+        if (filteredDailyData.length === 0 && dailyDataArray.length > 0) {
+          const availableDates = dailyDataArray
+            .map(d => d.date ? new Date(d.date).toISOString().split('T')[0] : 'null')
+            .slice(0, 10);
+          console.log(`⚠️ [Enhanced Route API] No matching date found. Available dates (first 10): ${availableDates.join(', ')}`);
+          console.log(`⚠️ [Enhanced Route API] Requested date: ${date}, Target date (UTC): ${targetDate.toISOString()}`);
+        }
       } else if (startDate && endDate) {
         // Date range filter
         const start = new Date(startDate);
@@ -293,10 +321,28 @@ router.get('/route/:materialId', async (req, res) => {
       }
 
       // Process filtered daily data
-      filteredDailyData.forEach(dailyRecord => {
-        if (dailyRecord.locationHistory && dailyRecord.locationHistory.length > 0) {
+      console.log(`📊 [Enhanced Route API] Processing ${filteredDailyData.length} daily record(s)`);
+      filteredDailyData.forEach((dailyRecord, index) => {
+        const recordDate = dailyRecord.date ? new Date(dailyRecord.date).toISOString().split('T')[0] : 'unknown';
+        
+        // ✅ FIX: Check if locationHistory exists and has data - log more details for debugging
+        const locationHistory = dailyRecord.locationHistory;
+        const locationCount = locationHistory ? (Array.isArray(locationHistory) ? locationHistory.length : 0) : 0;
+        
+        console.log(`📅 [Enhanced Route API] Daily record ${index + 1}: date=${recordDate}, locationHistory type=${typeof locationHistory}, isArray=${Array.isArray(locationHistory)}, points=${locationCount}`);
+        
+        // ✅ DEBUG: Log first few location points if they exist
+        if (locationHistory && Array.isArray(locationHistory) && locationHistory.length > 0) {
+          console.log(`📍 [Enhanced Route API] First location point:`, {
+            hasCoordinates: !!locationHistory[0]?.coordinates,
+            coordinates: locationHistory[0]?.coordinates,
+            timestamp: locationHistory[0]?.timestamp
+          });
+        }
+        
+        if (locationHistory && Array.isArray(locationHistory) && locationHistory.length > 0) {
           // Use advanced GPS cleaning for better accuracy
-          const cleanedPoints = GPSValidation.cleanGPSData(dailyRecord.locationHistory, {
+          const cleanedPoints = GPSValidation.cleanGPSData(locationHistory, {
             strictMode: false,
             maxAccuracy: 100, // Allow up to 100m accuracy
             minAccuracy: 1,
@@ -305,19 +351,81 @@ router.get('/route/:materialId', async (req, res) => {
             maxSpeed: 200
           });
 
+          console.log(`🧹 [Enhanced Route API] Cleaned ${locationHistory.length} points to ${cleanedPoints.length} valid points for date ${recordDate}`);
           allLocationPoints = allLocationPoints.concat(cleanedPoints);
           totalDistance += dailyRecord.totalDistanceTraveled || 0;
           totalAdPlays += dailyRecord.totalAdPlays || 0;
           totalQRScans += dailyRecord.totalQRScans || 0;
           totalHoursOnline += dailyRecord.totalHoursOnline || 0;
+        } else {
+          console.log(`⚠️ [Enhanced Route API] Daily record ${index + 1} (date=${recordDate}) has no locationHistory or it's empty`);
+          console.log(`⚠️ [Enhanced Route API] Daily record structure:`, {
+            hasLocationHistory: !!dailyRecord.locationHistory,
+            locationHistoryType: typeof dailyRecord.locationHistory,
+            locationHistoryIsArray: Array.isArray(dailyRecord.locationHistory),
+            locationHistoryLength: dailyRecord.locationHistory?.length || 0,
+            dailyRecordKeys: Object.keys(dailyRecord || {})
+          });
         }
       });
+      
+      console.log(`📊 [Enhanced Route API] Total location points collected: ${allLocationPoints.length}`);
+    }
+    
+    // ✅ FIX: If no location points found in historical data, try fallback to DeviceTracking for recent dates
+    if (allLocationPoints.length === 0 && date) {
+      const requestedDate = new Date(date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const daysDiff = Math.floor((today - requestedDate) / (1000 * 60 * 60 * 24));
+      
+      // If the requested date is within the last 7 days, try DeviceTracking as fallback
+      if (daysDiff <= 7 && daysDiff >= 0) {
+        console.log(`🔄 [Enhanced Route API] No historical location data found, trying DeviceTracking fallback for recent date (${daysDiff} days ago)`);
+        try {
+          const DeviceTracking = require('../models/deviceTracking');
+          const deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+          
+          if (deviceTracking && deviceTracking.locationHistory && deviceTracking.locationHistory.length > 0) {
+            // Check if the locationHistory is from the requested date
+            const firstPoint = deviceTracking.locationHistory[0];
+            const lastPoint = deviceTracking.locationHistory[deviceTracking.locationHistory.length - 1];
+            
+            if (firstPoint && firstPoint.timestamp) {
+              const firstPointDate = new Date(firstPoint.timestamp);
+              firstPointDate.setHours(0, 0, 0, 0);
+              
+              if (firstPointDate.getTime() === requestedDate.getTime()) {
+                console.log(`✅ [Enhanced Route API] Found location data in DeviceTracking for ${date}`);
+                const cleanedPoints = GPSValidation.cleanGPSData(deviceTracking.locationHistory, {
+                  strictMode: false,
+                  maxAccuracy: 100,
+                  minAccuracy: 1,
+                  requirePhilippinesBounds: true,
+                  removeDrift: true,
+                  maxSpeed: 200
+                });
+                
+                allLocationPoints = cleanedPoints;
+                totalDistance = deviceTracking.totalDistanceTraveled || 0;
+                totalAdPlays = deviceTracking.totalAdPlays || 0;
+                totalQRScans = deviceTracking.totalQRScans || 0;
+                totalHoursOnline = (deviceTracking.currentSession && deviceTracking.currentSession.totalHoursOnline) ? deviceTracking.currentSession.totalHoursOnline : 0;
+                
+                console.log(`✅ [Enhanced Route API] Using DeviceTracking fallback: ${allLocationPoints.length} points`);
+              }
+            }
+          }
+        } catch (fallbackError) {
+          console.log(`⚠️ [Enhanced Route API] DeviceTracking fallback failed:`, fallbackError.message);
+        }
+      }
     }
     
     if (allLocationPoints.length === 0) {
       return res.status(200).json({
         success: false,
-        message: 'No valid location data found for the specified date range',
+        message: `No GPS location data available for ${date || 'the specified date range'}. The vehicle may not have been active or GPS tracking was not enabled on this day.`,
         data: null
       });
     }
@@ -340,9 +448,12 @@ router.get('/route/:materialId', async (req, res) => {
     }
 
     // ✅ FILTER: If actualDeploymentTime is found, filter location points to only include those after ad deployment
+    // ✅ FIX: Only apply adStartTime filter for TODAY's data. For historical dates, show all route data
+    // because materials were active on that date regardless of when the ad was deployed.
     let filteredLocationPoints = allLocationPoints;
-    if (actualDeploymentTime) {
-      // ✅ Check if ad deployment time is on the same date as the requested date
+    if (actualDeploymentTime && isToday) {
+      // ✅ Only filter by ad deployment time for TODAY's data
+      // For historical dates, show all route data (materials were active on that date)
       const deploymentDateStr = actualDeploymentTime.toISOString().split('T')[0];
       const requestedDateStr = date;
       
@@ -385,14 +496,18 @@ router.get('/route/:materialId', async (req, res) => {
           totalDistance = 0;
         }
       } else if (deploymentDateStr > requestedDateStr) {
-        // Ad was deployed AFTER the requested date - return empty route (ad wasn't active yet)
-        console.log(`⚠️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is after requested date (${requestedDateStr}) - returning empty route`);
-        filteredLocationPoints = [];
-        totalDistance = 0;
+        // Ad was deployed AFTER the requested date - but only filter for TODAY, not historical dates
+        // For historical dates, show all route data (materials were active on that date)
+        console.log(`⚠️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is after requested date (${requestedDateStr}) - but showing all route data for historical date`);
+        // Don't filter - show all points for historical dates
       } else {
         // Ad was deployed BEFORE the requested date - show all points (ad was already active)
         console.log(`ℹ️ [Enhanced Route API] Ad deployment (${deploymentDateStr}) is before requested date (${requestedDateStr}) - showing all route points`);
       }
+    } else if (actualDeploymentTime && !isToday) {
+      // ✅ FIX: For historical dates, don't filter by adStartTime - show all route data
+      // Materials were active on that date regardless of when the ad was deployed
+      console.log(`ℹ️ [Enhanced Route API] Historical date requested - showing all route data (not filtering by ad deployment time)`);
     }
 
     // Create route points with enhanced data
