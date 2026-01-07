@@ -1011,6 +1011,28 @@ router.post('/qr-scan', async (req, res) => {
       console.log(`   DeviceTracking QR Scans: \u001b[32m${deviceTracking.totalQRScans}\u001b[0m`);
       console.log(`   QR Scans in Array: \u001b[32m${deviceTracking.qrScans.length}\u001b[0m`);
       
+      // ⚡ REAL-TIME FIX: Immediately trigger user sync to update UserAnalytics
+      // This ensures QR scan appears in frontend within seconds instead of waiting for sync job (30s)
+      if (isMasterSlot && userId) {
+        try {
+          const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+          console.log(`⚡ [QRScan] Triggering immediate sync for user ${userId} to update UserAnalytics...`);
+          // Use setTimeout to avoid blocking the response - sync happens in background
+          setTimeout(async () => {
+            try {
+              await userAnalyticsSyncJob.syncUserImmediately(userId);
+              console.log(`✅ [QRScan] Immediate sync completed for user ${userId}`);
+            } catch (syncError) {
+              console.warn(`⚠️ [QRScan] Immediate sync failed for user ${userId}:`, syncError.message);
+              // Don't throw - sync job will handle it on next run
+            }
+          }, 100); // 100ms delay to ensure DeviceTracking save is complete
+        } catch (syncJobError) {
+          console.warn(`⚠️ [QRScan] Could not trigger immediate sync:`, syncJobError.message);
+          // Don't throw - sync job will handle it on next run
+        }
+      }
+      
     } catch (deviceTrackingError) {
       console.log('\u001b[31m❌ Could not update deviceTracking with QR scan:\u001b[0m', deviceTrackingError.message);
     }

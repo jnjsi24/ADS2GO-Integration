@@ -843,20 +843,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       });
     }
     
-    // ✅ CRITICAL: Update lastAnalyticsAccess to mark user as "active" for sync job
-    // This ensures the user is included in the 30-second active users sync
-    try {
-      const User = require('../models/User');
-      await User.updateOne(
-        { _id: new mongoose.Types.ObjectId(userId) },
-        { $set: { lastAnalyticsAccess: new Date() } }
-      );
-      console.log(`✅ [DIRECT-V2] Updated lastAnalyticsAccess for user ${userId} - user is now marked as active`);
-    } catch (userUpdateError) {
-      console.warn(`⚠️ [DIRECT-V2] Failed to update lastAnalyticsAccess:`, userUpdateError.message);
-      // Don't fail the request if user update fails
-    }
-    
     console.log('🚀 [OPTIMIZED] Direct API v2 for user:', userId, 'period:', period, 'page:', page);
     
     // Validate and normalize date range

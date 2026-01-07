@@ -11,7 +11,7 @@ import {
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
-import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode } from 'lucide-react';
+import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode, Clock } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -19,7 +19,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 // ✅ PERSISTENT CACHE: Module-level cache manager that survives component unmounts
 // This allows instant display when returning to Detailed Analytics page after navigation
 const ANALYTICS_CACHE_KEY = 'detailed-analytics-cache';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const CACHE_TTL = 30 * 1000; // ⚡ REAL-TIME FIX: Reduced from 5 minutes to 30 seconds for faster QR scan updates
 const MAX_CACHE_SIZE = 30; // Limit cache to 30 entries (prevents memory issues with many ads)
 
 interface CacheEntry {
@@ -550,6 +550,7 @@ const DetailedAnalytics: React.FC = () => {
   
   // ✅ Background refresh every 10 seconds (silent) for real-time updates
   // ⚡ REAL-TIME: Reduced from 15s to 10s for faster Top Performing Ads updates (matches TODAY filter polling)
+  // ⚡ REAL-TIME FIX: Also refresh QR Scans card data at same rate for consistency
   useEffect(() => {
     if (!user?.userId) return;
     
@@ -850,18 +851,34 @@ const DetailedAnalytics: React.FC = () => {
     const currentDevice = selectedDevice; // Capture current value
     
     if (currentDevice && filteredDevices.length > 0) {
+      // If "All Devices" is selected, keep it if there are multiple devices
+      if (currentDevice === 'all' && filteredDevices.length > 1) {
+        // Keep "All Devices" selected
+        return;
+      }
+      // Check if the current device still exists in the filtered list
       const deviceExists = filteredDevices.some(device => device.materialId === currentDevice);
       if (!deviceExists) {
-        // Select first device as default
+        // If there are multiple devices, default to "All Devices", otherwise select first device
+        if (filteredDevices.length > 1) {
+          setSelectedDevice('all');
+          setSelectedDeviceLabel('All Devices');
+        } else {
+          const firstDevice = filteredDevices[0];
+          setSelectedDevice(firstDevice.materialId);
+          setSelectedDeviceLabel(firstDevice.name);
+        }
+      }
+    } else if (!currentDevice && filteredDevices.length > 0) {
+      // Auto-select: "All Devices" if more than 1 device, otherwise first device
+      if (filteredDevices.length > 1) {
+        setSelectedDevice('all');
+        setSelectedDeviceLabel('All Devices');
+      } else {
         const firstDevice = filteredDevices[0];
         setSelectedDevice(firstDevice.materialId);
         setSelectedDeviceLabel(firstDevice.name);
       }
-    } else if (!currentDevice && filteredDevices.length > 0) {
-      // Auto-select first device when no device is selected and devices are available
-      const firstDevice = filteredDevices[0];
-      setSelectedDevice(firstDevice.materialId);
-      setSelectedDeviceLabel(firstDevice.name);
     } else if (filteredDevices.length === 0 && currentDevice) {
       // Only clear if there was a device selected
       setSelectedDevice('');
@@ -935,7 +952,7 @@ const DetailedAnalytics: React.FC = () => {
   // Fetch analytics data (both all devices and specific device) with debouncing and useCallback
   // ✅ Updated to include adId parameter when an ad is selected
   // ✅ Added silent parameter to disable loading state during background refreshes
-  const fetchDirectAnalytics = useCallback(async (silent: boolean = false) => {
+  const fetchDirectAnalytics = useCallback(async (silent: boolean = false, bypassCache: boolean = false) => {
     if (!user?.userId) return;
 
     // ✅ PERFORMANCE: Check cache first before fetching
@@ -957,7 +974,7 @@ const DetailedAnalytics: React.FC = () => {
       // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
       savePersistentCache(cache);
       console.log('⚡ [DetailedAnalytics] Using cached data for:', cacheKey);
-      if (!selectedDevice) {
+      if (!selectedDevice || selectedDevice === 'all') {
         setDirectAnalyticsData(cached.data);
         setDeviceAnalytics(null);
       } else {
@@ -1038,7 +1055,8 @@ const DetailedAnalytics: React.FC = () => {
         }
 
         let url;
-        if (!selectedDevice) {
+        // Treat 'all' the same as no device selected (fetch all devices)
+        if (!selectedDevice || selectedDevice === 'all') {
           if (isCustomDate && selectedDate) {
             const dateISO = formatDateForAPI(selectedDate);
             queryParams.append('startDate', dateISO);
@@ -1066,9 +1084,16 @@ const DetailedAnalytics: React.FC = () => {
           }
         }
 
-        console.log('📡 [DetailedAnalytics] Fetching:', url);
-        const response = await fetch(url, {
-          signal: abortController.signal // ✅ Attach abort signal
+        // ⚡ REAL-TIME FIX: Add cache-busting timestamp to prevent stale data
+        // This ensures QR scan updates appear immediately instead of being cached
+        const cacheBuster = `_t=${Date.now()}`;
+        const separator = url.includes('?') ? '&' : '?';
+        const urlWithCacheBuster = `${url}${separator}${cacheBuster}`;
+        
+        console.log('📡 [DetailedAnalytics] Fetching:', urlWithCacheBuster);
+        const response = await fetch(urlWithCacheBuster, {
+          signal: abortController.signal, // ✅ Attach abort signal
+          cache: 'no-store' // ⚡ REAL-TIME FIX: Prevent browser caching
         });
 
         // ✅ Check if request was aborted
@@ -1080,7 +1105,7 @@ const DetailedAnalytics: React.FC = () => {
         const data = await response.json();
 
         if (data.success) {
-          if (!selectedDevice) {
+          if (!selectedDevice || selectedDevice === 'all') {
             console.log('📊 [DetailedAnalytics] Received directAnalyticsData:', {
               hasDeviceStats: !!data.data?.deviceStats,
               deviceStatsCount: data.data?.deviceStats?.length || 0,
@@ -1233,7 +1258,7 @@ const DetailedAnalytics: React.FC = () => {
         // ✅ PERSISTENT CACHE: Save updated lastAccessed to localStorage
         savePersistentCache(cache);
         console.log('⚡ [DetailedAnalytics] Using cached data for filters - instant display:', cacheKey);
-        if (!selectedDevice) {
+        if (!selectedDevice || selectedDevice === 'all') {
           setDirectAnalyticsData(cached.data);
           setDeviceAnalytics(null);
         } else {
@@ -1311,8 +1336,9 @@ const DetailedAnalytics: React.FC = () => {
     if (isCustomDate) return;
     
     // Poll every 10 seconds when viewing current day data (silent refresh) for faster real-time updates
+    // ⚡ REAL-TIME FIX: Bypass cache during polling to get fresh QR scan data immediately
     const pollInterval = setInterval(() => {
-      fetchDirectAnalytics(true); // Silent background refresh
+      fetchDirectAnalytics(true, true); // Silent background refresh with cache bypass
     }, 10000); // 10 seconds for today's data (faster than 30s for historical data)
     
     return () => clearInterval(pollInterval);
@@ -1370,7 +1396,7 @@ const DetailedAnalytics: React.FC = () => {
     // Ad filter is always active now since we always have a specific ad selected
     const hasAdFilter = Boolean(selectedAd);
     // Device filter is active when a specific device is selected
-    const hasDeviceFilter = Boolean(selectedDevice);
+    const hasDeviceFilter = Boolean(selectedDevice && selectedDevice !== 'all');
     const hasAnyFilter = hasAdFilter || hasDeviceFilter || hasDateFilter;
     
     // ✅ CRITICAL FIX: Always prefer directAnalyticsData (from UserAnalytics collection) when available
@@ -1383,13 +1409,16 @@ const DetailedAnalytics: React.FC = () => {
       // ✅ Use overallAnalyticsData first for consistency with Top Performing Ads (same polling rate)
       if (overallAnalyticsData?.getUserAnalytics?.summary) {
         console.log('✅ [DetailedAnalytics] Using overallAnalyticsData summary for "all" period (consistent with Top Performing Ads):', overallAnalyticsData.getUserAnalytics.summary);
+        const totalDisplayTime = overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0;
+        const totalDevices = overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0;
         return {
           totalAdsPlayed: overallAnalyticsData.getUserAnalytics.summary.totalAdsPlayed || 0,
-          totalDisplayTime: overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0,
+          totalDisplayTime: totalDisplayTime,
           averageCompletionRate: overallAnalyticsData.getUserAnalytics.summary.averageCompletionRate || 0,
+          averageHoursOnline: totalDevices > 0 ? totalDisplayTime / totalDevices / 3600 : 0,
           totalAds: overallAnalyticsData.getUserAnalytics.summary.totalAds || 0,
           activeAds: overallAnalyticsData.getUserAnalytics.summary.activeAds || 0,
-          totalDevices: overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0,
+          totalDevices: totalDevices,
           totalQRScans: overallAnalyticsData.getUserAnalytics.summary.totalQRScans || 0
         };
       }
@@ -1411,6 +1440,7 @@ const DetailedAnalytics: React.FC = () => {
         totalAdsPlayed: 0,
         totalDisplayTime: 0,
         averageCompletionRate: 0,
+        averageHoursOnline: 0,
         totalAds: 0,
         activeAds: 0,
         totalDevices: 0,
@@ -1422,10 +1452,12 @@ const DetailedAnalytics: React.FC = () => {
     // DON'T fallback to overall data - wait for deviceAnalytics to load
     if (hasDeviceFilter) {
       if (deviceAnalytics) {
+        const totalDisplayTime = deviceAnalytics.totals?.totalAdPlayTime || 0;
         return {
           totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
-          totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
+          totalDisplayTime: totalDisplayTime,
           averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
+          averageHoursOnline: totalDisplayTime / 3600, // For single device, just convert seconds to hours
           totalAds: 0, // Not applicable for device-specific view
           activeAds: 0, // Not applicable for device-specific view
           totalDevices: 1, // Always 1 when device is selected
@@ -1438,6 +1470,7 @@ const DetailedAnalytics: React.FC = () => {
           totalAdsPlayed: 0,
           totalDisplayTime: 0,
           averageCompletionRate: 0,
+          averageHoursOnline: 0,
           totalAds: 0,
           activeAds: 0,
           totalMaterials: 0,
@@ -1460,13 +1493,16 @@ const DetailedAnalytics: React.FC = () => {
       // ✅ ALWAYS prefer directAnalyticsData - never fallback to overallAnalyticsData once directAnalyticsData is available
       if (directAnalyticsData?.summary) {
         console.log('✅ [DetailedAnalytics] Using directAnalyticsData for "TODAY" period (fresh data):', directAnalyticsData.summary);
+        const totalDisplayTime = directAnalyticsData.summary.totalDisplayTime || 0;
+        const totalDevices = directAnalyticsData.summary.totalDevices || 0;
         return {
           totalAdsPlayed: directAnalyticsData.summary.totalAdsPlayed || 0,
-          totalDisplayTime: directAnalyticsData.summary.totalDisplayTime || 0,
+          totalDisplayTime: totalDisplayTime,
           averageCompletionRate: directAnalyticsData.summary.averageCompletionRate || 0,
+          averageHoursOnline: totalDevices > 0 ? totalDisplayTime / totalDevices / 3600 : 0,
           totalAds: directAnalyticsData.summary.totalAds || 0,
           activeAds: directAnalyticsData.summary.activeAds || 0,
-          totalDevices: directAnalyticsData.summary.totalDevices || 0,
+          totalDevices: totalDevices,
           totalQRScans: directAnalyticsData.summary.totalQRScans || 0
         };
       }
@@ -1480,6 +1516,7 @@ const DetailedAnalytics: React.FC = () => {
           totalAdsPlayed: 0,
           totalDisplayTime: 0,
           averageCompletionRate: 0,
+          averageHoursOnline: 0,
           totalAds: 0,
           activeAds: 0,
           totalDevices: 0,
@@ -1507,6 +1544,7 @@ const DetailedAnalytics: React.FC = () => {
               totalAdsPlayed: 0,
               totalDisplayTime: 0,
               averageCompletionRate: 0,
+              averageHoursOnline: 0,
               totalAds: directAnalyticsData.summary.totalAds || 0,
               activeAds: directAnalyticsData.summary.activeAds || 0,
               totalDevices: directAnalyticsData.summary.totalDevices || 0,
@@ -1529,6 +1567,7 @@ const DetailedAnalytics: React.FC = () => {
               totalAdsPlayed: 0,
               totalDisplayTime: 0,
               averageCompletionRate: 0,
+              averageHoursOnline: 0,
               totalAds: directAnalyticsData.summary.totalAds || 0,
               activeAds: directAnalyticsData.summary.activeAds || 0,
               totalDevices: directAnalyticsData.summary.totalDevices || 0,
@@ -1553,6 +1592,7 @@ const DetailedAnalytics: React.FC = () => {
           totalAdsPlayed: 0,
           totalDisplayTime: 0,
           averageCompletionRate: 0,
+          averageHoursOnline: 0,
           totalAds: 0,
           activeAds: 0,
           totalMaterials: 0,
@@ -1566,7 +1606,13 @@ const DetailedAnalytics: React.FC = () => {
     // (GraphQL analyticsData respects date/period but NOT adId, so only use when ad='all' and device='all')
     // Note: hasAdFilter and hasDeviceFilter are already declared at the top of this useMemo
     if (!hasAdFilter && !hasDeviceFilter && analyticsData?.getUserAnalytics?.summary) {
-      return analyticsData.getUserAnalytics.summary;
+      const summary = analyticsData.getUserAnalytics.summary;
+      const totalDisplayTime = summary.totalDisplayTime || 0;
+      const totalDevices = summary.totalDevices || 0;
+      return {
+        ...summary,
+        averageHoursOnline: totalDevices > 0 ? totalDisplayTime / totalDevices / 3600 : 0
+      };
     }
     
     // ✅ Final fallback: Return zeros (will show loading state)
@@ -1576,6 +1622,7 @@ const DetailedAnalytics: React.FC = () => {
       totalAdsPlayed: 0,
       totalDisplayTime: 0,
       averageCompletionRate: 0,
+      averageHoursOnline: 0,
       totalAds: 0,
       activeAds: 0,
       totalMaterials: 0,
@@ -1898,18 +1945,25 @@ const DetailedAnalytics: React.FC = () => {
       const qrScans = ad.totalQRScans || 0;
       
       // ✅ Get actual device count from myAdsData (devices assigned to the ad)
-      // Find the corresponding ad in myAdsData to get the actual materialId array
+      // Find the corresponding ad in myAdsData to get the actual materialId array, startTime, and endTime
       let assignedDevicesCount = ad.totalDevices || 0; // Fallback to analytics data
+      let startTime = null;
+      let endTime = null;
       if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
         const adFromMyAds = myAdsData.getMyAds.find((myAd: any) => {
           // Match by adId (could be string or ObjectId)
           return myAd.id === ad.adId || myAd.id?.toString() === ad.adId?.toString();
         });
         
-        if (adFromMyAds && adFromMyAds.materialId && Array.isArray(adFromMyAds.materialId)) {
-          // Count actual assigned devices from materialId array
-          assignedDevicesCount = adFromMyAds.materialId.length;
-          console.log(`📊 [TopPerformingAds] Ad "${ad.adTitle}" has ${assignedDevicesCount} assigned devices (from materialId array)`);
+        if (adFromMyAds) {
+          if (adFromMyAds.materialId && Array.isArray(adFromMyAds.materialId)) {
+            // Count actual assigned devices from materialId array
+            assignedDevicesCount = adFromMyAds.materialId.length;
+            console.log(`📊 [TopPerformingAds] Ad "${ad.adTitle}" has ${assignedDevicesCount} assigned devices (from materialId array)`);
+          }
+          // Get start and end dates
+          startTime = adFromMyAds.startTime || null;
+          endTime = adFromMyAds.endTime || null;
         }
       }
       
@@ -1927,7 +1981,9 @@ const DetailedAnalytics: React.FC = () => {
         ...ad,
         totalPlays: totalPlays, // ✅ Calculated from play time
         totalQRScans: qrScans, // ✅ Use QR scans directly from backend (fresh data)
-        assignedDevicesCount: assignedDevicesCount // Use this instead of totalMaterials for device count
+        assignedDevicesCount: assignedDevicesCount, // Use this instead of totalMaterials for device count
+        startTime: startTime, // Start date from myAdsData
+        endTime: endTime // End date from myAdsData
       };
     });
     
@@ -2115,6 +2171,23 @@ const DetailedAnalytics: React.FC = () => {
                       className="absolute z-30 mt-1 w-full rounded shadow-lg bg-white border border-gray-200"
                     >
                       <div className="p-2 max-h-60 overflow-y-auto">
+                        {/* All Devices Option - Only show if more than 1 device */}
+                        {availableDevices.length > 1 && (
+                          <button
+                            onClick={() => {
+                              setSelectedDevice('all');
+                              setSelectedDeviceLabel('All Devices');
+                              setShowDeviceDropdown(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded flex items-center justify-between ${
+                              selectedDevice === 'all'
+                                ? "bg-blue-50 text-blue-700"
+                                : "text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <span className="truncate font-medium">All Devices</span>
+                          </button>
+                        )}
                         {availableDevices.map((device) => (
                           <button
                             key={device.id}
@@ -2130,9 +2203,6 @@ const DetailedAnalytics: React.FC = () => {
                             }`}
                           >
                             <span className="truncate">{device.name}</span>
-                            <span className={`w-2 h-2 rounded-full ml-2 flex-shrink-0 ${
-                              device.isOnline ? "bg-green-500" : "bg-gray-300"
-                            }`} />
                           </button>
                         ))}
                       </div>
@@ -2389,6 +2459,29 @@ const DetailedAnalytics: React.FC = () => {
                         className="absolute z-50 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden border border-gray-200"
                       >
                         <div className="p-3">
+                          {/* All Devices Option - Only show if more than 1 device */}
+                          {availableDevices.length > 1 && (
+                            <button
+                              onClick={() => {
+                                setSelectedDevice('all');
+                                setSelectedDeviceLabel('All Devices');
+                                setShowDeviceDropdown(false);
+                              }}
+                              className={`block w-full text-left px-1 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150 ${
+                                selectedDevice === 'all'
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "hover:bg-gray-50 text-gray-700"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <div>
+                                    <div className="font-medium">All Devices</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          )}
                           {/* Individual Devices */}
                           {availableDevices.map((device) => (
                             <button
@@ -2409,20 +2502,6 @@ const DetailedAnalytics: React.FC = () => {
                                   <div>
                                     <div className="font-medium">{device.name}</div>
                                   </div>
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                  <div
-                                    className={`w-2 h-2 rounded-full ${
-                                      device.isOnline ? "bg-green-500" : "bg-red-500"
-                                    }`}
-                                  ></div>
-                                  <span
-                                    className={`text-[10px] font-medium ${
-                                      device.isOnline ? "text-green-600" : "text-red-600"
-                                    }`}
-                                  >
-                                    {device.isOnline ? "ONLINE" : "OFFLINE"}
-                                  </span>
                                 </div>
                               </div>
                             </button>
@@ -2582,11 +2661,11 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
               </div>
 
-              {/* Online Devices */}
+              {/* Total Hours Online */}
               <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-sm text-black/70">Online Devices</p>
+                    <p className="text-sm text-black/70">Total Hours Online</p>
                     <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
                       {/* ✅ Show loading state when filters change or initial load */}
                       {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
@@ -2595,38 +2674,12 @@ const DetailedAnalytics: React.FC = () => {
                           <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
                         </>
                       ) : (
-                        // ✅ Use onlineDevicesCount which respects filters
-                        // When device is selected: shows 1 if online, 0 if offline
-                        // Otherwise: shows count of online devices from filtered data
-                        onlineDevicesCount
-                      )}
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
-                    <MonitorSmartphone className="w-5 h-5 text-green-700 drop-shadow-sm" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Completion Rate */}
-              <div className="bg-white/50 backdrop-blur-sm p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-sm text-black/70">Completion Rate</p>
-                    <div className="text-xl font-semibold text-gray-900 mt-1 flex items-center gap-2">
-                      {/* ✅ Show loading state when filters change or initial load */}
-                      {(analyticsLoading && isInitialLoad) || directAnalyticsLoading || isFiltersLoading ? (
-                        <>
-                          <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                          <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
-                        </>
-                      ) : (
-                        `${analyticsSummary.averageCompletionRate.toFixed(1)}%`
+                        ((analyticsSummary.totalDisplayTime || 0) / 3600).toFixed(1)
                       )}
                     </div>
                   </div>
                   <div className="p-2 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 border border-white/30 backdrop-blur-md shadow-md">
-                    <TrendingUp className="w-5 h-5 text-purple-700 drop-shadow-sm" />
+                    <Clock className="w-5 h-5 text-purple-700 drop-shadow-sm" />
                   </div>
                 </div>
               </div>
@@ -2763,10 +2816,26 @@ const DetailedAnalytics: React.FC = () => {
                           </span>
                         </div>
                         
-                        {/* Ad Title */}
-                        {/* <-- WRAPPER DIV IS OPTIONAL HERE BUT GOOD PRACTICE --> */}
+                        {/* Ad Title and Dates */}
                         <div> 
                             <p className="font-semibold text-black/90 text-lg">{ad.adTitle}</p>
+                            {(ad.startTime || ad.endTime) && (
+                              <div className="flex items-center gap-2 mt-1">
+                                {ad.startTime && (
+                                  <span className="text-xs text-black/50">
+                                    Start: {new Date(ad.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                )}
+                                {ad.startTime && ad.endTime && (
+                                  <span className="text-xs text-black/30">•</span>
+                                )}
+                                {ad.endTime && (
+                                  <span className="text-xs text-black/50">
+                                    End: {new Date(ad.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                         </div>
                       </div>
                       
