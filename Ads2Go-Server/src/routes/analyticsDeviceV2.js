@@ -20,7 +20,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
   const { startDate, endDate, period, adId } = req.query;
   
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:18',message:'Device analytics endpoint called',data:{userId,deviceId,startDate,endDate,period,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:18',message:'Device analytics endpoint called',data:{userId,deviceId,startDate,endDate,period,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
   // #endregion
   
   try {
@@ -145,7 +146,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
         }).lean();
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:141',message:'Fetched today DeviceTracking record (POST-FIX)',data:{deviceId,date:todayStr,todayISO:today.toISOString(),found:!!todayRecord,hasQrScansByAd:!!todayRecord?.qrScansByAd,qrScansByAdCount:todayRecord?.qrScansByAd?.length||0,hasQrScans:!!todayRecord?.qrScans,qrScansCount:todayRecord?.qrScans?.length||0,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+        // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:141',message:'Fetched today DeviceTracking record (POST-FIX)',data:{deviceId,date:todayStr,todayISO:today.toISOString(),found:!!todayRecord,hasQrScansByAd:!!todayRecord?.qrScansByAd,qrScansByAdCount:todayRecord?.qrScansByAd?.length||0,hasQrScans:!!todayRecord?.qrScans,qrScansCount:todayRecord?.qrScans?.length||0,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
         // #endregion
         
         if (todayRecord) {
@@ -156,14 +158,16 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
               adTitle: scan.adTitle,
               scanCount: scan.scanCount
             }));
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:145',message:'qrScansByAd details',data:{qrScansByAdDetails,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:145',message:'qrScansByAd details',data:{qrScansByAdDetails,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
           }
           if (todayRecord.qrScans && todayRecord.qrScans.length > 0) {
             const qrScansDetails = todayRecord.qrScans.map(scan => ({
               adId: scan.adId ? scan.adId.toString() : 'null',
               adTitle: scan.adTitle
             }));
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:152',message:'qrScans array details',data:{qrScansDetails,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:152',message:'qrScans array details',data:{qrScansDetails,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
           }
           // #endregion
           let todayAdsPlayed = 0;
@@ -183,12 +187,14 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
           
           // Process QR scans (prefer qrScansByAd, fallback to qrScans array)
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:159',message:'Processing QR scans for today',data:{deviceId,adId,hasQrScansByAd:!!todayRecord.qrScansByAd,qrScansByAdCount:todayRecord.qrScansByAd?.length||0,hasQrScans:!!todayRecord.qrScans,qrScansCount:todayRecord.qrScans?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:159',message:'Processing QR scans for today',data:{deviceId,adId,hasQrScansByAd:!!todayRecord.qrScansByAd,qrScansByAdCount:todayRecord.qrScansByAd?.length||0,hasQrScans:!!todayRecord.qrScans,qrScansCount:todayRecord.qrScans?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
           // #endregion
           
           if (todayRecord.qrScansByAd && todayRecord.qrScansByAd.length > 0) {
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:162',message:'Using qrScansByAd for QR scan counting',data:{qrScansByAdCount:todayRecord.qrScansByAd.length,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:162',message:'Using qrScansByAd for QR scan counting',data:{qrScansByAdCount:todayRecord.qrScansByAd.length,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
             // #endregion
             
             todayRecord.qrScansByAd.forEach(adScan => {
@@ -196,20 +202,23 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
               const matches = !adId || adId === 'all' || adIdStr === adId;
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:165',message:'Checking qrScansByAd entry',data:{adScanAdId:adIdStr,filterAdId:adId||'all',matches,scanCount:adScan.scanCount||0,adTitle:adScan.adTitle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+              // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:165',message:'Checking qrScansByAd entry',data:{adScanAdId:adIdStr,filterAdId:adId||'all',matches,scanCount:adScan.scanCount||0,adTitle:adScan.adTitle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
               // #endregion
               
               if (matches) {
                 todayQRScans += adScan.scanCount || 0;
                 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:170',message:'Added QR scans from qrScansByAd',data:{adIdStr,scanCount:adScan.scanCount||0,todayQRScansAfter:todayQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:170',message:'Added QR scans from qrScansByAd',data:{adIdStr,scanCount:adScan.scanCount||0,todayQRScansAfter:todayQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
                 // #endregion
               }
             });
           } else if (todayRecord.qrScans && todayRecord.qrScans.length > 0) {
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:175',message:'Using qrScans array (fallback)',data:{qrScansCount:todayRecord.qrScans.length,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:175',message:'Using qrScans array (fallback)',data:{qrScansCount:todayRecord.qrScans.length,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
             // #endregion
             
             todayRecord.qrScans.forEach(scan => {
@@ -217,21 +226,24 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
               const matches = !adId || adId === 'all' || adIdStr === adId;
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:180',message:'Checking qrScans array entry',data:{scanAdId:adIdStr,filterAdId:adId||'all',matches,adTitle:scan.adTitle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+              // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:180',message:'Checking qrScans array entry',data:{scanAdId:adIdStr,filterAdId:adId||'all',matches,adTitle:scan.adTitle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
               // #endregion
               
               if (matches) {
                 todayQRScans += 1;
                 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:186',message:'Added QR scan from array',data:{adIdStr,todayQRScansAfter:todayQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:186',message:'Added QR scan from array',data:{adIdStr,todayQRScansAfter:todayQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
                 // #endregion
               }
             });
           }
           
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:192',message:'QR scan processing complete',data:{todayQRScans,todayAdsPlayed,todayDisplayTime,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:192',message:'QR scan processing complete',data:{todayQRScans,todayAdsPlayed,todayDisplayTime,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
           // #endregion
           
           if (todayAdsPlayed > 0 || todayQRScans > 0 || todayDisplayTime > 0) {
@@ -357,7 +369,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
     // ✅ CRITICAL FIX: Always recalculate totals from dailyStats to ensure accuracy
     // This is especially important when filtering by adId or date, as aggregation might not include filtered data
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:285',message:'Starting totals recalculation',data:{hasDailyStats:!!data.dailyStats,dailyStatsCount:data.dailyStats?.length||0,originalTotalQRScans:data.totalQRScans||0,originalTotalAdsPlayed:data.totalAdsPlayed||0,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:285',message:'Starting totals recalculation',data:{hasDailyStats:!!data.dailyStats,dailyStatsCount:data.dailyStats?.length||0,originalTotalQRScans:data.totalQRScans||0,originalTotalAdsPlayed:data.totalAdsPlayed||0,adId,filterAdId:adId||'all'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
     
     if (data.dailyStats && data.dailyStats.length > 0) {
@@ -369,7 +382,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
           const matches = statAdId === adId;
           
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:293',message:'Filtering dailyStat by adId',data:{statAdId,filterAdId:adId,matches,statQrScans:stat.qrScans||0,statAdsPlayed:stat.adsPlayed||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:293',message:'Filtering dailyStat by adId',data:{statAdId,filterAdId:adId,matches,statQrScans:stat.qrScans||0,statAdsPlayed:stat.adsPlayed||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
           // #endregion
           
           return matches;
@@ -383,7 +397,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
       const recalculatedQRScans = filteredDailyStats.reduce((sum, stat) => sum + (stat.qrScans || 0), 0);
       
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:304',message:'Recalculated totals from dailyStats',data:{originalPlays:data.totalAdsPlayed||0,originalQRScans:data.totalQRScans||0,recalculatedPlays,recalculatedQRScans,filteredDailyStatsCount:filteredDailyStats.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:304',message:'Recalculated totals from dailyStats',data:{originalPlays:data.totalAdsPlayed||0,originalQRScans:data.totalQRScans||0,recalculatedPlays,recalculatedQRScans,filteredDailyStatsCount:filteredDailyStats.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       
       // Update totals (use recalculated values if they differ, or if original totals are missing)
@@ -398,7 +413,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
         data.totalQRScans = recalculatedQRScans;
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:315',message:'Updated totals after recalculation',data:{finalTotalQRScans:data.totalQRScans,finalTotalAdsPlayed:data.totalAdsPlayed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:315',message:'Updated totals after recalculation',data:{finalTotalQRScans:data.totalQRScans,finalTotalAdsPlayed:data.totalAdsPlayed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
       }
     } else if (!data.totalAdsPlayed && !data.totalQRScans) {
@@ -409,7 +425,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
       console.log(`⚠️ [Device V2] No dailyStats and no totals, setting to 0`);
       
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:323',message:'No dailyStats found, set totals to 0',data:{hasDailyStats:!!data.dailyStats},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:323',message:'No dailyStats found, set totals to 0',data:{hasDailyStats:!!data.dailyStats},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
     }
     
@@ -441,7 +458,8 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
     });
     
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:348',message:'Sending response to frontend',data:{deviceId,adId,filterAdId:adId||'all',totalQRScans:data.totalQRScans||0,totalAdPlays:data.totalAdsPlayed||0,dailyStatsCount:data.dailyStats?.length||0,dailyStatsSample:data.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analyticsDeviceV2.js:348',message:'Sending response to frontend',data:{deviceId,adId,filterAdId:adId||'all',totalQRScans:data.totalQRScans||0,totalAdPlays:data.totalAdsPlayed||0,dailyStatsCount:data.dailyStats?.length||0,dailyStatsSample:data.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
     
     res.json({

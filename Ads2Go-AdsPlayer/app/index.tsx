@@ -834,12 +834,6 @@ export default function HomeScreen() {
               {refreshing ? '🔄' : '🔄'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.videoModeButton}
-            onPress={toggleInterfaceMode}
-          >
-            <Text style={styles.videoModeButtonText}>📺 Video Mode</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -887,72 +881,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Tracking Status */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <Text style={styles.statusTitle}>🔄 Continuous Tracking</Text>
-            <View style={[styles.statusIndicator, { backgroundColor: isTracking ? '#27ae60' : '#e74c3c' }]} />
-          </View>
-          <View style={styles.statusContent}>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Status:</Text>
-              <Text style={[styles.statusValue, { color: isTracking ? '#27ae60' : '#e74c3c' }]}>
-                {isTracking ? 'Active' : 'Inactive'}
-              </Text>
-            </View>
-            <Text style={styles.trackingStatusText}>
-              {trackingStatus}
-            </Text>
-            <View style={styles.trackingControls}>
-              {!isTracking && !isSimulatingOffline ? (
-                <TouchableOpacity 
-                  style={[styles.trackingButton, styles.startButton]}
-                  onPress={handleStartTracking}
-                >
-                  <Text style={styles.trackingButtonText}>▶️ Start Tracking</Text>
-                </TouchableOpacity>
-              ) : null}
-              
-              <TouchableOpacity 
-                style={[
-                  styles.trackingButton, 
-                  isSimulatingOffline ? styles.disabledButton : styles.offlineButton
-                ]}
-                onPress={handleGoOffline}
-                disabled={isSimulatingOffline}
-              >
-                <Text style={[styles.trackingButtonText, isSimulatingOffline && styles.disabledButtonText]}>
-                  🔴 Go Offline (Stops Tracking)
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[
-                  styles.trackingButton, 
-                  !isSimulatingOffline ? styles.disabledButton : styles.onlineButton
-                ]}
-                onPress={handleGoOnline}
-                disabled={!isSimulatingOffline}
-              >
-                <Text style={[styles.trackingButtonText, !isSimulatingOffline && styles.disabledButtonText]}>
-                  🟢 Go Online (Start Tracking)
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Advertisement Player - AdPlayer is rendered at top level to prevent remounting */}
-      <View style={styles.adSection}>
-        <Text style={styles.adTitle}>📺 Advertisement Player</Text>
-        {!registrationData && (
-          <View style={styles.notRegisteredContainer}>
-            <Text style={styles.notRegisteredTitle}>
-              Please register the tablet to start playing advertisements
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* Tablet QR Code */}

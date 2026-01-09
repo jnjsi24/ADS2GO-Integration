@@ -451,9 +451,9 @@ const DetailedAnalytics: React.FC = () => {
   const fetchAllTimeAnalytics = useCallback(async (silent: boolean = false) => {
     if (!user?.userId) return;
     
-    // Throttle: Don't fetch more than once every 2 seconds
+    // Throttle: Don't fetch more than once every 1 second (reduced for faster updates)
     const now = Date.now();
-    if (!silent && (now - allTimeLastFetchRef.current) < 2000) {
+    if (!silent && (now - allTimeLastFetchRef.current) < 1000) {
       return;
     }
     allTimeLastFetchRef.current = now;
@@ -548,16 +548,16 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [user?.userId, fetchAllTimeAnalytics]);
   
-  // ✅ Background refresh every 10 seconds (silent) for real-time updates
-  // ⚡ REAL-TIME: Reduced from 15s to 10s for faster Top Performing Ads updates (matches TODAY filter polling)
-  // ⚡ REAL-TIME FIX: Also refresh QR Scans card data at same rate for consistency
+  // ✅ Background refresh every 3 seconds (silent) for real-time updates
+  // ⚡ REAL-TIME FIX: Reduced from 10s to 3s to match top cards instant update behavior
+  // This ensures Top Performing Ads updates as fast as the top summary cards
   useEffect(() => {
     if (!user?.userId) return;
     
     const pollInterval = setInterval(() => {
       console.log('🔄 [TopPerformingAds] Background refresh triggered');
       fetchAllTimeAnalytics(true); // Silent refresh - always fetches fresh data (no cache)
-    }, 10000); // 10 seconds for faster near real-time updates (matches TODAY filter polling rate)
+    }, 3000); // 3 seconds for near-instant updates (matches top cards refresh rate)
     
     return () => {
       clearInterval(pollInterval);
@@ -1191,7 +1191,8 @@ const DetailedAnalytics: React.FC = () => {
             });
             
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1185',message:'Received deviceAnalytics response',data:{selectedAd,selectedDevice,selectedDate,hasTotals:!!data.data.deviceAnalytics?.totals,totalQRScans:data.data.deviceAnalytics?.totals?.totalQRScans||0,totalAdPlays:data.data.deviceAnalytics?.totals?.totalAdPlays||0,dailyStatsCount:data.data.deviceAnalytics?.dailyStats?.length||0,sampleDailyStat:data.data.deviceAnalytics?.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // DISABLED: Debug logging
+            // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1185',message:'Received deviceAnalytics response',data:{selectedAd,selectedDevice,selectedDate,hasTotals:!!data.data.deviceAnalytics?.totals,totalQRScans:data.data.deviceAnalytics?.totals?.totalQRScans||0,totalAdPlays:data.data.deviceAnalytics?.totals?.totalAdPlays||0,dailyStatsCount:data.data.deviceAnalytics?.dailyStats?.length||0,sampleDailyStat:data.data.deviceAnalytics?.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
             // #endregion
             
             setDeviceAnalytics(data.data.deviceAnalytics);
@@ -1481,7 +1482,8 @@ const DetailedAnalytics: React.FC = () => {
         });
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1477',message:'Calculating summary from deviceAnalytics',data:{selectedAd,selectedDevice,selectedDate,totalQRScans,totalAdPlays,totalDisplayTime,hasTotals:!!deviceAnalytics.totals},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // DISABLED: Debug logging
+        // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1477',message:'Calculating summary from deviceAnalytics',data:{selectedAd,selectedDevice,selectedDate,totalQRScans,totalAdPlays,totalDisplayTime,hasTotals:!!deviceAnalytics.totals},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         
         return {
@@ -2889,20 +2891,10 @@ const DetailedAnalytics: React.FC = () => {
                       </div>
                       
                       {/* RIGHT SECTION: Performance Metrics */}
-                      <div className="flex items-center space-x-6 text-right">
+                      <div className="flex items-center text-right">
                         
-                        {/* Plays - Always show total plays from all-time data */}
-                        <div className="w-20"> 
-                          <p className="text-base font-bold text-black/70">
-                            {(ad.totalPlays || ad.totalAdsPlayed || 0).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-black/50 font-medium leading-none mt-0.5">
-                            Plays
-                          </p>
-                        </div>
-
                         {/* QR Scans (Highlighted) - Always show all-time QR scans */}
-                        <div className="w-20 ml-6 pl-4 border-l border-gray-200">
+                        <div className="w-20">
                           <p className="text-xl font-extrabold text-green-600">
                             {(ad.totalQRScans || 0).toLocaleString()}
                           </p>

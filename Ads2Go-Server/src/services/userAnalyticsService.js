@@ -5936,7 +5936,8 @@ class UserAnalyticsService {
               adsFoundInQrScansByAd.add(normalizedAdId); // Track that this ad was found in qrScansByAd
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5935',message:'Processing qrScansByAd entry in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isInUserAdIds:userAdIds.includes(normalizedAdId),userAdIdsSample:userAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+              // DISABLED: Debug logging
+              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5935',message:'Processing qrScansByAd entry in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isInUserAdIds:userAdIds.includes(normalizedAdId),userAdIdsSample:userAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
               // #endregion
               
               if (!qrScansByAd[normalizedAdId]) {
@@ -5980,7 +5981,8 @@ class UserAnalyticsService {
               totalScans += scanCountToAdd;
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5974',message:'Added QR scans in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCountToAdd,previousTotal,newTotal:qrScansByAd[normalizedAdId].totalScans,allAdTotals:Object.keys(qrScansByAd).map(k=>({adId:k,adTitle:qrScansByAd[k].adTitle,totalScans:qrScansByAd[k].totalScans}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+              // DISABLED: Debug logging
+              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5974',message:'Added QR scans in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCountToAdd,previousTotal,newTotal:qrScansByAd[normalizedAdId].totalScans,allAdTotals:Object.keys(qrScansByAd).map(k=>({adId:k,adTitle:qrScansByAd[k].adTitle,totalScans:qrScansByAd[k].totalScans}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
               // #endregion
               
               if (isVerbose || scanCountToAdd > 0) {

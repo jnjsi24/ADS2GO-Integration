@@ -658,7 +658,8 @@ class UserAnalyticsSyncJob {
                   const adIdStr = adId;
                   
                   // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:656',message:'Processing qrScansByAd entry in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isValidAd:adIdStr?validAdIds.includes(adIdStr):false,validAdIdsSample:validAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+                  // DISABLED: Debug logging
+                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:656',message:'Processing qrScansByAd entry in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isValidAd:adIdStr?validAdIds.includes(adIdStr):false,validAdIdsSample:validAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
                   // #endregion
                   
                   if (adIdStr && validAdIds.includes(adIdStr)) {
@@ -680,7 +681,8 @@ class UserAnalyticsSyncJob {
                     processedData.ads[adIdStr].totalQRScans += (adScan.scanCount || 0);
                     
                     // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:675',message:'Added QR scans to ad in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,previousCount,newCount:processedData.ads[adIdStr].totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+                    // DISABLED: Debug logging
+                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:675',message:'Added QR scans to ad in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,previousCount,newCount:processedData.ads[adIdStr].totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
                     // #endregion
                   }
                 });
@@ -951,13 +953,15 @@ class UserAnalyticsSyncJob {
               qrScanMap.set(adId, qrAd.totalScans || 0);
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:951',message:'Mapping QR scan data from getTotalQRScans',data:{adId,adTitle:qrAd.adTitle||qrAd.adId,totalScans:qrAd.totalScans||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+              // DISABLED: Debug logging
+              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:951',message:'Mapping QR scan data from getTotalQRScans',data:{adId,adTitle:qrAd.adTitle||qrAd.adId,totalScans:qrAd.totalScans||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
               // #endregion
             }
           });
           
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:955',message:'Updating ads array with QR scan data',data:{qrScanMapSize:qrScanMap.size,qrScanMapEntries:Array.from(qrScanMap.entries()).map(([k,v])=>({adId:k,totalScans:v})),userAnalyticsAdsCount:userAnalytics.ads?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:955',message:'Updating ads array with QR scan data',data:{qrScanMapSize:qrScanMap.size,qrScanMapEntries:Array.from(qrScanMap.entries()).map(([k,v])=>({adId:k,totalScans:v})),userAnalyticsAdsCount:userAnalytics.ads?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
           // #endregion
           
           // Update ads array with QR scan data from getTotalQRScans
@@ -967,7 +971,8 @@ class UserAnalyticsSyncJob {
             const previousQRScans = ad.totalQRScans || 0;
             
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:958',message:'Updating ad with QR scan data',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,qrScansFromMap:qrScans,willUpdate:qrScans!==undefined&&qrScans>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // DISABLED: Debug logging
+            // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:958',message:'Updating ad with QR scan data',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,qrScansFromMap:qrScans,willUpdate:qrScans!==undefined&&qrScans>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
             // #endregion
             
             if (qrScans !== undefined && qrScans > 0) {
@@ -975,7 +980,8 @@ class UserAnalyticsSyncJob {
               ad.totalQRScans = qrScans;
               
               // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:961',message:'Updated ad totalQRScans',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,newQRScans:ad.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+              // DISABLED: Debug logging
+              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:961',message:'Updated ad totalQRScans',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,newQRScans:ad.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
               // #endregion
             }
             return ad;

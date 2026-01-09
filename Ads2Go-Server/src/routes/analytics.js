@@ -825,6 +825,11 @@ router.get('/user/:userId/totals-only', async (req, res) => {
 // ✅ Pre-filters archived ads at database level
 // ✅ Calculates totals in MongoDB (not JavaScript)
 router.get('/user/:userId/direct-v2', async (req, res) => {
+  // #region agent log
+  // DISABLED: Debug logging
+  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:827',message:'direct-v2 endpoint called',data:{userId:req.params.userId,period:req.query.period,adId:req.query.adId,queryParams:req.query},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+  // #endregion
+  
   console.log('🔥 [DIRECT-V2] ===== ENDPOINT HIT! =====', req.method, req.originalUrl);
   console.log('🔥 [DIRECT-V2] Query params:', req.query);
   console.log('🔥 [DIRECT-V2] Route params:', req.params);
@@ -983,12 +988,15 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     // ✅ FIX: For period=all, use UserAnalyticsSummary for accurate all-time totals
     // This collection has pre-aggregated all-time totals per ad (updated by sync job)
     let filteredAds;
+    let summaryLastUpdated = null; // Track when summary was last updated
     if (period === 'all' || !period) {
       try {
         const UserAnalyticsSummary = require('../models/userAnalyticsSummary');
         const summary = await UserAnalyticsSummary.findOne({ userId: new mongoose.Types.ObjectId(userId) }).lean();
         
         if (summary && summary.ads && summary.ads.length > 0) {
+          summaryLastUpdated = summary.lastUpdated || summary.lastSyncTimestamp;
+          
           // Use summary.ads which has accurate all-time totals
           filteredAds = summary.ads
             .filter(ad => ad.adId && validAdIds.includes(ad.adId.toString()))
@@ -1008,7 +1016,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
             filteredAds = filteredAds.filter(ad => ad.adId.toString() === adId);
           }
           
-          console.log(`✅ [direct-v2] Using UserAnalyticsSummary for all-time totals: ${filteredAds.length} ads`);
+          console.log(`✅ [direct-v2] Using UserAnalyticsSummary for all-time totals: ${filteredAds.length} ads, lastUpdated: ${summaryLastUpdated}`);
         } else {
           // Fallback to userAnalytics.ads if summary not available
           filteredAds = (userAnalytics.ads || []).filter(ad => 
@@ -1081,6 +1089,9 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     const todayStr = today.toISOString().split('T')[0];
     const includesToday = (!startDateStr || startDateStr <= todayStr) && (!endDateStr || endDateStr >= todayStr);
     
+    // ✅ Declare todayDataByAd outside if block so it's accessible when building adPerformance
+    let todayDataByAd = new Map();
+    
     if (includesToday) {
       try {
         console.log('⚡ [direct-v2] Merging today\'s real-time data from DeviceTracking...');
@@ -1103,8 +1114,21 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
           
           console.log(`📊 [direct-v2] Found ${todayRecords.length} DeviceTracking records for today`);
           
+          // #region agent log
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1114',message:'Querying DeviceTracking for today',data:{today:today.toISOString(),materialIdsCount:materialIds.length,materialIdsSample:materialIds.slice(0,3),todayRecordsCount:todayRecords.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+          // #endregion
+          
+          if (todayRecords.length > 0) {
+            // #region agent log
+            // DISABLED: Debug logging
+            // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1118',message:'Processing today DeviceTracking records',data:{recordCount:todayRecords.length,firstRecordMaterialId:todayRecords[0]?.materialId,firstRecordHasQrScansByAd:!!todayRecords[0]?.qrScansByAd,firstRecordQrScansByAdCount:todayRecords[0]?.qrScansByAd?.length||0,firstRecordHasQrScans:!!todayRecords[0]?.qrScans,firstRecordQrScansCount:todayRecords[0]?.qrScans?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+            // #endregion
+          }
+          
           // Aggregate today's data by ad
-          const todayDataByAd = new Map();
+          // ✅ Reinitialize the Map (it was declared outside the if block)
+          todayDataByAd = new Map();
           
           todayRecords.forEach(record => {
             // Process adPerformance
@@ -1169,6 +1193,11 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
               });
             }
           });
+          
+          // #region agent log
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1192',message:'Finished processing today records',data:{todayDataByAdSize:todayDataByAd.size,todayDataByAdEntries:Array.from(todayDataByAd.entries()).map(([k,v])=>({adId:k,adTitle:v.adTitle,qrScans:v.qrScans,adsPlayed:v.adsPlayed}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+          // #endregion
           
           // Merge today's data into flatDailyStats
           todayDataByAd.forEach((adData, adIdStr) => {
@@ -1363,9 +1392,12 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     }
     
     // Format adPerformance
-    const adPerformance = filteredAds.map(ad => {
-      let totalPlays = 0;
-      let totalQRScans = 0;
+    // ✅ FIX: Make map callback async to support await for DeviceDataHistoryV2 queries
+    const adPerformance = await Promise.all(filteredAds.map(async (ad) => {
+      try {
+        const adIdStr = ad.adId ? ad.adId.toString() : '';
+        let totalPlays = 0;
+        let totalQRScans = 0;
       
       // ✅ FIX: For period=all, use pre-aggregated all-time totals (from UserAnalyticsSummary or userAnalytics.ads)
       // For date-filtered periods, calculate from dailyStats
@@ -1374,12 +1406,307 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
         totalPlays = ad.totalAdPlays || 0;
         totalQRScans = ad.totalQRScans || 0;
         
+        // ✅ CRITICAL FIX: Replace today's portion with real-time data from DeviceTracking
+        // UserAnalyticsSummary has all-time totals that include today's data from last sync
+        // Since DailyUserAnalytics might not have today's entry, we need to handle this carefully
+        // ✅ SAFETY: If summary was updated very recently (within 5 minutes), trust it completely to avoid double-counting
+        const RECENT_UPDATE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+        const summaryAge = summaryLastUpdated ? (Date.now() - new Date(summaryLastUpdated).getTime()) : Infinity;
+        const isSummaryVeryRecent = summaryAge < RECENT_UPDATE_THRESHOLD;
+        
+        if (includesToday) {
+          // ✅ SAFETY: If summary was updated very recently, trust it completely
+          if (isSummaryVeryRecent) {
+            console.log(`✅ [direct-v2] Summary updated ${Math.round(summaryAge / 1000)}s ago - using summary total as-is to prevent double-counting: ${totalQRScans}`);
+            // Use summary total as-is, don't try to merge today's data
+          } else {
+            const beforeQRScans = totalQRScans;
+          const beforePlays = totalPlays;
+          
+          // ✅ Get today's portion from dailyStats (what UserAnalyticsSummary has for today)
+          // This is needed to avoid double-counting when we add real-time data
+          let todayPortionFromDailyStats = { qrScans: 0, adsPlayed: 0 };
+          const todayDailyStat = processedDailyStats.find(stat => stat.date === todayStr);
+          if (todayDailyStat) {
+            const todayAdEntry = todayDailyStat.ads?.find(a => a.adId && a.adId.toString() === adIdStr);
+            if (todayAdEntry && todayAdEntry.totals) {
+              todayPortionFromDailyStats.qrScans = todayAdEntry.totals.qrScans || 0;
+              todayPortionFromDailyStats.adsPlayed = todayAdEntry.totals.adsPlayed || 0;
+            }
+          }
+          
+          // ✅ Get today's real-time data (from todayDataByAd if available, or query DeviceTracking directly)
+          let todayData = null;
+          if (typeof todayDataByAd !== 'undefined' && todayDataByAd.has(adIdStr)) {
+            todayData = todayDataByAd.get(adIdStr);
+          } else {
+            // todayDataByAd is empty - query DeviceTracking directly for this ad
+            try {
+              const DeviceTracking = require('../models/deviceTracking');
+              const Ad = require('../models/Ad');
+              
+              // ✅ FIX: Get materials from the Ad model, not Material.find with userId
+              // Materials are linked to ads via ad.materialId array
+              const adDoc = await Ad.findById(adIdStr)
+                .select('materialId')
+                .lean();
+              
+              let materialIds = [];
+              if (adDoc && adDoc.materialId && Array.isArray(adDoc.materialId)) {
+                materialIds = adDoc.materialId.map(m => {
+                  // Handle both direct materialId strings and objects with materialId property
+                  return typeof m === 'string' ? m : (m.materialId || m);
+                }).filter(Boolean);
+              }
+              
+              if (materialIds.length > 0) {
+                const todayRecords = await DeviceTracking.find({
+                  materialId: { $in: materialIds },
+                  date: today
+                }).lean();
+                
+                // Aggregate QR scans for this ad from today's records
+                let todayQRScans = 0;
+                let todayAdsPlayed = 0;
+                let todayDisplayTime = 0;
+                
+                todayRecords.forEach(record => {
+                  // Process qrScansByAd
+                  if (record.qrScansByAd && record.qrScansByAd.length > 0) {
+                    record.qrScansByAd.forEach(adScan => {
+                      const scanAdIdStr = adScan.adId ? adScan.adId.toString() : '';
+                      if (scanAdIdStr === adIdStr) {
+                        todayQRScans += adScan.scanCount || 0;
+                      }
+                    });
+                  } else if (record.qrScans && record.qrScans.length > 0) {
+                    // Fallback to counting from array
+                    record.qrScans.forEach(scan => {
+                      const scanAdIdStr = scan.adId ? scan.adId.toString() : '';
+                      if (scanAdIdStr === adIdStr) {
+                        todayQRScans += 1;
+                      }
+                    });
+                  }
+                  
+                  // Process adPerformance
+                  if (record.adPerformance && record.adPerformance.length > 0) {
+                    record.adPerformance.forEach(adPerf => {
+                      const perfAdIdStr = adPerf.adId ? adPerf.adId.toString() : '';
+                      if (perfAdIdStr === adIdStr) {
+                        todayAdsPlayed += adPerf.playCount || 0;
+                        todayDisplayTime += adPerf.totalViewTime || 0;
+                      }
+                    });
+                  }
+                });
+                
+                if (todayQRScans > 0 || todayAdsPlayed > 0) {
+                  todayData = {
+                    adId: new mongoose.Types.ObjectId(adIdStr),
+                    adTitle: ad.adTitle || 'Unknown',
+                    qrScans: todayQRScans,
+                    adsPlayed: todayAdsPlayed,
+                    displayTime: todayDisplayTime,
+                    impressions: 0
+                  };
+                }
+              }
+            } catch (todayQueryError) {
+              console.error('❌ [direct-v2] Error querying DeviceTracking for today:', todayQueryError);
+            }
+          }
+          
+          // ✅ CRITICAL FIX: If DailyUserAnalytics has no entry for today, UserAnalyticsSummary already includes today's data
+          // In this case, we need to estimate today's portion from the summary
+          // If summary was updated today, it likely includes today's data up to the sync time
+          // We'll use a conservative approach: if no dailyStats entry, assume summary includes today's real-time data
+          // So we subtract today's real-time data and add it back (net: use real-time as source of truth)
+          if (todayPortionFromDailyStats.qrScans === 0 && summaryLastUpdated) {
+            const summaryUpdateDate = new Date(summaryLastUpdated);
+            summaryUpdateDate.setHours(0, 0, 0, 0);
+            const todayDate = new Date(today);
+            todayDate.setHours(0, 0, 0, 0);
+            
+            if (summaryUpdateDate.getTime() === todayDate.getTime()) {
+              // Summary was updated today but no DailyUserAnalytics entry
+              // This means UserAnalyticsSummary's total already includes today's data from the sync
+              // We can't know exactly how much, so we'll use today's real-time data as the source of truth
+              // Calculate: historical = summary total - today's real-time (approximation)
+              // Then add today's real-time back = historical + today's real-time
+              // This is: totalQRScans - todayData.qrScans + todayData.qrScans = totalQRScans (no change)
+              // But that's wrong if summary has different today's data
+              // Better: Use DeviceDataHistoryV2 for historical, but that's expensive
+              // Simplest: Assume summary's total is correct for historical, and just use real-time for today
+              // This means: total = (summary total - estimated today from summary) + real-time today
+              // But we don't know estimated today from summary...
+              // ACTUAL FIX: If no dailyStats entry, don't subtract anything, just use summary total
+              // This means we're trusting the summary for historical, and only updating if dailyStats exists
+              console.log(`⚠️ [direct-v2] No DailyUserAnalytics entry for today, but summary was updated today. Using summary total as-is (may include stale today data).`);
+            }
+          }
+          
+          // ✅ Replace today's portion: subtract what's in dailyStats (from UserAnalyticsSummary), add real-time data
+          // #region agent log
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1525',message:'Checking today portion replacement logic',data:{adId:adIdStr,adTitle:ad.adTitle,todayPortionFromDailyStats:todayPortionFromDailyStats.qrScans,hasSummaryLastUpdated:!!summaryLastUpdated,summaryLastUpdated:summaryLastUpdated?.toString(),beforeQRScans,hasTodayData:!!todayData,todayQRScans:todayData?.qrScans||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
+          // #endregion
+          
+          if (todayData && todayPortionFromDailyStats.qrScans > 0) {
+            // We have dailyStats entry, so we can safely replace
+            // ✅ FIX: Ensure we don't subtract more than we have, and verify todayData is valid
+            const todayQRScansFromStats = todayPortionFromDailyStats.qrScans || 0;
+            const todayQRScansRealTime = todayData.qrScans || 0;
+            
+            // ✅ SAFETY CHECK: If real-time count is 0 or missing, don't subtract - use DeviceDataHistoryV2 calculation instead
+            if (!todayData || todayQRScansRealTime === 0) {
+              console.log(`⚠️ [direct-v2] Real-time today data is missing or 0. Using DeviceDataHistoryV2 calculation instead to avoid count decrease.`);
+              // Fall through to DeviceDataHistoryV2 calculation path by setting todayPortionFromDailyStats.qrScans to 0
+              // This will trigger the else if condition below
+              todayPortionFromDailyStats.qrScans = 0;
+            } else {
+              // ✅ FIX: Calculate the replacement carefully
+              const replacementResult = Math.max(0, totalQRScans - todayQRScansFromStats + todayQRScansRealTime);
+              
+              // ✅ SAFETY CHECK: If replacement would increase count significantly more than expected, it might be double-counting
+              // Expected increase: todayQRScansRealTime - todayQRScansFromStats
+              // If the result is more than 2 scans higher than beforeQRScans, something's wrong
+              const expectedIncrease = todayQRScansRealTime - todayQRScansFromStats;
+              if (expectedIncrease > 0 && replacementResult > beforeQRScans + expectedIncrease + 2) {
+                console.log(`⚠️ [direct-v2] Replacement result (${replacementResult}) is suspiciously higher than expected. Using summary total to prevent double-counting.`);
+                totalQRScans = beforeQRScans; // Use summary as-is
+              } else {
+                totalQRScans = replacementResult;
+              }
+              
+              totalPlays = Math.max(0, totalPlays - todayPortionFromDailyStats.adsPlayed + (todayData.adsPlayed || 0));
+              console.log(`⚡ [direct-v2] Replaced today's data for "${ad.adTitle}": QR scans ${beforeQRScans} → ${totalQRScans} (dailyStats had ${todayQRScansFromStats} for today, real-time has ${todayQRScansRealTime})`);
+              
+              // #region agent log
+              // DISABLED: Debug logging
+              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1530',message:'Used dailyStats entry for replacement',data:{adId:adIdStr,adTitle:ad.adTitle,beforeQRScans,afterQRScans:totalQRScans,todayPortionFromDailyStats:todayQRScansFromStats,todayQRScans:todayQRScansRealTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
+              // #endregion
+            }
+          }
+          
+          // ✅ FIX: If we need to use DeviceDataHistoryV2 calculation (either no dailyStats entry or todayData is invalid)
+          if (summaryLastUpdated && todayPortionFromDailyStats.qrScans === 0) {
+            // No dailyStats entry - get historical from DeviceDataHistoryV2 (excluding today), then add today's real-time
+            // ✅ FIX: Always use DeviceDataHistoryV2 calculation when we have today's real-time data to avoid double-counting
+            // This ensures accurate counts by calculating historical separately and adding today's real-time data
+            if (todayData && (todayData.qrScans || 0) > 0) {
+              try {
+                const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+                const Ad = require('../models/Ad');
+                const { getUTCMidnight } = require('../utils/dateUtils');
+                
+                // ✅ FIX: Get materials from the Ad model, not Material.find with userId
+                // Materials are linked to ads via ad.materialId array
+                const adDoc = await Ad.findById(adIdStr)
+                  .select('materialId')
+                  .lean();
+                
+                let materialIds = [];
+                if (adDoc && adDoc.materialId && Array.isArray(adDoc.materialId)) {
+                  materialIds = adDoc.materialId.map(m => {
+                    // Handle both direct materialId strings and objects with materialId property
+                    return typeof m === 'string' ? m : (m.materialId || m);
+                  }).filter(Boolean);
+                }
+                
+                if (materialIds.length > 0) {
+                  // Get historical QR scans from DeviceDataHistoryV2 (all days except today)
+                  // ✅ FIX: Use getUTCMidnight to ensure consistent date comparison
+                  const todayMidnight = getUTCMidnight(today);
+                  const historicalQRScans = await DeviceDataHistoryV2.aggregate([
+                    { $match: { materialId: { $in: materialIds } } },
+                    { $unwind: '$dailyData' },
+                    { 
+                      $match: { 
+                        'dailyData.date': { $lt: todayMidnight } // Exclude today - use midnight for consistency
+                      } 
+                    },
+                    { $unwind: { path: '$dailyData.qrScansByAd', preserveNullAndEmptyArrays: true } },
+                    {
+                      $match: {
+                        'dailyData.qrScansByAd.adId': new mongoose.Types.ObjectId(adIdStr)
+                      }
+                    },
+                    {
+                      $group: {
+                        _id: null,
+                        totalQRScans: { $sum: '$dailyData.qrScansByAd.scanCount' }
+                      }
+                    }
+                  ]);
+                  
+                  const historicalCount = historicalQRScans.length > 0 ? (historicalQRScans[0].totalQRScans || 0) : 0;
+                  
+                  // Use historical count + today's real-time data
+                  const todayQRScans = todayData ? (todayData.qrScans || 0) : 0;
+                  const calculatedTotal = historicalCount + todayQRScans;
+                  
+                  // ✅ CRITICAL FIX: Never return a count lower than the summary total (unless we're absolutely sure)
+                  // Also check if calculated is suspiciously higher (might be double-counting)
+                  // This prevents the count from mysteriously decreasing or increasing incorrectly
+                  if (calculatedTotal < beforeQRScans && beforeQRScans > 0) {
+                    console.log(`⚠️ [direct-v2] Calculated total (${calculatedTotal}) is lower than summary (${beforeQRScans}). Using summary total to prevent count decrease.`);
+                    totalQRScans = beforeQRScans;
+                  } else if (calculatedTotal > beforeQRScans + 5) {
+                    // If calculated is significantly higher (more than 5 scans difference), something's wrong
+                    // Use summary total to prevent incorrect increases
+                    console.log(`⚠️ [direct-v2] Calculated total (${calculatedTotal}) is suspiciously higher than summary (${beforeQRScans}). Difference: ${calculatedTotal - beforeQRScans}. Using summary total to prevent double-counting.`);
+                    totalQRScans = beforeQRScans;
+                  } else {
+                    totalQRScans = calculatedTotal;
+                  }
+                  
+                  console.log(`⚡ [direct-v2] Calculated from DeviceDataHistoryV2 for "${ad.adTitle}": Historical=${historicalCount}, Today=${todayQRScans}, Calculated=${calculatedTotal}, Final=${totalQRScans} (was ${beforeQRScans} from summary)`);
+                  
+                  // #region agent log
+                  // DISABLED: Debug logging
+                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1450',message:'Calculated from DeviceDataHistoryV2',data:{adId:adIdStr,adTitle:ad.adTitle,historicalCount,todayQRScans,calculatedTotal:totalQRScans,summaryTotal:beforeQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+                  // #endregion
+                } else {
+                  // No materials - use summary total as-is
+                  console.log(`⚠️ [direct-v2] No materials found, using summary total as-is: ${totalQRScans}`);
+                }
+              } catch (historyError) {
+                console.error('❌ [direct-v2] Error getting historical data from DeviceDataHistoryV2:', historyError);
+                // Fallback: Use summary total as-is (might be slightly inaccurate)
+                console.log(`⚠️ [direct-v2] Using summary total as-is: ${totalQRScans} (real-time has ${todayData?.qrScans || 0} but not adding to avoid double-counting)`);
+              }
+            } else {
+              // No today's real-time data or todayData.qrScans is 0
+              // ✅ FIX: Don't subtract or modify the summary total if we don't have valid todayData
+              // The summary should be correct, so use it as-is to prevent count decreasing
+              console.log(`⚠️ [direct-v2] No valid today's real-time data (todayData.qrScans=${todayData?.qrScans || 0}). Using summary total as-is to prevent count decrease: ${totalQRScans}`);
+            }
+          } else {
+            // No summaryLastUpdated - use summary total as-is
+            console.log(`⚠️ [direct-v2] No summary lastUpdated, using summary total as-is: ${totalQRScans}`);
+          }
+          
+          console.log(`⚡ [direct-v2] Processed today's data for "${ad.adTitle}": QR scans ${beforeQRScans} → ${totalQRScans} (dailyStats had ${todayPortionFromDailyStats.qrScans} for today, real-time has ${todayData?.qrScans || 0}), Plays ${beforePlays} → ${totalPlays} (dailyStats had ${todayPortionFromDailyStats.adsPlayed} for today, real-time has ${todayData?.adsPlayed || 0})`);
+          
+          // #region agent log
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1425',message:'Processed today data in adPerformance',data:{adId:adIdStr,adTitle:ad.adTitle,beforeQRScans,afterQRScans:totalQRScans,todayQRScansFromDailyStats:todayPortionFromDailyStats.qrScans,todayQRScansRealTime:todayData.qrScans||0,hasDailyStatsEntry:todayPortionFromDailyStats.qrScans>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+          // #endregion
+          }
+        } else if (includesToday) {
+          // #region agent log
+          // DISABLED: Debug logging
+          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1415',message:'No today data to merge for ad',data:{adId:adIdStr,adTitle:ad.adTitle,hasTodayDataByAd:typeof todayDataByAd!=='undefined',todayDataByAdSize:typeof todayDataByAd!=='undefined'?todayDataByAd.size:0,hasAdInMap:typeof todayDataByAd!=='undefined'?todayDataByAd.has(adIdStr):false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+          // #endregion
+        }
+        
         // Fallback calculation if not available
         if (totalPlays === 0 && ad.totalAdPlayTime) {
           totalPlays = Math.round(ad.totalAdPlayTime / 35);
         }
         
-        console.log(`📊 [direct-v2] Ad "${ad.adTitle}" all-time totals: ${totalPlays} plays, ${totalQRScans} QR scans`);
+        console.log(`📊 [direct-v2] Ad "${ad.adTitle}" all-time totals (with today's real-time): ${totalPlays} plays, ${totalQRScans} QR scans`);
       } else {
         // Date-filtered: Calculate from dailyStats for this ad
         processedDailyStats.forEach(dateEntry => {
@@ -1401,17 +1728,39 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
         }
       }
       
-      return {
-        adId: ad.adId,
-        adTitle: ad.adTitle,
-        totalPlays: totalPlays,
-        totalViewTime: ad.totalAdPlayTime || 0,
-        averageViewTime: totalPlays > 0 ? (ad.totalAdPlayTime || 0) / totalPlays : 0,
-        completionRate: ad.averageAdCompletionRate || 0,
-        impressions: ad.totalAdImpressions || 0,
-        totalQRScans: totalQRScans // ✅ Use all-time totals when period=all
-      };
-    });
+        return {
+          adId: ad.adId,
+          adTitle: ad.adTitle,
+          totalPlays: totalPlays, // Frontend uses: ad.totalAdPlays || ad.totalPlays
+          totalAdPlays: totalPlays, // ✅ Also include for frontend compatibility
+          totalViewTime: ad.totalAdPlayTime || 0, // Frontend uses: ad.totalAdPlayTime || ad.totalViewTime
+          totalAdPlayTime: ad.totalAdPlayTime || 0, // ✅ Also include for frontend compatibility
+          averageViewTime: totalPlays > 0 ? (ad.totalAdPlayTime || 0) / totalPlays : 0,
+          completionRate: ad.averageAdCompletionRate || 0,
+          averageAdCompletionRate: ad.averageAdCompletionRate || 0, // ✅ Also include for frontend compatibility
+          impressions: ad.totalAdImpressions || 0,
+          totalAdImpressions: ad.totalAdImpressions || 0, // ✅ Also include for frontend compatibility
+          totalQRScans: totalQRScans // ✅ Use all-time totals when period=all
+        };
+      } catch (adError) {
+        console.error(`❌ [direct-v2] Error processing ad ${ad.adId}:`, adError);
+        // Return a fallback object to prevent Promise.all from failing
+        return {
+          adId: ad.adId,
+          adTitle: ad.adTitle || 'Unknown',
+          totalPlays: ad.totalAdPlays || ad.totalPlays || 0,
+          totalAdPlays: ad.totalAdPlays || ad.totalPlays || 0,
+          totalViewTime: ad.totalAdPlayTime || ad.totalViewTime || 0,
+          totalAdPlayTime: ad.totalAdPlayTime || ad.totalViewTime || 0,
+          averageViewTime: 0,
+          completionRate: ad.averageAdCompletionRate || ad.completionRate || 0,
+          averageAdCompletionRate: ad.averageAdCompletionRate || ad.completionRate || 0,
+          impressions: ad.totalAdImpressions || ad.impressions || 0,
+          totalAdImpressions: ad.totalAdImpressions || ad.impressions || 0,
+          totalQRScans: ad.totalQRScans || 0
+        };
+      }
+    }));
     
     // Format deviceStats
     const deviceStats = (userAnalytics.materialBreakdown || []).map(material => ({
@@ -1436,6 +1785,11 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       deviceStatsCount: deviceStats.length,
       sampleDailyStats: formattedDailyStats.slice(0, 2)
     });
+    
+    // #region agent log
+    // DISABLED: Debug logging
+    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1469',message:'direct-v2 response ready',data:{userId,period:period||'all',adPerformanceCount:adPerformance.length,summaryTotalQRScans:summary.totalQRScans,includesToday,hasTodayData:todayDataByAd.size>0,todayDataByAdEntries:Array.from(todayDataByAd.entries()).map(([k,v])=>({adId:k,qrScans:v.qrScans,adsPlayed:v.adsPlayed})),adPerformanceSample:adPerformance.slice(0,2).map(a=>({adId:a.adId?.toString(),adTitle:a.adTitle,totalQRScans:a.totalQRScans}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+    // #endregion
     
     res.json({
       success: true,
