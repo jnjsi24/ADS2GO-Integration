@@ -1073,6 +1073,142 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       });
     }
     
+    // ✅ CRITICAL FIX: Always merge today's data from DeviceTracking for real-time accuracy
+    // This ensures QR scans and ad plays from today appear immediately, even if sync job hasn't run
+    // ✅ FIX: Use getUTCMidnight() to match DeviceTracking date format (UTC midnight)
+    const { getUTCMidnight } = require('../utils/dateUtils');
+    const today = getUTCMidnight(); // Use UTC midnight to match DeviceTracking storage format
+    const todayStr = today.toISOString().split('T')[0];
+    const includesToday = (!startDateStr || startDateStr <= todayStr) && (!endDateStr || endDateStr >= todayStr);
+    
+    if (includesToday) {
+      try {
+        console.log('⚡ [direct-v2] Merging today\'s real-time data from DeviceTracking...');
+        const DeviceTracking = require('../models/deviceTracking');
+        const Material = require('../models/Material');
+        
+        // Get user's ads to find associated materials
+        const userMaterials = await Material.find({ 
+          userId: new mongoose.Types.ObjectId(userId) 
+        }).select('materialId').lean();
+        
+        const materialIds = userMaterials.map(m => m.materialId);
+        
+        if (materialIds.length > 0) {
+          // Get today's DeviceTracking records
+          const todayRecords = await DeviceTracking.find({
+            materialId: { $in: materialIds },
+            date: today
+          }).lean();
+          
+          console.log(`📊 [direct-v2] Found ${todayRecords.length} DeviceTracking records for today`);
+          
+          // Aggregate today's data by ad
+          const todayDataByAd = new Map();
+          
+          todayRecords.forEach(record => {
+            // Process adPerformance
+            if (record.adPerformance && record.adPerformance.length > 0) {
+              record.adPerformance.forEach(adPerf => {
+                const adIdStr = adPerf.adId ? adPerf.adId.toString() : '';
+                if (validAdIds.includes(adIdStr) && (!adId || adId === 'all' || adIdStr === adId)) {
+                  if (!todayDataByAd.has(adIdStr)) {
+                    todayDataByAd.set(adIdStr, {
+                      adId: adPerf.adId,
+                      adTitle: adPerf.adTitle || 'Unknown',
+                      adsPlayed: 0,
+                      displayTime: 0,
+                      qrScans: 0,
+                      impressions: 0
+                    });
+                  }
+                  const adData = todayDataByAd.get(adIdStr);
+                  adData.adsPlayed += adPerf.playCount || 0;
+                  adData.displayTime += adPerf.totalViewTime || 0;
+                  adData.impressions += adPerf.impressionCount || 0;
+                }
+              });
+            }
+            
+            // Process QR scans (prefer qrScansByAd, fallback to qrScans array)
+            if (record.qrScansByAd && record.qrScansByAd.length > 0) {
+              record.qrScansByAd.forEach(adScan => {
+                const adIdStr = adScan.adId ? adScan.adId.toString() : '';
+                if (validAdIds.includes(adIdStr) && (!adId || adId === 'all' || adIdStr === adId)) {
+                  if (!todayDataByAd.has(adIdStr)) {
+                    todayDataByAd.set(adIdStr, {
+                      adId: adScan.adId,
+                      adTitle: adScan.adTitle || 'Unknown',
+                      adsPlayed: 0,
+                      displayTime: 0,
+                      qrScans: 0,
+                      impressions: 0
+                    });
+                  }
+                  const adData = todayDataByAd.get(adIdStr);
+                  adData.qrScans += adScan.scanCount || 0;
+                }
+              });
+            } else if (record.qrScans && record.qrScans.length > 0) {
+              // Fallback to counting from array
+              record.qrScans.forEach(scan => {
+                const adIdStr = scan.adId ? scan.adId.toString() : '';
+                if (validAdIds.includes(adIdStr) && (!adId || adId === 'all' || adIdStr === adId)) {
+                  if (!todayDataByAd.has(adIdStr)) {
+                    todayDataByAd.set(adIdStr, {
+                      adId: scan.adId,
+                      adTitle: scan.adTitle || 'Unknown',
+                      adsPlayed: 0,
+                      displayTime: 0,
+                      qrScans: 0,
+                      impressions: 0
+                    });
+                  }
+                  todayDataByAd.get(adIdStr).qrScans += 1;
+                }
+              });
+            }
+          });
+          
+          // Merge today's data into flatDailyStats
+          todayDataByAd.forEach((adData, adIdStr) => {
+            // Check if today's data already exists in flatDailyStats
+            const existingTodayIndex = flatDailyStats.findIndex(stat => 
+              stat.date === todayStr && stat.adId && stat.adId.toString() === adIdStr
+            );
+            
+            if (existingTodayIndex >= 0) {
+              // Merge: add today's real-time data to existing entry
+              const existing = flatDailyStats[existingTodayIndex];
+              existing.adsPlayed = (existing.adsPlayed || 0) + adData.adsPlayed;
+              existing.displayTime = (existing.displayTime || 0) + adData.displayTime;
+              existing.qrScans = (existing.qrScans || 0) + adData.qrScans;
+              existing.impressions = (existing.impressions || 0) + adData.impressions;
+              console.log(`✅ [direct-v2] Merged today's data for ad ${adIdStr}: +${adData.adsPlayed} plays, +${adData.qrScans} QR scans`);
+            } else {
+              // Add new entry for today
+              flatDailyStats.push({
+                userId: new mongoose.Types.ObjectId(userId),
+                date: todayStr,
+                adId: adData.adId,
+                adTitle: adData.adTitle,
+                adsPlayed: adData.adsPlayed,
+                displayTime: adData.displayTime,
+                qrScans: adData.qrScans,
+                impressions: adData.impressions,
+                completionRate: 0,
+                materialStats: []
+              });
+              console.log(`✅ [direct-v2] Added today's data for ad ${adIdStr}: ${adData.adsPlayed} plays, ${adData.qrScans} QR scans`);
+            }
+          });
+        }
+      } catch (todayError) {
+        console.error('❌ [direct-v2] Error merging today\'s data:', todayError);
+        // Continue without today's data - fallback to sync job data
+      }
+    }
+    
     // 🔥 FALLBACK: If flat collection is empty, generate data in real-time from DeviceDataHistoryV2
     if (flatDailyStats.length === 0) {
       console.log('⚠️ [direct-v2] DailyUserAnalytics is empty, falling back to real-time generation from DeviceDataHistoryV2');

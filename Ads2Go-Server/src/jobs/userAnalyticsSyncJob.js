@@ -653,11 +653,18 @@ class UserAnalyticsSyncJob {
               // ✅ Also process qrScansByAd if available (aggregated format)
               if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
                 dailyData.qrScansByAd.forEach(adScan => {
-                  const adId = adScan.adId;
-                  if (validAdIds.includes(adId)) {
-                    if (!processedData.ads[adId]) {
-                      processedData.ads[adId] = {
-                        adId,
+                  // ✅ FIX: Normalize adId to string for comparison (handles ObjectId vs string)
+                  const adId = adScan.adId ? (adScan.adId.toString ? adScan.adId.toString() : String(adScan.adId)) : null;
+                  const adIdStr = adId;
+                  
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:656',message:'Processing qrScansByAd entry in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isValidAd:adIdStr?validAdIds.includes(adIdStr):false,validAdIdsSample:validAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+                  // #endregion
+                  
+                  if (adIdStr && validAdIds.includes(adIdStr)) {
+                    if (!processedData.ads[adIdStr]) {
+                      processedData.ads[adIdStr] = {
+                        adId: adScan.adId, // Keep original ObjectId format
                         adTitle: adScan.adTitle || 'Unknown',
                         totalPlays: 0,
                         totalViewTime: 0,
@@ -666,10 +673,15 @@ class UserAnalyticsSyncJob {
                         materials: []
                       };
                     }
-                    if (!processedData.ads[adId].totalQRScans) {
-                      processedData.ads[adId].totalQRScans = 0;
+                    if (!processedData.ads[adIdStr].totalQRScans) {
+                      processedData.ads[adIdStr].totalQRScans = 0;
                     }
-                    processedData.ads[adId].totalQRScans += (adScan.scanCount || 0);
+                    const previousCount = processedData.ads[adIdStr].totalQRScans || 0;
+                    processedData.ads[adIdStr].totalQRScans += (adScan.scanCount || 0);
+                    
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:675',message:'Added QR scans to ad in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,previousCount,newCount:processedData.ads[adIdStr].totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+                    // #endregion
                   }
                 });
               }
@@ -937,16 +949,34 @@ class UserAnalyticsSyncJob {
             const adId = qrAd.adId ? (qrAd.adId.toString ? qrAd.adId.toString() : String(qrAd.adId)) : '';
             if (adId) {
               qrScanMap.set(adId, qrAd.totalScans || 0);
+              
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:951',message:'Mapping QR scan data from getTotalQRScans',data:{adId,adTitle:qrAd.adTitle||qrAd.adId,totalScans:qrAd.totalScans||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+              // #endregion
             }
           });
+          
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:955',message:'Updating ads array with QR scan data',data:{qrScanMapSize:qrScanMap.size,qrScanMapEntries:Array.from(qrScanMap.entries()).map(([k,v])=>({adId:k,totalScans:v})),userAnalyticsAdsCount:userAnalytics.ads?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+          // #endregion
           
           // Update ads array with QR scan data from getTotalQRScans
           userAnalytics.ads = userAnalytics.ads.map(ad => {
             const adId = ad.adId.toString ? ad.adId.toString() : String(ad.adId);
             const qrScans = qrScanMap.get(adId);
+            const previousQRScans = ad.totalQRScans || 0;
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:958',message:'Updating ad with QR scan data',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,qrScansFromMap:qrScans,willUpdate:qrScans!==undefined&&qrScans>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            
             if (qrScans !== undefined && qrScans > 0) {
               // Use QR scan data from getTotalQRScans (more complete, includes current day)
               ad.totalQRScans = qrScans;
+              
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:961',message:'Updated ad totalQRScans',data:{adId,adTitle:ad.adTitle||ad.adId,previousQRScans,newQRScans:ad.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+              // #endregion
             }
             return ad;
           });

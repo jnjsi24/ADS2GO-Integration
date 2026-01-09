@@ -607,6 +607,10 @@ router.post('/ad-playback', async (req, res) => {
 
 // POST /deviceTracking/qr-scan - Track QR scan
 router.post('/qr-scan', async (req, res) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:609',message:'QR scan endpoint called',data:{body:req.body,hasBody:!!req.body,bodyKeys:req.body?Object.keys(req.body):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+  // #endregion
+  
   try {
     const { deviceId, deviceSlot, qrScanData } = req.body;
 
@@ -767,34 +771,33 @@ router.post('/qr-scan', async (req, res) => {
       // Store the current count before adding the new scan
       const currentCount = deviceTracking.totalQRScans || 0;
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:771',message:'Saving QR scan to deviceTracking',data:{materialId,deviceSlot,adId:qrScanData.adId,adTitle:qrScanData.adTitle,userId:qrScanData.userId,slotNumber:parseInt(deviceSlot)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+      
       // Add QR scan to the device tracking (always store, regardless of master/slave)
       deviceTracking.qrScans.push({
         ...qrScanData,
         slotNumber: parseInt(deviceSlot)
       });
       
-      // ✅ FIX: Increment totalQRScans instead of recalculating from array length
-      // This ensures persistence and prevents reset issues when the array might be filtered
-      // Only increment if this is the master slot (to avoid double counting)
+      // ✅ FIX: Always update totalQRScans to match qrScans.length
+      // This ensures the count reflects all scans in the array, regardless of master/slave status
+      // Master/slave logic only affects analytics aggregation, not the device tracking record itself
+      deviceTracking.totalQRScans = deviceTracking.qrScans.length;
       if (isMasterSlot) {
-        // Increment the count - this ensures it persists correctly
-        deviceTracking.totalQRScans = currentCount + 1;
-        console.log(`✅ [QRScan] Incremented count: ${currentCount} → ${deviceTracking.totalQRScans}`);
+        console.log(`✅ [QRScan] Master slot - updated count to match array: ${deviceTracking.totalQRScans} (was ${currentCount})`);
       } else {
-        // For slave slots, don't increment the count (only master slot counts)
-        // But ensure the count is at least set to the array length if it's unset
-        if (deviceTracking.totalQRScans === undefined || deviceTracking.totalQRScans === null) {
-          deviceTracking.totalQRScans = deviceTracking.qrScans.length;
-        }
-        console.log(`💤 [QRScan] Slave slot - count remains: ${deviceTracking.totalQRScans}`);
+        console.log(`💤 [QRScan] Slave slot - updated count to match array: ${deviceTracking.totalQRScans} (was ${currentCount})`);
       }
       
       // Mark qrScans as modified to ensure post-save hook triggers archiving
       deviceTracking.markModified('qrScans');
       deviceTracking.markModified('totalQRScans');
       
-      // ✅ FIX: Update QR scans by ad (only for master slot) - fetch userId from Ad if not provided
-      if (isMasterSlot && qrScanData.adId) {
+      // ✅ FIX: Update QR scans by ad for ALL slots (master and slave)
+      // Master/slave logic only affects analytics aggregation, not the device tracking record itself
+      if (qrScanData.adId) {
         let userId = qrScanData.userId;
         if (!userId) {
           try {
@@ -826,6 +829,10 @@ router.post('/qr-scan', async (req, res) => {
             
             const previousCount = existingAdScan.scanCount || 0;
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:815',message:'Updating existing qrScansByAd entry',data:{adIdStr,adTitle:qrScanData.adTitle,previousCount,actualArrayCount,willIncrementTo:previousCount+1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            
             // If array count is higher than scanCount, the count was reset - repair it
             if (actualArrayCount > previousCount) {
               console.log(`🔧 [QRScan] REPAIR: Ad "${qrScanData.adTitle || 'Unknown'}" (${adIdStr}) - scanCount was ${previousCount}, but array has ${actualArrayCount} scans. Repairing...`);
@@ -835,7 +842,12 @@ router.post('/qr-scan', async (req, res) => {
             // Now increment from the repaired/correct count
             existingAdScan.scanCount = (existingAdScan.scanCount || 0) + 1;
             existingAdScan.lastScanned = new Date();
-            console.log(`✅ [QRScan] Updated existing ad scan: ${qrScanData.adTitle || 'Unknown'} (${adIdStr}) - count: ${previousCount} → ${existingAdScan.scanCount}`);
+            const slotType = isMasterSlot ? 'Master' : 'Slave';
+            console.log(`✅ [QRScan] ${slotType} slot - Updated existing ad scan: ${qrScanData.adTitle || 'Unknown'}" (${adIdStr}) - count: ${previousCount} → ${existingAdScan.scanCount}`);
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:831',message:'Updated qrScansByAd entry',data:{adIdStr,adTitle:qrScanData.adTitle,newCount:existingAdScan.scanCount,allQrScansByAd:deviceTracking.qrScansByAd.map(s=>({adId:s.adId?.toString(),adTitle:s.adTitle,scanCount:s.scanCount}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
           } else {
             deviceTracking.qrScansByAd.push({
               adId: qrScanData.adId,
@@ -845,7 +857,8 @@ router.post('/qr-scan', async (req, res) => {
               lastScanned: new Date(),
               firstScanned: new Date()
             });
-            console.log(`✅ [QRScan] Created new ad scan entry: ${qrScanData.adTitle || 'Unknown'} (${adIdStr}) - count: 1`);
+            const slotType = isMasterSlot ? 'Master' : 'Slave';
+            console.log(`✅ [QRScan] ${slotType} slot - Created new ad scan entry: ${qrScanData.adTitle || 'Unknown'} (${adIdStr}) - count: 1`);
           }
           deviceTracking.markModified('qrScansByAd');
         } else {
@@ -860,6 +873,41 @@ router.post('/qr-scan', async (req, res) => {
       }
       
       await deviceTracking.save();
+      
+      // ⚡ REAL-TIME FIX: Immediately trigger user sync to update UserAnalytics
+      // This ensures QR scan appears in frontend within seconds instead of waiting for sync job (30s)
+      // ✅ Trigger for ALL slots (not just master) since we now update qrScansByAd for all slots
+      if (qrScanData.userId || (qrScanData.adId && deviceTracking.qrScansByAd && deviceTracking.qrScansByAd.length > 0)) {
+        const userId = qrScanData.userId || (deviceTracking.qrScansByAd[0]?.userId);
+        if (userId) {
+          try {
+            const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+            const slotType = isMasterSlot ? 'Master' : 'Slave';
+            console.log(`⚡ [QRScan] ${slotType} slot - Triggering immediate sync for user ${userId} to update UserAnalytics...`);
+            // Use setTimeout to avoid blocking the response - sync happens in background
+            setTimeout(async () => {
+              try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:881',message:'Triggering immediate sync after QR scan',data:{userId,adId:qrScanData.adId,adTitle:qrScanData.adTitle,materialId,deviceSlot},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+                // #endregion
+                
+                await userAnalyticsSyncJob.syncUserImmediately(userId);
+                console.log(`✅ [QRScan] ${slotType} slot - Immediate sync completed for user ${userId}`);
+                
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:887',message:'Immediate sync completed',data:{userId,adId:qrScanData.adId,adTitle:qrScanData.adTitle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+                // #endregion
+              } catch (syncError) {
+                console.warn(`⚠️ [QRScan] ${slotType} slot - Immediate sync failed for user ${userId}:`, syncError.message);
+                // Don't throw - sync job will handle it on next run
+              }
+            }, 100); // 100ms delay to ensure DeviceTracking save is complete
+          } catch (syncJobError) {
+            console.warn(`⚠️ [QRScan] Could not trigger immediate sync:`, syncJobError.message);
+            // Don't throw - sync job will handle it on next run
+          }
+        }
+      }
     }
 
     res.json({
@@ -878,6 +926,220 @@ router.post('/qr-scan', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to track QR scan',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /deviceTracking/repair-qr-scans/:materialId - Repair QR scan counts for a material
+router.post('/repair-qr-scans/:materialId', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId,
+      date: today
+    });
+    
+    if (!deviceTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device tracking record not found for today'
+      });
+    }
+    
+    // Trigger repair by saving (pre-save hook will repair)
+    const oldTotalQRScans = deviceTracking.totalQRScans;
+    const oldQrScansByAdCount = deviceTracking.qrScansByAd.length;
+    
+    // Mark as modified to trigger pre-save hook
+    deviceTracking.markModified('qrScans');
+    deviceTracking.markModified('qrScansByAd');
+    deviceTracking.markModified('totalQRScans');
+    
+    await deviceTracking.save();
+    
+    // Trigger immediate sync if userId is available
+    if (deviceTracking.qrScansByAd && deviceTracking.qrScansByAd.length > 0) {
+      const userId = deviceTracking.qrScansByAd[0].userId;
+      if (userId) {
+        try {
+          const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+          setTimeout(async () => {
+            try {
+              await userAnalyticsSyncJob.syncUserImmediately(userId);
+              console.log(`✅ [Repair] Immediate sync completed for user ${userId}`);
+            } catch (syncError) {
+              console.warn(`⚠️ [Repair] Immediate sync failed:`, syncError.message);
+            }
+          }, 100);
+        } catch (syncError) {
+          console.warn(`⚠️ [Repair] Could not trigger sync:`, syncError.message);
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'QR scan counts repaired successfully',
+      data: {
+        materialId: materialId,
+        oldTotalQRScans: oldTotalQRScans,
+        newTotalQRScans: deviceTracking.totalQRScans,
+        qrScansArrayLength: deviceTracking.qrScans.length,
+        oldQrScansByAdCount: oldQrScansByAdCount,
+        newQrScansByAdCount: deviceTracking.qrScansByAd.length,
+        qrScansByAd: deviceTracking.qrScansByAd.map(ad => ({
+          adId: ad.adId,
+          adTitle: ad.adTitle,
+          scanCount: ad.scanCount
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error repairing QR scans:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to repair QR scans',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /deviceTracking/diagnostic/:materialId - Get detailed diagnostic data for a material
+router.get('/diagnostic/:materialId', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+    const { date } = req.query;
+    
+    let query = { materialId: materialId };
+    
+    if (date) {
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      query.date = targetDate;
+    } else {
+      // Default to today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      query.date = today;
+    }
+    
+    const record = await DeviceTracking.findOne(query);
+    
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: 'DeviceTracking record not found',
+        query: query
+      });
+    }
+    
+    // Count QR scans by ad from the array
+    const qrScansByAdFromArray = {};
+    if (record.qrScans && record.qrScans.length > 0) {
+      record.qrScans.forEach(scan => {
+        if (scan.adId) {
+          const adIdStr = scan.adId.toString ? scan.adId.toString() : String(scan.adId);
+          if (!qrScansByAdFromArray[adIdStr]) {
+            qrScansByAdFromArray[adIdStr] = {
+              adId: adIdStr,
+              adTitle: scan.adTitle || 'Unknown',
+              count: 0,
+              scans: []
+            };
+          }
+          qrScansByAdFromArray[adIdStr].count++;
+          qrScansByAdFromArray[adIdStr].scans.push({
+            slotNumber: scan.slotNumber,
+            timestamp: scan.scanTimestamp,
+            userId: scan.userId
+          });
+        }
+      });
+    }
+    
+    // Prepare diagnostic data
+    const diagnostic = {
+      materialId: record.materialId,
+      date: record.date,
+      carGroupId: record.carGroupId,
+      screenType: record.screenType,
+      isOnline: record.isOnline,
+      lastSeen: record.lastSeen,
+      
+      // Summary counts
+      summary: {
+        totalAdPlays: record.totalAdPlays || 0,
+        totalQRScans: record.totalQRScans || 0,
+        qrScansArrayLength: record.qrScans ? record.qrScans.length : 0,
+        totalHoursOnline: record.totalHoursOnline || 0,
+        totalDistanceTraveled: record.totalDistanceTraveled || 0,
+        hasMismatch: record.totalQRScans !== (record.qrScans ? record.qrScans.length : 0)
+      },
+      
+      // QR Scans array details
+      qrScans: record.qrScans ? record.qrScans.map(scan => ({
+        adId: scan.adId,
+        adTitle: scan.adTitle,
+        slotNumber: scan.slotNumber,
+        scanTimestamp: scan.scanTimestamp,
+        userId: scan.userId,
+        deviceType: scan.deviceType,
+        browser: scan.browser
+      })) : [],
+      
+      // QR Scans by Ad (from qrScansByAd field)
+      qrScansByAd: record.qrScansByAd ? record.qrScansByAd.map(adScan => {
+        const adIdStr = adScan.adId ? (adScan.adId.toString ? adScan.adId.toString() : String(adScan.adId)) : '';
+        const actualCount = qrScansByAdFromArray[adIdStr] ? qrScansByAdFromArray[adIdStr].count : 0;
+        
+        return {
+          adId: adScan.adId,
+          adTitle: adScan.adTitle,
+          scanCount: adScan.scanCount || 0,
+          actualCountFromArray: actualCount,
+          hasMismatch: adScan.scanCount !== actualCount,
+          userId: adScan.userId,
+          firstScanned: adScan.firstScanned,
+          lastScanned: adScan.lastScanned
+        };
+      }) : [],
+      
+      // QR Scans by Ad (calculated from array)
+      qrScansByAdFromArray: Object.values(qrScansByAdFromArray),
+      
+      // Ad Performance
+      adPerformance: record.adPerformance ? record.adPerformance.map(adPerf => ({
+        adId: adPerf.adId,
+        adTitle: adPerf.adTitle,
+        playCount: adPerf.playCount || 0,
+        totalViewTime: adPerf.totalViewTime || 0,
+        userId: adPerf.userId
+      })) : [],
+      
+      // Slots
+      slots: record.slots ? record.slots.map(slot => ({
+        slotNumber: slot.slotNumber,
+        deviceId: slot.deviceId,
+        isOnline: slot.isOnline,
+        lastSeen: slot.lastSeen
+      })) : []
+    };
+    
+    res.json({
+      success: true,
+      data: diagnostic,
+      message: 'Diagnostic data retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error getting diagnostic data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get diagnostic data',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

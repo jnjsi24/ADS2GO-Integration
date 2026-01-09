@@ -857,20 +857,87 @@ DeviceTrackingSchema.statics.findByMaterialAndSlot = function(materialId, slotNu
 
 // Post-save hook to trigger archiving when DeviceTracking data changes
 // ✅ FIX: Pre-save hook to ensure totalQRScans stays in sync, but only if it's not already set correctly
-// We don't want to recalculate if totalQRScans was explicitly set (incremented) in the route handlers
+// ✅ FIX: Always sync totalQRScans with qrScans.length and repair qrScansByAd to ensure accuracy
+// This ensures the count reflects all scans in the array, fixing cases where slave slots
+// added scans but didn't update the count
 DeviceTrackingSchema.pre('save', function(next) {
-  // Only recalculate if totalQRScans is undefined/null or if it's significantly out of sync
-  // This prevents the hook from overriding explicit increments made in route handlers
   if (this.qrScans && Array.isArray(this.qrScans)) {
-    // If totalQRScans is not set or is 0 but we have scans, set it to array length
-    // But if totalQRScans is already set and greater than array length, keep it (might be intentional)
-    if (this.totalQRScans === undefined || this.totalQRScans === null) {
+    // Always sync totalQRScans with the actual array length
+    // This fixes cases where scans were added but count wasn't updated (e.g., slave slot scans)
+    if (this.totalQRScans !== this.qrScans.length) {
+      const oldCount = this.totalQRScans;
       this.totalQRScans = this.qrScans.length;
-    } else if (this.totalQRScans === 0 && this.qrScans.length > 0) {
-      // If count is 0 but we have scans, sync it (might have been reset incorrectly)
-      this.totalQRScans = this.qrScans.length;
+      if (oldCount !== undefined && oldCount !== null) {
+        console.log(`🔧 [DeviceTracking] Synced totalQRScans: ${oldCount} → ${this.totalQRScans} (array has ${this.qrScans.length} scans)`);
+      }
     }
-    // Otherwise, trust the explicitly set value from route handlers
+    
+    // ✅ FIX: Repair qrScansByAd to match actual qrScans array
+    // Count scans per adId in the qrScans array
+    const scanCountsByAd = new Map();
+    this.qrScans.forEach(scan => {
+      if (scan.adId) {
+        const adIdStr = scan.adId.toString ? scan.adId.toString() : String(scan.adId);
+        scanCountsByAd.set(adIdStr, (scanCountsByAd.get(adIdStr) || 0) + 1);
+      }
+    });
+    
+    // Update or create qrScansByAd entries to match actual counts
+    if (scanCountsByAd.size > 0) {
+      scanCountsByAd.forEach((actualCount, adIdStr) => {
+        const existingAdScan = this.qrScansByAd.find(scan => {
+          const scanAdIdStr = scan.adId ? (scan.adId.toString ? scan.adId.toString() : String(scan.adId)) : '';
+          return scanAdIdStr === adIdStr;
+        });
+        
+        if (existingAdScan) {
+          // Repair if count is wrong
+          if (existingAdScan.scanCount !== actualCount) {
+            const oldCount = existingAdScan.scanCount;
+            existingAdScan.scanCount = actualCount;
+            // Find the most recent scan for this ad to update lastScanned
+            const adScans = this.qrScans.filter(scan => {
+              const scanAdId = scan.adId ? (scan.adId.toString ? scan.adId.toString() : String(scan.adId)) : '';
+              return scanAdId === adIdStr;
+            });
+            if (adScans.length > 0) {
+              const mostRecentScan = adScans.reduce((latest, scan) => {
+                const scanTime = scan.scanTimestamp ? new Date(scan.scanTimestamp).getTime() : 0;
+                const latestTime = latest.scanTimestamp ? new Date(latest.scanTimestamp).getTime() : 0;
+                return scanTime > latestTime ? scan : latest;
+              });
+              if (mostRecentScan.scanTimestamp) {
+                existingAdScan.lastScanned = new Date(mostRecentScan.scanTimestamp);
+              }
+            }
+            console.log(`🔧 [DeviceTracking] Repaired qrScansByAd for ad ${adIdStr}: ${oldCount} → ${actualCount}`);
+          }
+        } else {
+          // Create new entry if missing (try to get adTitle and userId from first scan)
+          const firstScan = this.qrScans.find(scan => {
+            const scanAdId = scan.adId ? (scan.adId.toString ? scan.adId.toString() : String(scan.adId)) : '';
+            return scanAdId === adIdStr;
+          });
+          
+          if (firstScan) {
+            this.qrScansByAd.push({
+              adId: firstScan.adId,
+              userId: firstScan.userId || null,
+              adTitle: firstScan.adTitle || 'Unknown',
+              scanCount: actualCount,
+              lastScanned: firstScan.scanTimestamp ? new Date(firstScan.scanTimestamp) : new Date(),
+              firstScanned: firstScan.scanTimestamp ? new Date(firstScan.scanTimestamp) : new Date()
+            });
+            console.log(`🔧 [DeviceTracking] Created missing qrScansByAd entry for ad ${adIdStr}: ${actualCount} scans`);
+          }
+        }
+      });
+      
+      // Mark as modified if we made changes
+      if (this.qrScansByAd.length > 0) {
+        this.markModified('qrScansByAd');
+      }
+    }
   }
   next();
 });

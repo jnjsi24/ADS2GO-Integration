@@ -1179,6 +1179,21 @@ const DetailedAnalytics: React.FC = () => {
             // ✅ PERSISTENT CACHE: Save to localStorage after caching new data
             savePersistentCache(analyticsCacheRef.current);
             
+            // ✅ DEBUG: Log the received device analytics data
+            console.log('📊 [DetailedAnalytics] Received deviceAnalytics:', {
+              hasTotals: !!data.data.deviceAnalytics?.totals,
+              totals: data.data.deviceAnalytics?.totals,
+              totalQRScans: data.data.deviceAnalytics?.totals?.totalQRScans,
+              totalAdPlays: data.data.deviceAnalytics?.totals?.totalAdPlays,
+              hasDailyStats: !!data.data.deviceAnalytics?.dailyStats,
+              dailyStatsCount: data.data.deviceAnalytics?.dailyStats?.length || 0,
+              sampleDailyStat: data.data.deviceAnalytics?.dailyStats?.[0]
+            });
+            
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1185',message:'Received deviceAnalytics response',data:{selectedAd,selectedDevice,selectedDate,hasTotals:!!data.data.deviceAnalytics?.totals,totalQRScans:data.data.deviceAnalytics?.totals?.totalQRScans||0,totalAdPlays:data.data.deviceAnalytics?.totals?.totalAdPlays||0,dailyStatsCount:data.data.deviceAnalytics?.dailyStats?.length||0,sampleDailyStat:data.data.deviceAnalytics?.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            
             setDeviceAnalytics(data.data.deviceAnalytics);
             setDirectAnalyticsData(null);
           }
@@ -1453,15 +1468,31 @@ const DetailedAnalytics: React.FC = () => {
     if (hasDeviceFilter) {
       if (deviceAnalytics) {
         const totalDisplayTime = deviceAnalytics.totals?.totalAdPlayTime || 0;
+        const totalQRScans = deviceAnalytics.totals?.totalQRScans || 0;
+        const totalAdPlays = deviceAnalytics.totals?.totalAdPlays || 0;
+        
+        // ✅ DEBUG: Log what we're using for the summary
+        console.log('📊 [DetailedAnalytics] Using deviceAnalytics for summary:', {
+          totalQRScans,
+          totalAdPlays,
+          totalDisplayTime,
+          hasTotals: !!deviceAnalytics.totals,
+          totalsObject: deviceAnalytics.totals
+        });
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1477',message:'Calculating summary from deviceAnalytics',data:{selectedAd,selectedDevice,selectedDate,totalQRScans,totalAdPlays,totalDisplayTime,hasTotals:!!deviceAnalytics.totals},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        
         return {
-          totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
+          totalAdsPlayed: totalAdPlays,
           totalDisplayTime: totalDisplayTime,
           averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
           averageHoursOnline: totalDisplayTime / 3600, // For single device, just convert seconds to hours
           totalAds: 0, // Not applicable for device-specific view
           activeAds: 0, // Not applicable for device-specific view
           totalDevices: 1, // Always 1 when device is selected
-          totalQRScans: deviceAnalytics.totals?.totalQRScans || 0
+          totalQRScans: totalQRScans
         };
       } else {
         // ✅ Device filter active but data not loaded yet - return zeros (will show loading state)
@@ -1860,16 +1891,34 @@ const DetailedAnalytics: React.FC = () => {
       console.log('📊 [DetailedAnalytics] Device dailyStats mapped:', {
         rawDataCount: deviceDailyData.length,
         filteredCount: filteredDeviceDailyStats.length,
-        sampleRaw: filteredDeviceDailyStats.slice(0, 2)
+        sampleRaw: filteredDeviceDailyStats.slice(0, 2),
+        sampleRawFields: filteredDeviceDailyStats[0] ? Object.keys(filteredDeviceDailyStats[0]) : []
       });
       
-      const mappedDeviceStats = filteredDeviceDailyStats.map((day: any) => ({
-        date: day.date,
-        // ✅ Support both field names from different API versions
-        adPlays: day.totalAdPlays || day.adsPlayed || 0,
-        qrScans: day.totalQRScans || day.qrScans || 0,
-        completionRate: day.adCompletionRate || day.completionRate || 0
-      }));
+      const mappedDeviceStats = filteredDeviceDailyStats.map((day: any) => {
+        const qrScans = day.totalQRScans || day.qrScans || 0;
+        const adPlays = day.totalAdPlays || day.adsPlayed || 0;
+        
+        // ✅ DEBUG: Log what we're extracting from each day
+        if (qrScans > 0 || adPlays > 0) {
+          console.log('📊 [DetailedAnalytics] Mapping day:', {
+            date: day.date,
+            qrScans,
+            adPlays,
+            hasTotalQRScans: !!day.totalQRScans,
+            hasQrScans: !!day.qrScans,
+            allFields: Object.keys(day)
+          });
+        }
+        
+        return {
+          date: day.date,
+          // ✅ Support both field names from different API versions
+          adPlays: adPlays,
+          qrScans: qrScans,
+          completionRate: day.adCompletionRate || day.completionRate || 0
+        };
+      });
       
       // ✅ Fill missing dates with zero values for proper chart line rendering
       return fillMissingDates(mappedDeviceStats, selectedPeriod, isCustomDate ? selectedDate : null);
