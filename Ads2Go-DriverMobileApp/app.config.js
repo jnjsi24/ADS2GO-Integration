@@ -59,6 +59,9 @@ export default {
       typedRoutes: true
     },
     extra: {
+      eas: {
+        projectId: "ffa377ff-3b34-47a0-b9d9-af13a1f680ac"
+      },
       EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
       EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
       EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
