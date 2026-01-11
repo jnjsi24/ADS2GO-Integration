@@ -381,13 +381,15 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
     return Math.round((this.currentSession.totalHoursOnline || 0) * 100) / 100;
   }
 
-  // Device is online AND displaying ads - calculate hours since last update
+  // Device is online AND displaying ads - calculate hours since last update in real-time
   let totalHours = this.currentSession.totalHoursOnline || 0;
   const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
   const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
 
-  // Only add reasonable increments (less than 1 hour to prevent bugs)
-  if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
+  // ✅ FIX: Always add real-time hours (removed < 1 hour restriction for real-time display)
+  // The hoursUpdateService updates lastOnlineUpdate every 30 seconds, so this should be small increments
+  // But even if lastOnlineUpdate is stale, we still want to show real-time hours
+  if (hoursSinceLastUpdate > 0) {
     totalHours += hoursSinceLastUpdate;
   }
   

@@ -48,7 +48,9 @@ class HoursUpdateService {
   async updateAllDeviceHours() {
     try {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      // ✅ FIX: Use Date object (UTC midnight) instead of string for proper query matching
+      // This matches the pattern used in deviceTracking.js findByDeviceId method
+      const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
 
       // Get all devices for today that are online AND displaying ads
       // ✅ FIX: Only update hours for devices that are actually displaying ads

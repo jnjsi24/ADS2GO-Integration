@@ -1,6 +1,7 @@
 const DeviceTracking = require('../models/deviceTracking');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const logger = require('../utils/logger');
+const { getUTCMidnight, formatDateString } = require('../utils/dateUtils');
 
 class DailyArchiveJobV2 {
   constructor() {
@@ -23,6 +24,7 @@ class DailyArchiveJobV2 {
       const now = new Date();
       
       // Get date components directly from Philippines timezone using Intl.DateTimeFormat
+      // This ensures we get "today" in PH timezone, not UTC timezone
       const phDateFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Manila',
         year: 'numeric',
@@ -37,10 +39,11 @@ class DailyArchiveJobV2 {
       
       // Create UTC midnight date directly from Philippines date components
       // This matches how dates are stored in the database (UTC midnight)
+      // Using Date.UTC ensures consistency with DeviceTracking records
       const targetUTCDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
       
-      // Format date string for logging
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // Format date string for logging using the utility function
+      const dateStr = formatDateString(targetUTCDate);
       
       logger.database(`📅 Archiving data for date: ${dateStr} (Philippines time)`);
       logger.database(`📅 Target UTC date: ${targetUTCDate.toISOString()}`);
@@ -51,7 +54,7 @@ class DailyArchiveJobV2 {
       logger.database(`📊 Found ${devices.length} device records to archive`);
 
       for (const device of devices) {
-        await this.archiveMaterialDataV2(device, dateStr);
+        await this.archiveMaterialDataV2(device, dateStr, targetUTCDate);
       }
 
       // ✅ ADD VALIDATION
@@ -128,10 +131,12 @@ class DailyArchiveJobV2 {
     }
   }
 
-  async archiveMaterialDataV2(device, dateStr) {
+  async archiveMaterialDataV2(device, dateStr, targetUTCDate = null) {
     try {
       const deviceTimezone = 'Asia/Manila';
-      const targetDate = new Date(dateStr);
+      // ✅ FIX: Use the UTC midnight date passed from archiveDailyData, or parse from dateStr as UTC
+      // This ensures we use UTC dates consistently, not local timezone dates
+      const targetDate = targetUTCDate || getUTCMidnight(new Date(dateStr + 'T00:00:00Z'));
 
       // Prepare QR scans array first (filter out invalid location data and entries without userId)
       const cleanedQrScans = this.cleanQRScanData(device.qrScans || []).filter(scan => scan.userId);
@@ -204,9 +209,13 @@ class DailyArchiveJobV2 {
 
       if (existingDocument) {
         // Check if daily data for this date already exists
-        const existingDailyIndex = existingDocument.dailyData.findIndex(d => 
-          d.date.toDateString() === targetDate.toDateString()
-        );
+        // ✅ FIX: Compare dates using UTC midnight timestamps instead of toDateString() (timezone-dependent)
+        const targetDateTimestamp = targetDate.getTime();
+        const existingDailyIndex = existingDocument.dailyData.findIndex(d => {
+          if (!d.date) return false;
+          const dDate = new Date(d.date);
+          return dDate.getTime() === targetDateTimestamp;
+        });
 
         if (existingDailyIndex >= 0) {
           // Update existing daily data
@@ -259,9 +268,13 @@ class DailyArchiveJobV2 {
                 }
                 
                 // Reapply the changes to the fresh document
-                const freshDailyIndex = freshDocument.dailyData.findIndex(d => 
-                  d.date.toDateString() === targetDate.toDateString()
-                );
+                // ✅ FIX: Compare dates using UTC midnight timestamps instead of toDateString()
+                const targetDateTimestamp = targetDate.getTime();
+                const freshDailyIndex = freshDocument.dailyData.findIndex(d => {
+                  if (!d.date) return false;
+                  const dDate = new Date(d.date);
+                  return dDate.getTime() === targetDateTimestamp;
+                });
                 
                 if (freshDailyIndex >= 0) {
                   const freshDaily = freshDocument.dailyData[freshDailyIndex];
@@ -356,9 +369,13 @@ class DailyArchiveJobV2 {
                 }
                 
                 // Check if daily data for this date already exists (might have been added by another process)
-                const freshDailyIndex = freshDocument.dailyData.findIndex(d => 
-                  d.date.toDateString() === targetDate.toDateString()
-                );
+                // ✅ FIX: Compare dates using UTC midnight timestamps instead of toDateString()
+                const targetDateTimestamp = targetDate.getTime();
+                const freshDailyIndex = freshDocument.dailyData.findIndex(d => {
+                  if (!d.date) return false;
+                  const dDate = new Date(d.date);
+                  return dDate.getTime() === targetDateTimestamp;
+                });
                 
                 if (freshDailyIndex >= 0) {
                   // Date already exists, update instead
@@ -976,8 +993,9 @@ class DailyArchiveJobV2 {
   async validateArchive(dateStr) {
     console.log(`🔍 Validating archive for ${dateStr}...`);
     
-    const targetDate = new Date(dateStr);
-    targetDate.setHours(0, 0, 0, 0);
+    // ✅ FIX: Parse dateStr as UTC midnight to match database format
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
     
     // Get all registered materials
     const Material = require('../models/Material');
@@ -1034,9 +1052,13 @@ class DailyArchiveJobV2 {
     
     for (const missing of missingArchives) {
       try {
+        // ✅ FIX: Parse dateStr as UTC midnight to match database format
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const targetUTCDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+        
         const device = await DeviceTracking.findOne({
           materialId: missing.materialId,
-          date: new Date(dateStr)
+          date: targetUTCDate
         });
         
         if (device) {
