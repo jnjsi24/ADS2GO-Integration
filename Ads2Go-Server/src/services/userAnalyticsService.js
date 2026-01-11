@@ -6110,6 +6110,11 @@ class UserAnalyticsService {
             const dailyDateStr = dailyDateOnly.toISOString().split('T')[0];
             const isToday = dailyDateStr === todayStr;
             
+            // #region agent log
+            // Log date comparison to track timezone issues
+            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6111',message:'Date comparison for daily data exclusion',data:{dailyDate:dailyData.date,dailyDateStr,todayStr,isToday,currentDataLength:currentData.length,isAllTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
+            
             // ✅ FIX: Include today from historical data if current day data wasn't found
             // This ensures today's scans are counted even if DeviceTracking query fails or hasn't been archived yet
             let shouldProcess = false;
@@ -6117,6 +6122,12 @@ class UserAnalyticsService {
               // ✅ FIX: Include today from historical data if current day data wasn't found
               // This prevents missing today's scans when DeviceTracking query returns 0 devices
               shouldProcess = currentData.length === 0; // Only skip if we found current day data
+              
+              // #region agent log
+              // Log today exclusion decision
+              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6119',message:'Today exclusion decision',data:{dailyDateStr,todayStr,isToday,currentDataLength:currentData.length,shouldProcess},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+              // #endregion
+              
               if (!shouldProcess) {
                 console.log(`⏭️ [getTotalQRScans] Skipping today's date in historical data (current day data found): ${dailyData.date} (today: ${todayStr}, daily: ${dailyDateStr})`);
               } else {
@@ -6202,8 +6213,14 @@ class UserAnalyticsService {
                       }
                     }
                     
+                    const previousHistoricalTotal = qrScansByAd[normalizedAdId].totalScans || 0;
                     qrScansByAd[normalizedAdId].totalScans += scanCountToAdd;
                     totalScans += scanCountToAdd;
+                    
+                    // #region agent log
+                    // Log QR scan addition from historical data to track double-counting
+                    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6205',message:'QR scan added from historical data',data:{normalizedAdId,adTitle:adScan.adTitle,scanCountToAdd,previousHistoricalTotal,newTotal:qrScansByAd[normalizedAdId].totalScans,dailyDate:dailyData.date,source:'DeviceDataHistoryV2'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     
                     if (isVerbose || scanCountToAdd > 0) {
                       console.log(`✅ [getTotalQRScans] Historical: Ad "${adScan.adTitle}" (${normalizedAdId}): +${scanCountToAdd} scans on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);

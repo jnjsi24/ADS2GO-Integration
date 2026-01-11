@@ -553,8 +553,23 @@ class UserAnalyticsSyncJob {
                 userAdImpressions = userOwnedPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 0), 0);
               }
               
+              // ✅ FIX: Prefer qrScansByAd over qrScans array to prevent double-counting
+              // qrScansByAd is the aggregated format and should be used when available
+              // Only process qrScans array if qrScansByAd is empty or missing
+              const hasQrScansByAd = dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0;
+              
               // Calculate totals from user-owned QR scans only
-              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+              // ✅ FIX: Prefer qrScansByAd over qrScans array to prevent double-counting
+              if (hasQrScansByAd) {
+                // Use qrScansByAd (aggregated format)
+                dailyData.qrScansByAd.forEach(adScan => {
+                  const adId = adScan.adId ? (adScan.adId.toString ? adScan.adId.toString() : String(adScan.adId)) : null;
+                  if (adId && validAdIds.includes(adId)) {
+                    userQRScans += adScan.scanCount || 0;
+                  }
+                });
+              } else if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+                // Fallback to qrScans array only if qrScansByAd is not available
                 const userOwnedQrScans = dailyData.qrScans.filter(qrScan => 
                   validAdIds.includes(qrScan.adId)
                 );
@@ -620,7 +635,8 @@ class UserAnalyticsSyncJob {
               }
               
               // Collect user-owned QR scans for detailed tracking
-              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+              // ✅ FIX: Only process qrScans array if qrScansByAd is NOT available (to prevent double-counting)
+              if (!hasQrScansByAd && dailyData.qrScans && dailyData.qrScans.length > 0) {
                 const userOwnedQrScans = dailyData.qrScans.filter(qrScan => 
                   validAdIds.includes(qrScan.adId)
                 );
@@ -650,17 +666,12 @@ class UserAnalyticsSyncJob {
                 }
               }
               
-              // ✅ Also process qrScansByAd if available (aggregated format)
-              if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
+              // ✅ Process qrScansByAd (aggregated format) - prefer this over qrScans array
+              if (hasQrScansByAd) {
                 dailyData.qrScansByAd.forEach(adScan => {
                   // ✅ FIX: Normalize adId to string for comparison (handles ObjectId vs string)
                   const adId = adScan.adId ? (adScan.adId.toString ? adScan.adId.toString() : String(adScan.adId)) : null;
                   const adIdStr = adId;
-                  
-                  // #region agent log
-                  // DISABLED: Debug logging
-                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:656',message:'Processing qrScansByAd entry in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isValidAd:adIdStr?validAdIds.includes(adIdStr):false,validAdIdsSample:validAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-                  // #endregion
                   
                   if (adIdStr && validAdIds.includes(adIdStr)) {
                     if (!processedData.ads[adIdStr]) {
@@ -677,13 +688,7 @@ class UserAnalyticsSyncJob {
                     if (!processedData.ads[adIdStr].totalQRScans) {
                       processedData.ads[adIdStr].totalQRScans = 0;
                     }
-                    const previousCount = processedData.ads[adIdStr].totalQRScans || 0;
                     processedData.ads[adIdStr].totalQRScans += (adScan.scanCount || 0);
-                    
-                    // #region agent log
-                    // DISABLED: Debug logging
-                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsSyncJob.js:675',message:'Added QR scans to ad in sync job',data:{adIdStr,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,previousCount,newCount:processedData.ads[adIdStr].totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-                    // #endregion
                   }
                 });
               }
