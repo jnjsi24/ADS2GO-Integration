@@ -439,8 +439,8 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [analyticsError, isCustomDate, selectedDate]);
 
-  // ✅ PERFORMANCE FIX: Fetch all-time analytics data for Top Performing Ads using direct API (faster than GraphQL)
-  // This ensures Top Performing Ads always shows all-time totals regardless of filter selection
+  // ✅ PERFORMANCE FIX: Fetch all-time analytics data using direct API (faster than GraphQL)
+  // This ensures all-time analytics data is available for summary metrics and other displays
   const [allTimeAnalyticsData, setAllTimeAnalyticsData] = useState<any>(null);
   const [allTimeAnalyticsLoading, setAllTimeAnalyticsLoading] = useState(false);
   const allTimeAnalyticsErrorRef = useRef<any>(null);
@@ -478,7 +478,7 @@ const DetailedAnalytics: React.FC = () => {
         queryParams.append('_t', Date.now().toString()); // ✅ Cache-busting timestamp
         
         const url = `${baseUrl}/analytics/user/${user.userId}/direct-v2?${queryParams.toString()}`;
-        console.log('📡 [TopPerformingAds] Fetching all-time analytics (V2):', url);
+        console.log('📡 [AllTimeAnalytics] Fetching all-time analytics (V2):', url);
         
         // ✅ Force fresh fetch - prevent browser caching (using cache: 'no-store' and timestamp parameter)
         // Note: Not using custom headers to avoid CORS preflight issues
@@ -518,7 +518,7 @@ const DetailedAnalytics: React.FC = () => {
           
           setAllTimeAnalyticsData(transformedData);
           allTimeAnalyticsErrorRef.current = null;
-          console.log('✅ [TopPerformingAds] All-time analytics loaded:', {
+          console.log('✅ [AllTimeAnalytics] All-time analytics loaded:', {
             adsCount: adPerformance.length,
             totalQRScans: result.data.summary?.totalQRScans || 0,
             sampleAd: adPerformance[0] ? {
@@ -531,7 +531,7 @@ const DetailedAnalytics: React.FC = () => {
           throw new Error(result.message || 'Failed to fetch all-time analytics');
         }
       } catch (error: any) {
-        console.error('❌ [TopPerformingAds] Error fetching all-time analytics:', error);
+        console.error('❌ [AllTimeAnalytics] Error fetching all-time analytics:', error);
         allTimeAnalyticsErrorRef.current = error;
       } finally {
         if (!silent) {
@@ -550,12 +550,12 @@ const DetailedAnalytics: React.FC = () => {
   
   // ✅ Background refresh every 3 seconds (silent) for real-time updates
   // ⚡ REAL-TIME FIX: Reduced from 10s to 3s to match top cards instant update behavior
-  // This ensures Top Performing Ads updates as fast as the top summary cards
+  // This ensures all-time analytics data updates as fast as the top summary cards
   useEffect(() => {
     if (!user?.userId) return;
     
     const pollInterval = setInterval(() => {
-      console.log('🔄 [TopPerformingAds] Background refresh triggered');
+      console.log('🔄 [AllTimeAnalytics] Background refresh triggered');
       fetchAllTimeAnalytics(true); // Silent refresh - always fetches fresh data (no cache)
     }, 3000); // 3 seconds for near-instant updates (matches top cards refresh rate)
     
@@ -567,7 +567,7 @@ const DetailedAnalytics: React.FC = () => {
   // ✅ Refresh when page regains focus (user returns to tab)
   useEffect(() => {
     const handleFocus = () => {
-      console.log('🔄 [TopPerformingAds] Page focus detected, refreshing data');
+      console.log('🔄 [AllTimeAnalytics] Page focus detected, refreshing data');
       fetchAllTimeAnalytics(false); // Non-silent refresh when user returns
     };
     
@@ -1325,7 +1325,7 @@ const DetailedAnalytics: React.FC = () => {
     savePersistentCache(analyticsCacheRef.current);
     // Refresh all data
     fetchDirectAnalytics(false);
-    fetchAllTimeAnalytics(false); // Refresh Top Performing Ads (this is the key fix!)
+    fetchAllTimeAnalytics(false); // Refresh all-time analytics data
   }, [fetchDirectAnalytics, fetchAllTimeAnalytics]);
   
   // ✅ Hide loading state when data arrives
@@ -1420,11 +1420,11 @@ const DetailedAnalytics: React.FC = () => {
     // Only fallback to GraphQL data if directAnalyticsData is not available
     
     // ✅ When no filters are active (period='all', ad='all', device='all'), prefer overallAnalyticsData for consistency
-    // This ensures QR Scans metric updates at the same rate as Top Performing Ads (both use overallAnalyticsData)
+    // This ensures QR Scans metric uses all-time data when no filters are active
     if (!hasAnyFilter && selectedPeriod === 'all' && !isCustomDate) {
-      // ✅ Use overallAnalyticsData first for consistency with Top Performing Ads (same polling rate)
+      // ✅ Use overallAnalyticsData first for consistency (same polling rate)
       if (overallAnalyticsData?.getUserAnalytics?.summary) {
-        console.log('✅ [DetailedAnalytics] Using overallAnalyticsData summary for "all" period (consistent with Top Performing Ads):', overallAnalyticsData.getUserAnalytics.summary);
+        console.log('✅ [DetailedAnalytics] Using overallAnalyticsData summary for "all" period:', overallAnalyticsData.getUserAnalytics.summary);
         const totalDisplayTime = overallAnalyticsData.getUserAnalytics.summary.totalDisplayTime || 0;
         const totalDevices = overallAnalyticsData.getUserAnalytics.summary.totalDevices || 0;
         return {
@@ -1928,138 +1928,6 @@ const DetailedAnalytics: React.FC = () => {
       return [];
     }
   }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDate, selectedDate]);
-
-  // Top performing ads with proper QR scan calculation - ALWAYS use all-time data regardless of device/date selection
-  // ✅ RANKING: Sorted by QR scans (descending) - ads with highest QR scans are ranked first
-  const topPerformingAds = useMemo(() => {
-    // Always use the all-time ad performance data from GraphQL query (not filtered by device or date)
-    console.log('🔍 [TopPerformingAds] Computing with:', {
-      hasAllTimeData: !!allTimeAnalyticsData,
-      hasGetUserAnalytics: !!allTimeAnalyticsData?.getUserAnalytics,
-      hasAdPerformance: !!allTimeAnalyticsData?.getUserAnalytics?.adPerformance,
-      adPerformanceLength: allTimeAnalyticsData?.getUserAnalytics?.adPerformance?.length || 0,
-      period: allTimeAnalyticsData?.getUserAnalytics?.period,
-      currentFilters: {
-        selectedAd,
-        selectedDevice,
-        selectedPeriod
-      },
-      note: 'Top Performing Ads should ALWAYS show period=all data, independent of filters!'
-    });
-    
-    const ads = (allTimeAnalyticsData?.getUserAnalytics?.adPerformance || []);
-    
-    console.log('📊 [TopPerformingAds] Processing ads:', ads.length);
-    console.log('📊 [TopPerformingAds] Sample ad data:', ads[0] ? {
-      adId: ads[0].adId,
-      adTitle: ads[0].adTitle,
-      totalQRScans: ads[0].totalQRScans,
-      hasMaterials: !!ads[0].materials,
-      materialsCount: ads[0].materials?.length || 0
-    } : 'No ads');
-    
-    // ✅ Filter out archived/deleted ads - check against myAdsData
-    // ⚠️ IMPORTANT: Only filter if myAdsData is loaded, otherwise show all ads
-    const archivedAdIds = new Set<string>();
-    if (myAdsData?.getMyAds && Array.isArray(myAdsData.getMyAds) && myAdsData.getMyAds.length > 0) {
-      myAdsData.getMyAds.forEach((ad: any) => {
-        if (ad.isArchived) {
-          archivedAdIds.add(ad.id?.toString() || '');
-        }
-      });
-      console.log('📊 [TopPerformingAds] Archived ad IDs:', Array.from(archivedAdIds));
-    } else {
-      console.log('⚠️ [TopPerformingAds] myAdsData not loaded yet - showing all ads (not filtering archived)');
-    }
-    
-    // Filter out archived ads (only if myAdsData is loaded)
-    const nonArchivedAds = myAdsData?.getMyAds ? ads.filter((ad: any) => {
-      const adId = ad.adId?.toString() || '';
-      const isArchived = archivedAdIds.has(adId);
-      if (isArchived) {
-        console.log(`⏭️ [TopPerformingAds] Filtering out archived ad: ${ad.adTitle} (${adId})`);
-      }
-      return !isArchived;
-    }) : ads; // ✅ If myAdsData not loaded, show all ads
-    
-    console.log('📊 [TopPerformingAds] After filtering archived ads:', {
-      originalCount: ads.length,
-      filteredCount: nonArchivedAds.length,
-      filteredOut: ads.length - nonArchivedAds.length,
-      myAdsDataLoaded: !!myAdsData?.getMyAds
-    });
-    
-    // ✅ Trust backend data - backend now always fetches fresh QR scan data
-    // The backend's getUserAnalytics already fetches fresh QR scans and populates ad.totalQRScans
-    const mappedAds = nonArchivedAds.map((ad: any) => {
-      // Use the QR scans directly from backend (already fresh data)
-      const qrScans = ad.totalQRScans || 0;
-      
-      // ✅ Get actual device count from myAdsData (devices assigned to the ad)
-      // Find the corresponding ad in myAdsData to get the actual materialId array, startTime, and endTime
-      let assignedDevicesCount = ad.totalDevices || 0; // Fallback to analytics data
-      let startTime = null;
-      let endTime = null;
-      if (myAdsData?.getMyAds && myAdsData.getMyAds.length > 0) {
-        const adFromMyAds = myAdsData.getMyAds.find((myAd: any) => {
-          // Match by adId (could be string or ObjectId)
-          return myAd.id === ad.adId || myAd.id?.toString() === ad.adId?.toString();
-        });
-        
-        if (adFromMyAds) {
-          if (adFromMyAds.materialId && Array.isArray(adFromMyAds.materialId)) {
-            // Count actual assigned devices from materialId array
-            assignedDevicesCount = adFromMyAds.materialId.length;
-            console.log(`📊 [TopPerformingAds] Ad "${ad.adTitle}" has ${assignedDevicesCount} assigned devices (from materialId array)`);
-          }
-          // Get start and end dates
-          startTime = adFromMyAds.startTime || null;
-          endTime = adFromMyAds.endTime || null;
-        }
-      }
-      
-      // ✅ Use actual play count from backend (totalAdPlays) for consistency with summary stats
-      const totalPlays = ad.totalAdPlays || 0;
-      
-      console.log(`✅ [TopPerformingAds] Ad "${ad.adTitle}": ${totalPlays} plays (actual count from backend)`);
-      
-      // Debug logging
-      if (qrScans > 0 || totalPlays > 0) {
-        console.log(`✅ [TopPerformingAds] Ad "${ad.adTitle}" (${ad.adId}): ${totalPlays} plays, ${qrScans} QR scans from backend`);
-      }
-      
-      return {
-        ...ad,
-        totalPlays: totalPlays, // ✅ Calculated from play time
-        totalQRScans: qrScans, // ✅ Use QR scans directly from backend (fresh data)
-        assignedDevicesCount: assignedDevicesCount, // Use this instead of totalMaterials for device count
-        startTime: startTime, // Start date from myAdsData
-        endTime: endTime // End date from myAdsData
-      };
-    });
-    
-    // ✅ RANKING: Sort by QR scans (descending), then by ad plays (descending) as tiebreaker
-    // Ads with highest QR scans are ranked #1, #2, #3, etc.
-    const sortedAds = mappedAds.sort((a: any, b: any) => {
-      // Primary sort: QR scans (descending)
-      if (b.totalQRScans !== a.totalQRScans) {
-        return (b.totalQRScans || 0) - (a.totalQRScans || 0);
-      }
-      // Secondary sort: Total ad plays (descending) as tiebreaker
-      const aPlays = a.totalPlays || a.totalAdsPlayed || 0;
-      const bPlays = b.totalPlays || b.totalAdsPlayed || 0;
-      return bPlays - aPlays;
-    });
-    
-    console.log('🏆 [TopPerformingAds] Sorted ads by QR scans:', sortedAds.map((ad: any) => ({
-      title: ad.adTitle,
-      qrScans: ad.totalQRScans,
-      plays: ad.totalPlays || ad.totalAdsPlayed || 0
-    })));
-    
-    // Return top 5 performing ads (highest QR scans)
-    return sortedAds.slice(0, 5);
-  }, [allTimeAnalyticsData, myAdsData]);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -2827,92 +2695,6 @@ const DetailedAnalytics: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Top Performing Ads - Always show all-time totals regardless of filters */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-black/80 mb-1">Top Performing Ads</h3>
-                  <p className="text-sm text-black/60">Your best performing advertisements (All-time totals)</p>
-                </div>
-              </div>
-              {allTimeAnalyticsLoading && topPerformingAds.length === 0 ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-center">
-                    <LoaderCircle className="w-6 h-6 animate-spin text-blue-500 mx-auto mb-2" />
-                    <p className="text-xs text-gray-600">Loading top performing ads...</p>
-                  </div>
-                </div>
-              ) : topPerformingAds.length > 0 ? (
-                <div className="space-y-3">
-                  {topPerformingAds.slice(0, 5).map((ad: any, index: number) => (
-                    <div 
-                      key={ad.adId} 
-                      className="flex items-center justify-between p-4 bg-white/70 rounded-md shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                      
-                      {/* LEFT SECTION: Position and Ad Title */}
-                      <div className="flex items-center space-x-4"> {/* <-- CHANGED: items-start to items-center */}
-                        {/* Position/Medal Icon */}
-                        <div className={`
-                          w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center font-bold shadow-md
-                          ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 
-                            index === 1 ? 'bg-gray-100 text-gray-600' : 
-                            index === 2 ? 'bg-orange-100 text-orange-600' : 
-                            'bg-blue-50 text-black/60'}
-                        `}>
-                          <span className="text-sm">
-                            {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
-                          </span>
-                        </div>
-                        
-                        {/* Ad Title and Dates */}
-                        <div> 
-                            <p className="font-semibold text-black/90 text-lg">{ad.adTitle}</p>
-                            {(ad.startTime || ad.endTime) && (
-                              <div className="flex items-center gap-2 mt-1">
-                                {ad.startTime && (
-                                  <span className="text-xs text-black/50">
-                                    Start: {new Date(ad.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </span>
-                                )}
-                                {ad.startTime && ad.endTime && (
-                                  <span className="text-xs text-black/30">•</span>
-                                )}
-                                {ad.endTime && (
-                                  <span className="text-xs text-black/50">
-                                    End: {new Date(ad.endTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                        </div>
-                      </div>
-                      
-                      {/* RIGHT SECTION: Performance Metrics */}
-                      <div className="flex items-center text-right">
-                        
-                        {/* QR Scans (Highlighted) - Always show all-time QR scans */}
-                        <div className="w-20">
-                          <p className="text-xl font-extrabold text-green-600">
-                            {(ad.totalQRScans || 0).toLocaleString()}
-                          </p>
-                          <p className="text-xs text-green-700 font-bold leading-none mt-0.5">
-                            QR Scans
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">No ads found</p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

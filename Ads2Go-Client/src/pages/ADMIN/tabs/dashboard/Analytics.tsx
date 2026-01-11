@@ -36,8 +36,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ analytics }) => {
 
   const displayAnalytics = analytics;
 
-  const topPerformingAds: any[] = [];
-
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold">Analytics & Performance</h3>
@@ -81,32 +79,6 @@ const Analytics: React.FC<AnalyticsProps> = ({ analytics }) => {
           </div>
         </div>
       </div>
-
-      {/* Top Performing Ads */}
-      {topPerformingAds.length > 0 && (
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-medium mb-3">Top Performing Ads</h4>
-          <div className="space-y-3">
-            {topPerformingAds.map((ad, index) => (
-              <div key={index} className="flex items-center justify-between bg-white p-3 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div className="font-medium">{ad.title}</div>
-                    <div className="text-sm text-gray-500">{ad.views} views</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-medium text-green-600">{ad.completion}%</div>
-                  <div className="text-sm text-gray-500">₱{ad.revenue}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Additional Analytics Sections */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
