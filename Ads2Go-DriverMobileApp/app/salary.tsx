@@ -402,46 +402,6 @@ const SalaryScreen: React.FC = () => {
     return category;
   };
 
-  // Calculate current month's salary
-  const getCurrentMonthSalary = () => {
-    if (!calculations || calculations.length === 0) {
-      return { totalSalary: 0, totalDistanceSalary: 0, totalHoursSalary: 0 };
-    }
-
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const currentMonthCalculations = calculations.filter((calc) => {
-      if (!calc.calculationPeriod?.startDate) return false;
-      
-      const startDate = new Date(calc.calculationPeriod.startDate);
-      const calcMonth = startDate.getMonth();
-      const calcYear = startDate.getFullYear();
-      
-      // Check if the calculation period is in the current month
-      return calcMonth === currentMonth && calcYear === currentYear;
-    });
-
-    const totalSalary = currentMonthCalculations.reduce((sum, calc) => {
-      return sum + (calc.calculations?.totalSalary || 0);
-    }, 0);
-
-    const totalDistanceSalary = currentMonthCalculations.reduce((sum, calc) => {
-      return sum + (calc.calculations?.distanceComputation || 0);
-    }, 0);
-
-    const totalHoursSalary = currentMonthCalculations.reduce((sum, calc) => {
-      return sum + (calc.calculations?.hoursComputation || 0);
-    }, 0);
-
-    return {
-      totalSalary: Math.round(totalSalary * 100) / 100,
-      totalDistanceSalary: Math.round(totalDistanceSalary * 100) / 100,
-      totalHoursSalary: Math.round(totalHoursSalary * 100) / 100,
-    };
-  };
-
   const fetchDailyBreakdown = async (calculation: SalaryCalculation) => {
     console.log('🚀 fetchDailyBreakdown called with calculation:', calculation.id);
     try {
@@ -659,29 +619,6 @@ const SalaryScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-
-        {/* Summary Cards */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItemCard}>
-              <Text style={styles.summaryValue}>
-                {formatCurrency(getCurrentMonthSalary().totalDistanceSalary)}
-              </Text>
-              <Text style={styles.summaryLabel}>Distance Salary</Text>
-            </View>
-            <View style={styles.summaryItemCard}>
-              <Text style={styles.summaryValue}>
-                {formatCurrency(getCurrentMonthSalary().totalHoursSalary)}
-              </Text>
-              <Text style={styles.summaryLabel}>Hours Salary</Text>
-            </View>
-            <View style={styles.summaryItemCard}>
-              <Text style={styles.summaryValue}>{formatCurrency(getCurrentMonthSalary().totalSalary)}</Text>
-              <Text style={styles.summaryLabel}>Total Salary (This Month)</Text> 
-            </View>
-          </View>
-        </View>
-
         {/* Calculations List */}
         <View style={styles.calculationsSection}>
           <Text style={styles.sectionTitle}>Salary Calculations</Text>
@@ -983,13 +920,6 @@ const SalaryScreen: React.FC = () => {
                   </View>
                 )}
               </View>
-
-              {selectedCalculation.notes && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>Notes</Text>
-                  <Text style={styles.notesText}>{selectedCalculation.notes}</Text>
-                </View>
-              )}
             </ScrollView>
           )}
         </SafeAreaView>
@@ -1334,11 +1264,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
   },
   loadingBreakdown: {
     padding: 20,

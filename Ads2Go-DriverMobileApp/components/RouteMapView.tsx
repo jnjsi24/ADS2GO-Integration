@@ -33,8 +33,13 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({
   
   // Always show the map, even with no data
   const routeData = route || [];
-  console.log('🗺️ RouteMapView received route data:', routeData.length, 'points');
-  console.log('🎨 Speed colors:', showSpeedColors, 'Waypoints:', showWaypoints);
+  
+  // ✅ OPTIMIZED: Reduce logging frequency to improve performance
+  const routeLength = routeData.length;
+  if (routeLength > 0 && routeLength % 10 === 0) {
+    // Only log every 10th point to reduce console spam during real-time updates
+    console.log('🗺️ RouteMapView route data:', routeLength, 'points');
+  }
 
   // Create the HTML for the map using Leaflet (OpenStreetMap)
   const mapHtml = `

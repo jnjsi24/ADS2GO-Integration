@@ -122,6 +122,20 @@ interface DriverAnalytics {
   } | null;
 }
 
+// ✅ Cache keys for AsyncStorage
+const CACHE_KEYS = {
+  ANALYTICS: '@dashboard_analytics_cache',
+  SALARY: '@dashboard_salary_cache',
+  MOUNTED_DATE: '@dashboard_mounted_date',
+};
+
+// ✅ Cache expiry times
+const CACHE_EXPIRY = {
+  TODAY: 5 * 60 * 1000, // 5 minutes for today's data
+  PAST_DATE: 15 * 60 * 1000, // 15 minutes for past dates
+  SALARY: 10 * 60 * 1000, // 10 minutes for salary
+};
+
 const Dashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
@@ -134,6 +148,98 @@ const Dashboard: React.FC = () => {
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [materialMountedAt, setMaterialMountedAt] = useState<string | null>(null); // ✅ Track mounted date (when material was physically installed)
+
+  // Helper function to check if selected date is today
+  const isSelectedDateToday = () => {
+    const today = new Date();
+    return (
+      selectedDate.getDate() === today.getDate() &&
+      selectedDate.getMonth() === today.getMonth() &&
+      selectedDate.getFullYear() === today.getFullYear()
+    );
+  };
+
+  // ✅ Load persistent cache from AsyncStorage on mount
+  useEffect(() => {
+    const loadPersistentCache = async () => {
+      try {
+        // Load analytics cache
+        const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
+        if (analyticsCacheStr) {
+          const analyticsCache = JSON.parse(analyticsCacheStr);
+          const now = Date.now();
+          
+          // Filter out expired entries and load valid ones
+          const validCache: typeof dataCache = {};
+          for (const [key, entry] of Object.entries(analyticsCache)) {
+            const isToday = key.includes(new Date().toISOString().split('T')[0]);
+            const cacheExpiry = isToday ? CACHE_EXPIRY.TODAY : CACHE_EXPIRY.PAST_DATE;
+            if (now - (entry as any).timestamp < cacheExpiry) {
+              validCache[key] = entry as any;
+            }
+          }
+          
+          if (Object.keys(validCache).length > 0) {
+            setDataCache(validCache);
+            console.log('📦 Loaded', Object.keys(validCache).length, 'cached analytics entries');
+          }
+        }
+
+        // Load salary cache
+        const salaryCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY);
+        if (salaryCacheStr) {
+          const salaryCache = JSON.parse(salaryCacheStr);
+          const now = Date.now();
+          if (now - salaryCache.timestamp < CACHE_EXPIRY.SALARY) {
+            setTotalEarnings(salaryCache.value || 0);
+            console.log('📦 Loaded cached salary:', salaryCache.value);
+          }
+        }
+
+        // Load mounted date cache
+        const mountedDateStr = await AsyncStorage.getItem(CACHE_KEYS.MOUNTED_DATE);
+        if (mountedDateStr) {
+          setMaterialMountedAt(mountedDateStr);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to load persistent cache:', error);
+      }
+    };
+
+    loadPersistentCache();
+  }, []);
+
+  // ✅ Save cache to AsyncStorage
+  const savePersistentCache = async (cache: typeof dataCache) => {
+    try {
+      await AsyncStorage.setItem(CACHE_KEYS.ANALYTICS, JSON.stringify(cache));
+    } catch (error) {
+      console.warn('⚠️ Failed to save analytics cache:', error);
+    }
+  };
+
+  // ✅ Save salary cache
+  const saveSalaryCache = async (value: number) => {
+    try {
+      await AsyncStorage.setItem(CACHE_KEYS.SALARY, JSON.stringify({
+        value,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.warn('⚠️ Failed to save salary cache:', error);
+    }
+  };
+
+  // ✅ Save mounted date cache
+  const saveMountedDateCache = async (date: string | null) => {
+    try {
+      if (date) {
+        await AsyncStorage.setItem(CACHE_KEYS.MOUNTED_DATE, date);
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to save mounted date cache:', error);
+    }
+  };
 
 
   useEffect(() => {
@@ -150,16 +256,57 @@ const Dashboard: React.FC = () => {
           // Use driverId (string like "DRV-008") instead of _id (ObjectId)
           const driverId = driver.driverId || driver.id;
           
-          // Fetch real analytics data and salary summary
-          await Promise.all([
-            fetchDriverAnalytics(driverId),
-            fetchSalarySummary()
-          ]);
+          // ✅ OPTIMIZATION: Check cache first and show immediately
+          const dateKey = selectedDate.toISOString().split('T')[0];
+          const cacheKey = `${driverId}-${dateKey}`;
+          const isToday = isSelectedDateToday();
+          const cacheExpiry = isToday ? CACHE_EXPIRY.TODAY : CACHE_EXPIRY.PAST_DATE;
+          
+          // ✅ Check both memory and AsyncStorage cache
+          let cachedData = dataCache[cacheKey];
+          if (!cachedData) {
+            try {
+              const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
+              if (analyticsCacheStr) {
+                const analyticsCache = JSON.parse(analyticsCacheStr);
+                cachedData = analyticsCache[cacheKey];
+                if (cachedData) {
+                  setDataCache(prev => ({
+                    ...prev,
+                    [cacheKey]: cachedData!
+                  }));
+                }
+              }
+            } catch (error) {
+              // Ignore cache errors
+            }
+          }
+          
+          if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry) {
+            console.log('📦 Using cached data for immediate display:', dateKey);
+            setAnalytics(cachedData.data);
+            setLoading(false); // ✅ Show UI immediately with cached data
+            
+            // ✅ Fetch fresh data in background (silent refresh)
+            Promise.all([
+              fetchDriverAnalytics(driverId, true), // silent = true
+              fetchSalarySummary(true) // silent = true
+            ]).catch(error => {
+              console.warn('Background refresh failed:', error);
+            });
+          } else {
+            // ✅ No cache available, fetch fresh data
+            await Promise.all([
+              fetchDriverAnalytics(driverId),
+              fetchSalarySummary()
+            ]);
+            setLoading(false);
+          }
         } else {
           // No driver info found
           console.log('❌ No driver info found in AsyncStorage');
+          setLoading(false);
         }
-        setLoading(false);
       } catch (error) {
         console.error('Error loading data:', error);
         setLoading(false);
@@ -191,11 +338,56 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (user?.driverId || user?.id) {
       const driverId = user.driverId || user.id;
-      fetchDriverAnalytics(driverId);
+      
+      // ✅ OPTIMIZATION: Check cache first and show immediately
+      const dateKey = selectedDate.toISOString().split('T')[0];
+      const cacheKey = `${driverId}-${dateKey}`;
+      const isToday = isSelectedDateToday();
+      const cacheExpiry = isToday ? CACHE_EXPIRY.TODAY : CACHE_EXPIRY.PAST_DATE;
+      const cachedData = dataCache[cacheKey];
+      
+      // ✅ Check cache and AsyncStorage
+      const checkCacheAndFetch = async () => {
+        let validCache = cachedData;
+        
+        // If not in memory, check AsyncStorage
+        if (!validCache) {
+          try {
+            const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
+            if (analyticsCacheStr) {
+              const analyticsCache = JSON.parse(analyticsCacheStr);
+              validCache = analyticsCache[cacheKey];
+              if (validCache) {
+                setDataCache(prev => ({
+                  ...prev,
+                  [cacheKey]: validCache!
+                }));
+              }
+            }
+          } catch (error) {
+            // Ignore cache errors
+          }
+        }
+        
+        if (validCache && (Date.now() - validCache.timestamp) < cacheExpiry) {
+          console.log('📦 Using cached data for date change:', dateKey);
+          setAnalytics(validCache.data);
+          
+          // ✅ Fetch fresh data in background
+          fetchDriverAnalytics(driverId, true).catch(error => {
+            console.warn('Background refresh failed:', error);
+          });
+        } else {
+          // ✅ No cache available, fetch fresh data
+          fetchDriverAnalytics(driverId);
+        }
+      };
+      
+      checkCacheAndFetch();
     }
     // Reset selected data point when date changes
     setSelectedDataPoint(null);
-  }, [selectedDate]);
+  }, [selectedDate, user?.driverId, user?.id]);
 
   // Reset selected data point when metric changes
   // ✅ Auto-select today's data point for distance tab (like hours tab does automatically)
@@ -250,16 +442,6 @@ const Dashboard: React.FC = () => {
     }
   }, [selectedMetric, analytics, selectedDate]);
 
-  // Helper function to check if selected date is today
-  const isSelectedDateToday = () => {
-    const today = new Date();
-    return (
-      selectedDate.getDate() === today.getDate() &&
-      selectedDate.getMonth() === today.getMonth() &&
-      selectedDate.getFullYear() === today.getFullYear()
-    );
-  };
-
   // Helper function to create empty analytics for dates with no data
   const createEmptyAnalytics = (driverData: any): DriverAnalytics => {
     return {
@@ -306,8 +488,26 @@ const Dashboard: React.FC = () => {
     };
   };
 
-  const fetchSalarySummary = async () => {
+  const fetchSalarySummary = async (silent: boolean = false) => {
     try {
+      // ✅ Check cache first
+      if (!silent) {
+        const salaryCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY);
+        if (salaryCacheStr) {
+          const salaryCache = JSON.parse(salaryCacheStr);
+          const now = Date.now();
+          if (now - salaryCache.timestamp < CACHE_EXPIRY.SALARY) {
+            console.log('📦 Using cached salary:', salaryCache.value);
+            setTotalEarnings(salaryCache.value || 0);
+            // ✅ If cache is valid, fetch fresh data in background if not silent
+            if (!silent) {
+              fetchSalarySummary(true).catch(() => {}); // Fetch in background
+            }
+            return;
+          }
+        }
+      }
+
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         console.log('No auth token found for salary summary');
@@ -352,6 +552,7 @@ const Dashboard: React.FC = () => {
         if (calculations.length === 0) {
           console.log('📊 No salary calculations found');
           setTotalEarnings(0);
+          await saveSalaryCache(0);
           return;
         }
         
@@ -408,30 +609,61 @@ const Dashboard: React.FC = () => {
         // Only show current month's salary (no fallback to past months)
         const finalSalary = Math.round(currentMonthSalary * 100) / 100;
         setTotalEarnings(finalSalary);
+        
+        // ✅ Save to cache
+        await saveSalaryCache(finalSalary);
       } else {
         setTotalEarnings(0);
+        await saveSalaryCache(0);
       }
     } catch (error) {
       // Don't show error to user, just keep default value
-      setTotalEarnings(0);
+      if (!silent) {
+        setTotalEarnings(0);
+      }
     }
   };
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
     try {
-      // Check cache first (5 minutes for today, 15 minutes for past dates)
+      // ✅ Check cache first (5 minutes for today, 15 minutes for past dates)
       const dateKey = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const cacheKey = `${driverId}-${dateKey}`;
       const isToday = isSelectedDateToday();
-      const cacheExpiry = isToday ? 5 * 60 * 1000 : 15 * 60 * 1000; // 5 or 15 minutes
-      const cachedData = dataCache[cacheKey];
+      const cacheExpiry = isToday ? CACHE_EXPIRY.TODAY : CACHE_EXPIRY.PAST_DATE;
+      
+      // ✅ Check both in-memory cache and AsyncStorage
+      let cachedData = dataCache[cacheKey];
+      
+      // ✅ If not in memory, try AsyncStorage
+      if (!cachedData) {
+        try {
+          const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
+          if (analyticsCacheStr) {
+            const analyticsCache = JSON.parse(analyticsCacheStr);
+            cachedData = analyticsCache[cacheKey];
+            if (cachedData) {
+              // Load into memory cache
+              setDataCache(prev => ({
+                ...prev,
+                [cacheKey]: cachedData!
+              }));
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to load cache from AsyncStorage:', error);
+        }
+      }
       
       if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry && !silent) {
         if (!silent) {
           console.log('📦 Using cached data for', dateKey);
         }
         setAnalytics(cachedData.data);
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
+        // ✅ If silent, still return early but don't fetch (already have fresh data)
         return;
       }
       
@@ -597,6 +829,11 @@ const Dashboard: React.FC = () => {
         
         console.log('📅 [Dashboard] Final Material Mounted Date:', mountedAt);
         setMaterialMountedAt(mountedAt || null);
+        
+        // ✅ Cache mounted date
+        if (mountedAt) {
+          await saveMountedDateCache(mountedAt);
+        }
 
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
@@ -654,16 +891,20 @@ const Dashboard: React.FC = () => {
         
         setAnalytics(transformedAnalytics);
         
-        // Cache the data
+        // ✅ Cache the data (both in memory and persistent storage)
         const dateKey = selectedDate.toISOString().split('T')[0];
         const cacheKey = `${driverId}-${dateKey}`;
-        setDataCache(prev => ({
-          ...prev,
+        const newCache = {
+          ...dataCache,
           [cacheKey]: {
             data: transformedAnalytics,
             timestamp: Date.now()
           }
-        }));
+        };
+        setDataCache(newCache);
+        
+        // ✅ Persist to AsyncStorage
+        savePersistentCache(newCache);
       } else {
         // API returned success: false
         const isToday = isSelectedDateToday();
@@ -906,6 +1147,20 @@ const Dashboard: React.FC = () => {
       style: 'currency',
       currency: 'PHP',
     }).format(amount);
+  };
+
+  const formatHours = (hours: number): string => {
+    if (hours < 0) return '0m';
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    
+    if (wholeHours > 0 && minutes > 0) {
+      return `${wholeHours}h ${minutes}m`;
+    } else if (wholeHours > 0) {
+      return `${wholeHours}h`;
+    } else {
+      return `${minutes}m`;
+    }
   };
 
   // Memoize chart data to avoid recalculating on every render
@@ -1213,11 +1468,13 @@ const Dashboard: React.FC = () => {
                 {(() => {
                   const v = getCurrentMetricValue();
                   if (selectedMetric === 'distance') return v.toFixed(1);
-                  if (selectedMetric === 'hours') return v.toFixed(2);
+                  if (selectedMetric === 'hours') return formatHours(v);
                   return v.toFixed(0);
                 })()}
               </Text>
-              <Text style={styles.gaugeUnit}>{getMetricUnit()}</Text>
+              <Text style={styles.gaugeUnit}>
+                {selectedMetric === 'hours' ? '' : getMetricUnit()}
+              </Text>
             </View>
           </View>
           

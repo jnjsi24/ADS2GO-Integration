@@ -22,6 +22,12 @@ import playbackWebSocketService from '../../services/playbackWebSocketService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// ✅ CACHE CONFIGURATION
+const ROUTE_CACHE_KEY_PREFIX = 'route_cache_';
+const ROUTE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const DRIVER_INFO_CACHE_KEY = 'driver_info_cache';
+const DRIVER_INFO_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache TTL
+
 interface RoutePoint {
   lat: number;
   lng: number;
@@ -46,6 +52,8 @@ interface RouteData {
   materialId: string;
   route: RoutePoint[];
   metrics: RouteMetrics;
+  sessionStatus?: any;
+  overallCompliance?: any;
 }
 
 interface DriverInfo {
@@ -53,6 +61,17 @@ interface DriverInfo {
   materialId: string;
   deviceId: string;
   materialAssignedDate?: string; // Date when driver was assigned to material
+}
+
+interface CachedRouteData {
+  data: RouteData;
+  timestamp: number;
+  dateStr: string;
+}
+
+interface CachedDriverInfo {
+  data: DriverInfo;
+  timestamp: number;
 }
 
 const RouteTab: React.FC = () => {
@@ -213,7 +232,8 @@ const RouteTab: React.FC = () => {
     // 🔄 Clear pending GPS queue when date changes
     pendingGPSPointsRef.current = [];
     
-    loadDriverInfoAndRoute(false); // Initial load with loading screen
+    // ✅ OPTIMIZED: Load cached data immediately, then refresh in background
+    loadDriverInfoAndRoute(false); // Initial load with loading screen (uses cache)
     
     if (isToday) {
       console.log('📅 [Route Tab] Today detected - enabling real-time WebSocket updates');
@@ -328,7 +348,7 @@ const RouteTab: React.FC = () => {
           if (!prev) {
             // Initialize route data with first point
             const firstPoint = pointsToAdd[0];
-            const newRouteData = {
+            const newRouteData: RouteData = {
               deviceId: driverInfo.deviceId,
               materialId: driverInfo.materialId,
               route: pointsToAdd,
@@ -342,8 +362,14 @@ const RouteTab: React.FC = () => {
               }
             };
             
-            // ✅ Geocode addresses for new route data
-            // Use setTimeout to ensure state is updated before geocoding
+            // ✅ OPTIMIZED: Cache updated route data (non-blocking)
+            const year = selectedDate.getFullYear();
+            const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+            const day = String(selectedDate.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            saveRouteDataToCache(driverInfo.materialId, dateStr, newRouteData).catch(console.warn);
+            
+            // ✅ OPTIMIZED: Geocode addresses in background (don't block render)
             setTimeout(() => {
               if (pointsToAdd.length > 0) {
                 const segments = segmentRoute(pointsToAdd);
@@ -378,7 +404,7 @@ const RouteTab: React.FC = () => {
 
           const averageSpeed = duration > 0 ? (totalDistance / duration) * 3600 : 0;
 
-          const updatedRouteData = {
+          const updatedRouteData: RouteData = {
             ...prev,
             route: updatedRoute,
             metrics: {
@@ -391,8 +417,14 @@ const RouteTab: React.FC = () => {
             }
           };
           
-          // ✅ Geocode addresses for newly added segments
-          // Use setTimeout to ensure state is updated before geocoding
+          // ✅ OPTIMIZED: Cache updated route data (non-blocking)
+          const year = selectedDate.getFullYear();
+          const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(selectedDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          saveRouteDataToCache(driverInfo.materialId, dateStr, updatedRouteData).catch(console.warn);
+          
+          // ✅ OPTIMIZED: Geocode addresses in background (don't block render)
           setTimeout(() => {
             if (pointsToAdd.length > 0) {
               const segments = segmentRoute(updatedRoute);
@@ -412,7 +444,91 @@ const RouteTab: React.FC = () => {
       console.log('🔄 [Batch Update] Stopping batch update interval');
       clearInterval(batchInterval);
     };
-  }, [isRealTimeActive, driverInfo?.deviceId]);
+  }, [isRealTimeActive, driverInfo?.deviceId, driverInfo?.materialId, selectedDate]);
+
+  // ✅ CACHE HELPERS: Get cache key for route data
+  const getRouteCacheKey = (materialId: string, dateStr: string): string => {
+    return `${ROUTE_CACHE_KEY_PREFIX}${materialId}_${dateStr}`;
+  };
+
+  // ✅ CACHE HELPERS: Load cached route data
+  const loadCachedRouteData = async (materialId: string, dateStr: string): Promise<RouteData | null> => {
+    try {
+      const cacheKey = getRouteCacheKey(materialId, dateStr);
+      const cachedStr = await AsyncStorage.getItem(cacheKey);
+      if (!cachedStr) return null;
+
+      const cached: CachedRouteData = JSON.parse(cachedStr);
+      const now = Date.now();
+
+      // Check if cache is still valid
+      if (now - cached.timestamp < ROUTE_CACHE_TTL) {
+        console.log('✅ [Cache] Route cache HIT for', materialId, dateStr);
+        return cached.data;
+      } else {
+        console.log('⏰ [Cache] Route cache EXPIRED for', materialId, dateStr);
+        // Remove expired cache
+        await AsyncStorage.removeItem(cacheKey);
+        return null;
+      }
+    } catch (error) {
+      console.warn('⚠️ [Cache] Error loading cached route data:', error);
+      return null;
+    }
+  };
+
+  // ✅ CACHE HELPERS: Save route data to cache
+  const saveRouteDataToCache = async (materialId: string, dateStr: string, data: RouteData): Promise<void> => {
+    try {
+      const cacheKey = getRouteCacheKey(materialId, dateStr);
+      const cached: CachedRouteData = {
+        data,
+        timestamp: Date.now(),
+        dateStr
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cached));
+      console.log('💾 [Cache] Route data cached for', materialId, dateStr);
+    } catch (error) {
+      console.warn('⚠️ [Cache] Error saving route data to cache:', error);
+    }
+  };
+
+  // ✅ CACHE HELPERS: Load cached driver info
+  const loadCachedDriverInfo = async (): Promise<DriverInfo | null> => {
+    try {
+      const cachedStr = await AsyncStorage.getItem(DRIVER_INFO_CACHE_KEY);
+      if (!cachedStr) return null;
+
+      const cached: CachedDriverInfo = JSON.parse(cachedStr);
+      const now = Date.now();
+
+      if (now - cached.timestamp < DRIVER_INFO_CACHE_TTL) {
+        console.log('✅ [Cache] Driver info cache HIT');
+        return cached.data;
+      } else {
+        console.log('⏰ [Cache] Driver info cache EXPIRED');
+        await AsyncStorage.removeItem(DRIVER_INFO_CACHE_KEY);
+        return null;
+      }
+    } catch (error) {
+      console.warn('⚠️ [Cache] Error loading cached driver info:', error);
+      return null;
+    }
+  };
+
+  // ✅ CACHE HELPERS: Save driver info to cache
+  const saveDriverInfoToCache = async (driverInfo: DriverInfo): Promise<void> => {
+    try {
+      const cached: CachedDriverInfo = {
+        data: driverInfo,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(DRIVER_INFO_CACHE_KEY, JSON.stringify(cached));
+      console.log('💾 [Cache] Driver info cached');
+    } catch (error) {
+      console.warn('⚠️ [Cache] Error saving driver info to cache:', error);
+    }
+  };
 
   const loadDriverInfoAndRoute = async (silentRefresh = false) => {
     try {
@@ -431,19 +547,29 @@ const RouteTab: React.FC = () => {
       const driver = JSON.parse(driverInfoStr);
       const driverId = driver.driverId || driver.id;
       
+      // ✅ OPTIMIZED: Load cached driver info immediately
+      const cachedDriverInfo = await loadCachedDriverInfo();
+      if (cachedDriverInfo && !silentRefresh) {
+        console.log('🚀 [Optimization] Loading cached driver info immediately');
+        setDriverInfo(cachedDriverInfo);
+      }
+      
       // Get auth token
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         throw new Error('No auth token found');
       }
 
-      // Fetch driver's material and device info
-      const driverResponse = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}`, {
+      // ✅ OPTIMIZED: Fetch driver info and GraphQL in parallel (if needed)
+      const driverInfoPromise = fetch(`${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
+
+      // Fetch driver's material and device info
+      const driverResponse = await driverInfoPromise;
 
       if (!driverResponse.ok) {
         // Handle 404 gracefully - device may have been unregistered
@@ -511,51 +637,60 @@ const RouteTab: React.FC = () => {
       // ✅ Get assigned date - try screenTracking API first, then GraphQL (same as Profile tab)
       let materialAssignedDate = driverData.data.materialAssignedDate;
       
-      if (!materialAssignedDate) {
-        console.log('⚠️ [Route Tab] No materialAssignedDate in screenTracking API, fetching from GraphQL...');
-        try {
-          const materialsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              query: `
-                query GetDriverMaterials($driverId: ID!) {
-                  getDriverMaterials(driverId: $driverId) {
-                    success
-                    materials {
-                      assignedDate
-                    }
-                  }
+      // ✅ OPTIMIZED: Fetch GraphQL in parallel if needed (don't wait for it to block route loading)
+      const graphQLPromise = !materialAssignedDate ? fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: `
+            query GetDriverMaterials($driverId: ID!) {
+              getDriverMaterials(driverId: $driverId) {
+                success
+                materials {
+                  assignedDate
                 }
-              `,
-              variables: { driverId },
-            }),
-          });
-          
-          const materialsResult = await materialsResponse.json();
-          if (materialsResult.data?.getDriverMaterials?.success) {
-            const materials = materialsResult.data.getDriverMaterials.materials;
-            if (materials && materials.length > 0 && materials[0].assignedDate) {
-              materialAssignedDate = materials[0].assignedDate;
-              console.log('✅ [Route Tab] Got assigned date from GraphQL:', materialAssignedDate);
+              }
             }
+          `,
+          variables: { driverId },
+        }),
+      }).then(async (response) => {
+        const materialsResult = await response.json();
+        if (materialsResult.data?.getDriverMaterials?.success) {
+          const materials = materialsResult.data.getDriverMaterials.materials;
+          if (materials && materials.length > 0 && materials[0].assignedDate) {
+            return materials[0].assignedDate;
           }
-        } catch (error) {
-          console.warn('⚠️ [Route Tab] Could not fetch from GraphQL:', error);
         }
-      }
+        return null;
+      }).catch((error) => {
+        console.warn('⚠️ [Route Tab] Could not fetch from GraphQL:', error);
+        return null;
+      }) : Promise.resolve(null);
 
-      console.log('📅 [Route Tab] Final Material Assigned Date:', materialAssignedDate);
-
-      setDriverInfo({
+      // Don't wait for GraphQL - set driver info immediately and update assigned date later if needed
+      const finalDriverInfo: DriverInfo = {
         driverId,
         materialId,
         deviceId,
         materialAssignedDate: materialAssignedDate || undefined
-      });
+      };
+
+      console.log('📅 [Route Tab] Setting driver info (GraphQL fetch in parallel if needed)');
+      setDriverInfo(finalDriverInfo);
+      await saveDriverInfoToCache(finalDriverInfo);
+
+      // Wait for GraphQL result and update if needed
+      const graphQLAssignedDate = await graphQLPromise;
+      if (graphQLAssignedDate && !materialAssignedDate) {
+        console.log('✅ [Route Tab] Got assigned date from GraphQL:', graphQLAssignedDate);
+        const updatedDriverInfo = { ...finalDriverInfo, materialAssignedDate: graphQLAssignedDate };
+        setDriverInfo(updatedDriverInfo);
+        await saveDriverInfoToCache(updatedDriverInfo);
+      }
 
       // ✅ FIXED: Enhanced route endpoint requires materialId, not deviceId
       // Use materialId as primary identifier for route fetching
@@ -567,7 +702,8 @@ const RouteTab: React.FC = () => {
 
       // Only fetch route data if we have a valid materialId
       if (identifierForRoute) {
-        await fetchDriverRouteData(identifierForRoute);
+        // ✅ OPTIMIZED: Pass useCache flag - true for initial load, false for refresh
+        await fetchDriverRouteData(identifierForRoute, !silentRefresh);
       } else {
         console.log('ℹ️ [Route Tab] No valid materialId, skipping route fetch - device not registered');
         // No valid device, but show the page anyway
@@ -694,7 +830,7 @@ const RouteTab: React.FC = () => {
     }
   };
 
-  const fetchDriverRouteData = async (materialId: string) => {
+  const fetchDriverRouteData = async (materialId: string, useCache: boolean = true) => {
     try {
       // ✅ CRITICAL FIX: Get local date string to avoid UTC timezone issues
       const year = selectedDate.getFullYear();
@@ -713,8 +849,42 @@ const RouteTab: React.FC = () => {
         todayStr,
         isToday,
         selectedDateFull: selectedDate.toString(),
-        nowFull: now.toString()
+        nowFull: now.toString(),
+        useCache
       });
+      
+      // ✅ OPTIMIZED: Load cached data IMMEDIATELY if available (non-blocking)
+      if (useCache) {
+        const cachedRouteData = await loadCachedRouteData(materialId, dateStr);
+        if (cachedRouteData) {
+          console.log('🚀 [Optimization] Loading cached route data immediately');
+          setRouteData(cachedRouteData);
+          // Also set session status and compliance if available in cache
+          if (cachedRouteData.sessionStatus) {
+            setSessionStatus(cachedRouteData.sessionStatus);
+          }
+          if (cachedRouteData.overallCompliance) {
+            setOverallCompliance(cachedRouteData.overallCompliance);
+          }
+          // Clear geocoded addresses when loading cached data
+          setGeocodedAddresses(new Map());
+          
+          // Check if addresses exist in cached data
+          if (cachedRouteData.route && cachedRouteData.route.length > 0) {
+            const allAddressesExist = cachedRouteData.route.every((point: RoutePoint) => 
+              point.address && point.address.trim() !== ''
+            );
+            setAddressesReady(allAddressesExist);
+            if (!allAddressesExist) {
+              // Start geocoding in background
+              setTimeout(() => {
+                const segments = segmentRoute(cachedRouteData.route);
+                geocodeSegmentLocations(segments);
+              }, 100);
+            }
+          }
+        }
+      }
       
       console.log(`🌐 [Route Tab] State before fetch:`, {
         showOnlyLastLocation,
@@ -815,12 +985,22 @@ const RouteTab: React.FC = () => {
                 hasOverallCompliance: !!sessionResult.data.overallCompliance
               });
               
-              setRouteData(sessionResult.data);
+              // ✅ Prepare route data with session info for caching
+              const routeDataWithSession: RouteData = {
+                ...sessionResult.data,
+                sessionStatus: sessionResult.data.sessionStatus,
+                overallCompliance: sessionResult.data.overallCompliance
+              };
+              
+              setRouteData(routeDataWithSession);
+              
+              // ✅ OPTIMIZED: Cache the route data
+              await saveRouteDataToCache(materialId, dateStr, routeDataWithSession);
               
               // ✅ Clear geocoded addresses when route data changes (new date/route)
               setGeocodedAddresses(new Map());
               
-              // ✅ Check if all addresses already exist in route data
+              // ✅ OPTIMIZED: Check if all addresses already exist in route data (non-blocking)
               if (sessionResult.data.route && sessionResult.data.route.length > 0) {
                 const allAddressesExist = sessionResult.data.route.every((point: RoutePoint) => 
                   point.address && point.address.trim() !== ''
@@ -831,10 +1011,13 @@ const RouteTab: React.FC = () => {
                   setAddressesReady(true);
                   console.log('✅ All addresses already exist in route data');
                 } else {
-                  // Some addresses missing, start geocoding
+                  // Some addresses missing, start geocoding in background (don't block render)
                   setAddressesReady(false);
-                  const segments = segmentRoute(sessionResult.data.route);
-                  geocodeSegmentLocations(segments);
+                  // Defer geocoding to not block initial render
+                  setTimeout(() => {
+                    const segments = segmentRoute(sessionResult.data.route);
+                    geocodeSegmentLocations(segments);
+                  }, 100);
                 }
               } else {
                 setAddressesReady(false);
@@ -910,10 +1093,13 @@ const RouteTab: React.FC = () => {
               console.log('🔄 [Enhanced API] Setting route data with', enhancedResult.data.route?.length, 'points');
               setRouteData(enhancedResult.data);
               
+              // ✅ OPTIMIZED: Cache the route data
+              await saveRouteDataToCache(materialId, dateStr, enhancedResult.data);
+              
               // ✅ Clear geocoded addresses when route data changes (new date/route)
               setGeocodedAddresses(new Map());
               
-              // ✅ Check if all addresses already exist in route data
+              // ✅ OPTIMIZED: Check if all addresses already exist in route data (non-blocking)
               if (enhancedResult.data.route && enhancedResult.data.route.length > 0) {
                 const allAddressesExist = enhancedResult.data.route.every((point: RoutePoint) => 
                   point.address && point.address.trim() !== ''
@@ -924,10 +1110,13 @@ const RouteTab: React.FC = () => {
                   setAddressesReady(true);
                   console.log('✅ All addresses already exist in route data');
                 } else {
-                  // Some addresses missing, start geocoding
+                  // Some addresses missing, start geocoding in background (don't block render)
                   setAddressesReady(false);
-                  const segments = segmentRoute(enhancedResult.data.route);
-                  geocodeSegmentLocations(segments);
+                  // Defer geocoding to not block initial render
+                  setTimeout(() => {
+                    const segments = segmentRoute(enhancedResult.data.route);
+                    geocodeSegmentLocations(segments);
+                  }, 100);
                 }
               } else {
                 setAddressesReady(false);
@@ -979,6 +1168,20 @@ const RouteTab: React.FC = () => {
       return `${minutes}m ${secs}s`;
     } else {
       return `${secs}s`;
+    }
+  };
+
+  const formatHours = (hours: number): string => {
+    if (hours < 0) return '0m';
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    
+    if (wholeHours > 0 && minutes > 0) {
+      return `${wholeHours}h ${minutes}m`;
+    } else if (wholeHours > 0) {
+      return `${wholeHours}h`;
+    } else {
+      return `${minutes}m`;
     }
   };
 
@@ -1329,9 +1532,13 @@ const RouteTab: React.FC = () => {
             willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
           });
           
+          // ✅ OPTIMIZED: Use stable key based on date, not route data, to prevent unnecessary WebView reloads
+          const mapKey = `${selectedDate.getTime()}_${showOnlyLastLocation ? 'last' : 'full'}`;
+          
           return shouldShowSingleMarker ? (
             <>
               <RouteMapView 
+                key={mapKey}
                 route={[lastLocationPoint]} 
                 style={styles.fullScreenMap}
                 showSpeedColors={false}
@@ -1346,6 +1553,7 @@ const RouteTab: React.FC = () => {
             </>
           ) : (
             <RouteMapView 
+              key={mapKey}
               route={routeData?.route || []} 
               style={styles.fullScreenMap}
               showSpeedColors={false}
@@ -1465,7 +1673,7 @@ const RouteTab: React.FC = () => {
                 <Text style={styles.metricValue}>
                   {/* ✅ FIXED: Use sessionStatus.currentHours for today's date to match dashboard */}
                   {isSelectedDateToday() && sessionStatus?.currentHours !== undefined
-                    ? `${sessionStatus.currentHours.toFixed(2)}h`
+                    ? formatHours(sessionStatus.currentHours)
                     : routeData?.metrics?.totalDuration
                     ? formatDuration(routeData.metrics.totalDuration)
                     : '0 sec'}
@@ -1527,7 +1735,7 @@ const RouteTab: React.FC = () => {
               <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
               <Text style={styles.sessionCompletedTitle}>8-Hour Requirement Completed!</Text>
               <Text style={styles.sessionCompletedText}>
-                You completed {sessionStatus.currentHours.toFixed(2)} hours today
+                You completed {formatHours(sessionStatus.currentHours)} today
               </Text>
               <Text style={styles.sessionCompletedTime}>
                 {sessionStatus.startTime ? new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
@@ -1546,13 +1754,13 @@ const RouteTab: React.FC = () => {
                 <View style={styles.sessionStatItem}>
                   <Text style={styles.sessionStatLabel}>Current Hours</Text>
                   <Text style={styles.sessionStatValue}>
-                    {sessionStatus.currentHours.toFixed(2)} / {sessionStatus.targetHours}h
+                    {formatHours(sessionStatus.currentHours)} / {sessionStatus.targetHours}h
                   </Text>
                 </View>
                 <View style={styles.sessionStatItem}>
                   <Text style={styles.sessionStatLabel}>Remaining</Text>
                   <Text style={styles.sessionStatValue}>
-                    {sessionStatus.remainingHours.toFixed(2)}h
+                    {formatHours(sessionStatus.remainingHours)}
                   </Text>
                 </View>
               </View>
