@@ -1762,18 +1762,82 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       }
     }));
     
-    // Format deviceStats
-    const deviceStats = (userAnalytics.materialBreakdown || []).map(material => ({
-      deviceId: material.materialId,
-      materialId: material.materialId,
-      deviceName: material.materialId,
-      adsPlayed: material.totalAdPlays || 0,
-      displayTime: material.totalAdPlayTime || 0,
-      qrScans: material.totalQRScans || 0,
-      impressions: material.totalAdImpressions || 0,
-      isOnline: material.isOnline || false,
-      lastSeen: material.lastActivity || null
-    }));
+    // ✅ FIX: Get fresh deviceStats from getDeviceStatsFromHistory instead of stale materialBreakdown
+    // This ensures device stats reflect the latest ad plays and QR scans from individual devices
+    const UserAnalyticsService = require('../services/userAnalyticsService');
+    let deviceStats = [];
+    try {
+      // Get fresh device stats using the same date range as the query
+      const freshDeviceStats = await UserAnalyticsService.getDeviceStatsFromHistory(
+        userId,
+        dateRange.startDate,
+        dateRange.endDate,
+        adId || null
+      );
+      
+      // Format deviceStats to match expected structure
+      deviceStats = freshDeviceStats.map(device => ({
+        deviceId: device.materialId,
+        materialId: device.materialId,
+        deviceName: device.materialId,
+        adsPlayed: device.adsPlayed || 0,
+        displayTime: device.displayTime || 0,
+        qrScans: device.qrScans || 0,
+        impressions: 0, // Not available from getDeviceStatsFromHistory
+        isOnline: device.isOnline || false,
+        lastSeen: device.lastActivity || null
+      }));
+      
+      console.log(`✅ [direct-v2] Fetched fresh deviceStats: ${deviceStats.length} devices`);
+      
+      // ✅ CRITICAL FIX: Recalculate summary from fresh deviceStats when "all devices" filter is selected
+      // This ensures totals reflect the latest ad plays from individual devices, not just cached data
+      if (deviceStats.length > 0) {
+        const calculatedFromDeviceStats = {
+          totalAdsPlayed: deviceStats.reduce((sum, device) => sum + (device.adsPlayed || 0), 0),
+          totalDisplayTime: deviceStats.reduce((sum, device) => sum + (device.displayTime || 0), 0),
+          totalQRScans: deviceStats.reduce((sum, device) => sum + (device.qrScans || 0), 0),
+          totalDevices: deviceStats.length
+        };
+        
+        console.log(`📊 [direct-v2] Recalculating summary from fresh deviceStats:`, {
+          fromDailyStats: {
+            totalAdsPlayed: summary.totalAdsPlayed,
+            totalDisplayTime: summary.totalDisplayTime,
+            totalQRScans: summary.totalQRScans
+          },
+          fromDeviceStats: calculatedFromDeviceStats
+        });
+        
+        // ✅ Override summary totals with fresh deviceStats totals (more accurate for "all devices" view)
+        // This ensures the summary updates immediately when individual devices have new ad plays
+        summary.totalAdsPlayed = calculatedFromDeviceStats.totalAdsPlayed;
+        summary.totalDisplayTime = calculatedFromDeviceStats.totalDisplayTime;
+        summary.totalQRScans = calculatedFromDeviceStats.totalQRScans;
+        summary.totalDevices = calculatedFromDeviceStats.totalDevices;
+        
+        console.log(`✅ [direct-v2] Summary updated from fresh deviceStats:`, {
+          totalAdsPlayed: summary.totalAdsPlayed,
+          totalDisplayTime: summary.totalDisplayTime,
+          totalQRScans: summary.totalQRScans,
+          totalDevices: summary.totalDevices
+        });
+      }
+    } catch (deviceStatsError) {
+      console.error('❌ [direct-v2] Error fetching fresh deviceStats, falling back to materialBreakdown:', deviceStatsError);
+      // Fallback to materialBreakdown if getDeviceStatsFromHistory fails
+      deviceStats = (userAnalytics.materialBreakdown || []).map(material => ({
+        deviceId: material.materialId,
+        materialId: material.materialId,
+        deviceName: material.materialId,
+        adsPlayed: material.totalAdPlays || 0,
+        displayTime: material.totalAdPlayTime || 0,
+        qrScans: material.totalQRScans || 0,
+        impressions: material.totalAdImpressions || 0,
+        isOnline: material.isOnline || false,
+        lastSeen: material.lastActivity || null
+      }));
+    }
     
     const duration = Date.now() - requestStartTime;
     

@@ -688,7 +688,7 @@ const Register: React.FC = () => {
               {step === 3 && (
                 <div className="space-y-4">
                   <FloatingInputMobile
-                    id="contactNumber"
+                    id="contactNumber-mobile"
                     name="contactNumber"
                     type="tel"
                     maxLength={formData.contactNumber.startsWith('+639') ? 13 : 11}
@@ -699,7 +699,7 @@ const Register: React.FC = () => {
                   />
 
                   <FloatingInputMobile
-                    id="email"
+                    id="email-mobile"
                     name="email"
                     type="email"
                     value={formData.email}
@@ -709,7 +709,7 @@ const Register: React.FC = () => {
                   />
 
                   <FloatingInputMobile
-                    id="password"
+                    id="password-mobile"
                     name="password"
                     type="password"
                     value={formData.password}
@@ -720,7 +720,7 @@ const Register: React.FC = () => {
                   />
 
                   <FloatingInputMobile
-                    id="confirmPassword"
+                    id="confirmPassword-mobile"
                     name="confirmPassword"
                     type="password"
                     value={formData.confirmPassword}

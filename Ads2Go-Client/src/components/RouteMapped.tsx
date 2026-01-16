@@ -591,7 +591,6 @@ const RouteMapped: React.FC<RouteMappedProps> = ({
     console.log('🗺️ [RouteMapped] Valid points after filtering:', validPoints.length);
     
     if (validPoints.length === 0) {
-      console.warn('⚠️ [RouteMapped] No valid route points found!');
       return [];
     }
     

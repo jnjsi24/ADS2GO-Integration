@@ -74,7 +74,14 @@ export const UserAuthProvider: React.FC<{
   const [registerMutation] = useMutation(REGISTER_MUTATION);
   const [logoutMutation] = useMutation(LOGOUT_MUTATION);
   const apolloClient = useApolloClient();
-  const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
+  // ✅ FIX: Pass fetchPolicy to hook instead of execute function (Apollo Client 3.14.0 requirement)
+  const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS, {
+    fetchPolicy: 'cache-and-network', // Default fetch policy
+  });
+  // Separate hook for network-only queries (when cache might be stale)
+  const [fetchUserDetailsNetwork] = useLazyQuery(GET_OWN_USER_DETAILS, {
+    fetchPolicy: 'network-only',
+  });
 
   const publicPages = ['/login', '/register', '/forgot-password'];
 
@@ -200,9 +207,7 @@ export const UserAuthProvider: React.FC<{
 
               // Use cache-first for performance on initial load, but verify user matches token
               // For app reloads, this will use cache if available (faster)
-              const { data } = await fetchUserDetails({
-                fetchPolicy: 'cache-and-network', // Use cache if available, but fetch fresh in background
-              });
+              const { data } = await fetchUserDetails();
               freshUserRaw = data?.getOwnUserDetails;
               
               if (freshUserRaw) {
@@ -212,9 +217,8 @@ export const UserAuthProvider: React.FC<{
               // If no data but no error, might be a cache issue - try network-only on retry
               if (retries > 1) {
                 console.log(`🔄 [UserAuth] Attempt ${attemptNumber}: No user data, retrying with network-only...`);
-                const { data: networkData } = await fetchUserDetails({
-                  fetchPolicy: 'network-only',
-                });
+                // ✅ FIX: Use separate network-only hook instead of passing fetchPolicy to execute
+                const { data: networkData } = await fetchUserDetailsNetwork();
                 freshUserRaw = networkData?.getOwnUserDetails;
                 if (freshUserRaw) {
                   break; // Success
@@ -403,7 +407,7 @@ export const UserAuthProvider: React.FC<{
       isInitializingRef.current = false;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchUserDetails, navigate]); // Intentionally not including user to avoid re-running on user state changes
+  }, [fetchUserDetails, fetchUserDetailsNetwork, navigate]); // Intentionally not including user to avoid re-running on user state changes
 
   const login = async (email: string, password: string, keepLoggedIn: boolean = false): Promise<User | null> => {
     try {
