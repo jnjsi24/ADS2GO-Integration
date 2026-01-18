@@ -1652,37 +1652,6 @@ const RouteTab: React.FC = () => {
                 )}
               </View>
             </View>
-            
-            {/* Route Statistics - 2x2 Grid with 3 items (Avg Speed centered) */}
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Distance</Text>
-                <Text style={styles.metricValue}>
-                  {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km
-                </Text>
-              </View>
-              
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Duration</Text>
-                <Text style={styles.metricValue}>
-                  {/* ✅ FIXED: Use sessionStatus.currentHours for today's date to match dashboard */}
-                  {isSelectedDateToday() && sessionStatus?.currentHours !== undefined
-                    ? formatHours(sessionStatus.currentHours)
-                    : routeData?.metrics?.totalDuration
-                    ? formatDuration(routeData.metrics.totalDuration)
-                    : '0 sec'}
-                </Text>
-              </View>
-              
-              <View style={styles.metricCardWrapper}>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Avg Speed</Text>
-                  <Text style={styles.metricValue}>
-                    {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
-                  </Text>
-                </View>
-              </View>
-            </View>
           </View>
 
           {/* Session Status Card (8-Hour Requirement) */}
