@@ -1644,12 +1644,6 @@ const RouteTab: React.FC = () => {
               <Text style={styles.deviceIdText}>{driverInfo?.materialId}</Text>
               </View>
               <View style={styles.statusContainer}>
-                <View style={[styles.statusBadge, !isAdPlayerOnline && styles.statusBadgeOffline]}>
-                  <View style={[styles.statusDot, isAdPlayerOnline && styles.statusDotOnline]} />
-                  <Text style={[styles.statusText, isAdPlayerOnline && styles.statusTextOnline]}>
-                    {isAdPlayerOnline ? 'ONLINE' : 'OFFLINE'}
-                  </Text>
-                </View>
                 {/* Real-time indicator */}
                 {lastUpdate && (
                   <Text style={styles.lastUpdateText}>

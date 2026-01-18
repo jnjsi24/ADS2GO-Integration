@@ -95,8 +95,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   useEffect(() => {
     if (data) {
       if (data?.getUserNotifications) {
+        console.log('🔔 NotificationContext: Updating notifications from data:', data.getUserNotifications.length);
         setNotifications(data.getUserNotifications);
       } else {
+        console.log('🔔 NotificationContext: No notifications in data, setting empty array');
         setNotifications([]);
       }
       setIsLoading(false);
@@ -127,57 +129,44 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const unreadCount = notifications.filter(n => !n.read).length;
   const displayBadgeCount = enableNotificationBadge ? unreadCount : 0;
 
+  // Debug unread count changes
+  useEffect(() => {
+    console.log('🔔 NotificationContext: Unread count updated:', unreadCount, 'Display badge count:', displayBadgeCount, 'Total notifications:', notifications.length);
+  }, [unreadCount, displayBadgeCount, notifications.length]);
+
   const markAsRead = async (notificationId: string) => {
     try {
       console.log('🔔 Marking notification as read:', notificationId);
-      
-      // Update local state immediately for better UX
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, read: true }
-            : notification
-        )
-      );
 
-      // Call backend mutation
+      // Call backend mutation first - refetchQueries will automatically refetch after success
       await markNotificationAsReadMutation({
         variables: { notificationId }
       });
       
+      // Manually refetch to ensure state is updated
+      const refetchResult = await refetch();
+      console.log('🔔 NotificationContext: Refetch after markAsRead:', refetchResult.data?.getUserNotifications?.length, 'notifications');
+      
       console.log('✅ Notification marked as read successfully');
     } catch (error) {
       console.error('❌ Error marking notification as read:', error);
-      // Revert local state on error
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, read: false }
-            : notification
-        )
-      );
     }
   };
 
   const markAllAsRead = async () => {
     try {
       console.log('🔔 Marking all notifications as read');
-      
-      // Update local state immediately for better UX
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: true }))
-      );
 
-      // Call backend mutation
+      // Call backend mutation - refetchQueries will automatically refetch after success
       await markAllNotificationsAsReadMutation();
+      
+      // Manually refetch to ensure state is updated
+      const refetchResult = await refetch();
+      console.log('🔔 NotificationContext: Refetch after markAllAsRead:', refetchResult.data?.getUserNotifications?.length, 'notifications');
       
       console.log('✅ All notifications marked as read successfully');
     } catch (error) {
       console.error('❌ Error marking all notifications as read:', error);
-      // Revert local state on error
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: false }))
-      );
     }
   };
 
@@ -210,11 +199,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
     try {
       console.log('🗑️ Deleting notification:', notificationToDelete.id);
-      
-      // Update local state immediately for better UX
-      setNotifications(prev => prev.filter(n => n.id !== notificationToDelete.id));
 
-      // Call backend mutation
+      // Call backend mutation - refetchQueries will automatically refetch after success
       const result = await deleteNotificationMutation({
         variables: { notificationId: notificationToDelete.id }
       });
@@ -223,6 +209,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       
       if (result.data?.deleteNotification?.success) {
         console.log('✅ Notification deleted successfully from server');
+        // Manually refetch to ensure state is updated
+        const refetchResult = await refetch();
+        console.log('🔔 NotificationContext: Refetch after delete:', refetchResult.data?.getUserNotifications?.length, 'notifications');
       } else {
         const errorMessage = result.data?.deleteNotification?.message || 'Failed to delete notification';
         console.error('❌ Delete notification failed:', errorMessage);
@@ -230,14 +219,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       }
     } catch (error) {
       console.error('❌ Error deleting notification:', error);
-      
-      // Revert local state on error - add the notification back
-      setNotifications(prev => {
-        const updated = [...prev];
-        // Insert back in the same position or at the beginning
-        updated.unshift(notificationToDelete);
-        return updated;
-      });
       
       // Extract meaningful error message
       let errorMessage = 'Failed to delete notification. Please try again.';
@@ -269,17 +250,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const deleteAllNotifications = async () => {
     try {
       console.log('🗑️ Deleting all notifications');
-      
-      // Update local state immediately for better UX
-      setNotifications([]);
 
-      // Call backend mutation
+      // Call backend mutation - refetchQueries will automatically refetch after success
       const result = await deleteAllNotificationsMutation();
       
       console.log('🔍 Delete all notifications result:', result);
       
       if (result.data?.deleteAllNotifications?.success) {
         console.log('✅ All notifications deleted successfully from server');
+        // Manually refetch to ensure state is updated
+        const refetchResult = await refetch();
+        console.log('🔔 NotificationContext: Refetch after deleteAll:', refetchResult.data?.getUserNotifications?.length, 'notifications');
       } else {
         const errorMessage = result.data?.deleteAllNotifications?.message || 'Failed to delete all notifications';
         console.error('❌ Delete all notifications failed:', errorMessage);

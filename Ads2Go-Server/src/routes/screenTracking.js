@@ -22,6 +22,7 @@ const clearFailedGeocodingCache = () => {
 const { checkAdminMiddleware } = require('../middleware/auth');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
+const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 
 // POST /updateLocation - Update tablet location and start/continue daily session
 router.post('/updateLocation', async (req, res) => {
@@ -3139,16 +3140,59 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
           defaultEndDate = endDate || new Date();
         }
         
+        // ✅ NEW: Get assignment periods for this driver and material
+        const assignmentPeriods = await MaterialUsageHistory.find({
+          materialId: material._id,
+          driverId: driverId
+        }).sort({ assignedAt: 1 });
+
+        // Helper function to check if a date falls within any assignment period
+        const isDateInAssignmentPeriod = (date) => {
+          // If no assignment history exists, check if material is currently assigned to this driver
+          // This handles edge cases where MaterialUsageHistory wasn't created (legacy data)
+          if (assignmentPeriods.length === 0) {
+            // Fallback: If material is currently assigned to this driver, include all data
+            // This is a safety measure for legacy data, but ideally all assignments should have history
+            if (material.driverId === driverId) {
+              console.log(`⚠️  [ScreenTracking] No assignment history found, but material is currently assigned to driver ${driverId}. Including all data as fallback.`);
+              return true;
+            }
+            // If not currently assigned, exclude all data
+            return false;
+          }
+          
+          const checkDate = new Date(date);
+          checkDate.setHours(0, 0, 0, 0); // Normalize to start of day
+          
+          return assignmentPeriods.some(period => {
+            const assignedAt = new Date(period.assignedAt);
+            assignedAt.setHours(0, 0, 0, 0);
+            
+            // If unassignedAt is null, the assignment is still active (use endDate as upper bound)
+            const unassignedAt = period.unassignedAt 
+              ? new Date(period.unassignedAt)
+              : new Date(defaultEndDate);
+            unassignedAt.setHours(23, 59, 59, 999); // End of day
+            
+            return checkDate >= assignedAt && checkDate <= unassignedAt;
+          });
+        };
+
         // Find historical data for this material
         const historicalData = await DeviceDataHistoryV2.findOne({ 
           materialId: material.materialId 
         });
         
         if (historicalData && historicalData.dailyData) {
-          // Filter daily data by date range
+          // ✅ FIXED: Filter daily data by both date range AND assignment period
           const filteredDailyData = historicalData.dailyData.filter(day => {
             const dayDate = new Date(day.date);
-            return dayDate >= new Date(defaultStartDate) && dayDate <= new Date(defaultEndDate);
+            const isInDateRange = dayDate >= new Date(defaultStartDate) && dayDate <= new Date(defaultEndDate);
+            
+            // Only include data from dates when this driver was assigned
+            const isInAssignmentPeriod = isDateInAssignmentPeriod(dayDate);
+            
+            return isInDateRange && isInAssignmentPeriod;
           }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
           
           if (period === 'daily') {

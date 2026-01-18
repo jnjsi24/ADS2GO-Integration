@@ -3,6 +3,7 @@ const DriverSalaryCalculation = require('../models/DriverSalaryCalculation');
 const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const SuperAdmin = require('../models/SuperAdmin');
 
 // Helper function to check if user is SuperAdmin
@@ -75,6 +76,7 @@ const getPricingConfig = async (vehicleType, category, materialType) => {
 };
 
 // Helper function to get driver tracking data for a period
+// ✅ FIXED: Now filters by driver assignment period to prevent data leakage
 const getDriverTrackingData = async (driverId, startDate, endDate) => {
   try {
     // Get driver's material
@@ -87,6 +89,44 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
     if (!material) {
       throw new Error('Material not found');
     }
+    
+    // ✅ NEW: Get assignment periods for this driver and material
+    const assignmentPeriods = await MaterialUsageHistory.find({
+      materialId: material._id,
+      driverId: driverId
+    }).sort({ assignedAt: 1 });
+
+    // Helper function to check if a date falls within any assignment period
+    const isDateInAssignmentPeriod = (date) => {
+      // If no assignment history exists, check if material is currently assigned to this driver
+      // This handles edge cases where MaterialUsageHistory wasn't created (legacy data)
+      if (assignmentPeriods.length === 0) {
+        // Fallback: If material is currently assigned to this driver, include all data
+        // This is a safety measure for legacy data, but ideally all assignments should have history
+        if (material.driverId === driverId) {
+          console.log(`⚠️  [DriverSalaryResolver] No assignment history found, but material is currently assigned to driver ${driverId}. Including all data as fallback.`);
+          return true;
+        }
+        // If not currently assigned, exclude all data
+        return false;
+      }
+      
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0); // Normalize to start of day
+      
+      return assignmentPeriods.some(period => {
+        const assignedAt = new Date(period.assignedAt);
+        assignedAt.setHours(0, 0, 0, 0);
+        
+        // If unassignedAt is null, the assignment is still active (use endDate as upper bound)
+        const unassignedAt = period.unassignedAt 
+          ? new Date(period.unassignedAt)
+          : new Date(endDate);
+        unassignedAt.setHours(23, 59, 59, 999); // End of day
+        
+        return checkDate >= assignedAt && checkDate <= unassignedAt;
+      });
+    };
     
     // Get device data history for the material
     const deviceHistory = await DeviceDataHistoryV2.findOne({
@@ -101,10 +141,15 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // Filter daily data for the specified period
+    // ✅ FIXED: Filter daily data by both date range AND assignment period
     const periodData = deviceHistory.dailyData.filter(dailyData => {
       const dataDate = new Date(dailyData.date);
-      return dataDate >= start && dataDate <= end;
+      const isInDateRange = dataDate >= start && dataDate <= end;
+      
+      // Only include data from dates when this driver was assigned
+      const isInAssignmentPeriod = isDateInAssignmentPeriod(dataDate);
+      
+      return isInDateRange && isInAssignmentPeriod;
     });
 
     // Calculate totals for the period
@@ -121,13 +166,8 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
       }
     });
 
-    // If no data found for the period, try to get lifetime totals as fallback
-    if (periodData.length === 0) {
-      console.log(`No daily data found for period ${startDate} to ${endDate}, using lifetime totals`);
-      totalDistance = deviceHistory.lifetimeTotals?.totalDistanceTraveled || 0;
-      totalHours = deviceHistory.lifetimeTotals?.totalHoursOnline || 0;
-      daysWorked = deviceHistory.lifetimeTotals?.totalDays || 0;
-    }
+    // ✅ REMOVED: Don't use lifetime totals as fallback - they include data from all drivers
+    // This was causing the data leakage issue
 
     // Calculate days worked (simplified - in reality you'd count actual working days)
     const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));

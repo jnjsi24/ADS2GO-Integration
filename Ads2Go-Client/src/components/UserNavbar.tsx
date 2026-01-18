@@ -5,7 +5,6 @@ import { useNotifications } from '../contexts/NotificationContext';
 import {
   LayoutDashboard,
   Megaphone,
-  Settings,
   LogOut,
   CreditCard,
   HelpCircle,
@@ -250,18 +249,6 @@ const SideNavbar: React.FC = () => {
                   <span>Profile</span>
                 </button>
                 
-                <button
-                  onClick={() => {
-                    navigate('/settings');
-                    closeDropup();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  <Settings size={18} />
-                  <span>Settings</span>
-                </button>
-                
                 <hr className="my-1" />
                 
                 <button
@@ -399,18 +386,6 @@ const SideNavbar: React.FC = () => {
             >
               <User size={18} />
               <span>Profile</span>
-            </button>
-            
-            <button
-              onClick={() => {
-                navigate('/settings');
-                closeDropup();
-                setIsMobileMenuOpen(false);
-              }}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-white/30 transition-colors"
-            >
-              <Settings size={18} />
-              <span>Settings</span>
             </button>
             
             <hr className="my-1" />

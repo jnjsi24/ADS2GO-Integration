@@ -199,6 +199,17 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   return filledData;
 };
 
+// ✅ Helper function to format seconds into HH:MM:SS format
+const formatTimeToHoursMinutesSeconds = (totalSeconds: number): string => {
+  if (!totalSeconds || totalSeconds < 0) return '0:00:00';
+  
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  
+  return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+};
+
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
@@ -2081,7 +2092,7 @@ const DetailedAnalytics: React.FC = () => {
 
                 {/* Mobile Device Dropdown */}
                 <AnimatePresence>
-                  {showDeviceDropdown && selectedAd !== 'all' && (
+                  {showDeviceDropdown && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -2369,7 +2380,7 @@ const DetailedAnalytics: React.FC = () => {
                   </button>
 
                   <AnimatePresence>
-                    {showDeviceDropdown && selectedAd !== 'all' && (
+                    {showDeviceDropdown && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -2593,7 +2604,7 @@ const DetailedAnalytics: React.FC = () => {
                           <LoaderCircle className="w-4 h-4 animate-spin text-blue-500" />
                         </>
                       ) : (
-                        ((analyticsSummary.totalDisplayTime || 0) / 3600).toFixed(1)
+                        formatTimeToHoursMinutesSeconds(analyticsSummary.totalDisplayTime || 0)
                       )}
                     </div>
                   </div>
@@ -2648,11 +2659,8 @@ const DetailedAnalytics: React.FC = () => {
                       <YAxis tick={{ fontSize: 12 }} />
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <Tooltip 
-                        formatter={(value, name) => {
-                          // ⚠️ TEMPORARY FIX: Subtract 1 from adPlays to match database values
-                          // TODO: Fix root cause in backend aggregation
-                          const adjustedValue = name === 'adPlays' ? Math.max(0, (value || 0) - 1) : (value || 0);
-                          return [adjustedValue.toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans'];
+                        formatter={(value: any, name: string) => {
+                          return [(value || 0).toLocaleString(), name === 'adPlays' ? 'Ad Plays' : 'QR Scans'];
                         }}
                         labelFormatter={(label) => new Date(label).toLocaleDateString()}
                       />

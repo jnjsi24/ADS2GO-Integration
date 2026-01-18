@@ -1420,14 +1420,6 @@ const Dashboard: React.FC = () => {
               Hours
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.metricButton, selectedMetric === 'qrImpressions' && styles.metricButtonActive]}
-            onPress={() => setSelectedMetric('qrImpressions')}
-          >
-            <Text style={[styles.metricButtonText, selectedMetric === 'qrImpressions' && styles.metricButtonTextActive]}>
-              QR Scans
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
 
