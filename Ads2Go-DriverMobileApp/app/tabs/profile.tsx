@@ -769,7 +769,7 @@ export default function ProfileScreen() {
           <View style={styles.statIconContainer}>
             <Ionicons name="speedometer-outline" size={32} color="#3b82f6" />
           </View>
-          <Text style={styles.statValue}>{profile.totalDistance.toFixed(1)} km</Text>
+          <Text style={styles.statValue}>{profile.totalDistance.toFixed(2)} km</Text>
           <Text style={styles.statLabel}>Distance</Text>
         </View>
         <View style={styles.statCard}>

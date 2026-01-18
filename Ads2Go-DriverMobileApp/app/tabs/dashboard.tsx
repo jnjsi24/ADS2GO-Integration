@@ -1459,7 +1459,7 @@ const Dashboard: React.FC = () => {
               <Text style={styles.gaugeValue}>
                 {(() => {
                   const v = getCurrentMetricValue();
-                  if (selectedMetric === 'distance') return v.toFixed(1);
+                  if (selectedMetric === 'distance') return v.toFixed(2);
                   if (selectedMetric === 'hours') return formatHours(v);
                   return v.toFixed(0);
                 })()}
@@ -1495,7 +1495,7 @@ const Dashboard: React.FC = () => {
               backgroundColor: '#ffffff',
               backgroundGradientFrom: '#ffffff',
               backgroundGradientTo: '#ffffff',
-              decimalPlaces: 1,
+              decimalPlaces: 2,
               color: (opacity = 1) => `rgba(54, 116, 181, ${opacity})`,
               labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
               style: {
