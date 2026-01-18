@@ -315,7 +315,7 @@ const Dashboard: React.FC = () => {
 
     loadData();
     
-    // Auto-refresh only for current date (realtime data) every 60 seconds
+    // Auto-refresh only for current date (realtime data) every 10 seconds
     const refreshInterval = setInterval(async () => {
       const isToday = isSelectedDateToday();
       if (isToday) {
@@ -329,7 +329,7 @@ const Dashboard: React.FC = () => {
           }
         }
       }
-    }, 60000); // Increased to 60 seconds
+    }, 10000); // Polling every 10 seconds
     
     return () => clearInterval(refreshInterval);
   }, [selectedDate]); // Only re-create interval when date changes
