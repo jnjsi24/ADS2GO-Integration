@@ -862,8 +862,8 @@ const DetailedAnalytics: React.FC = () => {
     const currentDevice = selectedDevice; // Capture current value
     
     if (currentDevice && filteredDevices.length > 0) {
-      // If "All Devices" is selected, keep it if there are multiple devices
-      if (currentDevice === 'all' && filteredDevices.length > 1) {
+      // If "All Devices" is selected, always keep it (regardless of filtered device count)
+      if (currentDevice === 'all') {
         // Keep "All Devices" selected
         return;
       }
