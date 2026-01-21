@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform, Modal, Image, RefreshControl } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -512,10 +512,10 @@ const Dashboard: React.FC = () => {
     };
   };
 
-  const fetchSalarySummary = async (silent: boolean = false) => {
+  const fetchSalarySummary = async (silent: boolean = false, bypassCache: boolean = false) => {
     try {
-      // ✅ Check cache first
-      if (!silent) {
+      // ✅ Check cache first (skip if bypassCache is true)
+      if (!bypassCache && !silent) {
         const salaryCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY);
         if (salaryCacheStr) {
           const salaryCache = JSON.parse(salaryCacheStr);
@@ -648,7 +648,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
+  // ✅ Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const driverInfo = await AsyncStorage.getItem('driverInfo');
+      if (driverInfo) {
+        const driver = JSON.parse(driverInfo);
+        const driverId = driver.driverId || driver.id;
+        
+        // Fetch fresh data bypassing cache
+        await Promise.all([
+          fetchDriverAnalytics(driverId, false, true), // bypassCache = true
+          fetchSalarySummary(false, true) // bypassCache = true
+        ]);
+      }
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const fetchDriverAnalytics = async (driverId: string, silent: boolean = false, bypassCache: boolean = false) => {
     try {
       // ✅ Check cache first (5 minutes for today, 15 minutes for past dates)
       const dateKey = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -656,39 +678,42 @@ const Dashboard: React.FC = () => {
       const isToday = isSelectedDateToday();
       const cacheExpiry = isToday ? CACHE_EXPIRY.TODAY : CACHE_EXPIRY.PAST_DATE;
       
-      // ✅ Check both in-memory cache and AsyncStorage
-      let cachedData = dataCache[cacheKey];
-      
-      // ✅ If not in memory, try AsyncStorage
-      if (!cachedData) {
-        try {
-          const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
-          if (analyticsCacheStr) {
-            const analyticsCache = JSON.parse(analyticsCacheStr);
-            cachedData = analyticsCache[cacheKey];
-            if (cachedData) {
-              // Load into memory cache
-              setDataCache(prev => ({
-                ...prev,
-                [cacheKey]: cachedData!
-              }));
+      // ✅ Skip cache check if bypassCache is true
+      if (!bypassCache) {
+        // ✅ Check both in-memory cache and AsyncStorage
+        let cachedData = dataCache[cacheKey];
+        
+        // ✅ If not in memory, try AsyncStorage
+        if (!cachedData) {
+          try {
+            const analyticsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.ANALYTICS);
+            if (analyticsCacheStr) {
+              const analyticsCache = JSON.parse(analyticsCacheStr);
+              cachedData = analyticsCache[cacheKey];
+              if (cachedData) {
+                // Load into memory cache
+                setDataCache(prev => ({
+                  ...prev,
+                  [cacheKey]: cachedData!
+                }));
+              }
             }
+          } catch (error) {
+            console.warn('Failed to load cache from AsyncStorage:', error);
           }
-        } catch (error) {
-          console.warn('Failed to load cache from AsyncStorage:', error);
         }
-      }
-      
-      if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry && !silent) {
-        if (!silent) {
-          console.log('📦 Using cached data for', dateKey);
+        
+        if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry && !silent) {
+          if (!silent) {
+            console.log('📦 Using cached data for', dateKey);
+          }
+          setAnalytics(cachedData.data);
+          if (!silent) {
+            setLoading(false);
+          }
+          // ✅ If silent, still return early but don't fetch (already have fresh data)
+          return;
         }
-        setAnalytics(cachedData.data);
-        if (!silent) {
-          setLoading(false);
-        }
-        // ✅ If silent, still return early but don't fetch (already have fresh data)
-        return;
       }
       
       // Get auth token
@@ -1259,7 +1284,17 @@ const Dashboard: React.FC = () => {
         </View>
       )}
       
-      <ScrollView style={styles.container}>
+      <ScrollView 
+        style={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#3674B5']}
+            tintColor="#3674B5"
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
