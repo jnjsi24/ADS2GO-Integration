@@ -753,55 +753,65 @@ const DetailedAnalytics: React.FC = () => {
       return devices;
     }
     
+    // ✅ FIX: Use allTimeDevices as fallback when filtered data is not available
+    // This ensures the device dropdown always shows available devices even when switching from "All Devices" to a specific device
+    if (allTimeDevices.length > 0) {
+      console.log('📊 [DetailedAnalytics] Using allTimeDevices as fallback:', allTimeDevices.length);
+      return allTimeDevices;
+    }
+    
     console.log('⚠️ [DetailedAnalytics] No devices found in filtered analytics data');
     return [];
-  }, [analyticsData, directAnalyticsData]);
+  }, [analyticsData, directAnalyticsData, allTimeDevices]);
 
-  // ✅ Filter devices based on selected ad
-  // If devices aren't in analytics yet, create device entries from ad's materialIds
+  // ✅ FIX: Use ad's materialIds as the PRIMARY stable device list
+  // This ensures the device dropdown always shows the devices assigned to the ad, not devices that happen to have data
   const filteredDevices = useMemo(() => {
     if (!selectedAd) {
       // Show no devices when no ad is selected yet (during initialization)
       return [];
     }
 
-    // Try to get materialIds for the selected ad (try both string and original format)
+    // ✅ PRIORITY 1: Use ad's materialIds as primary source (most stable - always shows devices assigned to the ad)
     const selectedAdStr = selectedAd.toString();
     let materialIdsForAd = adToMaterialIdsMap.get(selectedAdStr) || adToMaterialIdsMap.get(selectedAd);
     
-    if (!materialIdsForAd || materialIdsForAd.length === 0) {
-      // Debug: Log what we're looking for
-      console.log('🔍 [DetailedAnalytics] No materialIds found for ad:', selectedAd, '(string:', selectedAdStr, ')');
-      console.log('🔍 [DetailedAnalytics] Available ad IDs in map:', Array.from(adToMaterialIdsMap.keys()));
-      // If no materialIds found for this ad, show all devices (fallback)
-      return extractedDevices;
-    }
-
-    console.log('✅ [DetailedAnalytics] Found materialIds for ad:', selectedAd, 'Materials:', materialIdsForAd);
-    console.log('🔍 [DetailedAnalytics] Available devices from analytics (materialIds):', extractedDevices.map(d => d.materialId));
-    
-    // Filter devices that match the ad's materialIds
-    const filteredFromAnalytics = extractedDevices.filter(device => materialIdsForAd.includes(device.materialId));
-    
-    // ✅ If no devices found in analytics but ad has materialIds, create device entries from materialIds
-    if (filteredFromAnalytics.length === 0 && materialIdsForAd.length > 0) {
-      console.log('⚠️ [DetailedAnalytics] No devices in analytics yet, creating device entries from ad materialIds');
-      const devicesFromMaterialIds = materialIdsForAd.map((materialId: string) => ({
-        id: materialId,
-        name: materialId,
-        materialId: materialId,
-        isOnline: false, // Default to offline since we don't have status yet
-        deviceStatus: null
-      }));
-      console.log('✅ [DetailedAnalytics] Created devices from materialIds:', devicesFromMaterialIds.length);
+    if (materialIdsForAd && materialIdsForAd.length > 0) {
+      console.log('✅ [DetailedAnalytics] Using ad materialIds for stable device list:', materialIdsForAd.length);
+      
+      // Create device entries from materialIds
+      // Try to merge with online status from extractedDevices or allTimeDevices if available
+      const devicesFromMaterialIds = materialIdsForAd.map((materialId: string) => {
+        // Try to find device info from extractedDevices or allTimeDevices
+        const deviceInfo = extractedDevices.find(d => d.materialId === materialId) || 
+                          allTimeDevices.find(d => d.materialId === materialId);
+        
+        return {
+          id: materialId,
+          name: materialId,
+          materialId: materialId,
+          isOnline: deviceInfo?.isOnline || false,
+          deviceStatus: deviceInfo?.deviceStatus || null
+        };
+      });
       return devicesFromMaterialIds;
     }
 
-    console.log('🔍 [DetailedAnalytics] Filtering devices. Total devices:', extractedDevices.length, 'Filtered:', filteredFromAnalytics.length);
-    console.log('🔍 [DetailedAnalytics] Filtered device materialIds:', filteredFromAnalytics.map(d => d.materialId));
+    // ✅ PRIORITY 2: Fallback to allTimeDevices if ad has no materialIds
+    if (allTimeDevices.length > 0) {
+      console.log('✅ [DetailedAnalytics] Fallback to allTimeDevices:', allTimeDevices.length);
+      return allTimeDevices;
+    }
 
-    return filteredFromAnalytics;
-  }, [extractedDevices, selectedAd, adToMaterialIdsMap, myAdsData]);
+    // ✅ PRIORITY 3: Last resort - use extractedDevices (filtered by current filters)
+    if (extractedDevices.length > 0) {
+      console.log('✅ [DetailedAnalytics] Last resort - using extracted devices:', extractedDevices.length);
+      return extractedDevices;
+    }
+
+    console.log('⚠️ [DetailedAnalytics] No devices found - returning empty array');
+    return [];
+  }, [selectedAd, adToMaterialIdsMap, extractedDevices, allTimeDevices]);
 
   // ✅ Memoized ad extraction - use myAdsData for consistency (same source as mapping)
   // This ensures ad IDs match between selection and materialId mapping
@@ -1200,11 +1210,6 @@ const DetailedAnalytics: React.FC = () => {
               dailyStatsCount: data.data.deviceAnalytics?.dailyStats?.length || 0,
               sampleDailyStat: data.data.deviceAnalytics?.dailyStats?.[0]
             });
-            
-            // #region agent log
-            // DISABLED: Debug logging
-            // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1185',message:'Received deviceAnalytics response',data:{selectedAd,selectedDevice,selectedDate,hasTotals:!!data.data.deviceAnalytics?.totals,totalQRScans:data.data.deviceAnalytics?.totals?.totalQRScans||0,totalAdPlays:data.data.deviceAnalytics?.totals?.totalAdPlays||0,dailyStatsCount:data.data.deviceAnalytics?.dailyStats?.length||0,sampleDailyStat:data.data.deviceAnalytics?.dailyStats?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-            // #endregion
             
             setDeviceAnalytics(data.data.deviceAnalytics);
             setDirectAnalyticsData(null);
