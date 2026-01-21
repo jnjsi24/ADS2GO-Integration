@@ -26,7 +26,9 @@
     "script:remove-total-materials-from-ads": "node src/scripts/removeTotalMaterialsFromAds.js",
     "script:fix-materials-and-remove-total-materials": "node src/scripts/fixMaterialsAndRemoveTotalMaterials.js",
     "script:comprehensive-fix": "node src/scripts/comprehensiveFixUserAnalytics.js",
-    "script:init-analytics-indexes": "node src/scripts/initializeAnalyticsIndexes.js"
+    "script:init-analytics-indexes": "node src/scripts/initializeAnalyticsIndexes.js",
+    "script:driver-salary-report": "node scripts/driverSalaryReport.js",
+    "script:list-drivers": "node scripts/listDrivers.js"
   },
   "author": "",
   "license": "ISC",

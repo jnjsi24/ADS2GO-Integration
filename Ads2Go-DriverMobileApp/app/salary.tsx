@@ -88,6 +88,30 @@ const SalaryScreen: React.FC = () => {
   const [dailyBreakdown, setDailyBreakdown] = useState<DailyBreakdown[]>([]);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
 
+  // ✅ Helper functions for billable calculations (floor to nearest 100m for distance, complete minutes for time)
+  const calculateBillableHours = (totalHours: number) => {
+    const totalMinutes = Math.floor(totalHours * 60); // Only count full minutes
+    return totalMinutes / 60; // Convert back to hours
+  };
+
+  const calculateBillableDistance = (totalDistance: number) => {
+    const totalMeters = Math.floor(totalDistance * 1000); // Convert to meters and floor
+    return totalMeters / 1000; // Convert back to km (1m precision)
+  };
+
+  const getIgnoredMeters = (totalDistance: number) => {
+    const totalKm = totalDistance;
+    const flooredKm = Math.floor(totalDistance * 1000) / 1000;
+    const ignoredMeters = Math.round((totalKm - flooredKm) * 1000);
+    return ignoredMeters;
+  };
+
+  const getIgnoredSeconds = (totalHours: number) => {
+    const totalSeconds = Math.floor(totalHours * 3600);
+    const ignoredSeconds = totalSeconds % 60;
+    return ignoredSeconds;
+  };
+
   useEffect(() => {
     fetchSalaryData();
   }, []);
@@ -539,21 +563,26 @@ const SalaryScreen: React.FC = () => {
         }
       }
       
-      // Calculate daily salary for each day
+      // Calculate daily salary for each day (with billable flooring)
       const breakdown: DailyBreakdown[] = dailyData.map((day: any) => {
-        const distance = day.totalDistance || 0;
-        const hours = day.totalHours || 0;
+        const rawDistance = day.totalDistance || 0;
+        const rawHours = day.totalHours || 0;
+        
+        // ✅ Apply billable flooring
+        const billableDistance = calculateBillableDistance(rawDistance);
+        const billableHours = calculateBillableHours(rawHours);
+        
         const distanceRate = calculation.pricingConfig?.distanceRate || 0;
         const hoursRate = calculation.pricingConfig?.hoursRate || 0;
         
-        const distanceSalary = distance * distanceRate;
-        const hoursSalary = hours * hoursRate;
+        const distanceSalary = billableDistance * distanceRate;
+        const hoursSalary = billableHours * hoursRate;
         const dailySalary = distanceSalary + hoursSalary;
         
         return {
           date: day.date,
-          totalDistance: distance,
-          totalHours: hours,
+          totalDistance: billableDistance, // Store billable value
+          totalHours: billableHours, // Store billable value
           distanceSalary: Math.round(distanceSalary * 100) / 100,
           hoursSalary: Math.round(hoursSalary * 100) / 100,
           dailySalary: Math.round(dailySalary * 100) / 100,
@@ -688,16 +717,30 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.calculationDetails}>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Distance:</Text>
-                    <Text style={styles.detailValue}>{calculation.rawData?.totalDistance || 0} km</Text>
+                    <Text style={styles.detailValue}>
+                      {calculateBillableDistance(calculation.rawData?.totalDistance || 0).toFixed(3)} km
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Hours:</Text>
-                    <Text style={styles.detailValue}>{calculation.rawData?.totalHours || 0} hrs</Text>
+                    <Text style={styles.detailValue}>
+                      {Math.floor(calculateBillableHours(calculation.rawData?.totalHours || 0) * 60)} min
+                    </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Total Salary:</Text>
-                    <Text style={styles.totalSalary}>{formatCurrency(calculation.calculations?.totalSalary || 0)}</Text>
+                    <Text style={styles.totalSalary}>
+                      {(() => {
+                        const billableDistance = calculateBillableDistance(calculation.rawData?.totalDistance || 0);
+                        const billableHours = calculateBillableHours(calculation.rawData?.totalHours || 0);
+                        const distanceRate = calculation.pricingConfig?.distanceRate || 0;
+                        const hoursRate = calculation.pricingConfig?.hoursRate || 0;
+                        const totalSalary = (billableDistance * distanceRate) + (billableHours * hoursRate);
+                        return formatCurrency(totalSalary);
+                      })()}
+                    </Text>
                   </View>
+                  <Text style={styles.billableIndicator}>✓ Approx. billable (tap for daily breakdown)</Text>
                 </View>
                 
                 <View style={styles.calculationFooter}>
@@ -771,56 +814,91 @@ const SalaryScreen: React.FC = () => {
                 </View>
               </View>
 
-              {/* Raw Data */}
+              {/* Billable Data (Summed from Daily) */}
               <View style={styles.detailSection}>
-                <Text style={styles.detailSectionTitle}>Raw Data</Text>
+                <Text style={styles.detailSectionTitle}>Billable Data</Text>
                 <View style={styles.rawDataGrid}>
                   <View style={styles.rawDataItemCard}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalDistance || 0}</Text>
-                    <Text style={styles.rawDataLabel}>Total Distance</Text>
+                    <Text style={styles.rawDataValue}>
+                      {dailyBreakdown.length > 0 
+                        ? dailyBreakdown.reduce((sum, day) => sum + day.totalDistance, 0).toFixed(2)
+                        : calculateBillableDistance(selectedCalculation.rawData?.totalDistance || 0).toFixed(2)
+                      }
+                    </Text>
+                    <Text style={styles.rawDataLabel}>Total Distance (km)</Text>
                   </View>
                   <View style={styles.rawDataItemCard}>
-                    <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.totalHours || 0}</Text>
-                    <Text style={styles.rawDataLabel}>Total Hours</Text>
+                    <Text style={styles.rawDataValue}>
+                      {dailyBreakdown.length > 0
+                        ? dailyBreakdown.reduce((sum, day) => sum + Math.floor(day.totalHours * 60), 0)
+                        : Math.floor(calculateBillableHours(selectedCalculation.rawData?.totalHours || 0) * 60)
+                      }
+                    </Text>
+                    <Text style={styles.rawDataLabel}>Total Minutes</Text>
                   </View>
                   <View style={styles.rawDataItemCard}>
                     <Text style={styles.rawDataValue}>{selectedCalculation.rawData?.daysWorked || 0}</Text>
                     <Text style={styles.rawDataLabel}>Days Worked</Text>
                   </View>
                 </View>
+                <View style={styles.billableNoteBanner}>
+                  <Text style={styles.billableNoteBannerText}>
+                    ✓ Sum of daily floored values (per meter, complete minutes)
+                  </Text>
+                </View>
               </View>
 
-              {/* Calculations */}
+              {/* Calculations (Billable) - Summed from Daily Breakdown */}
               <View style={styles.detailSection}>
                 <Text style={styles.detailSectionTitle}>Salary Calculations</Text>
                 <View style={styles.calculationGrid}>
                   <View style={styles.calculationRow}>
                     <View style={styles.calculationItem}>
                       <Text style={styles.calculationValue}>
-                        {formatCurrency(selectedCalculation.calculations?.distanceComputation || 0)}
+                        {(() => {
+                          // Sum from daily breakdown (already floored per day)
+                          const totalDistanceSalary = dailyBreakdown.reduce((sum, day) => sum + day.distanceSalary, 0);
+                          return formatCurrency(totalDistanceSalary);
+                        })()}
                       </Text>
                       <Text style={styles.calculationLabel}>Distance Computation</Text>
                       <Text style={styles.calculationFormula}>
-                        {selectedCalculation.rawData?.totalDistance || 0} km × {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
+                        {(() => {
+                          const totalBillableKm = dailyBreakdown.reduce((sum, day) => sum + day.totalDistance, 0);
+                          return `${totalBillableKm.toFixed(2)} km × ${formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km`;
+                        })()}
                       </Text>
                     </View>
                     <View style={styles.calculationItem}>
                       <Text style={styles.calculationValue}>
-                        {formatCurrency(selectedCalculation.calculations?.hoursComputation || 0)}
+                        {(() => {
+                          // Sum from daily breakdown (already floored per day)
+                          const totalHoursSalary = dailyBreakdown.reduce((sum, day) => sum + day.hoursSalary, 0);
+                          return formatCurrency(totalHoursSalary);
+                        })()}
                       </Text>
                       <Text style={styles.calculationLabel}>Hours Computation</Text>
                       <Text style={styles.calculationFormula}>
-                        {selectedCalculation.rawData?.totalHours || 0} hrs × {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
+                        {(() => {
+                          const totalBillableMinutes = dailyBreakdown.reduce((sum, day) => {
+                            return sum + Math.floor(day.totalHours * 60);
+                          }, 0);
+                          return `${totalBillableMinutes} min × ${formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour`;
+                        })()}
                       </Text>
                     </View>
                   </View>
                   <View style={[styles.calculationItem, styles.totalCalculationItem]}>
                     <Text style={styles.totalCalculationValue}>
-                      {formatCurrency(selectedCalculation.calculations?.totalSalary || 0)}
+                      {(() => {
+                        // Sum from daily breakdown
+                        const totalSalary = dailyBreakdown.reduce((sum, day) => sum + day.dailySalary, 0);
+                        return formatCurrency(totalSalary);
+                      })()}
                     </Text>
-                    <Text style={styles.totalCalculationLabel}>Total Salary</Text>
+                    <Text style={styles.totalCalculationLabel}>Total Salary (Billable)</Text>
                     <Text style={styles.totalCalculationFormula}>
-                      Distance + Hours Computation
+                      Sum of daily floored values
                     </Text>
                   </View>
                 </View>
@@ -852,7 +930,7 @@ const SalaryScreen: React.FC = () => {
                           <View style={styles.dailyBreakdownRow}>
                             <Text style={styles.dailyBreakdownLabel}>Distance:</Text>
                             <Text style={styles.dailyBreakdownValue}>
-                              {day.totalDistance.toFixed(2)} km
+                              {day.totalDistance.toFixed(3)} km
                             </Text>
                             <Text style={[
                               styles.dailyBreakdownSalary,
@@ -864,13 +942,18 @@ const SalaryScreen: React.FC = () => {
                           <View style={styles.dailyBreakdownRow}>
                             <Text style={styles.dailyBreakdownLabel}>Hours:</Text>
                             <Text style={styles.dailyBreakdownValue}>
-                              {day.totalHours.toFixed(2)} hrs
+                              {Math.floor(day.totalHours * 60)} min
                             </Text>
                             <Text style={[
                               styles.dailyBreakdownSalary,
                               day.hoursSalary > 1 ? styles.dailyBreakdownSalaryGreen : styles.dailyBreakdownSalaryZero
                             ]}>
                               {formatCurrency(day.hoursSalary)}
+                            </Text>
+                          </View>
+                          <View style={styles.dailyBreakdownBillableNote}>
+                            <Text style={styles.billableNoteText}>
+                              ✓ Billable only (per meter, complete minutes)
                             </Text>
                           </View>
                         </View>
@@ -1349,6 +1432,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#3B82F6',
+  },
+  dailyBreakdownBillableNote: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  billableNoteText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  billableNoteBanner: {
+    marginTop: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#D1FAE5',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 6,
+    padding: 8,
+  },
+  billableNoteBannerText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  billableIndicator: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'right',
   },
 });
 

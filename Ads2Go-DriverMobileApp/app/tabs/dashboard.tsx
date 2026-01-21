@@ -149,6 +149,30 @@ const Dashboard: React.FC = () => {
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [materialMountedAt, setMaterialMountedAt] = useState<string | null>(null); // ✅ Track mounted date (when material was physically installed)
 
+  // ✅ Helper functions for billable calculations (floor to nearest 100m for distance, complete minutes for time)
+  const calculateBillableHours = (totalHours: number) => {
+    const totalMinutes = Math.floor(totalHours * 60); // Only count full minutes
+    return totalMinutes / 60; // Convert back to hours
+  };
+
+  const calculateBillableDistance = (totalDistance: number) => {
+    const totalMeters = Math.floor(totalDistance * 1000); // Convert to meters and floor
+    return totalMeters / 1000; // Convert back to km (1m precision)
+  };
+
+  const getIgnoredMeters = (totalDistance: number) => {
+    const totalKm = totalDistance;
+    const flooredKm = Math.floor(totalDistance * 1000) / 1000;
+    const ignoredMeters = Math.round((totalKm - flooredKm) * 1000);
+    return ignoredMeters;
+  };
+
+  const getIgnoredSeconds = (totalHours: number) => {
+    const totalSeconds = Math.floor(totalHours * 3600);
+    const ignoredSeconds = totalSeconds % 60;
+    return ignoredSeconds;
+  };
+
   // Helper function to check if selected date is today
   const isSelectedDateToday = () => {
     const today = new Date();
@@ -1094,9 +1118,16 @@ const Dashboard: React.FC = () => {
   const getCurrentMetricValue = () => {
     if (!analytics) return 0;
 
-    // If a data point is selected, return its value
+    // If a data point is selected, return its value (apply billable logic)
     if (selectedDataPoint) {
-      return selectedDataPoint.value;
+      let value = selectedDataPoint.value;
+      // Apply billable flooring
+      if (selectedMetric === 'distance') {
+        value = calculateBillableDistance(value);
+      } else if (selectedMetric === 'hours') {
+        value = calculateBillableHours(value);
+      }
+      return value;
     }
 
     let value = 0;
@@ -1105,19 +1136,35 @@ const Dashboard: React.FC = () => {
     if (isToday) {
       // Use today's real-time data from DeviceTracking (devicetrackings)
       switch (selectedMetric) {
-        case 'distance': value = analytics.totalDistance || 0; break;
-        case 'hours': value = analytics.totalHours || 0; break;
-        case 'qrImpressions': value = analytics.qrImpressions || 0; break;
-        default: value = analytics.totalDistance || 0; break;
+        case 'distance': 
+          value = calculateBillableDistance(analytics.totalDistance || 0);
+          break;
+        case 'hours': 
+          value = calculateBillableHours(analytics.totalHours || 0);
+          break;
+        case 'qrImpressions': 
+          value = analytics.qrImpressions || 0;
+          break;
+        default: 
+          value = calculateBillableDistance(analytics.totalDistance || 0);
+          break;
       }
     } else {
       // Use selected date aggregated data from DeviceDataHistoryV2
       const dailyData = analytics.dailyData?.aggregatedMetrics;
       switch (selectedMetric) {
-        case 'distance': value = dailyData?.totalDistance || 0; break;
-        case 'hours': value = dailyData?.totalHours || 0; break;
-        case 'qrImpressions': value = dailyData?.totalQRImpressions || 0; break;
-        default: value = dailyData?.totalDistance || 0; break;
+        case 'distance': 
+          value = calculateBillableDistance(dailyData?.totalDistance || 0);
+          break;
+        case 'hours': 
+          value = calculateBillableHours(dailyData?.totalHours || 0);
+          break;
+        case 'qrImpressions': 
+          value = dailyData?.totalQRImpressions || 0;
+          break;
+        default: 
+          value = calculateBillableDistance(dailyData?.totalDistance || 0);
+          break;
       }
     }
     
@@ -1459,7 +1506,7 @@ const Dashboard: React.FC = () => {
               <Text style={styles.gaugeValue}>
                 {(() => {
                   const v = getCurrentMetricValue();
-                  if (selectedMetric === 'distance') return v.toFixed(2);
+                  if (selectedMetric === 'distance') return v.toFixed(3); // Show 3 decimals for meter precision
                   if (selectedMetric === 'hours') return formatHours(v);
                   return v.toFixed(0);
                 })()}
@@ -1467,8 +1514,43 @@ const Dashboard: React.FC = () => {
               <Text style={styles.gaugeUnit}>
                 {selectedMetric === 'hours' ? '' : getMetricUnit()}
               </Text>
+              <Text style={styles.billableLabel}>BILLABLE</Text>
             </View>
           </View>
+
+          {/* ✅ Show ignored values info */}
+          {analytics && (selectedMetric === 'distance' || selectedMetric === 'hours') && (
+            <View style={styles.ignoredInfo}>
+              {selectedMetric === 'distance' && (() => {
+                const rawDistance = isSelectedDateToday() 
+                  ? (analytics.totalDistance || 0)
+                  : (analytics.dailyData?.aggregatedMetrics?.totalDistance || 0);
+                const ignoredMeters = getIgnoredMeters(rawDistance);
+                const billableDistance = calculateBillableDistance(rawDistance);
+                return ignoredMeters > 0 ? (
+                  <Text style={styles.ignoredText}>
+                    {billableDistance.toFixed(3)} km • floored to nearest meter
+                  </Text>
+                ) : (
+                  <Text style={styles.ignoredText}>
+                    {billableDistance.toFixed(3)} km • exact to meter
+                  </Text>
+                );
+              })()}
+              {selectedMetric === 'hours' && (() => {
+                const rawHours = isSelectedDateToday() 
+                  ? (analytics.totalHours || 0)
+                  : (analytics.dailyData?.aggregatedMetrics?.totalHours || 0);
+                const ignoredSeconds = getIgnoredSeconds(rawHours);
+                const billableMinutes = Math.floor(rawHours * 60);
+                return ignoredSeconds > 0 ? (
+                  <Text style={styles.ignoredText}>
+                    {billableMinutes} min • ignored {ignoredSeconds}s
+                  </Text>
+                ) : null;
+              })()}
+            </View>
+          )}
           
           {selectedDataPoint && !isSelectedDateToday() && (
             <TouchableOpacity 
@@ -2185,6 +2267,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#6b7280',
     marginTop: 4,
+  },
+  billableLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 6,
+    letterSpacing: 1,
+  },
+  ignoredInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    width: '100%',
+  },
+  ignoredText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   gaugePeriod: {
     fontSize: 12,

@@ -168,16 +168,30 @@ class DriverSalaryService {
         })));
       }
 
-      // Calculate totals for the period
+      // Calculate totals for the period with per-day flooring (billable calculation)
       let totalDistance = 0;
       let totalHours = 0;
       let daysWorked = 0;
 
       periodData.forEach(dailyData => {
-        totalDistance += dailyData.totalDistanceTraveled || 0;
-        totalHours += dailyData.totalHoursOnline || 0;
+        const rawDistance = dailyData.totalDistanceTraveled || 0;
+        const rawHours = dailyData.totalHoursOnline || 0;
+        
+        // ✅ Apply billable flooring per day (1m precision for distance, complete minutes for time)
+        // Distance: Floor to nearest meter
+        const distanceMeters = Math.floor(rawDistance * 1000);
+        const billableDistance = distanceMeters / 1000;
+        
+        // Hours: Floor to complete minutes
+        const totalMinutes = Math.floor(rawHours * 60);
+        const billableHours = totalMinutes / 60;
+        
+        // Sum floored values
+        totalDistance += billableDistance;
+        totalHours += billableHours;
+        
         // Count days where there was some activity (distance > 0 or hours > 0)
-        if ((dailyData.totalDistanceTraveled > 0) || (dailyData.totalHoursOnline > 0)) {
+        if (rawDistance > 0 || rawHours > 0) {
           daysWorked++;
         }
       });
@@ -193,8 +207,8 @@ class DriverSalaryService {
       daysWorked = Math.min(daysWorked, maxDaysWorked);
 
       return {
-        totalDistance: Math.round(totalDistance * 100) / 100, // Round to 2 decimal places
-        totalHours: Math.round(totalHours * 100) / 100,
+        totalDistance: Math.round(totalDistance * 1000) / 1000, // Keep 3 decimal places for meter precision
+        totalHours: Math.round(totalHours * 10000) / 10000, // Keep precision for minute-level accuracy
         daysWorked
       };
     } catch (error) {
