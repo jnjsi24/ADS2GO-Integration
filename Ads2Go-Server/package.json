@@ -28,7 +28,8 @@
     "script:comprehensive-fix": "node src/scripts/comprehensiveFixUserAnalytics.js",
     "script:init-analytics-indexes": "node src/scripts/initializeAnalyticsIndexes.js",
     "script:driver-salary-report": "node scripts/driverSalaryReport.js",
-    "script:list-drivers": "node scripts/listDrivers.js"
+    "script:list-drivers": "node scripts/listDrivers.js",
+    "script:clear-salary-calculations": "node scripts/clearOldSalaryCalculations.js"
   },
   "author": "",
   "license": "ISC",
