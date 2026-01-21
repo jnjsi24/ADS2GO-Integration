@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -77,6 +77,26 @@ interface DailyBreakdown {
   dailySalary: number;
 }
 
+// Cache configuration
+const CACHE_KEYS = {
+  SALARY_CALCULATIONS: '@salary_calculations_cache',
+  SALARY_SUMMARY: '@salary_summary_cache',
+  BREAKDOWN_SUMMARIES: '@breakdown_summaries_cache',
+  DAILY_BREAKDOWN: '@daily_breakdown_cache',
+};
+
+const CACHE_EXPIRY = {
+  CALCULATIONS: 5 * 60 * 1000, // 5 minutes
+  SUMMARY: 5 * 60 * 1000, // 5 minutes
+  BREAKDOWN_SUMMARIES: 5 * 60 * 1000, // 5 minutes
+  DAILY_BREAKDOWN: 5 * 60 * 1000, // 5 minutes
+};
+
+interface CachedData<T> {
+  data: T;
+  timestamp: number;
+}
+
 const SalaryScreen: React.FC = () => {
   const router = useRouter();
   const [calculations, setCalculations] = useState<SalaryCalculation[]>([]);
@@ -87,6 +107,19 @@ const SalaryScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [dailyBreakdown, setDailyBreakdown] = useState<DailyBreakdown[]>([]);
   const [loadingBreakdown, setLoadingBreakdown] = useState(false);
+  // Store daily breakdown summaries by calculation ID for use in main card
+  const [breakdownSummaries, setBreakdownSummaries] = useState<Map<string, {
+    totalDistance: number;
+    totalHours: number;
+    totalSalary: number;
+  }>>(new Map());
+  const [dataCache, setDataCache] = useState<{
+    calculations?: CachedData<SalaryCalculation[]>;
+    summary?: CachedData<SalarySummary>;
+  }>({});
+  const selectedCalculationRef = useRef<SalaryCalculation | null>(null);
+  const loadingRef = useRef(false);
+  const refreshingRef = useRef(false);
 
   // ✅ Helper functions for billable calculations (floor to nearest 100m for distance, complete minutes for time)
   const calculateBillableHours = (totalHours: number) => {
@@ -112,259 +145,390 @@ const SalaryScreen: React.FC = () => {
     return ignoredSeconds;
   };
 
+  // Load cached breakdown summaries on mount
   useEffect(() => {
+    const loadCachedBreakdownSummaries = async () => {
+      try {
+        const cachedStr = await AsyncStorage.getItem(CACHE_KEYS.BREAKDOWN_SUMMARIES);
+        if (cachedStr) {
+          const cached: CachedData<Array<{ id: string; summary: { totalDistance: number; totalHours: number; totalSalary: number } }>> = JSON.parse(cachedStr);
+          const now = Date.now();
+          if (now - cached.timestamp < CACHE_EXPIRY.BREAKDOWN_SUMMARIES) {
+            // Restore cached summaries to Map
+            const summariesMap = new Map<string, { totalDistance: number; totalHours: number; totalSalary: number }>();
+            cached.data.forEach(({ id, summary }) => {
+              summariesMap.set(id, summary);
+            });
+            setBreakdownSummaries(summariesMap);
+            console.log('📦 Loaded cached breakdown summaries');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cached breakdown summaries:', error);
+      }
+    };
+    loadCachedBreakdownSummaries();
     fetchSalaryData();
   }, []);
 
-  const fetchSalaryData = async (silent = false) => {
+  // ✅ Auto-refresh main salary calculations list every 2 minutes
+  useEffect(() => {
+    // Set up interval to refresh salary data every 2 minutes (120000 ms)
+    const refreshInterval = setInterval(() => {
+      // Check refs to avoid stale closures
+      if (!loadingRef.current && !refreshingRef.current) {
+        // Only refresh if not already loading
+        console.log('🔄 Auto-refreshing salary calculations list...');
+        fetchSalaryData(true, true); // Silent refresh, force bypass cache
+      }
+    }, 120000); // 2 minutes
+
+    // Cleanup interval when component unmounts
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, []); // Empty deps - interval runs independently
+
+  // ✅ Auto-refresh daily breakdown every 2 minutes when modal is open
+  useEffect(() => {
+    if (!modalVisible || !selectedCalculation) {
+      return;
+    }
+
+    // Set up interval to refresh every 2 minutes (120000 ms)
+    // Note: Initial fetch is handled by handleViewDetails, this only handles auto-refresh
+    const refreshInterval = setInterval(() => {
+      const currentCalculation = selectedCalculationRef.current;
+      if (currentCalculation && modalVisible && !loadingBreakdown) {
+        // Only refresh if not already loading and modal is still visible
+        fetchDailyBreakdown(currentCalculation);
+      }
+    }, 120000); // 2 minutes
+
+    // Cleanup interval when modal closes or calculation changes
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [modalVisible, selectedCalculation?.id, loadingBreakdown]);
+
+  // ✅ Auto-refresh breakdown summaries for main card every 2 minutes
+  useEffect(() => {
+    // Set up interval to refresh breakdown summaries every 2 minutes (120000 ms)
+    const refreshInterval = setInterval(() => {
+      // Only refresh if not already loading and we have calculations
+      if (!loadingRef.current && !refreshingRef.current && calculations.length > 0) {
+        console.log('🔄 Auto-refreshing breakdown summaries for main card...');
+        // Refresh summaries for all calculations (force refresh to get latest data)
+        calculations.forEach((calc, index) => {
+          // Stagger the requests to avoid overwhelming the server
+          setTimeout(() => fetchBreakdownSummary(calc, true), index * 500);
+        });
+      }
+    }, 120000); // 2 minutes
+
+    // Cleanup interval when component unmounts
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [calculations.length]); // Re-run when calculations change
+
+  // Helper function to normalize dates for comparison
+  const normalizeDate = (date: string | Date | undefined): string => {
+    if (!date) return '';
     try {
-      if (!silent) setLoading(true);
+      const d = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
+  };
+
+  // Optimized deduplication function
+  const deduplicateCalculations = (calculations: SalaryCalculation[]): SalaryCalculation[] => {
+    const seenPeriods = new Map<string, SalaryCalculation>();
+    
+    for (const calc of calculations) {
+      const startDate = normalizeDate(calc.calculationPeriod?.startDate);
+      const endDate = normalizeDate(calc.calculationPeriod?.endDate);
+      
+      const periodKey = (startDate && endDate)
+        ? `${calc.driverId}-${startDate}-${endDate}`
+        : `${calc.driverId}-${calc.materialId}-${calc.calculationPeriod?.periodType || 'UNKNOWN'}`;
+      
+      if (!seenPeriods.has(periodKey)) {
+        seenPeriods.set(periodKey, calc);
+      } else {
+        const existing = seenPeriods.get(periodKey)!;
+        const existingDate = existing.createdAt ? new Date(existing.createdAt) : new Date(0);
+        const currentDate = calc.createdAt ? new Date(calc.createdAt) : new Date(0);
+        
+        if (!isNaN(currentDate.getTime()) && (!isNaN(existingDate.getTime()) ? currentDate > existingDate : true)) {
+          seenPeriods.set(periodKey, calc);
+        }
+      }
+    }
+    
+    const result = Array.from(seenPeriods.values());
+    result.sort((a, b) => {
+      const dateA = new Date(a.calculationPeriod?.startDate || 0);
+      const dateB = new Date(b.calculationPeriod?.startDate || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
+    
+    return result;
+  };
+
+  const fetchSalaryData = async (silent = false, forceRefresh = false) => {
+    try {
+      if (!silent) {
+        setLoading(true);
+        loadingRef.current = true;
+      }
       
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         throw new Error('No auth token found');
       }
 
-      // Fetch salary calculations
-      const calculationsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            query GetMySalaryCalculations {
-              getMySalaryCalculations {
-                success
-                message
-                calculations {
-                  id
-                  driverId
-                  materialId
-                  material {
-                    id
-                    materialId
-                    materialType
-                    category
-                    vehicleType
-                  }
-                  calculationPeriod {
-                    startDate
-                    endDate
-                    periodType
-                  }
-                  rawData {
-                    totalDistance
-                    totalHours
-                    daysWorked
-                  }
-                  pricingConfig {
-                    vehicleType
-                    category
-                    materialType
-                    distanceRate
-                    hoursRate
-                  }
-                  calculations {
-                    distanceComputation
-                    hoursComputation
-                    totalSalary
-                  }
-                  status
-                  approvedAt
-                  paidAt
-                  paymentReference
-                  notes
-                  periodDisplay
-                  createdAt
-                  updatedAt
-                }
-                totalCount
-              }
+      // ✅ If force refresh, skip cache completely and fetch immediately
+      if (forceRefresh) {
+        // Clear cache indicators to ensure fresh fetch
+        // Don't check any cache, go straight to API
+      } else {
+        // Check cache first (only for normal loads)
+        const cachedCalculations = dataCache.calculations;
+        const cachedSummary = dataCache.summary;
+        
+        // Check memory cache
+        if (cachedCalculations && (Date.now() - cachedCalculations.timestamp) < CACHE_EXPIRY.CALCULATIONS) {
+          setCalculations(cachedCalculations.data);
+          if (!silent) setLoading(false);
+        }
+        
+        if (cachedSummary && (Date.now() - cachedSummary.timestamp) < CACHE_EXPIRY.SUMMARY) {
+          setSummary(cachedSummary.data);
+        }
+        
+        // If we have valid cache for both, return early
+        if (cachedCalculations && cachedSummary && 
+            (Date.now() - cachedCalculations.timestamp) < CACHE_EXPIRY.CALCULATIONS &&
+            (Date.now() - cachedSummary.timestamp) < CACHE_EXPIRY.SUMMARY) {
+          if (!silent) setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+        
+        // Check AsyncStorage cache
+        try {
+          const calculationsCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY_CALCULATIONS);
+          const summaryCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY_SUMMARY);
+          
+          if (calculationsCacheStr && !cachedCalculations) {
+            const cached: CachedData<SalaryCalculation[]> = JSON.parse(calculationsCacheStr);
+            if ((Date.now() - cached.timestamp) < CACHE_EXPIRY.CALCULATIONS) {
+              setCalculations(cached.data);
+              setDataCache(prev => ({ ...prev, calculations: cached }));
+              if (!silent) setLoading(false);
             }
-          `,
-        }),
-      });
+          }
+          
+          if (summaryCacheStr && !cachedSummary) {
+            const cached: CachedData<SalarySummary> = JSON.parse(summaryCacheStr);
+            if ((Date.now() - cached.timestamp) < CACHE_EXPIRY.SUMMARY) {
+              setSummary(cached.data);
+              setDataCache(prev => ({ ...prev, summary: cached }));
+            }
+          }
+        } catch (cacheError) {
+          // Ignore cache errors
+        }
+      }
 
-      const calculationsData = await calculationsResponse.json();
+      // ✅ OPTIMIZATION: Fetch both queries in parallel
+      const [calculationsResponse, summaryResponse] = await Promise.all([
+        fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...(forceRefresh ? {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+            } : {}),
+          },
+          body: JSON.stringify({
+            query: `
+              query GetMySalaryCalculations {
+                getMySalaryCalculations {
+                  success
+                  message
+                  calculations {
+                    id
+                    driverId
+                    materialId
+                    material {
+                      id
+                      materialId
+                      materialType
+                      category
+                      vehicleType
+                    }
+                    calculationPeriod {
+                      startDate
+                      endDate
+                      periodType
+                    }
+                    rawData {
+                      totalDistance
+                      totalHours
+                      daysWorked
+                    }
+                    pricingConfig {
+                      vehicleType
+                      category
+                      materialType
+                      distanceRate
+                      hoursRate
+                    }
+                    calculations {
+                      distanceComputation
+                      hoursComputation
+                      totalSalary
+                    }
+                    status
+                    approvedAt
+                    paidAt
+                    paymentReference
+                    notes
+                    periodDisplay
+                    createdAt
+                    updatedAt
+                  }
+                  totalCount
+                }
+              }
+            `,
+          }),
+        }),
+        fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            ...(forceRefresh ? {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+            } : {}),
+          },
+          body: JSON.stringify({
+            query: `
+              query GetMySalarySummary {
+                getMySalarySummary {
+                  success
+                  message
+                  summary {
+                    driverId
+                    driver {
+                      id
+                      driverId
+                      firstName
+                      lastName
+                      email
+                      vehicleType
+                    }
+                    totalCalculations
+                    totalSalary
+                    totalDistanceSalary
+                    totalHoursSalary
+                    averageMonthlySalary
+                    lastCalculationDate
+                    currentStatus
+                  }
+                }
+              }
+            `,
+          }),
+        }),
+      ]);
+
+      // Process both responses in parallel
+      const [calculationsData, summaryData] = await Promise.all([
+        calculationsResponse.json(),
+        summaryResponse.json(),
+      ]);
       
-      // Check for GraphQL errors
+      // Process calculations
       if (calculationsData.errors) {
         console.error('GraphQL errors in getMySalaryCalculations:', calculationsData.errors);
         throw new Error(calculationsData.errors[0]?.message || 'Failed to fetch salary calculations');
       }
       
-      // Check response structure and success flag
       if (calculationsData.data?.getMySalaryCalculations?.success) {
         const fetchedCalculations = calculationsData.data.getMySalaryCalculations.calculations || [];
-        console.log(`✅ Fetched ${fetchedCalculations.length} salary calculations`);
-        
-        // Deduplicate calculations on frontend as a safety measure
-        // Keep only the most recent calculation for each unique period
-        const seenPeriods = new Map<string, SalaryCalculation>();
-        const deduplicatedCalculations: SalaryCalculation[] = [];
-        
-        // Helper function to normalize dates for comparison
-        const normalizeDate = (date: string | Date | undefined): string => {
-          if (!date) return '';
-          try {
-            const d = typeof date === 'string' ? new Date(date) : date;
-            // Check if date is valid
-            if (isNaN(d.getTime())) {
-              console.warn(`⚠️ Invalid date encountered: ${date}`);
-              return '';
-            }
-            return d.toISOString().split('T')[0]; // Get YYYY-MM-DD format
-          } catch (error) {
-            console.warn(`⚠️ Error normalizing date ${date}:`, error);
-            return '';
-          }
-        };
-        
-        console.log(`🔍 Starting deduplication for ${fetchedCalculations.length} calculations`);
-        
-        for (const calc of fetchedCalculations) {
-          // Normalize dates to ensure consistent comparison
-          const startDate = normalizeDate(calc.calculationPeriod?.startDate);
-          const endDate = normalizeDate(calc.calculationPeriod?.endDate);
-          
-          // Create period key - use ID as fallback if dates are invalid
-          let periodKey: string;
-          if (startDate && endDate) {
-            periodKey = `${calc.driverId}-${startDate}-${endDate}`;
-          } else {
-            // Fallback: use materialId and period type if dates are invalid
-            periodKey = `${calc.driverId}-${calc.materialId}-${calc.calculationPeriod?.periodType || 'UNKNOWN'}`;
-            console.warn(`⚠️ Using fallback periodKey for calculation ${calc.id} due to invalid dates`);
-          }
-          
-          console.log(`📋 Processing calculation ${calc.id}: periodKey=${periodKey}, startDate=${startDate || 'INVALID'}, endDate=${endDate || 'INVALID'}`);
-          
-          if (!seenPeriods.has(periodKey)) {
-            seenPeriods.set(periodKey, calc);
-            deduplicatedCalculations.push(calc);
-            console.log(`✅ Added new calculation for period: ${periodKey}`);
-          } else {
-            // Duplicate period found - keep the one with the most recent createdAt
-            const existing = seenPeriods.get(periodKey)!;
-            const existingDate = existing.createdAt ? new Date(existing.createdAt) : new Date(0);
-            const currentDate = calc.createdAt ? new Date(calc.createdAt) : new Date(0);
-            
-            // Validate dates before comparison
-            const existingValid = !isNaN(existingDate.getTime());
-            const currentValid = !isNaN(currentDate.getTime());
-            
-            console.log(`⚠️ Duplicate found! Existing: ${existing.id} (${existing.createdAt || 'INVALID'}), Current: ${calc.id} (${calc.createdAt || 'INVALID'})`);
-            
-            // If both dates are valid, compare them. Otherwise, prefer the one with a valid date, or keep existing
-            if (currentValid && existingValid && currentDate > existingDate) {
-              // Replace with newer calculation
-              const index = deduplicatedCalculations.indexOf(existing);
-              if (index !== -1) {
-                deduplicatedCalculations[index] = calc;
-                seenPeriods.set(periodKey, calc);
-                console.log(`🔄 Replaced with newer calculation: ${calc.id}`);
-              }
-            } else if (currentValid && !existingValid) {
-              // Current has valid date, existing doesn't - replace
-              const index = deduplicatedCalculations.indexOf(existing);
-              if (index !== -1) {
-                deduplicatedCalculations[index] = calc;
-                seenPeriods.set(periodKey, calc);
-                console.log(`🔄 Replaced (current has valid date): ${calc.id}`);
-              }
-            } else {
-              console.log(`⏭️ Keeping existing calculation: ${existing.id}`);
-            }
-          }
-        }
-        
-        // Sort by start date descending (most recent first)
-        deduplicatedCalculations.sort((a, b) => {
-          const dateA = new Date(a.calculationPeriod?.startDate || 0);
-          const dateB = new Date(b.calculationPeriod?.startDate || 0);
-          return dateB.getTime() - dateA.getTime();
-        });
-        
-        if (fetchedCalculations.length !== deduplicatedCalculations.length) {
-          console.log(`⚠️ Frontend deduplication: ${fetchedCalculations.length} → ${deduplicatedCalculations.length} calculations`);
-        } else {
-          console.log(`✅ No duplicates found (all ${deduplicatedCalculations.length} are unique)`);
-        }
+        const deduplicatedCalculations = deduplicateCalculations(fetchedCalculations);
         
         setCalculations(deduplicatedCalculations);
+        
+        // Cache the results
+        const cacheData: CachedData<SalaryCalculation[]> = {
+          data: deduplicatedCalculations,
+          timestamp: Date.now(),
+        };
+        setDataCache(prev => ({ ...prev, calculations: cacheData }));
+        await AsyncStorage.setItem(CACHE_KEYS.SALARY_CALCULATIONS, JSON.stringify(cacheData));
+        
+        // Fetch breakdown summaries immediately for all calculations (frontend calculation)
+        // Fetch first calculation immediately, then stagger the rest
+        if (deduplicatedCalculations.length > 0) {
+          // Fetch first calculation immediately (no delay)
+          fetchBreakdownSummary(deduplicatedCalculations[0], silent);
+          // Stagger the rest to avoid overwhelming the server
+          deduplicatedCalculations.slice(1).forEach((calc, index) => {
+            setTimeout(() => fetchBreakdownSummary(calc, silent), (index + 1) * 300);
+          });
+        }
       } else {
-        console.warn('⚠️ getMySalaryCalculations returned success: false', calculationsData.data?.getMySalaryCalculations?.message);
-        // Still set empty array to show empty state
         setCalculations([]);
       }
 
-      // Fetch salary summary
-      const summaryResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            query GetMySalarySummary {
-              getMySalarySummary {
-                success
-                message
-                summary {
-                  driverId
-                  driver {
-                    id
-                    driverId
-                    firstName
-                    lastName
-                    email
-                    vehicleType
-                  }
-                  totalCalculations
-                  totalSalary
-                  totalDistanceSalary
-                  totalHoursSalary
-                  averageMonthlySalary
-                  lastCalculationDate
-                  currentStatus
-                }
-              }
-            }
-          `,
-        }),
-      });
-
-      const summaryData = await summaryResponse.json();
-      
-      // Check for GraphQL errors
+      // Process summary
       if (summaryData.errors) {
         console.error('GraphQL errors in getMySalarySummary:', summaryData.errors);
-        // Don't throw here, just log - summary is not critical
-      }
-      
-      // Check response structure and success flag
-      if (summaryData.data?.getMySalarySummary?.success) {
-        setSummary(summaryData.data.getMySalarySummary.summary);
-        console.log('✅ Fetched salary summary successfully');
-      } else {
-        console.warn('⚠️ getMySalarySummary returned success: false', summaryData.data?.getMySalarySummary?.message);
+      } else if (summaryData.data?.getMySalarySummary?.success) {
+        const summaryResult = summaryData.data.getMySalarySummary.summary;
+        setSummary(summaryResult);
+        
+        // Cache the summary
+        const cacheData: CachedData<SalarySummary> = {
+          data: summaryResult,
+          timestamp: Date.now(),
+        };
+        setDataCache(prev => ({ ...prev, summary: cacheData }));
+        await AsyncStorage.setItem(CACHE_KEYS.SALARY_SUMMARY, JSON.stringify(cacheData));
       }
 
     } catch (error) {
       console.error('Error fetching salary data:', error);
-      Alert.alert('Error', 'Failed to fetch salary data. Please try again.');
+      if (!silent) {
+        Alert.alert('Error', 'Failed to fetch salary data. Please try again.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
+      loadingRef.current = false;
+      refreshingRef.current = false;
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
+    // Immediately show refresh indicator and fetch fresh data
     setRefreshing(true);
-    fetchSalaryData(true);
+    refreshingRef.current = true;
+    // Force refresh: skip all cache and fetch immediately from API
+    await fetchSalaryData(true, true);
   };
 
   const formatCurrency = (amount: number): string => {
@@ -426,10 +590,176 @@ const SalaryScreen: React.FC = () => {
     return category;
   };
 
-  const fetchDailyBreakdown = async (calculation: SalaryCalculation) => {
-    console.log('🚀 fetchDailyBreakdown called with calculation:', calculation.id);
+  // Helper function to fetch and store daily breakdown summary for a calculation
+  const fetchBreakdownSummary = async (calculation: SalaryCalculation, forceRefresh = false) => {
+    // Check cache first if not forcing refresh
+    if (!forceRefresh) {
+      // Check memory cache
+      if (breakdownSummaries.has(calculation.id)) {
+        return;
+      }
+      
+      // Check AsyncStorage cache
+      try {
+        const cachedStr = await AsyncStorage.getItem(CACHE_KEYS.BREAKDOWN_SUMMARIES);
+        if (cachedStr) {
+          const cached: CachedData<Array<{ id: string; summary: { totalDistance: number; totalHours: number; totalSalary: number } }>> = JSON.parse(cachedStr);
+          const now = Date.now();
+          if (now - cached.timestamp < CACHE_EXPIRY.BREAKDOWN_SUMMARIES) {
+            const cachedSummary = cached.data.find(item => item.id === calculation.id);
+            if (cachedSummary) {
+              // Restore from cache
+              setBreakdownSummaries(prev => {
+                const newMap = new Map(prev);
+                newMap.set(calculation.id, cachedSummary.summary);
+                return newMap;
+              });
+              console.log('📦 Using cached breakdown summary for calculation:', calculation.id);
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking cache for breakdown summary:', error);
+      }
+    }
+
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+
+      const startDateValue = calculation.calculationPeriod?.startDate;
+      const endDateValue = calculation.calculationPeriod?.endDate;
+      if (!startDateValue || !endDateValue) return;
+
+      let startDate: Date;
+      let endDate: Date;
+      try {
+        if (typeof startDateValue === 'string' && /^\d+$/.test(startDateValue)) {
+          startDate = new Date(parseInt(startDateValue, 10));
+        } else {
+          startDate = new Date(startDateValue);
+        }
+        if (typeof endDateValue === 'string' && /^\d+$/.test(endDateValue)) {
+          endDate = new Date(parseInt(endDateValue, 10));
+        } else {
+          endDate = new Date(endDateValue);
+        }
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return;
+      } catch {
+        return;
+      }
+
+      const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${calculation.driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&_t=${Date.now()}`;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      });
+
+      if (!response.ok) return;
+      const data = await response.json();
+      const dailyData = data.data?.dailyData?.dailyBreakdown || data.dailyData?.dailyBreakdown || [];
+
+      const breakdown: DailyBreakdown[] = dailyData.map((day: any) => {
+        const rawDistance = day.totalDistanceTraveled || day.totalDistance || 0;
+        const rawHours = day.totalHoursOnline || day.totalHours || 0;
+        const billableDistance = calculateBillableDistance(rawDistance);
+        const billableHours = calculateBillableHours(rawHours);
+        const distanceRate = calculation.pricingConfig?.distanceRate || 0;
+        const hoursRate = calculation.pricingConfig?.hoursRate || 0;
+        const distanceSalary = billableDistance * distanceRate;
+        const hoursSalary = billableHours * hoursRate;
+        const dailySalary = distanceSalary + hoursSalary;
+        return {
+          date: day.date,
+          totalDistance: billableDistance,
+          totalHours: billableHours,
+          distanceSalary: Math.round(distanceSalary * 100) / 100,
+          hoursSalary: Math.round(hoursSalary * 100) / 100,
+          dailySalary: Math.round(dailySalary * 100) / 100,
+        };
+      });
+
+      const totalDistance = breakdown.reduce((sum, day) => sum + day.totalDistance, 0);
+      const totalHours = breakdown.reduce((sum, day) => sum + day.totalHours, 0);
+      const totalSalary = breakdown.reduce((sum, day) => sum + day.dailySalary, 0);
+
+      setBreakdownSummaries(prev => {
+        const newMap = new Map(prev);
+        const summary = {
+          totalDistance,
+          totalHours,
+          totalSalary: Math.round(totalSalary * 100) / 100,
+        };
+        newMap.set(calculation.id, summary);
+        
+        // Save to cache
+        const cacheData: CachedData<Array<{ id: string; summary: typeof summary }>> = {
+          data: Array.from(newMap.entries()).map(([id, summary]) => ({ id, summary })),
+          timestamp: Date.now(),
+        };
+        AsyncStorage.setItem(CACHE_KEYS.BREAKDOWN_SUMMARIES, JSON.stringify(cacheData)).catch(err => {
+          console.error('Error saving breakdown summaries to cache:', err);
+        });
+        
+        return newMap;
+      });
+    } catch (error) {
+      // Silently fail - we'll use cached data if available
+      console.log('Could not fetch breakdown summary for calculation:', calculation.id);
+    }
+  };
+
+  const fetchDailyBreakdown = async (calculation: SalaryCalculation, forceRefresh = false) => {
     try {
       setLoadingBreakdown(true);
+      console.log('📊 Fetching daily breakdown (Distance + Hours) for calculation:', calculation.id, forceRefresh ? '(forced refresh)' : '');
+      
+      // Check cache first if not forcing refresh
+      if (!forceRefresh) {
+        try {
+          const cacheKey = `${CACHE_KEYS.DAILY_BREAKDOWN}_${calculation.id}`;
+          const cachedStr = await AsyncStorage.getItem(cacheKey);
+          if (cachedStr) {
+            const cached: CachedData<DailyBreakdown[]> = JSON.parse(cachedStr);
+            const now = Date.now();
+            if (now - cached.timestamp < CACHE_EXPIRY.DAILY_BREAKDOWN) {
+              // Use cached data
+              setDailyBreakdown(cached.data);
+              setLoadingBreakdown(false);
+              console.log('📦 Using cached daily breakdown for calculation:', calculation.id);
+              
+              // Still update summary from cached breakdown
+              const totalDistance = cached.data.reduce((sum, day) => sum + day.totalDistance, 0);
+              const totalHours = cached.data.reduce((sum, day) => sum + day.totalHours, 0);
+              const totalSalary = cached.data.reduce((sum, day) => sum + day.dailySalary, 0);
+              setBreakdownSummaries(prev => {
+                const newMap = new Map(prev);
+                const summary = {
+                  totalDistance,
+                  totalHours,
+                  totalSalary: Math.round(totalSalary * 100) / 100,
+                };
+                newMap.set(calculation.id, summary);
+                return newMap;
+              });
+              
+              // Fetch fresh data in background
+              fetchDailyBreakdown(calculation, true).catch(() => {});
+              return;
+            }
+          }
+        } catch (cacheError) {
+          console.error('Error checking cache for daily breakdown:', cacheError);
+        }
+      }
+      
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         throw new Error('No auth token found');
@@ -443,66 +773,29 @@ const SalaryScreen: React.FC = () => {
         const startDateValue = calculation.calculationPeriod?.startDate;
         const endDateValue = calculation.calculationPeriod?.endDate;
 
-        console.log('🔍 Parsing dates for daily breakdown:', { 
-          startDateValue, 
-          endDateValue,
-          startDateType: typeof startDateValue,
-          endDateType: typeof endDateValue
-        });
-
         if (!startDateValue || !endDateValue) {
           throw new Error('Missing date values in calculation period');
         }
 
-        // Try to parse the date - handle both string and number timestamps
+        // Parse dates - handle both string and number timestamps
         let startDateParsed: Date;
         let endDateParsed: Date;
 
-        // Handle string timestamps (like '1761955200000')
-        if (typeof startDateValue === 'string') {
-          // Check if it's a numeric string (timestamp)
-          if (/^\d+$/.test(startDateValue)) {
-            const timestamp = parseInt(startDateValue, 10);
-            startDateParsed = new Date(timestamp);
-            console.log(`📅 Parsed start date from timestamp: ${timestamp} → ${startDateParsed.toISOString()}`);
-          } else {
-            // It's an ISO string or other date format
-            startDateParsed = new Date(startDateValue);
-            console.log(`📅 Parsed start date from string: ${startDateValue} → ${startDateParsed.toISOString()}`);
-          }
-        } else if (typeof startDateValue === 'number') {
-          startDateParsed = new Date(startDateValue);
-          console.log(`📅 Parsed start date from number: ${startDateValue} → ${startDateParsed.toISOString()}`);
+        if (typeof startDateValue === 'string' && /^\d+$/.test(startDateValue)) {
+          startDateParsed = new Date(parseInt(startDateValue, 10));
         } else {
           startDateParsed = new Date(startDateValue);
-          console.log(`📅 Parsed start date from other: ${startDateValue} → ${startDateParsed.toISOString()}`);
         }
 
-        if (typeof endDateValue === 'string') {
-          // Check if it's a numeric string (timestamp)
-          if (/^\d+$/.test(endDateValue)) {
-            const timestamp = parseInt(endDateValue, 10);
-            endDateParsed = new Date(timestamp);
-            console.log(`📅 Parsed end date from timestamp: ${timestamp} → ${endDateParsed.toISOString()}`);
-          } else {
-            // It's an ISO string or other date format
-            endDateParsed = new Date(endDateValue);
-            console.log(`📅 Parsed end date from string: ${endDateValue} → ${endDateParsed.toISOString()}`);
-          }
-        } else if (typeof endDateValue === 'number') {
-          endDateParsed = new Date(endDateValue);
-          console.log(`📅 Parsed end date from number: ${endDateValue} → ${endDateParsed.toISOString()}`);
+        if (typeof endDateValue === 'string' && /^\d+$/.test(endDateValue)) {
+          endDateParsed = new Date(parseInt(endDateValue, 10));
         } else {
           endDateParsed = new Date(endDateValue);
-          console.log(`📅 Parsed end date from other: ${endDateValue} → ${endDateParsed.toISOString()}`);
         }
 
         // Validate dates
-        if (isNaN(startDateParsed.getTime())) {
-          throw new Error(`Invalid start date: ${startDateValue} (parsed as: ${startDateParsed})`);
-        }
-        if (isNaN(endDateParsed.getTime())) {
-          throw new Error(`Invalid end date: ${endDateValue} (parsed as: ${endDateParsed})`);
+        if (isNaN(startDateParsed.getTime()) || isNaN(endDateParsed.getTime())) {
+          throw new Error('Invalid date values');
         }
 
         startDate = new Date(startDateParsed);
@@ -510,65 +803,53 @@ const SalaryScreen: React.FC = () => {
         endDate = new Date(endDateParsed);
         endDate.setHours(23, 59, 59, 999);
 
-        console.log(`✅ Final dates: start=${startDate.toISOString()}, end=${endDate.toISOString()}`);
-
-        // Double-check dates are still valid after manipulation
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
           throw new Error('Date manipulation resulted in invalid dates');
         }
       } catch (dateError) {
-        console.error('❌ Error parsing dates for daily breakdown:', dateError);
-        console.error('Calculation period:', calculation.calculationPeriod);
+        console.error('Error parsing dates for daily breakdown:', dateError);
         setDailyBreakdown([]);
         setLoadingBreakdown(false);
         return;
       }
 
-      const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${calculation.driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
-      console.log(`🌐 Fetching daily breakdown from: ${apiUrl}`);
+      // ✅ Add cache-busting timestamp to ensure fresh data
+      const timestamp = Date.now();
+      const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${calculation.driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&_t=${timestamp}`;
       
-      const response = await fetch(apiUrl, {
+      // ✅ OPTIMIZATION: Add timeout to prevent long waits (2 minutes max)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout: Daily breakdown took too long to load')), 120000); // 2 minutes
+      });
+      
+      const fetchPromise = fetch(apiUrl, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       });
 
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ API error (${response.status}):`, errorText);
-        throw new Error(`Failed to fetch daily breakdown: ${response.status} ${response.statusText}`);
+        throw new Error(`Failed to fetch daily breakdown: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('📊 Daily breakdown API response:', JSON.stringify(data, null, 2));
       
-      // The API returns { success: true, data: { dailyData: { dailyBreakdown: [...] } } }
-      // So we need to access data.data.dailyData.dailyBreakdown
+      // Extract daily breakdown data
       const dailyData = data.data?.dailyData?.dailyBreakdown || data.dailyData?.dailyBreakdown || [];
-      console.log(`📋 Found ${dailyData.length} days of data`);
-      console.log('📋 Daily data sample:', dailyData.slice(0, 2));
-      
-      if (dailyData.length === 0) {
-        console.warn('⚠️ No daily breakdown data in API response');
-        console.warn('Response keys:', Object.keys(data));
-        if (data.data) {
-          console.warn('data.data keys:', Object.keys(data.data));
-          if (data.data.dailyData) {
-            console.warn('data.data.dailyData keys:', Object.keys(data.data.dailyData));
-          }
-        }
-        if (data.dailyData) {
-          console.warn('data.dailyData keys:', Object.keys(data.dailyData));
-        }
-      }
       
       // Calculate daily salary for each day (with billable flooring)
       const breakdown: DailyBreakdown[] = dailyData.map((day: any) => {
-        const rawDistance = day.totalDistance || 0;
-        const rawHours = day.totalHours || 0;
+        // API returns totalDistanceTraveled and totalHoursOnline
+        const rawDistance = day.totalDistanceTraveled || day.totalDistance || 0;
+        const rawHours = day.totalHoursOnline || day.totalHours || 0;
         
-        // ✅ Apply billable flooring
         const billableDistance = calculateBillableDistance(rawDistance);
         const billableHours = calculateBillableHours(rawHours);
         
@@ -581,31 +862,81 @@ const SalaryScreen: React.FC = () => {
         
         return {
           date: day.date,
-          totalDistance: billableDistance, // Store billable value
-          totalHours: billableHours, // Store billable value
+          totalDistance: billableDistance,
+          totalHours: billableHours,
           distanceSalary: Math.round(distanceSalary * 100) / 100,
           hoursSalary: Math.round(hoursSalary * 100) / 100,
           dailySalary: Math.round(dailySalary * 100) / 100,
         };
       });
 
-      // Sort by date (oldest first) - with validation
+      // Sort by date (oldest first)
       breakdown.sort((a, b) => {
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
-        
-        // Skip invalid dates in sorting
         if (isNaN(dateA.getTime())) return 1;
         if (isNaN(dateB.getTime())) return -1;
-        
         return dateA.getTime() - dateB.getTime();
       });
 
-      console.log(`✅ Processed ${breakdown.length} days for daily breakdown`);
+      // Calculate totals for logging
+      const totalDistance = breakdown.reduce((sum, day) => sum + day.totalDistance, 0);
+      const totalHours = breakdown.reduce((sum, day) => sum + day.totalHours, 0);
+      const totalDistanceSalary = breakdown.reduce((sum, day) => sum + day.distanceSalary, 0);
+      const totalHoursSalary = breakdown.reduce((sum, day) => sum + day.hoursSalary, 0);
+      
+      // Calculate total salary from daily breakdown
+      const totalSalary = breakdown.reduce((sum, day) => sum + day.dailySalary, 0);
+      
+      console.log(`✅ Daily breakdown fetched: ${breakdown.length} days`);
+      console.log(`📊 Distance: ${totalDistance.toFixed(3)} km (P${totalDistanceSalary.toFixed(2)})`);
+      console.log(`⏱️ Hours: ${Math.floor(totalHours * 60)} min (P${totalHoursSalary.toFixed(2)})`);
+      console.log(`💰 Total Salary: P${totalSalary.toFixed(2)}`);
+      
       setDailyBreakdown(breakdown);
+      
+      // Save to cache
+      try {
+        const cacheKey = `${CACHE_KEYS.DAILY_BREAKDOWN}_${calculation.id}`;
+        const cacheData: CachedData<DailyBreakdown[]> = {
+          data: breakdown,
+          timestamp: Date.now(),
+        };
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        console.log('💾 Saved daily breakdown to cache for calculation:', calculation.id);
+      } catch (cacheError) {
+        console.error('Error saving daily breakdown to cache:', cacheError);
+      }
+      
+      // Store summary for use in main card
+      setBreakdownSummaries(prev => {
+        const newMap = new Map(prev);
+        const summary = {
+          totalDistance,
+          totalHours,
+          totalSalary: Math.round(totalSalary * 100) / 100,
+        };
+        newMap.set(calculation.id, summary);
+        
+        // Save to cache
+        const cacheData: CachedData<Array<{ id: string; summary: typeof summary }>> = {
+          data: Array.from(newMap.entries()).map(([id, summary]) => ({ id, summary })),
+          timestamp: Date.now(),
+        };
+        AsyncStorage.setItem(CACHE_KEYS.BREAKDOWN_SUMMARIES, JSON.stringify(cacheData)).catch(err => {
+          console.error('Error saving breakdown summaries to cache:', err);
+        });
+        
+        return newMap;
+      });
     } catch (error) {
       console.error('❌ Error fetching daily breakdown:', error);
-      setDailyBreakdown([]);
+      if (error instanceof Error && error.message.includes('timeout')) {
+        Alert.alert('Timeout', 'Loading daily breakdown took too long. Please try again.');
+      } else if (error instanceof Error) {
+        Alert.alert('Error', `Failed to refresh data: ${error.message}`);
+      }
+      // Don't clear existing data on error, keep what was there
     } finally {
       setLoadingBreakdown(false);
     }
@@ -613,8 +944,42 @@ const SalaryScreen: React.FC = () => {
 
   const handleViewDetails = async (calculation: SalaryCalculation) => {
     setSelectedCalculation(calculation);
+    selectedCalculationRef.current = calculation;
     setModalVisible(true);
-    // Fetch daily breakdown when modal opens
+    
+    // Try to load cached data first for instant display
+    try {
+      const cacheKey = `${CACHE_KEYS.DAILY_BREAKDOWN}_${calculation.id}`;
+      const cachedStr = await AsyncStorage.getItem(cacheKey);
+      if (cachedStr) {
+        const cached: CachedData<DailyBreakdown[]> = JSON.parse(cachedStr);
+        const now = Date.now();
+        if (now - cached.timestamp < CACHE_EXPIRY.DAILY_BREAKDOWN) {
+          // Load cached data immediately
+          setDailyBreakdown(cached.data);
+          console.log('📦 Loaded cached daily breakdown for instant display');
+          
+          // Update summary from cached breakdown
+          const totalDistance = cached.data.reduce((sum, day) => sum + day.totalDistance, 0);
+          const totalHours = cached.data.reduce((sum, day) => sum + day.totalHours, 0);
+          const totalSalary = cached.data.reduce((sum, day) => sum + day.dailySalary, 0);
+          setBreakdownSummaries(prev => {
+            const newMap = new Map(prev);
+            const summary = {
+              totalDistance,
+              totalHours,
+              totalSalary: Math.round(totalSalary * 100) / 100,
+            };
+            newMap.set(calculation.id, summary);
+            return newMap;
+          });
+        }
+      }
+    } catch (cacheError) {
+      console.error('Error loading cached daily breakdown:', cacheError);
+    }
+    
+    // Fetch fresh data (will use cache if available and not expired)
     await fetchDailyBreakdown(calculation);
   };
 
@@ -718,25 +1083,43 @@ const SalaryScreen: React.FC = () => {
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Distance:</Text>
                     <Text style={styles.detailValue}>
-                      {calculateBillableDistance(calculation.rawData?.totalDistance || 0).toFixed(3)} km
+                      {/* Only show frontend calculation from daily breakdown summary */}
+                      {(() => {
+                        const summary = breakdownSummaries.get(calculation.id);
+                        if (summary) {
+                          return summary.totalDistance.toFixed(3);
+                        }
+                        // Show loading state - don't show backend rawData
+                        return '...';
+                      })()} km
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Hours:</Text>
                     <Text style={styles.detailValue}>
-                      {Math.floor(calculateBillableHours(calculation.rawData?.totalHours || 0) * 60)} min
+                      {/* Only show frontend calculation from daily breakdown summary */}
+                      {(() => {
+                        const summary = breakdownSummaries.get(calculation.id);
+                        if (summary) {
+                          return Math.floor(summary.totalHours * 60);
+                        }
+                        // Show loading state - don't show backend rawData
+                        return '...';
+                      })()} min
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Total Salary:</Text>
                     <Text style={styles.totalSalary}>
+                      {/* Only show frontend calculation from daily breakdown summary */}
                       {(() => {
-                        const billableDistance = calculateBillableDistance(calculation.rawData?.totalDistance || 0);
-                        const billableHours = calculateBillableHours(calculation.rawData?.totalHours || 0);
-                        const distanceRate = calculation.pricingConfig?.distanceRate || 0;
-                        const hoursRate = calculation.pricingConfig?.hoursRate || 0;
-                        const totalSalary = (billableDistance * distanceRate) + (billableHours * hoursRate);
-                        return formatCurrency(totalSalary);
+                        const summary = breakdownSummaries.get(calculation.id);
+                        if (summary) {
+                          // Use frontend-calculated total from daily breakdown
+                          return formatCurrency(summary.totalSalary);
+                        }
+                        // Show loading state - don't show backend calculation
+                        return '...';
                       })()}
                     </Text>
                   </View>
@@ -767,20 +1150,40 @@ const SalaryScreen: React.FC = () => {
         onRequestClose={() => {
           setModalVisible(false);
           setDailyBreakdown([]);
+          selectedCalculationRef.current = null;
         }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Salary Calculation Details</Text>
-            <TouchableOpacity
-              onPress={() => {
-                setModalVisible(false);
-                setDailyBreakdown([]);
-              }}
-              style={styles.closeButton}
-            >
-              <Ionicons name="close" size={24} color="#374151" />
-            </TouchableOpacity>
+            <View style={styles.modalHeaderButtons}>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (selectedCalculation && !loadingBreakdown) {
+                    console.log('🔄 Manual refresh triggered');
+                    await fetchDailyBreakdown(selectedCalculation, true);
+                  }
+                }}
+                style={styles.refreshButton}
+                disabled={loadingBreakdown || !selectedCalculation}
+              >
+                <Ionicons 
+                  name={loadingBreakdown ? "hourglass-outline" : "refresh"} 
+                  size={24} 
+                  color={loadingBreakdown ? "#9CA3AF" : "#374151"} 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setModalVisible(false);
+                  setDailyBreakdown([]);
+                  selectedCalculationRef.current = null;
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#374151" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {selectedCalculation && (
@@ -820,18 +1223,20 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.rawDataGrid}>
                   <View style={styles.rawDataItemCard}>
                     <Text style={styles.rawDataValue}>
+                      {/* Only show frontend calculation from daily breakdown */}
                       {dailyBreakdown.length > 0 
                         ? dailyBreakdown.reduce((sum, day) => sum + day.totalDistance, 0).toFixed(2)
-                        : calculateBillableDistance(selectedCalculation.rawData?.totalDistance || 0).toFixed(2)
+                        : '...'
                       }
                     </Text>
                     <Text style={styles.rawDataLabel}>Total Distance (km)</Text>
                   </View>
                   <View style={styles.rawDataItemCard}>
                     <Text style={styles.rawDataValue}>
+                      {/* Only show frontend calculation from daily breakdown */}
                       {dailyBreakdown.length > 0
                         ? dailyBreakdown.reduce((sum, day) => sum + Math.floor(day.totalHours * 60), 0)
-                        : Math.floor(calculateBillableHours(selectedCalculation.rawData?.totalHours || 0) * 60)
+                        : '...'
                       }
                     </Text>
                     <Text style={styles.rawDataLabel}>Total Minutes</Text>
@@ -856,34 +1261,48 @@ const SalaryScreen: React.FC = () => {
                     <View style={styles.calculationItem}>
                       <Text style={styles.calculationValue}>
                         {(() => {
-                          // Sum from daily breakdown (already floored per day)
-                          const totalDistanceSalary = dailyBreakdown.reduce((sum, day) => sum + day.distanceSalary, 0);
-                          return formatCurrency(totalDistanceSalary);
+                          // Only use frontend calculation from daily breakdown
+                          if (dailyBreakdown.length > 0) {
+                            const totalDistanceSalary = dailyBreakdown.reduce((sum, day) => sum + day.distanceSalary, 0);
+                            return formatCurrency(Math.round(totalDistanceSalary * 100) / 100);
+                          }
+                          // Show loading - don't show backend calculation
+                          return '...';
                         })()}
                       </Text>
                       <Text style={styles.calculationLabel}>Distance Computation</Text>
                       <Text style={styles.calculationFormula}>
+                        {/* Only use frontend calculation from daily breakdown */}
                         {(() => {
-                          const totalBillableKm = dailyBreakdown.reduce((sum, day) => sum + day.totalDistance, 0);
-                          return `${totalBillableKm.toFixed(2)} km × ${formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km`;
+                          if (dailyBreakdown.length > 0) {
+                            const totalKm = dailyBreakdown.reduce((sum, day) => sum + day.totalDistance, 0);
+                            return `${totalKm.toFixed(2)} km × ${formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km`;
+                          }
+                          return '...';
                         })()}
                       </Text>
                     </View>
                     <View style={styles.calculationItem}>
                       <Text style={styles.calculationValue}>
                         {(() => {
-                          // Sum from daily breakdown (already floored per day)
-                          const totalHoursSalary = dailyBreakdown.reduce((sum, day) => sum + day.hoursSalary, 0);
-                          return formatCurrency(totalHoursSalary);
+                          // Only use frontend calculation from daily breakdown
+                          if (dailyBreakdown.length > 0) {
+                            const totalHoursSalary = dailyBreakdown.reduce((sum, day) => sum + day.hoursSalary, 0);
+                            return formatCurrency(Math.round(totalHoursSalary * 100) / 100);
+                          }
+                          // Show loading - don't show backend calculation
+                          return '...';
                         })()}
                       </Text>
                       <Text style={styles.calculationLabel}>Hours Computation</Text>
                       <Text style={styles.calculationFormula}>
+                        {/* Only use frontend calculation from daily breakdown */}
                         {(() => {
-                          const totalBillableMinutes = dailyBreakdown.reduce((sum, day) => {
-                            return sum + Math.floor(day.totalHours * 60);
-                          }, 0);
-                          return `${totalBillableMinutes} min × ${formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour`;
+                          if (dailyBreakdown.length > 0) {
+                            const totalMinutes = dailyBreakdown.reduce((sum, day) => sum + Math.floor(day.totalHours * 60), 0);
+                            return `${totalMinutes} min × ${formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour`;
+                          }
+                          return '...';
                         })()}
                       </Text>
                     </View>
@@ -891,14 +1310,18 @@ const SalaryScreen: React.FC = () => {
                   <View style={[styles.calculationItem, styles.totalCalculationItem]}>
                     <Text style={styles.totalCalculationValue}>
                       {(() => {
-                        // Sum from daily breakdown
-                        const totalSalary = dailyBreakdown.reduce((sum, day) => sum + day.dailySalary, 0);
-                        return formatCurrency(totalSalary);
+                        // Only use frontend calculation from daily breakdown
+                        if (dailyBreakdown.length > 0) {
+                          const totalSalary = dailyBreakdown.reduce((sum, day) => sum + day.dailySalary, 0);
+                          return formatCurrency(Math.round(totalSalary * 100) / 100);
+                        }
+                        // Show loading - don't show backend calculation
+                        return '...';
                       })()}
                     </Text>
                     <Text style={styles.totalCalculationLabel}>Total Salary (Billable)</Text>
                     <Text style={styles.totalCalculationFormula}>
-                      Sum of daily floored values
+                      {dailyBreakdown.length > 0 ? 'Sum of daily floored values' : 'Loading...'}
                     </Text>
                   </View>
                 </View>
@@ -1247,6 +1670,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+    flex: 1,
+  },
+  modalHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    padding: 4,
   },
   closeButton: {
     padding: 4,

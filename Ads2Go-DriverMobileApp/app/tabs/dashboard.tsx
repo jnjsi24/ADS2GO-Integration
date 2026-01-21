@@ -538,7 +538,7 @@ const Dashboard: React.FC = () => {
         return;
       }
 
-      // Fetch salary calculations to calculate current month's salary (matching salary screen logic)
+      // Fetch salary calculations with rawData and pricingConfig for frontend calculation
       const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
@@ -553,13 +553,19 @@ const Dashboard: React.FC = () => {
                 message
                 calculations {
                   id
+                  driverId
                   calculationPeriod {
                     startDate
                     endDate
                     periodType
                   }
-                  calculations {
-                    totalSalary
+                  rawData {
+                    totalDistance
+                    totalHours
+                  }
+                  pricingConfig {
+                    distanceRate
+                    hoursRate
                   }
                 }
               }
@@ -625,10 +631,130 @@ const Dashboard: React.FC = () => {
           }
         });
 
-        // Sum up current month calculations only
-        const currentMonthSalary = currentMonthCalculations.reduce((sum: number, calc: any) => {
-          return sum + (calc.calculations?.totalSalary || 0);
-        }, 0);
+        // Calculate frontend salary from daily breakdown data (same as salary screen)
+        let currentMonthSalary = 0;
+        
+        // Fetch daily breakdown for each calculation and sum up
+        const salaryPromises = currentMonthCalculations.map(async (calc: any) => {
+          try {
+            // Check cache first
+            const cacheKey = `@daily_breakdown_cache_${calc.id}`;
+            const cachedStr = await AsyncStorage.getItem(cacheKey);
+            if (cachedStr) {
+              const cached: { data: Array<{ date: string; totalDistance: number; totalHours: number; distanceSalary: number; hoursSalary: number; dailySalary: number }>, timestamp: number } = JSON.parse(cachedStr);
+              const now = Date.now();
+              if (now - cached.timestamp < 5 * 60 * 1000) {
+                // Use cached daily breakdown
+                const totalSalary = cached.data.reduce((sum, day) => sum + day.dailySalary, 0);
+                return Math.round(totalSalary * 100) / 100;
+              }
+            }
+            
+            // Fetch fresh daily breakdown data
+            const startDateValue = calc.calculationPeriod?.startDate;
+            const endDateValue = calc.calculationPeriod?.endDate;
+            if (!startDateValue || !endDateValue || !calc.driverId) {
+              // Fallback: Calculate from rawData
+              const billableDistance = calc.rawData?.totalDistance || 0;
+              const billableHours = calc.rawData?.totalHours || 0;
+              const distanceRate = calc.pricingConfig?.distanceRate || 0;
+              const hoursRate = calc.pricingConfig?.hoursRate || 0;
+              return (billableDistance * distanceRate) + (billableHours * hoursRate);
+            }
+            
+            let startDate: Date;
+            let endDate: Date;
+            try {
+              if (typeof startDateValue === 'string' && /^\d+$/.test(startDateValue)) {
+                startDate = new Date(parseInt(startDateValue, 10));
+              } else {
+                startDate = new Date(startDateValue);
+              }
+              if (typeof endDateValue === 'string' && /^\d+$/.test(endDateValue)) {
+                endDate = new Date(parseInt(endDateValue, 10));
+              } else {
+                endDate = new Date(endDateValue);
+              }
+              startDate.setHours(0, 0, 0, 0);
+              endDate.setHours(23, 59, 59, 999);
+              if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                throw new Error('Invalid dates');
+              }
+            } catch {
+              // Fallback: Calculate from rawData
+              const billableDistance = calc.rawData?.totalDistance || 0;
+              const billableHours = calc.rawData?.totalHours || 0;
+              const distanceRate = calc.pricingConfig?.distanceRate || 0;
+              const hoursRate = calc.pricingConfig?.hoursRate || 0;
+              return (billableDistance * distanceRate) + (billableHours * hoursRate);
+            }
+            
+            const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${calc.driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&_t=${Date.now()}`;
+            const response = await fetch(apiUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+              },
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Failed to fetch: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const dailyData = data.data?.dailyData?.dailyBreakdown || data.dailyData?.dailyBreakdown || [];
+            
+            // Calculate daily breakdown with billable flooring (same as salary screen)
+            const breakdown = dailyData.map((day: any) => {
+              const rawDistance = day.totalDistanceTraveled || day.totalDistance || 0;
+              const rawHours = day.totalHoursOnline || day.totalHours || 0;
+              const billableDistance = calculateBillableDistance(rawDistance);
+              const billableHours = calculateBillableHours(rawHours);
+              const distanceRate = calc.pricingConfig?.distanceRate || 0;
+              const hoursRate = calc.pricingConfig?.hoursRate || 0;
+              const distanceSalary = billableDistance * distanceRate;
+              const hoursSalary = billableHours * hoursRate;
+              const dailySalary = distanceSalary + hoursSalary;
+              return {
+                date: day.date,
+                totalDistance: billableDistance,
+                totalHours: billableHours,
+                distanceSalary: Math.round(distanceSalary * 100) / 100,
+                hoursSalary: Math.round(hoursSalary * 100) / 100,
+                dailySalary: Math.round(dailySalary * 100) / 100,
+              };
+            });
+            
+            // Calculate total from daily breakdown
+            const totalSalary = breakdown.reduce((sum: number, day: any) => sum + day.dailySalary, 0);
+            
+            // Save to cache
+            try {
+              const cacheData = {
+                data: breakdown,
+                timestamp: Date.now(),
+              };
+              await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            } catch (cacheError) {
+              // Ignore cache errors
+            }
+            
+            return Math.round(totalSalary * 100) / 100;
+          } catch (error) {
+            // Fallback: Calculate from rawData
+            const billableDistance = calc.rawData?.totalDistance || 0;
+            const billableHours = calc.rawData?.totalHours || 0;
+            const distanceRate = calc.pricingConfig?.distanceRate || 0;
+            const hoursRate = calc.pricingConfig?.hoursRate || 0;
+            return (billableDistance * distanceRate) + (billableHours * hoursRate);
+          }
+        });
+        
+        // Wait for all calculations and sum them up
+        const salaries = await Promise.all(salaryPromises);
+        currentMonthSalary = salaries.reduce((sum, salary) => sum + salary, 0);
 
         // Only show current month's salary (no fallback to past months)
         const finalSalary = Math.round(currentMonthSalary * 100) / 100;
