@@ -1690,11 +1690,11 @@ const Dashboard: React.FC = () => {
                 const billableDistance = calculateBillableDistance(rawDistance);
                 return ignoredMeters > 0 ? (
                   <Text style={styles.ignoredText}>
-                    {billableDistance.toFixed(3)} km • floored to nearest meter
+                    {billableDistance.toFixed(3)} km
                   </Text>
                 ) : (
                   <Text style={styles.ignoredText}>
-                    {billableDistance.toFixed(3)} km • exact to meter
+                    {billableDistance.toFixed(3)} km
                   </Text>
                 );
               })()}
@@ -1706,7 +1706,7 @@ const Dashboard: React.FC = () => {
                 const billableMinutes = Math.floor(rawHours * 60);
                 return ignoredSeconds > 0 ? (
                   <Text style={styles.ignoredText}>
-                    {billableMinutes} min • ignored {ignoredSeconds}s
+                    {billableMinutes} min
                   </Text>
                 ) : null;
               })()}
