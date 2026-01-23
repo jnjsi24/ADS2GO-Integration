@@ -461,16 +461,6 @@ export default function Login() {
             <Text style={styles.loginBtnText}>Log In</Text>
           )}
         </TouchableOpacity>
-
-        {/* Divider */}
-        <Text style={styles.orText}>or Login with</Text>
-
-        {/* Socials */}
-        <View style={styles.socials}>
-          <TouchableOpacity style={styles.socialBtn}>
-            <Ionicons name="logo-google" size={22} color="#DB4437" />
-          </TouchableOpacity>
-        </View>
       </View>
     </View>
   );
@@ -609,14 +599,4 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   loginBtnText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  orText: { textAlign: "center", color: "#999", marginBottom: 15, fontSize: 14 },
-  socials: { flexDirection: "row", justifyContent: "center", gap: 15 },
-  socialBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#f2f2f2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
