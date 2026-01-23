@@ -2,6 +2,7 @@ const DeviceTracking = require('../models/deviceTracking');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const logger = require('../utils/logger');
 const { getUTCMidnight, formatDateString } = require('../utils/dateUtils');
+const GPSValidation = require('../utils/gpsValidation');
 
 class DailyArchiveJobV2 {
   constructor() {
@@ -150,13 +151,25 @@ class DailyArchiveJobV2 {
       // Prepare QR scans array first (filter out invalid location data and entries without userId)
       const cleanedQrScans = this.cleanQRScanData(device.qrScans || []).filter(scan => scan.userId);
       
+      // ✅ FIX: Calculate totals from arrays instead of counters (similar to QR scans)
+      // This ensures data is saved even if counters are reset or not updated
+      const calculatedTotalAdPlays = this.calculateTotalAdPlays(device);
+      const calculatedTotalDistance = this.calculateTotalDistanceTraveled(device);
+      
+      // Use calculated values, but fallback to counter if calculated is 0 and counter has value
+      // This handles edge cases where arrays might be empty but counters have data
+      const totalAdPlays = calculatedTotalAdPlays > 0 ? calculatedTotalAdPlays : (device.totalAdPlays || 0);
+      const totalDistanceTraveled = calculatedTotalDistance > 0 ? calculatedTotalDistance : (device.totalDistanceTraveled || 0);
+      
       // Prepare daily data
       const dailyData = {
         date: targetDate,
-        totalAdPlays: device.totalAdPlays || 0,
+        // ✅ FIX: Use calculated totalAdPlays from adPlaybacks array instead of counter
+        totalAdPlays: totalAdPlays,
         // ✅ FIX: Calculate totalQRScans from actual qrScans array length instead of device.totalQRScans
         totalQRScans: cleanedQrScans.length,
-        totalDistanceTraveled: device.totalDistanceTraveled || 0,
+        // ✅ FIX: Use calculated totalDistanceTraveled from locationHistory array instead of counter
+        totalDistanceTraveled: totalDistanceTraveled,
         totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
         totalAdImpressions: device.totalAdImpressions || 0,
         totalAdPlayTime: device.totalAdPlayTime || 0,
@@ -265,8 +278,27 @@ class DailyArchiveJobV2 {
           // Final cleaning of the daily data before assignment
           dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
-          // ✅ FIX: Recalculate totalQRScans from actual qrScans array length after merging
+          // ✅ FIX: Recalculate totals from arrays after merging (similar to QR scans)
           dailyData.totalQRScans = dailyData.qrScans.length;
+          // Recalculate totalAdPlays from merged adPlaybacks
+          dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+          // Recalculate totalDistanceTraveled from merged locationHistory
+          if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
+            let mergedDistance = 0;
+            for (let i = 1; i < dailyData.locationHistory.length; i++) {
+              const prevPoint = dailyData.locationHistory[i - 1];
+              const currentPoint = dailyData.locationHistory[i];
+              if (prevPoint.coordinates && currentPoint.coordinates &&
+                  prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+                const distance = GPSValidation.calculateDistance(
+                  prevPoint.coordinates[1], prevPoint.coordinates[0],
+                  currentPoint.coordinates[1], currentPoint.coordinates[0]
+                );
+                mergedDistance += distance;
+              }
+            }
+            dailyData.totalDistanceTraveled = Math.round(mergedDistance * 100) / 100;
+          }
           
           // Update the daily data
           existingDocument.dailyData[existingDailyIndex] = dailyData;
@@ -313,7 +345,25 @@ class DailyArchiveJobV2 {
                   dailyData.adPerformance = this.mergeAdPerformance(freshDaily.adPerformance, dailyData.adPerformance);
                   dailyData.qrScansByAd = this.mergeQrScansByAd(freshDaily.qrScansByAd, dailyData.qrScansByAd);
                   dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+                  // ✅ FIX: Recalculate totals from arrays after merging
                   dailyData.totalQRScans = dailyData.qrScans.length;
+                  dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+                  if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
+                    let mergedDistance = 0;
+                    for (let i = 1; i < dailyData.locationHistory.length; i++) {
+                      const prevPoint = dailyData.locationHistory[i - 1];
+                      const currentPoint = dailyData.locationHistory[i];
+                      if (prevPoint.coordinates && currentPoint.coordinates &&
+                          prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+                        const distance = GPSValidation.calculateDistance(
+                          prevPoint.coordinates[1], prevPoint.coordinates[0],
+                          currentPoint.coordinates[1], currentPoint.coordinates[0]
+                        );
+                        mergedDistance += distance;
+                      }
+                    }
+                    dailyData.totalDistanceTraveled = Math.round(mergedDistance * 100) / 100;
+                  }
                   
                   freshDocument.dailyData[freshDailyIndex] = dailyData;
                   freshDocument.lastArchiveUpdate = new Date();
@@ -370,8 +420,25 @@ class DailyArchiveJobV2 {
           // Final cleaning of the daily data before adding
           dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
-          // ✅ FIX: Recalculate totalQRScans from actual qrScans array length
+          // ✅ FIX: Recalculate totals from arrays (similar to QR scans)
           dailyData.totalQRScans = dailyData.qrScans.length;
+          dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+          if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
+            let mergedDistance = 0;
+            for (let i = 1; i < dailyData.locationHistory.length; i++) {
+              const prevPoint = dailyData.locationHistory[i - 1];
+              const currentPoint = dailyData.locationHistory[i];
+              if (prevPoint.coordinates && currentPoint.coordinates &&
+                  prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+                const distance = GPSValidation.calculateDistance(
+                  prevPoint.coordinates[1], prevPoint.coordinates[0],
+                  currentPoint.coordinates[1], currentPoint.coordinates[0]
+                );
+                mergedDistance += distance;
+              }
+            }
+            dailyData.totalDistanceTraveled = Math.round(mergedDistance * 100) / 100;
+          }
           
           existingDocument.addDailyData(dailyData);
           existingDocument.lastArchiveUpdate = new Date();
@@ -421,7 +488,25 @@ class DailyArchiveJobV2 {
                 } else {
                   // Add new daily data
                   dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+                  // ✅ FIX: Recalculate totals from arrays
                   dailyData.totalQRScans = dailyData.qrScans.length;
+                  dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+                  if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
+                    let mergedDistance = 0;
+                    for (let i = 1; i < dailyData.locationHistory.length; i++) {
+                      const prevPoint = dailyData.locationHistory[i - 1];
+                      const currentPoint = dailyData.locationHistory[i];
+                      if (prevPoint.coordinates && currentPoint.coordinates &&
+                          prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+                        const distance = GPSValidation.calculateDistance(
+                          prevPoint.coordinates[1], prevPoint.coordinates[0],
+                          currentPoint.coordinates[1], currentPoint.coordinates[0]
+                        );
+                        mergedDistance += distance;
+                      }
+                    }
+                    dailyData.totalDistanceTraveled = Math.round(mergedDistance * 100) / 100;
+                  }
                   freshDocument.addDailyData(dailyData);
                 }
                 
@@ -479,8 +564,25 @@ class DailyArchiveJobV2 {
         // Final cleaning of the daily data before creating new document
         dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
         
-        // ✅ FIX: Recalculate totalQRScans from actual qrScans array length
+        // ✅ FIX: Recalculate totals from arrays (similar to QR scans)
         dailyData.totalQRScans = dailyData.qrScans.length;
+        dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+        if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
+          let mergedDistance = 0;
+          for (let i = 1; i < dailyData.locationHistory.length; i++) {
+            const prevPoint = dailyData.locationHistory[i - 1];
+            const currentPoint = dailyData.locationHistory[i];
+            if (prevPoint.coordinates && currentPoint.coordinates &&
+                prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+              const distance = GPSValidation.calculateDistance(
+                prevPoint.coordinates[1], prevPoint.coordinates[0],
+                currentPoint.coordinates[1], currentPoint.coordinates[0]
+              );
+              mergedDistance += distance;
+            }
+          }
+          dailyData.totalDistanceTraveled = Math.round(mergedDistance * 100) / 100;
+        }
         
         const newDocument = new DeviceDataHistoryV2({
           materialId: device.materialId,
@@ -706,6 +808,45 @@ class DailyArchiveJobV2 {
     }
     
     return document;
+  }
+
+  // ✅ FIX: Calculate totalAdPlays from adPlaybacks array (similar to QR scans)
+  calculateTotalAdPlays(device) {
+    // Filter adPlaybacks by userId (only count valid playbacks)
+    const validAdPlaybacks = (device.adPlaybacks || []).filter(pb => pb.userId);
+    return validAdPlaybacks.length;
+  }
+
+  // ✅ FIX: Calculate totalDistanceTraveled from locationHistory array
+  calculateTotalDistanceTraveled(device) {
+    const locationHistory = (device.locationHistory || [])
+      .filter(loc => loc && loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2);
+    
+    if (locationHistory.length < 2) {
+      // Need at least 2 points to calculate distance
+      return device.totalDistanceTraveled || 0; // Fallback to counter if available
+    }
+    
+    let totalDistance = 0;
+    for (let i = 1; i < locationHistory.length; i++) {
+      const prevPoint = locationHistory[i - 1];
+      const currentPoint = locationHistory[i];
+      
+      if (prevPoint.coordinates && currentPoint.coordinates &&
+          prevPoint.coordinates.length >= 2 && currentPoint.coordinates.length >= 2) {
+        // Calculate distance using GPSValidation (coordinates are [lng, lat] in GeoJSON format)
+        const distance = GPSValidation.calculateDistance(
+          prevPoint.coordinates[1], // lat
+          prevPoint.coordinates[0], // lng
+          currentPoint.coordinates[1], // lat
+          currentPoint.coordinates[0]  // lng
+        );
+        totalDistance += distance;
+      }
+    }
+    
+    // Round to 2 decimal places
+    return Math.round(totalDistance * 100) / 100;
   }
 
   // Helper methods (same as original)
