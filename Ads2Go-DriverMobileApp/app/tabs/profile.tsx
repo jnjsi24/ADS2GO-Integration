@@ -756,31 +756,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Stats Cards */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="cash-outline" size={32} color="#4ade80" />
-          </View>
-          <Text style={styles.statValue}>₱ {realTotalEarnings.toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Total Earnings</Text>
-        </View>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="speedometer-outline" size={32} color="#3b82f6" />
-          </View>
-          <Text style={styles.statValue}>{profile.totalDistance.toFixed(2)} km</Text>
-          <Text style={styles.statLabel}>Distance</Text>
-        </View>
-        <View style={styles.statCard}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="time-outline" size={32} color="#f59e0b" />
-          </View>
-          <Text style={styles.statValue}>{profile.totalHours.toFixed(1)} hours</Text>
-          <Text style={styles.statLabel}>Hours</Text>
-        </View>
-      </View>
-
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity 
@@ -912,36 +887,6 @@ const styles = StyleSheet.create({
   },
   driverId: {
     fontSize: 15,
-    color: '#6b7280',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 30,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 13,
     color: '#6b7280',
   },
   tabsContainer: {
