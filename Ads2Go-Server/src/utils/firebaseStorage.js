@@ -98,13 +98,6 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
   let firebaseFile = null;
   
   try {
-    // Check if Firebase bucket is initialized
-    if (!bucket) {
-      const errorMsg = 'Firebase Storage bucket is not initialized. Please check Firebase Admin SDK configuration and environment variables (FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID, etc.)';
-      console.error('❌', errorMsg);
-      throw new Error(errorMsg);
-    }
-    
     // Handle the case where file is a Promise
     const fileObj = await Promise.resolve(file);
     

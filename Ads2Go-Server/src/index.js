@@ -11,9 +11,6 @@ require('dotenv').config();
 // Import centralized logger
 const logger = require('./utils/logger');
 
-// Import Firebase diagnostics
-const { runFirebaseDiagnostics, formatDiagnostics } = require('./utils/firebaseDiagnostics');
-
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
 
@@ -275,19 +272,6 @@ const app = express();
 
 // ✅ Register health check endpoint BEFORE startServer() to ensure it's always available
 // This ensures Railway can check health even if Apollo Server fails to start
-// Firebase diagnostics endpoint
-app.get('/health/firebase', async (req, res) => {
-  try {
-    const diagnostics = await runFirebaseDiagnostics();
-    res.json(diagnostics);
-  } catch (error) {
-    res.status(500).json({
-      error: 'Failed to run Firebase diagnostics',
-      message: error.message
-    });
-  }
-});
-
 app.get('/health', (req, res) => {
   const mongoStatus = mongoose.connection.readyState;
   const mongoStates = {
@@ -563,16 +547,6 @@ app.use('/api/google-oauth', googleOAuthRoutes);
       console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
       console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
       console.log(`\n✅ Health check available at http://0.0.0.0:${PORT}/health`);
-      console.log(`\n✅ Firebase diagnostics available at http://0.0.0.0:${PORT}/health/firebase`);
-      
-      // Run Firebase diagnostics on startup (non-blocking)
-      runFirebaseDiagnostics()
-        .then(diagnostics => {
-          console.log(formatDiagnostics(diagnostics));
-        })
-        .catch(error => {
-          console.error('⚠️ Failed to run Firebase diagnostics:', error.message);
-        });
       
       // Log initial memory usage
       const initialMem = process.memoryUsage();
