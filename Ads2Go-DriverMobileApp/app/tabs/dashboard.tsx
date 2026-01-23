@@ -7,6 +7,8 @@ import API_CONFIG from '../../config/api';
 import { LinearGradient, Circle } from 'react-native-svg';
 import Svg from 'react-native-svg';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -148,6 +150,7 @@ const Dashboard: React.FC = () => {
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
   const [materialMountedAt, setMaterialMountedAt] = useState<string | null>(null); // ✅ Track mounted date (when material was physically installed)
+  const [lastCalculationData, setLastCalculationData] = useState<{updatedAt: string, distance: number, hours: number} | null>(null); // ✅ Track last calculation data (static values)
 
   // ✅ Helper functions for billable calculations (floor to nearest 100m for distance, complete minutes for time)
   const calculateBillableHours = (totalHours: number) => {
@@ -348,8 +351,13 @@ const Dashboard: React.FC = () => {
           const driver = JSON.parse(driverInfo);
           const driverId = driver.driverId || driver.id;
           if (driverId) {
-            // Silent refresh - no console logs
-            await fetchDriverAnalytics(driverId, true);
+            // Silent refresh - bypass cache to get fresh data
+            await Promise.all([
+              fetchDriverAnalytics(driverId, true),
+              fetchSalarySummary(true, true) // ✅ Auto-refresh salary data (silent=true, bypassCache=true to force fresh data)
+            ]).catch(error => {
+              // Silent error handling - don't show to user
+            });
           }
         }
       }
@@ -357,6 +365,21 @@ const Dashboard: React.FC = () => {
     
     return () => clearInterval(refreshInterval);
   }, [selectedDate]); // Only re-create interval when date changes
+
+  // ✅ Refresh salary when tab comes into focus (ensures updates even if interval was paused)
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.driverId || user?.id) {
+        const isToday = isSelectedDateToday();
+        if (isToday) {
+          // Refresh salary when tab is focused and viewing today
+          fetchSalarySummary(true).catch(error => {
+            console.warn('Focus refresh failed:', error);
+          });
+        }
+      }
+    }, [user?.driverId, user?.id, selectedDate])
+  );
 
   // Refetch data when selectedDate changes
   useEffect(() => {
@@ -567,6 +590,7 @@ const Dashboard: React.FC = () => {
                     distanceRate
                     hoursRate
                   }
+                  updatedAt
                 }
               }
             }
@@ -637,16 +661,19 @@ const Dashboard: React.FC = () => {
         // Fetch daily breakdown for each calculation and sum up
         const salaryPromises = currentMonthCalculations.map(async (calc: any) => {
           try {
-            // Check cache first
             const cacheKey = `@daily_breakdown_cache_${calc.id}`;
-            const cachedStr = await AsyncStorage.getItem(cacheKey);
-            if (cachedStr) {
-              const cached: { data: Array<{ date: string; totalDistance: number; totalHours: number; distanceSalary: number; hoursSalary: number; dailySalary: number }>, timestamp: number } = JSON.parse(cachedStr);
-              const now = Date.now();
-              if (now - cached.timestamp < 5 * 60 * 1000) {
-                // Use cached daily breakdown
-                const totalSalary = cached.data.reduce((sum, day) => sum + day.dailySalary, 0);
-                return Math.round(totalSalary * 100) / 100;
+            
+            // Check cache first (skip if bypassCache is true)
+            if (!bypassCache) {
+              const cachedStr = await AsyncStorage.getItem(cacheKey);
+              if (cachedStr) {
+                const cached: { data: Array<{ date: string; totalDistance: number; totalHours: number; distanceSalary: number; hoursSalary: number; dailySalary: number }>, timestamp: number } = JSON.parse(cachedStr);
+                const now = Date.now();
+                if (now - cached.timestamp < 5 * 60 * 1000) {
+                  // Use cached daily breakdown
+                  const totalSalary = cached.data.reduce((sum, day) => sum + day.dailySalary, 0);
+                  return Math.round(totalSalary * 100) / 100;
+                }
               }
             }
             
@@ -759,6 +786,64 @@ const Dashboard: React.FC = () => {
         // Only show current month's salary (no fallback to past months)
         const finalSalary = Math.round(currentMonthSalary * 100) / 100;
         setTotalEarnings(finalSalary);
+        
+        // ✅ Get last calculation update data for today
+        if (currentMonthCalculations.length > 0) {
+          // Sort by updatedAt to get the most recent
+          const sortedCalcs = [...currentMonthCalculations].sort((a: any, b: any) => {
+            const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return bUpdated - aUpdated;
+          });
+          
+          const mostRecentCalc = sortedCalcs[0];
+          if (mostRecentCalc && mostRecentCalc.updatedAt) {
+            // Get today's data from the cached daily breakdown (from salary calculation)
+            const todayStr = new Date().toISOString().split('T')[0];
+            let todayDistance = 0;
+            let todayHours = 0;
+            
+            // Check cache for daily breakdown (this contains the data used in the calculation)
+            const cacheKey = `@daily_breakdown_cache_${mostRecentCalc.id}`;
+            try {
+              const cachedStr = await AsyncStorage.getItem(cacheKey);
+              if (cachedStr) {
+                const cached: { data: Array<{ date: string; totalDistance: number; totalHours: number }>, timestamp: number } = JSON.parse(cachedStr);
+                // Find today's data in the breakdown
+                const todayData = cached.data.find((day: any) => {
+                  try {
+                    const dayDate = new Date(day.date).toISOString().split('T')[0];
+                    return dayDate === todayStr;
+                  } catch {
+                    return false;
+                  }
+                });
+                if (todayData) {
+                  // Use the billable values from the calculation
+                  todayDistance = todayData.totalDistance || 0;
+                  todayHours = todayData.totalHours || 0;
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to get today data from calculation cache:', error);
+            }
+            
+            // Only set if we found today's data in the calculation
+            if (todayDistance > 0 || todayHours > 0) {
+              setLastCalculationData({
+                updatedAt: mostRecentCalc.updatedAt,
+                distance: todayDistance,
+                hours: todayHours
+              });
+            } else {
+              setLastCalculationData(null);
+            }
+          } else {
+            setLastCalculationData(null);
+          }
+        } else {
+          setLastCalculationData(null);
+        }
         
         // ✅ Save to cache
         await saveSalaryCache(finalSalary);
@@ -1467,6 +1552,20 @@ const Dashboard: React.FC = () => {
           <Text style={styles.balanceCurrency}>PHP</Text>
         </View>
         <Text style={styles.balanceAmount}>{formatCurrency(totalEarnings)}</Text>
+        {/* Last calculation data for today only - shows static values from last calculation update */}
+        {isSelectedDateToday() && lastCalculationData && (
+          <View style={styles.lastCalculationContainer}>
+            <Text style={styles.lastCalculationText}>
+              {(() => {
+                // Use the static values from the last calculation (already billable)
+                const minutes = Math.floor(lastCalculationData.hours * 60);
+                const distanceKm = lastCalculationData.distance.toFixed(3);
+                
+                return `(${minutes} m, ${distanceKm} km)`;
+              })()}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
 
 
@@ -1956,6 +2055,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1,
     textAlign: 'right',
+  },
+  
+  lastCalculationContainer: {
+    marginTop: 12,
+    alignItems: 'flex-end',
+  },
+  
+  lastCalculationText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    opacity: 0.85,
   },
   
   cardNumber: {
