@@ -35,8 +35,8 @@ const SadminDriverSalary: React.FC = () => {
     vehicleType: 'CAR',
     category: 'DIGITAL',
     materialType: 'LCD',
-    distanceRate: 0,
-    hoursRate: 0,
+    distanceRate: '' as any,
+    hoursRate: '' as any,
     notes: ''
   });
 
@@ -142,8 +142,8 @@ const SadminDriverSalary: React.FC = () => {
       vehicleType: 'CAR',
       category: 'DIGITAL',
       materialType: 'LCD',
-      distanceRate: 0,
-      hoursRate: 0,
+      distanceRate: '' as any,
+      hoursRate: '' as any,
       notes: ''
     });
     setShowVehicleDropdown(false);
@@ -266,8 +266,13 @@ const SadminDriverSalary: React.FC = () => {
     if (!formData.vehicleType) errors.vehicleType = 'Vehicle Type is required';
     if (!formData.category) errors.category = 'Category is required';
     if (!formData.materialType) errors.materialType = 'Material Type is required';
-    if (formData.distanceRate < 0) errors.distanceRate = 'Distance rate must be non-negative';
-    if (formData.hoursRate < 0) errors.hoursRate = 'Hours rate must be non-negative';
+    
+    // Convert empty strings to 0 for validation
+    const distanceRate = formData.distanceRate === '' ? 0 : Number(formData.distanceRate);
+    const hoursRate = formData.hoursRate === '' ? 0 : Number(formData.hoursRate);
+    
+    if (distanceRate < 0) errors.distanceRate = 'Distance rate must be non-negative';
+    if (hoursRate < 0) errors.hoursRate = 'Hours rate must be non-negative';
   
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -278,13 +283,18 @@ const SadminDriverSalary: React.FC = () => {
   
     if (editingPricing) {
       const updateInput: UpdateDriverSalaryPricingInput = {
-        distanceRate: formData.distanceRate,
-        hoursRate: formData.hoursRate,
+        distanceRate: distanceRate,
+        hoursRate: hoursRate,
         notes: formData.notes
       };
       updateDriverSalaryPricing({ variables: { id: editingPricing.id, input: updateInput } });
     } else {
-      createDriverSalaryPricing({ variables: { input: formData } });
+      const createInput = {
+        ...formData,
+        distanceRate: distanceRate,
+        hoursRate: hoursRate
+      };
+      createDriverSalaryPricing({ variables: { input: createInput } });
     }
   };
 
@@ -695,13 +705,13 @@ const SadminDriverSalary: React.FC = () => {
                     step="0.01"
                     min="0"
                     value={formData.distanceRate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, distanceRate: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, distanceRate: e.target.value as any }))}
                     className={`peer w-full px-0 pt-8 sm:pt-10 pb-2 text-sm sm:text-base text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.distanceRate ? 'border-red-400' : 'border-gray-300'}`}
                     required
                   />
                   <label
                     htmlFor="distanceRate"
-                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.distanceRate ? 'top-1 text-xs sm:text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-1 peer-placeholder-shown:text-sm sm:peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:top-1 peer-focus:text-xs sm:peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.distanceRate !== '' ? 'top-1 text-xs sm:text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-1 peer-placeholder-shown:text-sm sm:peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:top-1 peer-focus:text-xs sm:peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                   >
                     Distance Rate (₱/km)
                   </label>
@@ -719,13 +729,13 @@ const SadminDriverSalary: React.FC = () => {
                     step="0.01"
                     min="0"
                     value={formData.hoursRate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, hoursRate: parseFloat(e.target.value) || 0 }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, hoursRate: e.target.value as any }))}
                     className={`peer w-full px-0 pt-5 pb-2 text-sm sm:text-base text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.hoursRate ? 'border-red-400' : 'border-gray-300'}`}
                     required
                   />
                   <label
                     htmlFor="hoursRate"
-                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.hoursRate ? '-top-2 text-xs sm:text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm sm:peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-xs sm:peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.hoursRate !== '' ? '-top-2 text-xs sm:text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm sm:peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-xs sm:peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                   >
                     Hours Rate (₱/hour)
                   </label>
