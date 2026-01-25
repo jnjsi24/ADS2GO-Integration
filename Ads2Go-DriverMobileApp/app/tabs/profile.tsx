@@ -720,6 +720,9 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.iconButton} onPress={() => setShowReportModal(true)}>
             <Ionicons name="mail-outline" size={24} color="#3b82f6" />
           </TouchableOpacity>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/faqs')}>
+            <Ionicons name="help-circle-outline" size={24} color="#8b5cf6" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={24} color="#ef4444" />
           </TouchableOpacity>

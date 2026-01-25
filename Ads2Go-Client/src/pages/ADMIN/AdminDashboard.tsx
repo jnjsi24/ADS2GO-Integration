@@ -585,14 +585,14 @@ const Dashboard = () => {
             {/* Left part - Pending User Reports */}
             <div className="min-h-0">
               <motion.div
-                className="bg-white dark:bg-neutral-900 p-3 rounded-xl w-full h-auto space-y-3 shadow-md flex flex-col"
+                className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-auto space-y-3 shadow-md flex flex-col"
                 initial="collapsed"
                 whileHover="expanded"
               >
                 <div className="flex-1 overflow-hidden min-h-0">
                   {pendingUserReports.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">
-                      <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <FileText className="w-8 h-8 mx-auto text-gray-300" />
                       <p>No pending reports found</p>
                     </div>
                   ) : (

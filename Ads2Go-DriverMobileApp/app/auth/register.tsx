@@ -818,15 +818,6 @@ const RegisterForm = () => {
                   <Text style={styles.nextButtonText}>Next →</Text>
               </TouchableOpacity>
             </View>
-
-            <View>
-              <Text style={styles.socialSeparator}>or Register with</Text>
-              <View style={styles.socialButtonsContainer}>
-                <TouchableOpacity style={styles.socialButton}>
-                  <Ionicons name="logo-google" size={22} color="#DB4437" />
-                </TouchableOpacity>
-              </View>
-            </View>
           </View>
         );
 
@@ -1353,25 +1344,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: 'bold',
-  },
-  socialSeparator: {
-    textAlign: 'center',
-    color: '#999',
-    marginVertical: 20,
-    fontSize: 14,
-  },
-  socialButtonsContainer: {
-    flexDirection: "row", 
-    justifyContent: "center", 
-    gap: 15
-  },
-  socialButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#f2f2f2",
-    alignItems: "center",
-    justifyContent: "center",
   },
   contactNumberLabel: {
     fontSize: 14,

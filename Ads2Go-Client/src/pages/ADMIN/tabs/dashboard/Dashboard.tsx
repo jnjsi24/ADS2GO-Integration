@@ -177,65 +177,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               Last updated: {lastRefresh.toLocaleTimeString()}
             </p>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={onSelectAll}
-              className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200"
-            >
-              Select All
-            </button>
-            <button
-              onClick={onDeselectAll}
-              className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200"
-            >
-              Deselect All
-            </button>
-          </div>
         </div>
-
-        {/* Bulk Operations */}
-        {selectedScreens.length > 0 && (
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
-            <h4 className="font-medium mb-3">Bulk Operations ({selectedScreens.length} selected)</h4>
-            <div className="flex flex-wrap gap-2">
-              <button 
-                onClick={() => onBulkAction('play')}
-                className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
-              >
-                <Play className="w-4 h-4 inline mr-1" />
-                Play Selected
-              </button>
-              <button 
-                onClick={() => onBulkAction('pause')}
-                className="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-md text-sm hover:bg-yellow-200"
-              >
-                <Pause className="w-4 h-4 inline mr-1" />
-                Pause Selected
-              </button>
-              <button 
-                onClick={() => onBulkAction('lock')}
-                className="px-3 py-1 bg-orange-100 text-orange-600 rounded-md text-sm hover:bg-orange-200"
-              >
-                <Lock className="w-4 h-4 inline mr-1" />
-                Lock Selected
-              </button>
-              <button 
-                onClick={() => onBulkAction('unlock')}
-                className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
-              >
-                <Unlock className="w-4 h-4 inline mr-1" />
-                Unlock Selected
-              </button>
-              <button 
-                onClick={() => onBulkAction('sync')}
-                className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200"
-              >
-                <Monitor className="w-4 h-4 inline mr-1" />
-                Sync Selected
-              </button>
-            </div>
-          </div>
-        )}
         
         <div className="overflow-x-auto">
           {screens.length === 0 ? (
@@ -259,36 +201,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                     onScreenClick(screen);
                   }}
                   className="bg-white mb-3 rounded-lg shadow-md hover:bg-gray-50 transition-colors border border-gray-100 p-4">
-                  {/* Top Row: Checkbox, Screen ID, and Actions */}
+                  {/* Top Row: Screen ID, and Actions */}
                   <div className="flex flex-wrap justify-between items-center pb-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <motion.div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onScreenSelect(screen.deviceId);
-                        }}
-                        className="w-4 h-4 border-2 border-gray-400 rounded flex items-center justify-center cursor-pointer"
-                        initial={false}
-                        animate={{
-                          scale: selectedScreens.includes(screen.deviceId) ? 1.05 : 1,
-                        }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                      >
-                        <AnimatePresence>
-                          {selectedScreens.includes(screen.deviceId) && (
-                            <motion.div
-                              key="check"
-                              initial={{ opacity: 0, scale: 0.6 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.6 }}
-                              transition={{ duration: 0.15 }}
-                            >
-                              <Check className="w-3 h-3 text-black" />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
-
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();

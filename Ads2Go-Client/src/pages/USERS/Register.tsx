@@ -789,7 +789,8 @@ const Register: React.FC = () => {
               )}
             </form>
 
-            <div className="my-5 flex justify-center">
+            {/* Google login section hidden */}
+            {/* <div className="my-5 flex justify-center">
               <span className="text-white text-xs text-center">or continue with</span>
             </div>
 
@@ -797,7 +798,7 @@ const Register: React.FC = () => {
               <button type="button" className="p-3 border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
                 <img src="/image/g.png" alt="Google logo" className="h-4 w-4" />
               </button>
-            </div>
+            </div> */}
 
             <div className="text-center mt-5 text-sm">
               <span className="text-white/70">Already have an account?</span>
@@ -1054,7 +1055,8 @@ const Register: React.FC = () => {
             )}
           </form>
 
-          <div className="my-6 flex justify-center">
+          {/* Google login section hidden */}
+          {/* <div className="my-6 flex justify-center">
             <span className="text-white text-sm text-center">or continue with</span>
           </div>
 
@@ -1062,7 +1064,7 @@ const Register: React.FC = () => {
             <button type="button" className="p-3 border-2 border-white/30 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
               <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
             </button>
-          </div>
+          </div> */}
 
           <div className="text-center mt-6 text-sm">
             <span className="text-white/70">Already have an account?</span>

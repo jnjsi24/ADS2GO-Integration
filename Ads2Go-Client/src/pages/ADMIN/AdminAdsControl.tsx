@@ -1510,11 +1510,11 @@ const AdminAdsControl: React.FC = () => {
               </span>
             </button>
 
-            {/* Restart All */}
-            <button className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+            {/* Restart All button removed */}
+            {/* <button className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
               <RotateCcw className="w-6 h-6 text-blue-600 mb-2" />
               <span className="text-sm font-medium text-blue-600">Restart All</span>
-            </button>
+            </button> */}
 
             {/* Lock / Unlock All */}
             <button

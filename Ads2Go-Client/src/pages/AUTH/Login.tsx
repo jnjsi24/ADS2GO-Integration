@@ -421,7 +421,8 @@ const Login: React.FC = () => {
               </button>
             </form>
 
-            <div className="my-5 flex justify-center">
+            {/* Google login section hidden */}
+            {/* <div className="my-5 flex justify-center">
               <span className="text-white text-xs text-center">
                 or continue with
               </span>
@@ -442,7 +443,7 @@ const Login: React.FC = () => {
                   <img src="/image/g.png" alt="Google logo" className="h-4 w-4" />
                 )}
               </button>
-            </div>
+            </div> */}
 
             <div className="text-center mt-5 text-sm">
               <span className="text-white/70">Don't have an account?</span>
@@ -591,7 +592,8 @@ const Login: React.FC = () => {
             </button>
           </form>
 
-          <div className="my-6 flex justify-center">
+          {/* Google login section hidden */}
+          {/* <div className="my-6 flex justify-center">
             <span className="text-white text-sm text-center">
               or continue with
             </span>
@@ -612,7 +614,7 @@ const Login: React.FC = () => {
                 <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
               )}
             </button>
-          </div>
+          </div> */}
 
           <div className="text-center mt-6 text-sm">
             <span className="text-white/70">Don't have an account?</span>
