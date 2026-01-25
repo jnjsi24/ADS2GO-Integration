@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_ALL_MATERIALS = gql`
-  query GetAllMaterials {
-    getAllMaterials {
+  query GetAllMaterials($includeArchived: Boolean) {
+    getAllMaterials(includeArchived: $includeArchived) {
       id
       materialId
       vehicleType

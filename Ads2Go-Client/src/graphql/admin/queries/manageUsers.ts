@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_ALL_USERS = gql`
-  query GetAllUsers {
-    getAllUsers {
+  query GetAllUsers($includeArchived: Boolean) {
+    getAllUsers(includeArchived: $includeArchived) {
       id
       firstName
       middleName
@@ -20,6 +20,8 @@ export const GET_ALL_USERS = gql`
       updatedAt
       ads {
         id
+        status
+        isArchived
       }
       isArchived
       archivedAt

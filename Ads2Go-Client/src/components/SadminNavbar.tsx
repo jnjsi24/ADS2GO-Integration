@@ -5,7 +5,6 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import {
   LayoutDashboard,
   Users,
-  Settings,
   LogOut,
   BarChart3,
   DollarSign,
@@ -181,18 +180,6 @@ const SadminNavbar: React.FC = () => {
                   <span>Profile</span>
                 </button>
                 
-                <button
-                  onClick={() => {
-                    navigate('/sadmin-settings');
-                    closeDropup();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  <Settings size={18} />
-                  <span>Settings</span>
-                </button>
-                
                 <hr className="my-1" />
                 
                 <button
@@ -313,16 +300,6 @@ const SadminNavbar: React.FC = () => {
                     >
                       <User size={18} />
                       <span>Profile</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate('/sadmin-settings');
-                        closeDropup();
-                      }}
-                      className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Settings size={18} />
-                      <span>Settings</span>
                     </button>
                     <hr className="my-1" />
                     <button

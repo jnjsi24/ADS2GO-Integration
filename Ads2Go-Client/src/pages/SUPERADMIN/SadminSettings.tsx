@@ -423,7 +423,6 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-4">Recovery Settings</h2>
               {/* Recovery Email Address */}
               <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Recovery Email Address</h3>
@@ -450,23 +449,6 @@ const SadminSettings: React.FC = () => {
                     </button>
                   </div>
                 </form>
-              </div>
-              {/* Recovery Phone Number */}
-              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
-                <h3 className="text-lg font-semibold text-gray-800">Recovery Phone Number</h3>
-                <p className="text-sm text-gray-600 mb-4">Add phone number to set up SMS recovery for your account.</p>
-                <div className="flex justify-end">
-                  <button
-                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-                    onClick={() => addToast({
-                      type: 'success',
-                      title: 'Info',
-                      message: 'Setup Phone Recovery functionality not implemented.'
-                    })}
-                  >
-                    Setup
-                  </button>
-                </div>
               </div>
               {/* Deactivate Account */}
               <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">

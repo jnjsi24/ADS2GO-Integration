@@ -303,6 +303,7 @@ const ManageDrivers: React.FC = () => {
   };
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
+    variables: { includeArchived: activeTab === 'archived' },
     context: { headers: { authorization: `Bearer ${localStorage.getItem('token')}` } }
   });
 
@@ -609,7 +610,24 @@ const ManageDrivers: React.FC = () => {
     }
   };
 
+  // Helper function to check if driver can be deleted
+  const canDeleteDriver = (driver: Driver): boolean => {
+    return !driver.material; // Can delete if no material is assigned
+  };
+
   const handleDelete = (driverId: string) => {
+    // Check if driver has a material assigned
+    const driver = data?.getAllDrivers?.find((d: Driver) => d.driverId === driverId);
+    if (driver && !canDeleteDriver(driver)) {
+      addToast({
+        type: 'error',
+        title: 'Cannot Delete Driver',
+        message: 'This driver has a material assigned. Please unassign the material first before deleting the driver.',
+        duration: 6000
+      });
+      return;
+    }
+    
     setDriverToDelete(driverId);
     setShowDeleteModal(true);
   };
@@ -1076,8 +1094,36 @@ const ManageDrivers: React.FC = () => {
     setIsBulkProcessing(true);
 
     try {
+      // Filter out drivers that have materials assigned
+      const driversToDelete = selectedDrivers.filter(driverId => {
+        const driver = data?.getAllDrivers?.find((d: Driver) => d.driverId === driverId);
+        return !driver?.material; // Only include drivers without materials
+      });
+
+      const skippedCount = selectedDrivers.length - driversToDelete.length;
+      
+      if (driversToDelete.length === 0) {
+        addToast({
+          type: 'error',
+          title: 'Cannot Delete',
+          message: 'None of the selected drivers can be deleted. They all have materials assigned. Please unassign materials first.',
+          duration: 6000
+        });
+        setIsBulkProcessing(false);
+        return;
+      }
+
+      if (skippedCount > 0) {
+        addToast({
+          type: 'warning',
+          title: 'Some Drivers Skipped',
+          message: `${skippedCount} driver(s) were skipped because they have materials assigned.`,
+          duration: 6000
+        });
+      }
+
       const results = await Promise.allSettled(
-        selectedDrivers.map(driverId =>
+        driversToDelete.map(driverId =>
           deleteDriver({
             variables: { driverId, reason: reason || null }
           })
@@ -1330,14 +1376,14 @@ const ManageDrivers: React.FC = () => {
                   </div>
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-3">Email</div>
+                <div className="col-span-2">Email</div>
                 <div className="col-span-2">Contact</div>
                 <div className="col-span-1">Vehicle</div>
-                <div className="col-span-1 flex items-center gap-1 ml-4">
+                <div className="col-span-1 flex items-center gap-1">
                   <span>Status</span>
                 </div>
                 {activeTab === 'archived' && <div className="col-span-1">Deletion Date</div>}
-                <div className="col-span-2 text-center">Action</div>
+                <div className={`${activeTab === 'archived' ? 'col-span-2' : 'col-span-3'} text-center`}>Action</div>
               </div>
             )}
 
@@ -1446,11 +1492,19 @@ const ManageDrivers: React.FC = () => {
                           </>
                         )}
                         <button
-                          className="flex items-center text-red-700 px-1 py-1 rounded hover:bg-red-50"
+                          className={`flex items-center px-1 py-1 rounded ${
+                            canDeleteDriver(driver)
+                              ? 'text-red-700 hover:bg-red-50'
+                              : 'text-gray-400 cursor-not-allowed opacity-50'
+                          }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(driver.driverId);
+                            if (canDeleteDriver(driver)) {
+                              handleDelete(driver.driverId);
+                            }
                           }}
+                          title={!canDeleteDriver(driver) ? 'Cannot delete: Driver has a material assigned' : 'Delete driver'}
+                          disabled={!canDeleteDriver(driver)}
                         >
                           <Trash size={14} />
                         </button>
@@ -1494,12 +1548,12 @@ const ManageDrivers: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <div className="col-span-3 truncate">{driver.email}</div>
+                    <div className="col-span-2 truncate">{driver.email}</div>
                     <div className="col-span-2 truncate">{driver.contactNumber}</div>
-                    <div className="col-span-1 truncate ml-5">{driver.vehicleType}</div>
-                    <div className="col-span-1 ml-7">
+                    <div className="col-span-1 truncate">{driver.vehicleType}</div>
+                    <div className="col-span-1">
                       <span
-                        className={`px-2 py-1  text-xs font-medium rounded-full ${
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
                           driver.accountStatus === 'ACTIVE' ? 'bg-green-200 text-green-800' :
                           driver.accountStatus === 'PENDING' ? 'bg-yellow-200 text-yellow-800' :
                           driver.accountStatus === 'REJECTED' ? 'bg-red-200 text-red-800' :
@@ -1514,7 +1568,7 @@ const ManageDrivers: React.FC = () => {
                         {driver.scheduledDeletionDate ? formatDate(driver.scheduledDeletionDate) : 'N/A'}
                       </div>
                     )}
-                    <div className="col-span-2 flex items-center justify-center gap-1 ml-9" onClick={(e) => e.stopPropagation()}>
+                    <div className={`${activeTab === 'archived' ? 'col-span-2' : 'col-span-3'} flex items-center justify-center gap-1`} onClick={(e) => e.stopPropagation()}>
                     {activeTab === 'archived' ? (
                       <button
                         onClick={() => handleRestore(driver.driverId)}
@@ -1553,7 +1607,13 @@ const ManageDrivers: React.FC = () => {
                       )}
                       <button
                         onClick={() => handleDelete(driver.driverId)}
-                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        disabled={!canDeleteDriver(driver)}
+                        className={`group flex items-center overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300 ${
+                          canDeleteDriver(driver)
+                            ? 'text-red-700'
+                            : 'text-gray-400 cursor-not-allowed opacity-50'
+                        }`}
+                        title={!canDeleteDriver(driver) ? 'Cannot delete: Driver has a material assigned' : 'Delete driver'}
                       >
                         <Trash className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300" size={16} />
                         <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
@@ -2142,8 +2202,18 @@ const ManageDrivers: React.FC = () => {
                   </button>
                 )}
                 <button
-                  onClick={() => handleDelete(selectedDriverDetails.driverId)}
-                  className="px-1 text-red-600 font-medium rounded hover:bg-red-700 transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    if (canDeleteDriver(selectedDriverDetails)) {
+                      handleDelete(selectedDriverDetails.driverId);
+                    }
+                  }}
+                  disabled={!canDeleteDriver(selectedDriverDetails)}
+                  className={`px-1 font-medium rounded transition-colors flex items-center gap-2 ${
+                    canDeleteDriver(selectedDriverDetails)
+                      ? 'text-red-600 hover:bg-red-700'
+                      : 'text-gray-400 cursor-not-allowed opacity-50'
+                  }`}
+                  title={!canDeleteDriver(selectedDriverDetails) ? 'Cannot delete: Driver has a material assigned' : 'Delete driver'}
                 >
                   <Trash size={16} />
                   Delete

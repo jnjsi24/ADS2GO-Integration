@@ -118,7 +118,7 @@ const SuperAdminLogin: React.FC = () => {
                     ? '-top-2 text-xs text-white/70 font-bold'
                     : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-xs peer-focus:text-white/70 peer-focus:font-bold`}
                 >
-                  Enter your email or recovery email
+                  Enter your email
                 </label>
                 {validationErrors.email && (
                   <p className="text-red-300 text-xs mt-1">{validationErrors.email}</p>
@@ -215,7 +215,7 @@ const SuperAdminLogin: React.FC = () => {
                   ? '-top-2 text-sm text-white/70 font-bold'
                   : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
               >
-                Enter your email or recovery email
+                Enter your email
               </label>
               {validationErrors.email && (
                 <p className="text-red-300 text-xs mt-1">{validationErrors.email}</p>

@@ -22,7 +22,7 @@ interface User {
   email: string;
   status: 'verified' | 'unverified';
   city: string;
-  ads: { id: string }[];
+  ads: { id: string; status?: string; isArchived?: boolean }[];
   isEmailVerified: boolean;
   lastLogin: Date | null;
   createdAt: Date;
@@ -199,6 +199,7 @@ const ManageUsers: React.FC = () => {
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
+    variables: { includeArchived: activeTab === 'archived' },
     fetchPolicy: 'network-only',
   });
 
@@ -318,7 +319,36 @@ const ManageUsers: React.FC = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
+  // Helper function to check if user can be deleted
+  const canDeleteUser = (user: User): boolean => {
+    const activeAds = user.ads.filter((ad: any) => {
+      // Check if ad is active (RUNNING or APPROVED) and not archived
+      const isActiveStatus = ad.status === 'RUNNING' || ad.status === 'APPROVED';
+      const isNotArchived = !ad.isArchived;
+      return isActiveStatus && isNotArchived;
+    });
+    return activeAds.length === 0; // Can delete if no active ads
+  };
+
   const handleDelete = (id: string) => {
+    // Check if user has active ads
+    const user = users.find((u: User) => u.id === id);
+    if (user && !canDeleteUser(user)) {
+      const activeAds = user.ads.filter((ad: any) => {
+        const isActiveStatus = ad.status === 'RUNNING' || ad.status === 'APPROVED';
+        const isNotArchived = !ad.isArchived;
+        return isActiveStatus && isNotArchived;
+      });
+      
+      addToast({
+        type: 'error',
+        title: 'Cannot Delete Advertiser',
+        message: `This advertiser has ${activeAds.length} active ad(s). Please archive or end all active ads before deleting the advertiser.`,
+        duration: 6000
+      });
+      return;
+    }
+    
     setUserToDelete(id);
     setShowDeleteModal(true);
   };
@@ -442,8 +472,44 @@ const ManageUsers: React.FC = () => {
     setIsBulkDeleting(true);
     
     try {
+      // Filter out users that have active ads
+      const usersToDelete = selectedUsers.filter(userId => {
+        const user = users.find((u: User) => u.id === userId);
+        if (!user) return false;
+        
+        const activeAds = user.ads.filter((ad: any) => {
+          const isActiveStatus = ad.status === 'RUNNING' || ad.status === 'APPROVED';
+          const isNotArchived = !ad.isArchived;
+          return isActiveStatus && isNotArchived;
+        });
+        
+        return activeAds.length === 0; // Only include users without active ads
+      });
+
+      const skippedCount = selectedUsers.length - usersToDelete.length;
+      
+      if (usersToDelete.length === 0) {
+        addToast({
+          type: 'error',
+          title: 'Cannot Delete',
+          message: 'None of the selected advertisers can be deleted. They all have active ads. Please archive or end all active ads first.',
+          duration: 6000
+        });
+        setIsBulkDeleting(false);
+        return;
+      }
+
+      if (skippedCount > 0) {
+        addToast({
+          type: 'warning',
+          title: 'Some Advertisers Skipped',
+          message: `${skippedCount} advertiser(s) were skipped because they have active ads.`,
+          duration: 6000
+        });
+      }
+      
       const results = await Promise.allSettled(
-        selectedUsers.map(userId =>
+        usersToDelete.map(userId =>
           deleteUser({
             variables: { id: userId, reason: reason || null },
           })
@@ -986,11 +1052,19 @@ const ManageUsers: React.FC = () => {
                         </button>
                       ) : (
                         <button
-                          className="flex items-center text-red-700 px-1 py-1 rounded hover:bg-red-50"
+                          className={`flex items-center px-1 py-1 rounded ${
+                            canDeleteUser(user)
+                              ? 'text-red-700 hover:bg-red-50'
+                              : 'text-gray-400 cursor-not-allowed opacity-50'
+                          }`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(user.id);
+                            if (canDeleteUser(user)) {
+                              handleDelete(user.id);
+                            }
                           }}
+                          title={!canDeleteUser(user) ? 'Cannot delete: User has active ads' : 'Delete'}
+                          disabled={!canDeleteUser(user)}
                         >
                           <Trash size={14} />
                         </button>
@@ -1071,9 +1145,18 @@ const ManageUsers: React.FC = () => {
                       </button>
                     ) : (
                       <button
-                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                        onClick={() => handleDelete(user.id)}
-                        title="Delete"
+                        className={`group flex items-center overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300 ${
+                          canDeleteUser(user)
+                            ? 'text-red-700'
+                            : 'text-gray-400 cursor-not-allowed opacity-50'
+                        }`}
+                        onClick={() => {
+                          if (canDeleteUser(user)) {
+                            handleDelete(user.id);
+                          }
+                        }}
+                        title={!canDeleteUser(user) ? 'Cannot delete: User has active ads' : 'Delete'}
+                        disabled={!canDeleteUser(user)}
                       >
                         <Trash 
                           className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"

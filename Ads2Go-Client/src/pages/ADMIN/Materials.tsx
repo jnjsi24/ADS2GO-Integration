@@ -206,6 +206,7 @@ const Materials: React.FC = () => {
 
   // GraphQL hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_MATERIALS, {
+    variables: { includeArchived: activeTab === 'archived' },
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`

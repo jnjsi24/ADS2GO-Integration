@@ -274,7 +274,7 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        <Route
+        {/* <Route
           path="/sadmin-settings"
           element={
             <ProtectedRoute>
@@ -283,7 +283,7 @@ const AdminAppContent: React.FC = () => {
               </Suspense>
             </ProtectedRoute>
           }
-        />
+        /> */}
         <Route
           path="/sadmin-account"
           element={

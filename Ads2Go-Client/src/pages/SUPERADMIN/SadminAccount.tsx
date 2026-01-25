@@ -122,15 +122,37 @@ const Account: React.FC = () => {
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
-    // Auto-fix phone number format if user enters 9-digit number starting with 7
-    if (name === 'contactNumber' && value) {
+    // Handle phone number formatting
+    if (name === 'contactNumber') {
+      // Remove all non-digits
       const cleanNumber = value.replace(/\D/g, '');
+      
+      // Auto-fix phone number format if user enters 9-digit number starting with 7
       if (cleanNumber.length === 9 && cleanNumber.startsWith('7')) {
         // Auto-add the leading 9 to make it 10 digits
         const fixedNumber = `+63 9${cleanNumber}`;
         setFormData(prev => ({
           ...prev,
           [name]: fixedNumber
+        }));
+        return;
+      }
+      
+      // Always add +63 prefix back since input field strips it
+      if (cleanNumber.length > 0) {
+        // Limit to 10 digits
+        const digits = cleanNumber.slice(0, 10);
+        const formattedNumber = `+63 ${digits}`;
+        setFormData(prev => ({
+          ...prev,
+          [name]: formattedNumber
+        }));
+        return;
+      } else {
+        // If empty, set to default
+        setFormData(prev => ({
+          ...prev,
+          [name]: "+63 "
         }));
         return;
       }
@@ -287,7 +309,14 @@ const Account: React.FC = () => {
     // Phone number validation (only if provided and not just the default +63 )
     if (formData.contactNumber && formData.contactNumber !== "+63 " && formData.contactNumber.trim() !== '') {
       // Clean the number and check if it's a valid Philippine mobile number
-      const cleanNumber = formData.contactNumber.replace(/\D/g, ''); // Remove all non-digits
+      let cleanNumber = formData.contactNumber.replace(/\D/g, ''); // Remove all non-digits
+      
+      // If the number includes the country code (63), extract just the 10 digits
+      if (cleanNumber.startsWith('63') && cleanNumber.length === 12) {
+        cleanNumber = cleanNumber.slice(2); // Remove the 63 prefix to get 10 digits
+      } else if (cleanNumber.startsWith('0') && cleanNumber.length === 11) {
+        cleanNumber = cleanNumber.slice(1); // Remove the leading 0 to get 10 digits
+      }
       
       // Check if it's a valid Philippine mobile number format
       // Should be exactly 10 digits starting with 9 (e.g., 9748717212)

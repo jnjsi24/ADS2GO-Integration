@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_ALL_DRIVERS = gql`
-  query GetAllDrivers {
-    getAllDrivers {
+  query GetAllDrivers($includeArchived: Boolean) {
+    getAllDrivers(includeArchived: $includeArchived) {
       id
       driverId
       firstName
