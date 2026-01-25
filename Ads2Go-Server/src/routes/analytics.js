@@ -86,6 +86,47 @@ router.get('/user/:userId', async (req, res) => {
   }
 });
 
+// GET /analytics/ad/:adId/current-devices - Get current device assignments from AdsDeployment
+// This returns the ACTUAL current devices where an ad is deployed (not the stale Ad.materialId field)
+router.get('/ad/:adId/current-devices', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    
+    console.log(`📱 [Analytics] Getting current devices for ad ${adId}`);
+    
+    const AdsDeployment = require('../models/adsDeployment');
+    
+    // Find all active deployments for this ad across all materials
+    const activeDeployments = await AdsDeployment.find({
+      'lcdSlots.adId': new mongoose.Types.ObjectId(adId),
+      'lcdSlots.status': { $in: ['SCHEDULED', 'RUNNING'] },
+      isArchived: { $ne: true }
+    }).lean();
+    
+    // Extract unique materialIds (device ID strings like "DGL-HEADDRESS-CAR-004")
+    const materialIds = [...new Set(activeDeployments.map(d => d.materialId))].filter(Boolean);
+    
+    console.log(`📱 [Analytics] Found ${materialIds.length} active devices for ad ${adId}:`, materialIds);
+    
+    res.json({
+      success: true,
+      data: {
+        adId,
+        materialIds,
+        deviceCount: materialIds.length
+      },
+      message: `Found ${materialIds.length} active device(s) for this ad`
+    });
+  } catch (error) {
+    console.error('Error getting current devices for ad:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get current devices for ad',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // GET /analytics/ad/:adId - Get analytics for specific ad
 router.get('/ad/:adId', async (req, res) => {
   try {

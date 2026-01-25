@@ -6393,6 +6393,7 @@ class UserAnalyticsService {
       const Material = require('../models/Material');
       const Ad = require('../models/Ad');
       const DeviceTracking = require('../models/deviceTracking');
+      const AdsDeployment = require('../models/adsDeployment');
       
       // Get user's ads to find associated materials (including SCHEDULED ads)
       const userAds = await Ad.find({ 
@@ -6411,54 +6412,96 @@ class UserAnalyticsService {
         };
       }
 
-      // Get all materials associated with user's ads
+      // ✅ FIX: Get materials from AdsDeployment (current device assignments) instead of stale Ad.materialId
+      // This ensures the "Today" map shows the actual devices where ads are currently deployed
       const materialIds = [];
       const materialDetails = [];
-
-      for (const ad of userAds) {
-        if (ad.targetDevices && ad.targetDevices.length > 0) {
-          // Get material documents to extract materialId strings
-          const materials = await Material.find({ _id: { $in: ad.targetDevices } });
-          materials.forEach(material => {
-            if (material.materialId && !materialIds.includes(material.materialId)) {
-              materialIds.push(material.materialId);
-              materialDetails.push({
-                materialId: material.materialId,
-                materialName: material.materialName,
-                materialType: material.materialType,
-                vehicleType: material.vehicleType,
-                category: material.category,
-                status: material.status,
-                assignedDate: material.assignedDate,
-                mountedAt: material.mountedAt,
-                dismountedAt: material.dismountedAt,
-                driverId: material.driverId,
-                location: material.location,
-                ads: []
-              });
-            }
-          });
-        } else if (ad.materialId && ad.materialId.length > 0) {
-          const materials = await Material.find({ _id: { $in: ad.materialId } });
-          materials.forEach(material => {
-            if (material && material.materialId && !materialIds.includes(material.materialId)) {
-              materialIds.push(material.materialId);
-              materialDetails.push({
-                materialId: material.materialId,
-                materialName: material.materialName,
-                materialType: material.materialType,
-                vehicleType: material.vehicleType,
-                category: material.category,
-                status: material.status,
-                assignedDate: material.assignedDate,
-                mountedAt: material.mountedAt,
-                dismountedAt: material.dismountedAt,
-                driverId: material.driverId,
-                location: material.location,
-                ads: []
-              });
-            }
-          });
+      
+      // Get all adIds from user's ads
+      const userAdIds = userAds.map(ad => ad._id);
+      
+      // Query AdsDeployment to find all materials where user's ads are currently deployed
+      const activeDeployments = await AdsDeployment.find({
+        'lcdSlots.adId': { $in: userAdIds },
+        'lcdSlots.status': { $in: ['SCHEDULED', 'RUNNING'] },
+        isArchived: { $ne: true }
+      }).lean();
+      
+      console.log(`📱 [getActiveTotalMaterials] Found ${activeDeployments.length} active deployments for user ${userId}`);
+      
+      // Extract unique materialId strings and get their details
+      const deployedMaterialIdStrings = [...new Set(activeDeployments.map(d => d.materialId))].filter(Boolean);
+      
+      if (deployedMaterialIdStrings.length > 0) {
+        // Get material details for all deployed devices
+        const materials = await Material.find({ materialId: { $in: deployedMaterialIdStrings } });
+        materials.forEach(material => {
+          if (material.materialId && !materialIds.includes(material.materialId)) {
+            materialIds.push(material.materialId);
+            materialDetails.push({
+              materialId: material.materialId,
+              materialName: material.materialName,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              category: material.category,
+              status: material.status,
+              assignedDate: material.assignedDate,
+              mountedAt: material.mountedAt,
+              dismountedAt: material.dismountedAt,
+              driverId: material.driverId,
+              location: material.location,
+              ads: []
+            });
+          }
+        });
+        console.log(`📱 [getActiveTotalMaterials] Found ${materialIds.length} materials from AdsDeployment:`, materialIds);
+      } else {
+        // Fallback: If no active deployments found, use Ad.targetDevices/materialId as fallback
+        console.log(`⚠️ [getActiveTotalMaterials] No active deployments found, falling back to Ad.materialId`);
+        for (const ad of userAds) {
+          if (ad.targetDevices && ad.targetDevices.length > 0) {
+            const materials = await Material.find({ _id: { $in: ad.targetDevices } });
+            materials.forEach(material => {
+              if (material.materialId && !materialIds.includes(material.materialId)) {
+                materialIds.push(material.materialId);
+                materialDetails.push({
+                  materialId: material.materialId,
+                  materialName: material.materialName,
+                  materialType: material.materialType,
+                  vehicleType: material.vehicleType,
+                  category: material.category,
+                  status: material.status,
+                  assignedDate: material.assignedDate,
+                  mountedAt: material.mountedAt,
+                  dismountedAt: material.dismountedAt,
+                  driverId: material.driverId,
+                  location: material.location,
+                  ads: []
+                });
+              }
+            });
+          } else if (ad.materialId && ad.materialId.length > 0) {
+            const materials = await Material.find({ _id: { $in: ad.materialId } });
+            materials.forEach(material => {
+              if (material && material.materialId && !materialIds.includes(material.materialId)) {
+                materialIds.push(material.materialId);
+                materialDetails.push({
+                  materialId: material.materialId,
+                  materialName: material.materialName,
+                  materialType: material.materialType,
+                  vehicleType: material.vehicleType,
+                  category: material.category,
+                  status: material.status,
+                  assignedDate: material.assignedDate,
+                  mountedAt: material.mountedAt,
+                  dismountedAt: material.dismountedAt,
+                  driverId: material.driverId,
+                  location: material.location,
+                  ads: []
+                });
+              }
+            });
+          }
         }
       }
 

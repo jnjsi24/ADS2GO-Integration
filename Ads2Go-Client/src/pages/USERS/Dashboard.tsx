@@ -1163,29 +1163,76 @@ const Dashboard = () => {
     return Math.round(averageMileage * 10) / 10;
   };
 
-  // Get user's ads for route selector (only RUNNING ads with materials)
+  // Get user's ads for route selector (only RUNNING ads)
   // Only RUNNING ads have route history, APPROVED ads haven't started yet
   // ✅ Exclude archived/deleted ads
+  // ✅ FIX: Don't require materialId since actual devices come from AdsDeployment
   const userAdsForRoute = (myAdsData?.getMyAds || []).filter((ad: any) => 
     ad.status === 'RUNNING' && 
-    !ad.isArchived && // ✅ Exclude archived/deleted ads
-    ad.materialId && 
-    ad.materialId.length > 0
+    !ad.isArchived // ✅ Exclude archived/deleted ads
   );
 
-  // Get ALL material IDs from selected ad (memoized to prevent unnecessary re-renders)
-  const selectedMaterialIds = useMemo(() => {
-    if (!selectedAdForRoute || !myAdsData?.getMyAds) return [];
+  // ✅ FIX: Fetch CURRENT device assignments from AdsDeployment API (not stale Ad.materialId)
+  // This ensures the map shows the actual devices where the ad is currently deployed
+  const [currentDeviceIds, setCurrentDeviceIds] = useState<string[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  
+  // Fetch current devices when ad selection changes
+  useEffect(() => {
+    const fetchCurrentDevices = async () => {
+      if (!selectedAdForRoute) {
+        setCurrentDeviceIds([]);
+        return;
+      }
+      
+      setLoadingDevices(true);
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
+      
+      try {
+        console.log(`📱 [Dashboard] Fetching current devices for ad ${selectedAdForRoute}`);
+        const response = await fetch(`${baseUrl}/analytics/ad/${selectedAdForRoute}/current-devices`);
+        const result = await response.json();
+        
+        if (result.success && result.data?.materialIds) {
+          console.log(`📱 [Dashboard] Found ${result.data.materialIds.length} current devices:`, result.data.materialIds);
+          setCurrentDeviceIds(result.data.materialIds);
+        } else {
+          console.log(`⚠️ [Dashboard] No current devices found for ad, falling back to Ad.materialId`);
+          // Fallback to Ad.materialId if API returns no results
+          const selectedAd = myAdsData?.getMyAds?.find((ad: any) => ad.id === selectedAdForRoute);
+          if (selectedAd?.materialId) {
+            const fallbackIds = selectedAd.materialId
+              .map((material: any) => material?.materialId)
+              .filter((id: string) => id);
+            setCurrentDeviceIds(fallbackIds);
+          } else {
+            setCurrentDeviceIds([]);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [Dashboard] Error fetching current devices:`, error);
+        // Fallback to Ad.materialId on error
+        const selectedAd = myAdsData?.getMyAds?.find((ad: any) => ad.id === selectedAdForRoute);
+        if (selectedAd?.materialId) {
+          const fallbackIds = selectedAd.materialId
+            .map((material: any) => material?.materialId)
+            .filter((id: string) => id);
+          setCurrentDeviceIds(fallbackIds);
+        } else {
+          setCurrentDeviceIds([]);
+        }
+      } finally {
+        setLoadingDevices(false);
+      }
+    };
     
-    const selectedAd = myAdsData.getMyAds.find((ad: any) => ad.id === selectedAdForRoute);
-    // ✅ Exclude archived/deleted ads
-    if (!selectedAd || selectedAd.isArchived || !selectedAd.materialId || selectedAd.materialId.length === 0) return [];
-    
-    // Return array of all materialId strings
-    return selectedAd.materialId
-      .map((material: any) => material?.materialId)
-      .filter((id: string) => id); // Remove any null/undefined
+    fetchCurrentDevices();
   }, [selectedAdForRoute, myAdsData?.getMyAds]);
+  
+  // Use currentDeviceIds (from API) instead of stale ad.materialId
+  const selectedMaterialIds = useMemo(() => {
+    return currentDeviceIds;
+  }, [currentDeviceIds]);
 
   // Close calendar when clicking outside
   useEffect(() => {
@@ -1682,6 +1729,13 @@ const Dashboard = () => {
                         <p className="text-sm text-black/70">
                           Choose an ad from the dropdown above to view its historical routes
                         </p>
+                      </div>
+                    </div>
+                  ) : loadingDevices ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center p-8">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                        <p className="text-sm text-gray-500">Loading device assignments...</p>
                       </div>
                     </div>
                   ) : selectedMaterialIds.length === 0 ? (
