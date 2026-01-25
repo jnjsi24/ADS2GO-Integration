@@ -16,6 +16,7 @@ export const GET_ALL_DRIVERS = gql`
       accountStatus
       reviewStatus
       installedMaterialType
+      preferredMaterialType
       address
       licenseNumber
       licensePictureURL

@@ -30,6 +30,7 @@ interface Driver {
   accountStatus: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED' | 'RESUBMITTED';
   reviewStatus: string;
   installedMaterialType?: string;
+  preferredMaterialType?: string[];
   address?: string;
   licenseNumber?: string;
   licensePictureURL?: string; // legacy single license
@@ -1768,12 +1769,14 @@ const ManageDrivers: React.FC = () => {
                       </p>
                     </div>
 
-                    <div>
+                    <div className={`${isMobile ? "mb-2" : "mb-4"}`}>
                       <p className="text-xs sm:text-sm text-gray-500">Preferred Material</p>
                       <p className="text-gray-900 font-bold text-sm sm:text-base">
-                        {selectedDriverDetails.material?.materialType ||
-                          selectedDriverDetails.installedMaterialType ||
-                          "N/A"}
+                        {selectedDriverDetails.preferredMaterialType && selectedDriverDetails.preferredMaterialType.length > 0
+                          ? selectedDriverDetails.preferredMaterialType.join(', ')
+                          : selectedDriverDetails.material?.materialType ||
+                            selectedDriverDetails.installedMaterialType ||
+                            "N/A"}
                       </p>
                     </div>
 
