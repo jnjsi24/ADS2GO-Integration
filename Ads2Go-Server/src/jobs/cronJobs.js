@@ -82,11 +82,38 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
+    // ✅ FIX: Pre-midnight archive job - runs at 11:59 PM Philippines time
+    // This captures any hours accumulated between 11:55 PM and 11:59 PM
+    const preMidnightArchiveTask = cron.schedule('59 23 * * *', async () => {
+      console.log('⏰ Pre-midnight archive job triggered at 11:59 PM (Philippines time)');
+      try {
+        // Final archive before midnight reset - captures last 4 minutes of hours
+        await dailyArchiveJobV2.archiveDailyData();
+        logger.database('✅ Pre-midnight archive job completed successfully');
+      } catch (error) {
+        console.error('❌ Pre-midnight archive job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     // Daily reset job - runs at midnight Philippines time to reset DeviceTracking
     const dailyResetTask = cron.schedule('0 0 * * *', async () => {
       console.log('🔄 Daily reset job triggered at midnight (Philippines time)');
       try {
-        // ✅ SAFEGUARD: Wait a bit to ensure archive job completes (archive runs at 11:55 PM)
+        // ✅ FIX: Run a FINAL archive BEFORE reset to capture hours from 11:55 PM - 11:59:59 PM
+        // This ensures no hours are lost between the 11:55 PM archive and midnight reset
+        // IMPORTANT: Pass true to archive YESTERDAY's data (since it's now 12:00 AM of the new day)
+        console.log('📦 Running final archive before reset to capture YESTERDAY\'s final hours...');
+        try {
+          await dailyArchiveJobV2.archiveDailyData(true); // true = archive previous day
+          console.log('✅ Final archive before reset completed');
+        } catch (archiveError) {
+          console.error('⚠️ Final archive before reset failed, but proceeding with reset:', archiveError.message);
+        }
+        
+        // ✅ SAFEGUARD: Wait a bit to ensure archive job completes
         // Check if archive is still running and wait if needed (max 2 minutes)
         let waitCount = 0;
         while (dailyArchiveJobV2.isRunning && waitCount < 24) {
@@ -130,6 +157,7 @@ class CronJobs {
     this.jobs.set('hourlyArchive', hourlyArchiveTask);
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
+    this.jobs.set('preMidnightArchive', preMidnightArchiveTask);
     this.jobs.set('dailyFreshArchive', dailyFreshArchiveTask);
 
     // Hourly cleanup job - runs every hour to clean up old data

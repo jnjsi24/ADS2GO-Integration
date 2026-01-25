@@ -9,7 +9,7 @@ class DailyArchiveJobV2 {
     this.isRunning = false;
   }
 
-  async archiveDailyData() {
+  async archiveDailyData(archivePreviousDay = false) {
     if (this.isRunning) {
       console.log('⏭️ Archive job already running, skipping...');
       return;
@@ -34,9 +34,21 @@ class DailyArchiveJobV2 {
       });
       
       const phDateParts = phDateFormatter.formatToParts(now);
-      const year = parseInt(phDateParts.find(p => p.type === 'year').value);
-      const month = parseInt(phDateParts.find(p => p.type === 'month').value) - 1; // 0-indexed
-      const day = parseInt(phDateParts.find(p => p.type === 'day').value);
+      let year = parseInt(phDateParts.find(p => p.type === 'year').value);
+      let month = parseInt(phDateParts.find(p => p.type === 'month').value) - 1; // 0-indexed
+      let day = parseInt(phDateParts.find(p => p.type === 'day').value);
+      
+      // ✅ FIX: If archivePreviousDay is true (called at midnight), archive YESTERDAY's data
+      // This ensures we capture all hours from the previous day before reset
+      if (archivePreviousDay) {
+        // Subtract one day
+        const yesterdayDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+        yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+        year = yesterdayDate.getUTCFullYear();
+        month = yesterdayDate.getUTCMonth();
+        day = yesterdayDate.getUTCDate();
+        console.log(`📅 [Archive] Archiving PREVIOUS day's data (midnight archive)`);
+      }
       
       // Create UTC midnight date directly from Philippines date components
       // This matches how dates are stored in the database (UTC midnight)
@@ -826,10 +838,34 @@ class DailyArchiveJobV2 {
 
   // Helper methods (same as original)
   getFinalHoursOnline(device, deviceTimezone) {
-    if (device.hoursTracking && device.hoursTracking.totalOnlineHours !== undefined) {
+    // ✅ FIX: Check multiple sources for hours in priority order:
+    // 1. currentSession.totalHoursOnline (most up-to-date, real-time hours)
+    // 2. hoursTracking.totalOnlineHours (legacy tracking)
+    // 3. device.totalHoursOnline (synced from session)
+    // 4. Fallback to 0
+    
+    // Priority 1: Get from current session (most reliable source)
+    if (device.currentSession && device.currentSession.totalHoursOnline !== undefined && 
+        device.currentSession.totalHoursOnline !== null && device.currentSession.totalHoursOnline > 0) {
+      console.log(`📊 [Archive] ${device.materialId}: Using currentSession.totalHoursOnline = ${device.currentSession.totalHoursOnline}`);
+      return device.currentSession.totalHoursOnline;
+    }
+    
+    // Priority 2: Check hoursTracking (legacy)
+    if (device.hoursTracking && device.hoursTracking.totalOnlineHours !== undefined && 
+        device.hoursTracking.totalOnlineHours > 0) {
+      console.log(`📊 [Archive] ${device.materialId}: Using hoursTracking.totalOnlineHours = ${device.hoursTracking.totalOnlineHours}`);
       return device.hoursTracking.totalOnlineHours;
     }
-    return device.totalHoursOnline || 0;
+    
+    // Priority 3: Fall back to device-level totalHoursOnline
+    if (device.totalHoursOnline !== undefined && device.totalHoursOnline > 0) {
+      console.log(`📊 [Archive] ${device.materialId}: Using device.totalHoursOnline = ${device.totalHoursOnline}`);
+      return device.totalHoursOnline;
+    }
+    
+    console.log(`⚠️ [Archive] ${device.materialId}: No hours found, returning 0`);
+    return 0;
   }
 
   prepareHoursTracking(device, deviceTimezone) {
