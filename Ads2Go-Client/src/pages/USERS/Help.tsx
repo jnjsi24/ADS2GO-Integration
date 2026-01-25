@@ -176,22 +176,26 @@ const Help: React.FC = () => {
     }
   };
 
-  // Group FAQs by category
-  const faqsByCategory = faqs.reduce((acc: any, faq: any) => {
-    if (!acc[faq.category]) {
-      acc[faq.category] = [];
-    }
-    acc[faq.category].push(faq);
-    return acc;
-  }, {});
-  // Group filtered FAQs by category
-  const filteredFAQsByCategory = filteredFAQs.reduce((acc: any, faq: any) => {
-    if (!acc[faq.category]) {
-      acc[faq.category] = [];
-    }
-    acc[faq.category].push(faq);
-    return acc;
-  }, {});
+  // Group FAQs by category (excluding DRIVERS)
+  const faqsByCategory = faqs
+    .filter((faq: any) => faq.category !== 'DRIVERS')
+    .reduce((acc: any, faq: any) => {
+      if (!acc[faq.category]) {
+        acc[faq.category] = [];
+      }
+      acc[faq.category].push(faq);
+      return acc;
+    }, {});
+  // Group filtered FAQs by category (excluding DRIVERS)
+  const filteredFAQsByCategory = filteredFAQs
+    .filter((faq: any) => faq.category !== 'DRIVERS')
+    .reduce((acc: any, faq: any) => {
+      if (!acc[faq.category]) {
+        acc[faq.category] = [];
+      }
+      acc[faq.category].push(faq);
+      return acc;
+    }, {});
 
   const getCategoryTitle = (category: string) => {
     switch (category) {
@@ -369,7 +373,9 @@ const Help: React.FC = () => {
             </div>
               ) : (
                 <div className="max-w-5xl mx-auto">
-                  {getSortedCategories(searchQuery ? filteredFAQsByCategory : faqsByCategory).map((category: string, index: number) => {
+                  {getSortedCategories(searchQuery ? filteredFAQsByCategory : faqsByCategory)
+                    .filter((category: string) => category !== 'DRIVERS')
+                    .map((category: string, index: number) => {
                     const categoryFaqs = (searchQuery ? filteredFAQsByCategory : faqsByCategory)[category];
                     return (
                       <div key={category} className={`mb-12 last:mb-0 ${index === 0 ? 'mt-8' : ''}`}>

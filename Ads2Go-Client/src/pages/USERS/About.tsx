@@ -300,7 +300,7 @@ const About: React.FC = () => {
 
 
           {/* Values Section */}
-          <section className="bg-gradient-to-br from-gray-50 to-blue-50 rounded-3xl p-12">
+          <section className="pb-12">
             <div className="text-center mb-12">
               <h2 className="text-4xl font-bold text-gray-800 mb-4">Our Values</h2>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
@@ -336,15 +336,15 @@ const About: React.FC = () => {
           </section>
 
           {/* Market Focus Section */}
-          <section className="bg-gradient-to-r from-[#3674B5] to-[#578FCA] rounded-3xl p-12 text-white">
+          <section className="pb-12">
             <div className="text-center mb-12">
               <div className="flex items-center justify-center gap-3 mb-6">
-                <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
-                  <Globe className="w-8 h-8 text-white" />
+                <div className="p-3 rounded-2xl">
+                  <Globe className="w-8 h-8 text-black" />
                 </div>
                 <h2 className="text-4xl font-bold">Focused on the Philippines</h2>
               </div>
-              <p className="text-xl leading-relaxed text-blue-100 max-w-4xl mx-auto">
+              <p className="text-xl leading-relaxed text-black max-w-4xl mx-auto">
                 We understand the unique characteristics of the Philippine market and have designed our platform 
                 specifically to meet the needs of local businesses and drivers. Our solutions are tailored to 
                 maximize impact in the dynamic and growing vehicle market of the Philippines.
@@ -354,21 +354,21 @@ const About: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="text-center p-6 bg-white/10 rounded-2xl backdrop-blur-sm">
                 <div className="text-3xl font-bold mb-2">110M+</div>
-                <div className="text-blue-100">Population</div>
+                <div className="text-black">Population</div>
               </div>
               <div className="text-center p-6 bg-white/10 rounded-2xl backdrop-blur-sm">
                 <div className="text-3xl font-bold mb-2">15M+</div>
-                <div className="text-blue-100">Registered Vehicles</div>
+                <div className="text-black">Registered Vehicles</div>
               </div>
               <div className="text-center p-6 bg-white/10 rounded-2xl backdrop-blur-sm">
                 <div className="text-3xl font-bold mb-2">85%</div>
-                <div className="text-blue-100">Mobile Penetration</div>
+                <div className="text-black">Mobile Penetration</div>
               </div>
             </div>
           </section>
 
           {/* Team Section */}
-          <section className="bg-white rounded-3xl p-12 shadow-xl">
+          <section className="pb-12">
             <div className="text-center mb-12">
               <h2 className="text-4xl font-bold text-gray-800 mb-4">Our Team</h2>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
@@ -404,9 +404,9 @@ const About: React.FC = () => {
           </section>
 
           {/* Call to Action */}
-          <section className="bg-gradient-to-r from-[#3674B5] to-[#578FCA] rounded-3xl p-12 text-white text-center">
-            <h2 className="text-4xl font-bold mb-6">Ready to Get Started?</h2>
-            <p className="text-xl text-blue-100 mb-8 max-w-3xl mx-auto">
+          <section className="pb-12">
+            <h2 className="text-4xl text-center font-bold mb-6">Ready to Get Started?</h2>
+            <p className="text-xl text-black mb-8 max-w-3xl mx-auto">
               Join the future of mobile advertising. Start reaching new audiences with our innovative 
               mobile advertising platform designed for the Philippines market.
             </p>
@@ -428,7 +428,7 @@ const About: React.FC = () => {
               <button 
                 onClick={handleLearnMore}
                 disabled={isStartAdvertisingLoading || isLearnMoreLoading}
-                className="px-8 py-4 bg-white/20 text-white rounded-2xl font-semibold hover:bg-white/30 transition-all backdrop-blur-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-8 py-4 bg-white/20 text-black/70 rounded-2xl font-semibold hover:bg-white/30 transition-all backdrop-blur-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isLearnMoreLoading ? (
                   <>
