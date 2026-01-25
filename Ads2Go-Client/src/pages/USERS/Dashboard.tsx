@@ -14,8 +14,8 @@ import CalendarWidget from '../../components/CalendarWidget';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 
 // ✅ PERFORMANCE OPTIMIZATION: Persistent cache for Dashboard analytics (same as Detailed Analytics)
-const DASHBOARD_CACHE_KEY = 'dashboard-analytics-cache';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const DASHBOARD_CACHE_KEY = 'dashboard-analytics-cache-v2'; // 🔥 FIX: Changed key to invalidate old 5-minute cache entries
+const CACHE_TTL = 30 * 1000; // ⚡ REAL-TIME FIX: Reduced from 5 minutes to 30 seconds for faster updates (matches DetailedAnalytics)
 const MAX_CACHE_SIZE = 20; // Limit cache to 20 entries
 
 interface CacheEntry {
@@ -90,6 +90,16 @@ const savePersistentCache = (cache: Map<string, CacheEntry>) => {
     } else {
       console.warn('⚠️ [Dashboard] Failed to save persistent cache:', error);
     }
+  }
+};
+
+// ✅ PERSISTENT CACHE: Clear cache function (can be called on logout or manual refresh)
+export const clearDashboardCache = () => {
+  try {
+    localStorage.removeItem(DASHBOARD_CACHE_KEY);
+    console.log('🗑️ [Dashboard] Cleared persistent cache');
+  } catch (error) {
+    console.warn('⚠️ [Dashboard] Failed to clear persistent cache:', error);
   }
 };
 
@@ -1085,11 +1095,11 @@ const Dashboard = () => {
     // Period change will trigger useEffect to refetch data
   };
 
-  // ✅ Analytics summary - use overallAnalyticsData for summary metrics (all-time totals)
-  // Charts use periodAnalyticsData (filtered by period)
-  // ✅ Show loading state for overall analytics (separate from period-filtered analytics)
-  const isOverallAnalyticsLoading = overallAnalyticsLoading && !overallAnalyticsData;
-  const analyticsSummary = overallAnalyticsData?.getUserAnalytics?.summary || {
+  // ✅ FIX: Use periodAnalyticsData for summary metrics instead of overallAnalyticsData
+  // The period=all endpoint seems to return stale data (21 plays vs 135 plays)
+  // Using the period-specific endpoint data ensures we get fresh, accurate data
+  const isOverallAnalyticsLoading = periodAnalyticsLoading && !periodAnalyticsData;
+  const analyticsSummary = periodAnalyticsData?.getUserAnalytics?.summary || {
     totalAdsPlayed: 0,
     totalDisplayTime: 0,
     averageCompletionRate: 0,
@@ -1224,6 +1234,22 @@ const Dashboard = () => {
             <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800">Welcome back, {userFirstName}!</h1>
             <p className="text-gray-500 text-sm">Here's your analytic detail</p>
           </div>
+          {/* Refresh Button */}
+          <button
+            onClick={() => {
+              // Clear cache and force refresh
+              analyticsCacheRef.current.clear();
+              savePersistentCache(analyticsCacheRef.current);
+              console.log('🔄 [Dashboard] Manual refresh - cache cleared');
+              fetchPeriodAnalytics(false);
+              fetchOverallAnalytics(false);
+            }}
+            disabled={periodAnalyticsLoading || overallAnalyticsLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#2a5a94] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+          >
+            <RotateCcw className={`w-4 h-4 ${(periodAnalyticsLoading || overallAnalyticsLoading) ? 'animate-spin' : ''}`} />
+            <span className="text-sm font-medium">Refresh Data</span>
+          </button>
         </div>
         
         {/* No Analytics Data Message */}
@@ -1245,6 +1271,10 @@ const Dashboard = () => {
                   <div className="mt-3">
                     <button
                       onClick={() => {
+                        // Clear cache before refreshing
+                        analyticsCacheRef.current.clear();
+                        savePersistentCache(analyticsCacheRef.current);
+                        console.log('🗑️ [Dashboard] Manual cache clear triggered');
                         fetchPeriodAnalytics(false);
                         fetchOverallAnalytics(false);
                       }}
@@ -1401,29 +1431,6 @@ const Dashboard = () => {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
-                <div className="bg-[#1b5087]/60 p-3">
-                  <p className="text-xl sm:text-2xl font-bold">
-                    {periodAnalyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-300">Total Airtime (Minutes)</p>
-                  <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
-                </div>
-                <div className="bg-[#2876c7]/60 p-3">
-                  <p className="text-xl sm:text-2xl font-bold">
-                    {overallAnalyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
-                  <p className="text-xs text-gray-400">All-time total</p>
-                </div>
-                <div className="bg-[#1b5087]/60 p-3">
-                  <p className="text-xl sm:text-2xl font-bold">
-                    {overallAnalyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
-                  </p>
-                  <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
-                  <p className="text-xs text-gray-400">All-time total</p>
-                </div>
-              </div>
             </div>
           </div>
           <div className="lg:col-span-2 flex flex-col gap-4 sm:gap-3">
@@ -1439,7 +1446,7 @@ const Dashboard = () => {
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-black text-lg font-semibold">QR Scans</span>
-                  {/* ✅ Show loading spinner for overall analytics query (these metrics come from overallAnalyticsData) */}
+                  {/* ✅ Show loading spinner for period analytics query (now using periodAnalyticsData) */}
                   {isOverallAnalyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
@@ -1455,7 +1462,7 @@ const Dashboard = () => {
                     )}
                   </p>
                   <p className="text-xs pt-3 text-gray-500">
-                    All-time total (all ads)
+                    {analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'} (all ads)
                   </p>
                 </div>
 
@@ -1475,7 +1482,7 @@ const Dashboard = () => {
                 {/* Header */}
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-black text-lg font-semibold">Total Ad Played</span>
-                  {/* ✅ Show loading spinner for overall analytics query (these metrics come from overallAnalyticsData) */}
+                  {/* ✅ Show loading spinner for period analytics query (now using periodAnalyticsData) */}
                   {isOverallAnalyticsLoading && (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#1b5087]"></div>
                   )}
@@ -1491,7 +1498,7 @@ const Dashboard = () => {
                     )}
                   </p>
                   <p className="text-xs pt-3 text-gray-500">
-                    All-time total (all ads)
+                    {analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'} (all ads)
                   </p>
                 </div>
               </div>
