@@ -203,9 +203,12 @@ const SadminPricing: React.FC = () => {
   useEffect(() => {
     if (isModalOpen && multipliersData?.getGlobalPricingMultipliers) {
       const multipliers = multipliersData.getGlobalPricingMultipliers;
+      // Strip __typename from Apollo cache objects
+      const { __typename: _, ...adLengthMultipliers } = multipliers.adLengthMultipliers;
+      const { __typename: __, ...durationDiscountMultipliers } = multipliers.durationDiscountMultipliers;
       setMultipliersFormData({
-        adLengthMultipliers: multipliers.adLengthMultipliers,
-        durationDiscountMultipliers: multipliers.durationDiscountMultipliers
+        adLengthMultipliers: adLengthMultipliers as any,
+        durationDiscountMultipliers: durationDiscountMultipliers as any
       });
     }
   }, [isModalOpen, multipliersData]);
@@ -301,10 +304,12 @@ const SadminPricing: React.FC = () => {
   
     // Save duration discount multipliers first (always, since they're global)
     try {
+      // Strip __typename from the multipliers object before sending to GraphQL
+      const { __typename, ...cleanDurationMultipliers } = multipliersFormData.durationDiscountMultipliers as any;
       await updateGlobalMultipliers({ 
         variables: { 
           input: { 
-            durationDiscountMultipliers: multipliersFormData.durationDiscountMultipliers 
+            durationDiscountMultipliers: cleanDurationMultipliers 
           } 
         } 
       });
@@ -698,8 +703,11 @@ const SadminPricing: React.FC = () => {
                   placeholder=" "
                   step="0.01"
                   min="0.01"
-                  value={formData.basePrice}
-                  onChange={(e) => setFormData(prev => ({ ...prev, basePrice: parseFloat(e.target.value) || 0 }))}
+                  value={formData.basePrice || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData(prev => ({ ...prev, basePrice: val === '' ? 0 : parseFloat(val) }));
+                  }}
                   className={`peer w-full px-0 pt-5 pb-2 text-sm sm:text-base text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition ${validationErrors.basePrice ? 'border-red-400' : 'border-gray-300'}`}
                   required
                 />
@@ -765,9 +773,23 @@ const SadminPricing: React.FC = () => {
                         step="0.01"
                         min="0"
                         max="1"
-                        value={multipliersFormData.durationDiscountMultipliers[key]}
+                        value={multipliersFormData.durationDiscountMultipliers[key] || ''}
                         onChange={(e) => {
-                          const value = parseFloat(e.target.value) || 1.0;
+                          const val = e.target.value;
+                          if (val === '') {
+                            // Allow clearing the field temporarily
+                            setMultipliersFormData(prev => ({
+                              ...prev,
+                              durationDiscountMultipliers: {
+                                ...prev.durationDiscountMultipliers,
+                                [key]: '' as any
+                              }
+                            }));
+                            return;
+                          }
+                          const value = parseFloat(val);
+                          if (isNaN(value)) return;
+                          
                           if (key === 'months1' && value !== 1.0) {
                             setErrorMsg('1-month multiplier must be 1.0 (base)');
                             return;
