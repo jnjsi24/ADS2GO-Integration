@@ -825,11 +825,6 @@ router.get('/user/:userId/totals-only', async (req, res) => {
 // ✅ Pre-filters archived ads at database level
 // ✅ Calculates totals in MongoDB (not JavaScript)
 router.get('/user/:userId/direct-v2', async (req, res) => {
-  // #region agent log
-  // DISABLED: Debug logging
-  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:827',message:'direct-v2 endpoint called',data:{userId:req.params.userId,period:req.query.period,adId:req.query.adId,queryParams:req.query},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-  // #endregion
-  
   console.log('🔥 [DIRECT-V2] ===== ENDPOINT HIT! =====', req.method, req.originalUrl);
   console.log('🔥 [DIRECT-V2] Query params:', req.query);
   console.log('🔥 [DIRECT-V2] Route params:', req.params);
@@ -882,7 +877,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       adStatus: 'ACTIVE',
       isArchived: false,
       status: { $in: ['RUNNING', 'APPROVED', 'SCHEDULED'] }
-    }).select('_id title createdAt').lean();
+    }).select('_id title createdAt materialId targetDevices').lean();
     
     if (allUserAds.length === 0) {
       return res.json({
@@ -1098,12 +1093,32 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
         const DeviceTracking = require('../models/deviceTracking');
         const Material = require('../models/Material');
         
-        // Get user's ads to find associated materials
-        const userMaterials = await Material.find({ 
-          userId: new mongoose.Types.ObjectId(userId) 
-        }).select('materialId').lean();
+        // ✅ CRITICAL FIX: Get materialIds from AdsDeployment collection, NOT from Ad's stale materialId/targetDevices fields
+        // The Ad fields may be outdated when admin manually changes deployments
+        let materialIds = [];
+        const AdsDeployment = require('../models/adsDeployment');
         
-        const materialIds = userMaterials.map(m => m.materialId);
+        // If a specific ad is selected, only get materials where that ad is deployed
+        if (adId && adId !== 'all') {
+          // Query AdsDeployment to find all materials that have this ad in their slots
+          const deployments = await AdsDeployment.find({
+            'lcdSlots.adId': new mongoose.Types.ObjectId(adId),
+            'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] },
+            isArchived: false
+          }).select('materialId').lean();
+          
+          materialIds = deployments.map(d => d.materialId);
+        } else {
+          // Get all materials where user's ads are deployed
+          const adObjectIds = validAdIds.map(id => new mongoose.Types.ObjectId(id));
+          const deployments = await AdsDeployment.find({
+            'lcdSlots.adId': { $in: adObjectIds },
+            'lcdSlots.status': { $in: ['RUNNING', 'SCHEDULED'] },
+            isArchived: false
+          }).select('materialId').lean();
+          
+          materialIds = [...new Set(deployments.map(d => d.materialId))];
+        }
         
         if (materialIds.length > 0) {
           // Get today's DeviceTracking records
@@ -1113,18 +1128,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
           }).lean();
           
           console.log(`📊 [direct-v2] Found ${todayRecords.length} DeviceTracking records for today`);
-          
-          // #region agent log
-          // DISABLED: Debug logging
-          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1114',message:'Querying DeviceTracking for today',data:{today:today.toISOString(),materialIdsCount:materialIds.length,materialIdsSample:materialIds.slice(0,3),todayRecordsCount:todayRecords.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
-          // #endregion
-          
-          if (todayRecords.length > 0) {
-            // #region agent log
-            // DISABLED: Debug logging
-            // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1118',message:'Processing today DeviceTracking records',data:{recordCount:todayRecords.length,firstRecordMaterialId:todayRecords[0]?.materialId,firstRecordHasQrScansByAd:!!todayRecords[0]?.qrScansByAd,firstRecordQrScansByAdCount:todayRecords[0]?.qrScansByAd?.length||0,firstRecordHasQrScans:!!todayRecords[0]?.qrScans,firstRecordQrScansCount:todayRecords[0]?.qrScans?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
-            // #endregion
-          }
           
           // Aggregate today's data by ad
           // ✅ Reinitialize the Map (it was declared outside the if block)
@@ -1193,11 +1196,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
               });
             }
           });
-          
-          // #region agent log
-          // DISABLED: Debug logging
-          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1192',message:'Finished processing today records',data:{todayDataByAdSize:todayDataByAd.size,todayDataByAdEntries:Array.from(todayDataByAd.entries()).map(([k,v])=>({adId:k,adTitle:v.adTitle,qrScans:v.qrScans,adsPlayed:v.adsPlayed}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
-          // #endregion
           
           // Merge today's data into flatDailyStats
           todayDataByAd.forEach((adData, adIdStr) => {
@@ -1547,11 +1545,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
           }
           
           // ✅ Replace today's portion: subtract what's in dailyStats (from UserAnalyticsSummary), add real-time data
-          // #region agent log
-          // DISABLED: Debug logging
-          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1525',message:'Checking today portion replacement logic',data:{adId:adIdStr,adTitle:ad.adTitle,todayPortionFromDailyStats:todayPortionFromDailyStats.qrScans,hasSummaryLastUpdated:!!summaryLastUpdated,summaryLastUpdated:summaryLastUpdated?.toString(),beforeQRScans,hasTodayData:!!todayData,todayQRScans:todayData?.qrScans||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
-          // #endregion
-          
           if (todayData && todayPortionFromDailyStats.qrScans > 0) {
             // We have dailyStats entry, so we can safely replace
             // ✅ FIX: Ensure we don't subtract more than we have, and verify todayData is valid
@@ -1581,11 +1574,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
               
               totalPlays = Math.max(0, totalPlays - todayPortionFromDailyStats.adsPlayed + (todayData.adsPlayed || 0));
               console.log(`⚡ [direct-v2] Replaced today's data for "${ad.adTitle}": QR scans ${beforeQRScans} → ${totalQRScans} (dailyStats had ${todayQRScansFromStats} for today, real-time has ${todayQRScansRealTime})`);
-              
-              // #region agent log
-              // DISABLED: Debug logging
-              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1530',message:'Used dailyStats entry for replacement',data:{adId:adIdStr,adTitle:ad.adTitle,beforeQRScans,afterQRScans:totalQRScans,todayPortionFromDailyStats:todayQRScansFromStats,todayQRScans:todayQRScansRealTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
-              // #endregion
             }
           }
           
@@ -1662,11 +1650,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
                   }
                   
                   console.log(`⚡ [direct-v2] Calculated from DeviceDataHistoryV2 for "${ad.adTitle}": Historical=${historicalCount}, Today=${todayQRScans}, Calculated=${calculatedTotal}, Final=${totalQRScans} (was ${beforeQRScans} from summary)`);
-                  
-                  // #region agent log
-                  // DISABLED: Debug logging
-                  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1450',message:'Calculated from DeviceDataHistoryV2',data:{adId:adIdStr,adTitle:ad.adTitle,historicalCount,todayQRScans,calculatedTotal:totalQRScans,summaryTotal:beforeQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-                  // #endregion
                 } else {
                   // No materials - use summary total as-is
                   console.log(`⚠️ [direct-v2] No materials found, using summary total as-is: ${totalQRScans}`);
@@ -1688,17 +1671,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
           }
           
           console.log(`⚡ [direct-v2] Processed today's data for "${ad.adTitle}": QR scans ${beforeQRScans} → ${totalQRScans} (dailyStats had ${todayPortionFromDailyStats.qrScans} for today, real-time has ${todayData?.qrScans || 0}), Plays ${beforePlays} → ${totalPlays} (dailyStats had ${todayPortionFromDailyStats.adsPlayed} for today, real-time has ${todayData?.adsPlayed || 0})`);
-          
-          // #region agent log
-          // DISABLED: Debug logging
-          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1425',message:'Processed today data in adPerformance',data:{adId:adIdStr,adTitle:ad.adTitle,beforeQRScans,afterQRScans:totalQRScans,todayQRScansFromDailyStats:todayPortionFromDailyStats.qrScans,todayQRScansRealTime:todayData.qrScans||0,hasDailyStatsEntry:todayPortionFromDailyStats.qrScans>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-          // #endregion
           }
-        } else if (includesToday) {
-          // #region agent log
-          // DISABLED: Debug logging
-          // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1415',message:'No today data to merge for ad',data:{adId:adIdStr,adTitle:ad.adTitle,hasTodayDataByAd:typeof todayDataByAd!=='undefined',todayDataByAdSize:typeof todayDataByAd!=='undefined'?todayDataByAd.size:0,hasAdInMap:typeof todayDataByAd!=='undefined'?todayDataByAd.has(adIdStr):false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-          // #endregion
         }
         
         // Fallback calculation if not available
@@ -1849,11 +1822,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       deviceStatsCount: deviceStats.length,
       sampleDailyStats: formattedDailyStats.slice(0, 2)
     });
-    
-    // #region agent log
-    // DISABLED: Debug logging
-    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.js:1469',message:'direct-v2 response ready',data:{userId,period:period||'all',adPerformanceCount:adPerformance.length,summaryTotalQRScans:summary.totalQRScans,includesToday,hasTodayData:todayDataByAd.size>0,todayDataByAdEntries:Array.from(todayDataByAd.entries()).map(([k,v])=>({adId:k,qrScans:v.qrScans,adsPlayed:v.adsPlayed})),adPerformanceSample:adPerformance.slice(0,2).map(a=>({adId:a.adId?.toString(),adTitle:a.adTitle,totalQRScans:a.totalQRScans}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-    // #endregion
     
     res.json({
       success: true,
@@ -2280,13 +2248,80 @@ router.get('/user/:userId/direct', async (req, res) => {
       }
       
       // ✅ If deviceId filter is applied, calculate from deviceStats
+      // 🔧 FIX: Only show ads currently assigned to this device to prevent showing stale data
       if (deviceId && deviceId !== 'all') {
-        const deviceData = filteredDeviceStats[0];
-        if (deviceData) {
-          summary.totalAdsPlayed = deviceData.adsPlayed || 0;
-          summary.totalDisplayTime = deviceData.displayTime || 0;
-          summary.totalQRScans = deviceData.qrScans || 0;
+        // Get material reference for this device
+        const Material = require('../models/Material');
+        const material = await Material.findOne({ materialId: deviceId }).select('_id').lean();
+        
+        if (material) {
+          // Find ads currently assigned to this device
+          const currentDeviceAds = await Ad.find({
+            $or: [
+              { materialId: material._id },
+              { targetDevices: material._id }
+            ],
+            userId: userId,
+            isArchived: false,
+            paymentStatus: 'PAID',
+            adStatus: 'ACTIVE'
+          }).select('_id').lean();
+          
+          const currentAdIds = new Set(currentDeviceAds.map(ad => ad._id.toString()));
+          
+          // Filter ads array to only currently assigned ads
+          filteredAds = filteredAds.filter(ad => 
+            ad.adId && currentAdIds.has(ad.adId.toString())
+          );
+          
+          // Filter daily stats to only include currently assigned ads
+          filteredDailyStats = filteredDailyStats.map(dateEntry => {
+            const validAds = (dateEntry.ads || []).filter(ad => 
+              ad.adId && currentAdIds.has(ad.adId.toString())
+            );
+            
+            // Recalculate totals from only currently assigned ads
+            const recalculatedTotals = validAds.reduce((acc, ad) => {
+              const adTotals = ad.totals || {};
+              return {
+                impressions: acc.impressions + (adTotals.impressions || 0),
+                adsPlayed: acc.adsPlayed + (adTotals.adsPlayed || 0),
+                displayTime: acc.displayTime + (adTotals.displayTime || 0),
+                qrScans: acc.qrScans + (adTotals.qrScans || 0),
+                completionRate: 0
+              };
+            }, { impressions: 0, adsPlayed: 0, displayTime: 0, qrScans: 0, completionRate: 0 });
+            
+            return {
+              date: dateEntry.date,
+              ads: validAds,
+              totals: recalculatedTotals
+            };
+          });
+          
+          // Recalculate summary from filtered data
+          summary.totalAdsPlayed = filteredDailyStats.reduce((sum, dateEntry) => 
+            sum + (dateEntry.totals?.adsPlayed || 0), 0);
+          summary.totalDisplayTime = filteredDailyStats.reduce((sum, dateEntry) => 
+            sum + (dateEntry.totals?.displayTime || 0), 0);
+          summary.totalQRScans = filteredDailyStats.reduce((sum, dateEntry) => 
+            sum + (dateEntry.totals?.qrScans || 0), 0);
+          summary.totalAds = filteredAds.length;
+          summary.activeAds = filteredAds.filter(ad => ad.status === 'RUNNING' || ad.status === 'APPROVED').length;
           summary.totalDevices = 1;
+          
+          console.log('🔧 [DeviceFilter] Applied device filter:', {
+            deviceId,
+            currentlyAssignedAds: currentAdIds.size,
+            filteredAdsCount: filteredAds.length,
+            summary: {
+              totalAdsPlayed: summary.totalAdsPlayed,
+              totalQRScans: summary.totalQRScans,
+              totalDisplayTime: summary.totalDisplayTime
+            }
+          });
+        } else {
+          console.warn('⚠️ [DeviceFilter] Material not found for deviceId:', deviceId);
         }
       }
       
@@ -2349,6 +2384,7 @@ router.get('/user/:userId/direct', async (req, res) => {
         userId,
         period: period || 'all',
         adId: adId || 'all',
+        deviceId: deviceId || 'all',
         summary: {
           totalAdsPlayed: summary.totalAdsPlayed,
           totalDisplayTime: summary.totalDisplayTime,
@@ -2361,11 +2397,17 @@ router.get('/user/:userId/direct', async (req, res) => {
         adsCount: filteredAds.length,
         deviceStatsCount: filteredDeviceStats.length,
         hasDateFilter: !!(defaultStartDate && defaultEndDate),
+        hasDeviceFilter: !!(deviceId && deviceId !== 'all'),
         dateRange: defaultStartDate && defaultEndDate ? {
           start: defaultStartDate.toISOString(),
           end: defaultEndDate.toISOString()
         } : 'all dates'
       });
+      
+      // 🔧 Add device filter context to response
+      const deviceFilterNote = (deviceId && deviceId !== 'all') 
+        ? "Showing analytics for ads currently assigned to this device only. Historical data from previous device assignments is not included. Use 'All Devices' to see complete ad history."
+        : null;
       
       return res.json({
         success: true,
@@ -2378,7 +2420,8 @@ router.get('/user/:userId/direct', async (req, res) => {
           period: period || 'all',
           startDate: defaultStartDate?.toISOString(),
           endDate: defaultEndDate?.toISOString(),
-          lastUpdated: userAnalytics.lastUpdated || userAnalytics.updatedAt
+          lastUpdated: userAnalytics.lastUpdated || userAnalytics.updatedAt,
+          deviceFilterNote  // 🔧 Add context about device filtering
         }
       });
     } else {

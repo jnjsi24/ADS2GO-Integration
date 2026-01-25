@@ -1112,6 +1112,7 @@ const DetailedAnalytics: React.FC = () => {
         const urlWithCacheBuster = `${url}${separator}${cacheBuster}`;
         
         console.log('📡 [DetailedAnalytics] Fetching:', urlWithCacheBuster);
+        
         const response = await fetch(urlWithCacheBuster, {
           signal: abortController.signal, // ✅ Attach abort signal
           cache: 'no-store' // ⚡ REAL-TIME FIX: Prevent browser caching
@@ -1496,11 +1497,6 @@ const DetailedAnalytics: React.FC = () => {
           hasTotals: !!deviceAnalytics.totals,
           totalsObject: deviceAnalytics.totals
         });
-        
-        // #region agent log
-        // DISABLED: Debug logging
-        // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DetailedAnalytics.tsx:1477',message:'Calculating summary from deviceAnalytics',data:{selectedAd,selectedDevice,selectedDate,totalQRScans,totalAdPlays,totalDisplayTime,hasTotals:!!deviceAnalytics.totals},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         
         return {
           totalAdsPlayed: totalAdPlays,

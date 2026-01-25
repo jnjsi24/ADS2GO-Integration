@@ -607,11 +607,6 @@ router.post('/ad-playback', async (req, res) => {
 
 // POST /deviceTracking/qr-scan - Track QR scan
 router.post('/qr-scan', async (req, res) => {
-  // #region agent log
-  // DISABLED: Debug logging
-  // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'deviceTracking.js:609',message:'QR scan endpoint called',data:{body:req.body,hasBody:!!req.body,bodyKeys:req.body?Object.keys(req.body):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-  // #endregion
-  
   try {
     const { deviceId, deviceSlot, qrScanData } = req.body;
 

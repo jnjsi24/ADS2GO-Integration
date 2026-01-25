@@ -12,20 +12,11 @@ class DailyArchiveJobV2 {
   async archiveDailyData() {
     if (this.isRunning) {
       console.log('⏭️ Archive job already running, skipping...');
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:10',message:'Archive job skipped - already running',data:{isRunning:this.isRunning},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
     this.isRunning = true;
     logger.database('🔄 Starting daily archive job V2 (Array Structure)...');
-    
-    // #region agent log
-    // Log archive job start to track if it runs multiple times
-    const archiveStartTime = new Date();
-    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:17',message:'Archive job STARTED',data:{startTime:archiveStartTime.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
 
     try {
       // ✅ FIX: Get the date in Philippines timezone properly
@@ -246,15 +237,6 @@ class DailyArchiveJobV2 {
           // Merge arrays to avoid duplicates
           const existingDaily = existingDocument.dailyData[existingDailyIndex];
           
-          // #region agent log
-          // Log BEFORE merge to track duplicates
-          const existingQrScansByAdBefore = (existingDaily.qrScansByAd || []).map(ad => ({ adId: ad.adId?.toString(), adTitle: ad.adTitle, scanCount: ad.scanCount }));
-          const newQrScansByAdBefore = (dailyData.qrScansByAd || []).map(ad => ({ adId: ad.adId?.toString(), adTitle: ad.adTitle, scanCount: ad.scanCount }));
-          const existingQrScansCountBefore = (existingDaily.qrScans || []).length;
-          const newQrScansCountBefore = (dailyData.qrScans || []).length;
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:216',message:'BEFORE mergeQrScansByAd - existing daily data found',data:{materialId:device.materialId,dateStr,existingQrScansByAdCount:existingDaily.qrScansByAd?.length||0,existingQrScansByAd:existingQrScansByAdBefore,newQrScansByAdCount:dailyData.qrScansByAd?.length||0,newQrScansByAd:newQrScansByAdBefore,existingQrScansCount:existingQrScansCountBefore,newQrScansCount:newQrScansCountBefore},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-          
           // Clean existing QR scans data to remove any invalid coordinates
           const cleanedExistingQrScans = this.cleanQRScanData(existingDaily.qrScans);
           
@@ -267,13 +249,6 @@ class DailyArchiveJobV2 {
           dailyData.hourlyStats = this.mergeHourlyStats(existingDaily.hourlyStats, dailyData.hourlyStats);
           dailyData.adPerformance = this.mergeAdPerformance(existingDaily.adPerformance, dailyData.adPerformance);
           dailyData.qrScansByAd = this.mergeQrScansByAd(existingDaily.qrScansByAd, dailyData.qrScansByAd);
-          
-          // #region agent log
-          // Log AFTER merge to track if duplicates were created
-          const mergedQrScansByAdAfter = (dailyData.qrScansByAd || []).map(ad => ({ adId: ad.adId?.toString(), adTitle: ad.adTitle, scanCount: ad.scanCount }));
-          const mergedQrScansCountAfter = (dailyData.qrScans || []).length;
-          fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:229',message:'AFTER mergeQrScansByAd - merged data',data:{materialId:device.materialId,dateStr,mergedQrScansByAdCount:dailyData.qrScansByAd?.length||0,mergedQrScansByAd:mergedQrScansByAdAfter,mergedQrScansCount:mergedQrScansCountAfter,totalQRScans:dailyData.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
           
           // Final cleaning of the daily data before assignment
           dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
@@ -954,13 +929,6 @@ class DailyArchiveJobV2 {
     const merged = [...existing];
     const existingKeys = new Set(existing.map(item => `${item.adId}-${item.scanTimestamp?.getTime()}`));
     
-    // #region agent log
-    // Log BEFORE merge to track duplicates
-    const existingCount = existing.length;
-    const newCount = newData.length;
-    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:795',message:'BEFORE mergeQrScans',data:{existingCount,newCount,existingKeysSize:existingKeys.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
-    
     // Clean the new data before processing
     const cleanedNewData = this.cleanQRScanData(newData);
     
@@ -971,12 +939,6 @@ class DailyArchiveJobV2 {
         existingKeys.add(key); // Track added keys
       }
     });
-    
-    // #region agent log
-    // Log AFTER merge to track if duplicates were added
-    const mergedCount = merged.length;
-    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dailyArchiveJobV2.js:812',message:'AFTER mergeQrScans',data:{existingCount,newCount,mergedCount,expectedCount:existingCount+cleanedNewData.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     
     return merged;
   }

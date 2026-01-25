@@ -2546,11 +2546,12 @@ class UserAnalyticsService {
           // Get user's ads to find associated materials
           const userAds = await Ad.find({ userId: userId });
           const userAdIds = userAds.map(ad => ad._id.toString()); // ✅ Extract userAdIds for filtering
-          const materialIds = [];
+          const materialIdsSet = new Set(); // 🔧 Use Set for deduplication
           
           // Get Material model to look up materialId strings
           const Material = require('../models/Material');
           
+          // Step 1: Get currently assigned devices
           for (const ad of userAds) {
             // Check targetDevices first (newer field), then materialId (legacy)
             const deviceRefs = (ad.targetDevices && ad.targetDevices.length > 0) 
@@ -2561,14 +2562,43 @@ class UserAnalyticsService {
               // Look up Material documents to get materialId strings
               const materials = await Material.find({ _id: { $in: deviceRefs } }).select('materialId');
               materials.forEach(material => {
-                if (material.materialId && !materialIds.includes(material.materialId)) {
-                  materialIds.push(material.materialId);
+                if (material.materialId) {
+                  materialIdsSet.add(material.materialId);
                 }
               });
             }
           }
+          
+          // 🔧 FIX: Step 2 - Also find devices that have historical data for user's ads
+          // This handles cases where ads were reassigned to different devices
+          try {
+            const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+            const historicalDevices = await DeviceDataHistoryV2.aggregate([
+              {
+                $match: {
+                  $or: [
+                    { 'dailyData.adPlaybacks.adId': { $in: userAdIds } },
+                    { 'dailyData.adPerformance.adId': { $in: userAdIds } },
+                    { 'dailyData.qrScans.adId': { $in: userAdIds } },
+                    { 'dailyData.qrScansByAd.adId': { $in: userAdIds } }
+                  ]
+                }
+              },
+              { $project: { materialId: 1 } }
+            ], { maxTimeMS: 5000 });
+            
+            historicalDevices.forEach(device => {
+              if (device.materialId) {
+                materialIdsSet.add(device.materialId);
+              }
+            });
+          } catch (histError) {
+            console.warn('⚠️ [getDeviceStatsFromHistory] Could not fetch historical devices:', histError.message);
+          }
+          
+          const materialIds = Array.from(materialIdsSet);
 
-          console.log('📊 [getDeviceStatsFromHistory] Found materialIds for user:', materialIds.length, materialIds);
+          console.log('📊 [getDeviceStatsFromHistory] Found materialIds for user (including historical):', materialIds.length, materialIds);
           console.log('📊 [getDeviceStatsFromHistory] User adIds for filtering:', userAdIds.length, userAdIds);
 
           if (materialIds.length > 0) {
@@ -3057,23 +3087,67 @@ class UserAnalyticsService {
         : effectiveStartDate;
 
       // Get all materials and adIds associated with user's ads - optimized bulk query
-      const materialIds = [];
       const userAdIds = userAds.map(ad => ad._id.toString());
       
-      // Get materials from targetDevices (ObjectIds) and convert to materialIds (strings) - bulk operation
+      // 🔧 FIX: Get materials from BOTH current targetDevices AND historical data
+      // This ensures we include data from devices that were previously assigned to the user's ads
       const Material = require('../models/Material');
+      // Note: DeviceDataHistoryV2 already required at top of function
+      
+      // Step 1: Get currently assigned devices
       const allTargetDevices = userAds.flatMap(ad => ad.targetDevices || []);
+      const materialIds = new Set(); // Use Set for deduplication
       
       if (allTargetDevices.length > 0) {
         const materials = await Material.find({ _id: { $in: allTargetDevices } }, 'materialId');
         materials.forEach(material => {
-          if (material.materialId && !materialIds.includes(material.materialId)) {
-            materialIds.push(material.materialId);
+          if (material.materialId) {
+            materialIds.add(material.materialId);
           }
         });
       }
       
-      if (materialIds.length === 0) {
+      // Step 2: 🔧 CRITICAL FIX - Also find devices that have historical data for user's ads
+      // This handles cases where ads were reassigned to different devices
+      try {
+        const historicalDevices = await DeviceDataHistoryV2.aggregate([
+          {
+            // Match documents that have adPlaybacks for any of the user's ads
+            $match: {
+              $or: [
+                { 'dailyData.adPlaybacks.adId': { $in: userAdIds } },
+                { 'dailyData.adPerformance.adId': { $in: userAdIds } },
+                { 'dailyData.qrScans.adId': { $in: userAdIds } },
+                { 'dailyData.qrScansByAd.adId': { $in: userAdIds } }
+              ]
+            }
+          },
+          {
+            // Only return materialId
+            $project: { materialId: 1 }
+          }
+        ], { maxTimeMS: 5000 });
+        
+        historicalDevices.forEach(device => {
+          if (device.materialId) {
+            materialIds.add(device.materialId);
+          }
+        });
+        
+        console.log('🔧 [FIX] Found historical devices for user ads:', {
+          currentDevices: allTargetDevices.length,
+          historicalDevices: historicalDevices.length,
+          totalUniqueDevices: materialIds.size,
+          userAdIds: userAdIds.slice(0, 5) // Sample for debugging
+        });
+      } catch (historyError) {
+        console.warn('⚠️ Could not fetch historical devices (non-blocking):', historyError.message);
+        // Continue with just current devices if historical query fails
+      }
+      
+      const materialIdsArray = Array.from(materialIds);
+      
+      if (materialIdsArray.length === 0) {
         return {
           success: false,
           message: 'No materials found for this user'
@@ -3173,8 +3247,9 @@ class UserAnalyticsService {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
+      // 🔧 FIX: Use materialIdsArray which includes both current AND historical devices
       const currentDayData = await DeviceTracking.find({
-        materialId: { $in: materialIds },
+        materialId: { $in: materialIdsArray },
         date: {
           $gte: today,
           $lt: tomorrow
@@ -5935,11 +6010,6 @@ class UserAnalyticsService {
             if (normalizedAdId && userAdIds.includes(normalizedAdId)) {
               adsFoundInQrScansByAd.add(normalizedAdId); // Track that this ad was found in qrScansByAd
               
-              // #region agent log
-              // DISABLED: Debug logging
-              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5935',message:'Processing qrScansByAd entry in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCount:adScan.scanCount||0,isInUserAdIds:userAdIds.includes(normalizedAdId),userAdIdsSample:userAdIds.slice(0,3)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-              // #endregion
-              
               if (!qrScansByAd[normalizedAdId]) {
                 qrScansByAd[normalizedAdId] = {
                   adId: normalizedAdId, // ✅ Store as normalized string
@@ -5979,11 +6049,6 @@ class UserAnalyticsService {
               const previousTotal = qrScansByAd[normalizedAdId].totalScans || 0;
               qrScansByAd[normalizedAdId].totalScans += scanCountToAdd;
               totalScans += scanCountToAdd;
-              
-              // #region agent log
-              // DISABLED: Debug logging
-              // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:5974',message:'Added QR scans in getTotalQRScans',data:{normalizedAdId,adTitle:adScan.adTitle,scanCountToAdd,previousTotal,newTotal:qrScansByAd[normalizedAdId].totalScans,allAdTotals:Object.keys(qrScansByAd).map(k=>({adId:k,adTitle:qrScansByAd[k].adTitle,totalScans:qrScansByAd[k].totalScans}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-              // #endregion
               
               if (isVerbose || scanCountToAdd > 0) {
                 console.log(`✅ [getTotalQRScans] Current day: Ad "${adScan.adTitle}" (${normalizedAdId}): +${scanCountToAdd} scans (total: ${qrScansByAd[normalizedAdId].totalScans})`);
@@ -6110,11 +6175,6 @@ class UserAnalyticsService {
             const dailyDateStr = dailyDateOnly.toISOString().split('T')[0];
             const isToday = dailyDateStr === todayStr;
             
-            // #region agent log
-            // Log date comparison to track timezone issues
-            fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6111',message:'Date comparison for daily data exclusion',data:{dailyDate:dailyData.date,dailyDateStr,todayStr,isToday,currentDataLength:currentData.length,isAllTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
-            
             // ✅ FIX: Include today from historical data if current day data wasn't found
             // This ensures today's scans are counted even if DeviceTracking query fails or hasn't been archived yet
             let shouldProcess = false;
@@ -6122,11 +6182,6 @@ class UserAnalyticsService {
               // ✅ FIX: Include today from historical data if current day data wasn't found
               // This prevents missing today's scans when DeviceTracking query returns 0 devices
               shouldProcess = currentData.length === 0; // Only skip if we found current day data
-              
-              // #region agent log
-              // Log today exclusion decision
-              fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6119',message:'Today exclusion decision',data:{dailyDateStr,todayStr,isToday,currentDataLength:currentData.length,shouldProcess},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-              // #endregion
               
               if (!shouldProcess) {
                 console.log(`⏭️ [getTotalQRScans] Skipping today's date in historical data (current day data found): ${dailyData.date} (today: ${todayStr}, daily: ${dailyDateStr})`);
@@ -6216,11 +6271,6 @@ class UserAnalyticsService {
                     const previousHistoricalTotal = qrScansByAd[normalizedAdId].totalScans || 0;
                     qrScansByAd[normalizedAdId].totalScans += scanCountToAdd;
                     totalScans += scanCountToAdd;
-                    
-                    // #region agent log
-                    // Log QR scan addition from historical data to track double-counting
-                    fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'userAnalyticsService.js:6205',message:'QR scan added from historical data',data:{normalizedAdId,adTitle:adScan.adTitle,scanCountToAdd,previousHistoricalTotal,newTotal:qrScansByAd[normalizedAdId].totalScans,dailyDate:dailyData.date,source:'DeviceDataHistoryV2'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                    // #endregion
                     
                     if (isVerbose || scanCountToAdd > 0) {
                       console.log(`✅ [getTotalQRScans] Historical: Ad "${adScan.adTitle}" (${normalizedAdId}): +${scanCountToAdd} scans on ${dailyData.date} (total: ${qrScansByAd[normalizedAdId].totalScans})`);
