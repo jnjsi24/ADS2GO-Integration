@@ -4431,27 +4431,111 @@ class UserAnalyticsService {
         // Don't fail the entire sync if dailyStats fails
       }
       
-      // 2. Update cumulative totals from freshData OR dailyStats
-      // ✅ FIX: Always update totals if we have data (either from freshData or dailyStats)
+      // 2. ✅ CRITICAL FIX: Always recalculate summary totals from dailyStats
+      // This ensures summary totals always match the sum of daily data
+      // Previous bug: Math.max() prevented totals from decreasing when data was corrected
       if (!adId) {
-        // Calculate totals from dailyStats if freshData doesn't have them
-        // ✅ NEW STRUCTURE: dailyStats is now grouped by date with nested ads and materials
+        // ✅ ALWAYS calculate totals from dailyStats (source of truth)
+        // This ensures summary totals match the sum of daily data exactly
         const totalPlaysFromDailyStats = (userAnalytics.dailyStats || []).reduce((sum, dateEntry) => 
           sum + (dateEntry.totals?.adsPlayed || 0), 0);
         const totalTimeFromDailyStats = (userAnalytics.dailyStats || []).reduce((sum, dateEntry) => 
           sum + (dateEntry.totals?.displayTime || 0), 0);
         const totalQRFromDailyStats = (userAnalytics.dailyStats || []).reduce((sum, dateEntry) => 
           sum + (dateEntry.totals?.qrScans || 0), 0);
+        const totalImpressionsFromDailyStats = (userAnalytics.dailyStats || []).reduce((sum, dateEntry) => 
+          sum + (dateEntry.totals?.impressions || 0), 0);
         
-        // Use freshData if available, otherwise use dailyStats totals
-        const totalAdPlays = freshData.totalAdPlays > 0 ? freshData.totalAdPlays : totalPlaysFromDailyStats;
-        const totalAdPlayTime = freshData.totalAdPlayTime > 0 ? freshData.totalAdPlayTime : totalTimeFromDailyStats;
-        const totalQRScans = freshData.totalQRScans > 0 ? freshData.totalQRScans : totalQRFromDailyStats;
+        // Calculate average completion rate from dailyStats
+        let totalCompletionRate = 0;
+        let completionRateCount = 0;
+        (userAnalytics.dailyStats || []).forEach(dateEntry => {
+          if (dateEntry.totals?.completionRate && dateEntry.totals.completionRate > 0) {
+            totalCompletionRate += dateEntry.totals.completionRate;
+            completionRateCount++;
+          }
+        });
+        const averageCompletionRate = completionRateCount > 0 ? totalCompletionRate / completionRateCount : 0;
         
-        // ✅ Always update totals (even if 0) - don't require data to exist
-        userAnalytics.totalAdPlays = Math.max(userAnalytics.totalAdPlays || 0, totalAdPlays);
-        userAnalytics.totalAdPlayTime = Math.max(userAnalytics.totalAdPlayTime || 0, totalAdPlayTime);
-        userAnalytics.totalQRScans = Math.max(userAnalytics.totalQRScans || 0, totalQRScans);
+        // ✅ CRITICAL FIX: Always use dailyStats totals (direct assignment, not Math.max)
+        // This ensures totals can decrease if data is corrected, and always match dailyStats sum
+        const oldTotalAdPlays = userAnalytics.totalAdPlays || 0;
+        const oldTotalQRScans = userAnalytics.totalQRScans || 0;
+        
+        userAnalytics.totalAdPlays = totalPlaysFromDailyStats;
+        userAnalytics.totalAdPlayTime = totalTimeFromDailyStats;
+        userAnalytics.totalQRScans = totalQRFromDailyStats;
+        userAnalytics.totalAdImpressions = totalImpressionsFromDailyStats;
+        userAnalytics.averageAdCompletionRate = averageCompletionRate;
+        
+        // Log if totals changed (for debugging)
+        if (oldTotalAdPlays !== totalPlaysFromDailyStats || oldTotalQRScans !== totalQRFromDailyStats) {
+          console.log(`📊 [SYNC] Recalculated summary totals from dailyStats:`, {
+            adPlays: `${oldTotalAdPlays} → ${totalPlaysFromDailyStats}`,
+            qrScans: `${oldTotalQRScans} → ${totalQRFromDailyStats}`,
+            playTime: `${userAnalytics.totalAdPlayTime || 0} → ${totalTimeFromDailyStats}`,
+            daysCount: userAnalytics.dailyStats?.length || 0
+          });
+        }
+        
+        // ✅ CRITICAL FIX: Also recalculate ad-level totals from dailyStats
+        // This ensures each ad's totals match the sum of its daily data
+        if (userAnalytics.ads && Array.isArray(userAnalytics.ads) && userAnalytics.dailyStats && userAnalytics.dailyStats.length > 0) {
+          // Calculate totals per ad from dailyStats
+          const adTotalsFromDailyStats = {};
+          userAnalytics.dailyStats.forEach(dateEntry => {
+            if (dateEntry.ads && Array.isArray(dateEntry.ads)) {
+              dateEntry.ads.forEach(adEntry => {
+                const adIdStr = adEntry.adId?.toString ? adEntry.adId.toString() : String(adEntry.adId);
+                if (!adTotalsFromDailyStats[adIdStr]) {
+                  adTotalsFromDailyStats[adIdStr] = {
+                    totalAdPlays: 0,
+                    totalAdPlayTime: 0,
+                    totalQRScans: 0,
+                    totalAdImpressions: 0,
+                    completionRates: []
+                  };
+                }
+                adTotalsFromDailyStats[adIdStr].totalAdPlays += adEntry.totals?.adsPlayed || 0;
+                adTotalsFromDailyStats[adIdStr].totalAdPlayTime += adEntry.totals?.displayTime || 0;
+                adTotalsFromDailyStats[adIdStr].totalQRScans += adEntry.totals?.qrScans || 0;
+                adTotalsFromDailyStats[adIdStr].totalAdImpressions += adEntry.totals?.impressions || 0;
+                if (adEntry.totals?.completionRate && adEntry.totals.completionRate > 0) {
+                  adTotalsFromDailyStats[adIdStr].completionRates.push(adEntry.totals.completionRate);
+                }
+              });
+            }
+          });
+          
+          // Update ad totals to match dailyStats
+          userAnalytics.ads = userAnalytics.ads.map(ad => {
+            const adIdStr = ad.adId?.toString ? ad.adId.toString() : String(ad.adId);
+            const dailyStatsTotals = adTotalsFromDailyStats[adIdStr];
+            
+            if (dailyStatsTotals) {
+              const oldAdPlays = ad.totalAdPlays || 0;
+              const oldQRScans = ad.totalQRScans || 0;
+              
+              // Update totals from dailyStats
+              ad.totalAdPlays = dailyStatsTotals.totalAdPlays;
+              ad.totalAdPlayTime = dailyStatsTotals.totalAdPlayTime;
+              ad.totalQRScans = dailyStatsTotals.totalQRScans;
+              ad.totalAdImpressions = dailyStatsTotals.totalAdImpressions;
+              ad.averageAdCompletionRate = dailyStatsTotals.completionRates.length > 0
+                ? dailyStatsTotals.completionRates.reduce((sum, rate) => sum + rate, 0) / dailyStatsTotals.completionRates.length
+                : (ad.averageAdCompletionRate || 0);
+              
+              if (oldAdPlays !== dailyStatsTotals.totalAdPlays || oldQRScans !== dailyStatsTotals.totalQRScans) {
+                console.log(`📊 [SYNC] Updated ad ${adIdStr} totals from dailyStats:`, {
+                  adPlays: `${oldAdPlays} → ${dailyStatsTotals.totalAdPlays}`,
+                  qrScans: `${oldQRScans} → ${dailyStatsTotals.totalQRScans}`
+                });
+              }
+            }
+            
+            return ad;
+          });
+        }
         
         // ✅ ALWAYS calculate totalDevices from active deployments (source of truth)
         // This must run regardless of whether there's data, because totalDevices should reflect current deployments
@@ -4518,10 +4602,10 @@ class UserAnalyticsService {
             console.log(`⚠️ [SYNC] Final fallback: Keeping existing totalDevices: ${userAnalytics.totalDevices || 0}`);
           }
         }
-        userAnalytics.averageAdCompletionRate = freshData.averageAdCompletionRate || userAnalytics.averageAdCompletionRate || 0;
+        // ✅ averageAdCompletionRate is already calculated from dailyStats above
         // qrScanConversionRate removed - no longer needed
         
-        console.log(`✅ [SYNC] Updated totals: totalAdPlays=${userAnalytics.totalAdPlays}, totalQRScans=${userAnalytics.totalQRScans}, totalDevices=${userAnalytics.totalDevices}`);
+        console.log(`✅ [SYNC] Updated totals: totalAdPlays=${userAnalytics.totalAdPlays}, totalQRScans=${userAnalytics.totalQRScans}, totalDevices=${userAnalytics.totalDevices}, avgCompletionRate=${userAnalytics.averageAdCompletionRate}`);
       }
       
       // 3. Populate materialBreakdown from freshData.materials (device-level stats)
@@ -4837,8 +4921,29 @@ class UserAnalyticsService {
               // ✅ FIX: Update flat collections (UserAnalyticsSummary & DailyUserAnalytics) after sync
               const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
               if (finalUserAnalytics) {
-                await userAnalyticsSyncJob.updateFlatCollections(finalUserAnalytics);
-                console.log(`✅ [SYNC] Updated flat collections (UserAnalyticsSummary & DailyUserAnalytics) for user ${userId}`);
+              // ✅ CRITICAL: Update flat collections AFTER totals are recalculated
+              // This ensures DailyUserAnalytics and UserAnalyticsSummary use accurate totals from dailyStats
+              await userAnalyticsSyncJob.updateFlatCollections(finalUserAnalytics);
+              console.log(`✅ [SYNC] Updated flat collections (UserAnalyticsSummary & DailyUserAnalytics) for user ${userId}`);
+              
+              // ✅ VERIFICATION: Log totals to verify consistency
+              const verificationTotals = {
+                userAnalytics: {
+                  totalAdPlays: finalUserAnalytics.totalAdPlays || 0,
+                  totalQRScans: finalUserAnalytics.totalQRScans || 0
+                },
+                fromDailyStats: {
+                  totalAdPlays: (finalUserAnalytics.dailyStats || []).reduce((sum, d) => sum + (d.totals?.adsPlayed || 0), 0),
+                  totalQRScans: (finalUserAnalytics.dailyStats || []).reduce((sum, d) => sum + (d.totals?.qrScans || 0), 0)
+                }
+              };
+              
+              if (verificationTotals.userAnalytics.totalAdPlays !== verificationTotals.fromDailyStats.totalAdPlays ||
+                  verificationTotals.userAnalytics.totalQRScans !== verificationTotals.fromDailyStats.totalQRScans) {
+                console.warn(`⚠️ [SYNC] Totals mismatch detected for user ${userId}:`, verificationTotals);
+              } else {
+                console.log(`✅ [SYNC] Totals verified: All collections consistent for user ${userId}`);
+              }
               }
             }
           } else {

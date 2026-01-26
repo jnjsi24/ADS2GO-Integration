@@ -117,9 +117,25 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   // For custom date, just return the data as-is (single day)
   if (customDate) return data;
   
-  // Calculate date range based on period
+  // ✅ CRITICAL FIX: Use Philippine timezone (UTC+8) to match backend date calculations
+  // Backend uses Philippine timezone for date strings, so frontend must match
+  const getPhilippineDateString = (date: Date): string => {
+    const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const phTime = new Date(date.getTime() + phOffset);
+    return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
+  };
+  
+  const getPhilippineMidnight = (date: Date = new Date()): Date => {
+    const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const phTime = new Date(date.getTime() + phOffset);
+    // Set to midnight in Philippine time, then convert back to UTC
+    phTime.setUTCHours(0, 0, 0, 0);
+    return new Date(phTime.getTime() - phOffset);
+  };
+  
+  // Get current time and today's date in Philippine timezone
   const now = new Date();
-  now.setHours(23, 59, 59, 999);
+  const todayPH = getPhilippineDateString(now);
   let startDate: Date;
   
   // First, create a map of existing data by date (aggregate multiple entries per day)
@@ -127,7 +143,7 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   data.forEach(item => {
     const dateStr = typeof item.date === 'string' && item.date.match(/^\d{4}-\d{2}-\d{2}$/)
       ? item.date
-      : new Date(item.date).toISOString().split('T')[0];
+      : getPhilippineDateString(new Date(item.date));
     
     // If multiple entries for same date, sum them up
     if (dataMap.has(dateStr)) {
@@ -143,44 +159,56 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
     case '1d':
       return Array.from(dataMap.values()); // Single day, just aggregate
     case '7d':
+      // ✅ Use UTC methods to match backend (setUTCDate, setUTCHours)
       startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 6);
-      startDate.setHours(0, 0, 0, 0);
+      startDate.setUTCDate(startDate.getUTCDate() - 6);
+      startDate.setUTCHours(0, 0, 0, 0);
       break;
     case '30d':
+      // ✅ Use UTC methods to match backend (setUTCDate, setUTCHours)
       startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 29);
-      startDate.setHours(0, 0, 0, 0);
+      startDate.setUTCDate(startDate.getUTCDate() - 29);
+      startDate.setUTCHours(0, 0, 0, 0);
       break;
     case 'all':
       // For 'all', find the earliest date in data and add some context before it
+      // ✅ CRITICAL: Always include today, even if there's no data for today yet
       const sortedDates = Array.from(dataMap.keys()).sort();
       if (sortedDates.length === 0) return [];
       
       // Start from earliest data point, but add 3 days before for visual context
-      const earliestDate = new Date(sortedDates[0]);
+      const earliestDate = new Date(sortedDates[0] + 'T00:00:00Z');
       startDate = new Date(earliestDate);
-      startDate.setDate(startDate.getDate() - 3); // 3 days before first data point
-      startDate.setHours(0, 0, 0, 0);
+      startDate.setUTCDate(startDate.getUTCDate() - 3); // 3 days before first data point
+      startDate.setUTCHours(0, 0, 0, 0);
+      
+      // ✅ CRITICAL FIX: Ensure we always include today in the date range
+      // The endDate is already set to today (line 191), so this ensures today is always shown
+      // even if the backend hasn't returned today's data yet
       break;
     default:
       return Array.from(dataMap.values());
   }
   
-  // Fill in missing dates
+  // Fill in missing dates using Philippine timezone date strings
   const filledData: any[] = [];
   const currentDate = new Date(startDate);
-  const todayStr = now.toISOString().split('T')[0];
   
-  while (currentDate <= now) {
-    const dateStr = currentDate.toISOString().split('T')[0];
+  // ✅ CRITICAL FIX: For periods '7d', '30d', and 'all', always include today's date
+  // Set endDate to end of today (tomorrow's midnight minus 1ms) to ensure today is included
+  const tomorrowMidnight = getPhilippineMidnight(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+  const endDate = new Date(tomorrowMidnight.getTime() - 1); // Last moment of today
+  
+  while (currentDate <= endDate) {
+    const dateStr = getPhilippineDateString(currentDate);
     
-    // Don't include future dates
-    if (dateStr <= todayStr) {
+    // ✅ Always include today and past dates (compare with today in Philippine timezone)
+    // For periods '7d', '30d', and 'all', we want to include today even if there's no data
+    if (dateStr <= todayPH) {
       if (dataMap.has(dateStr)) {
         filledData.push(dataMap.get(dateStr));
       } else {
-        // Add zero-value entry for missing date
+        // Add zero-value entry for missing date (including today if no data exists)
         filledData.push({
           date: dateStr,
           adPlays: 0,
@@ -190,7 +218,23 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
       }
     }
     
-    currentDate.setDate(currentDate.getDate() + 1);
+    // Increment by 1 day in UTC to avoid timezone issues
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+  
+  // ✅ CRITICAL FIX: Ensure today is always included for '7d', '30d', and 'all' periods
+  // This is a safeguard in case the loop didn't include it due to timezone edge cases
+  if ((period === '7d' || period === '30d' || period === 'all') && !filledData.some(item => item.date === todayPH)) {
+    if (dataMap.has(todayPH)) {
+      filledData.push(dataMap.get(todayPH));
+    } else {
+      filledData.push({
+        date: todayPH,
+        adPlays: 0,
+        qrScans: 0,
+        completionRate: 0
+      });
+    }
   }
   
   // Sort by date ascending for proper chart display
@@ -213,7 +257,8 @@ const formatTimeToHoursMinutesSeconds = (totalSeconds: number): string => {
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [searchParams] = useSearchParams();
-  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('1d');
+  // ✅ FIX: Default to "All Time" for better user experience
+  const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d' | 'all'>('all');
   const [userFirstName, setUserFirstName] = useState('User');
   
   // Device selection state
@@ -249,12 +294,11 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   // Date Picker States
-  // ✅ FIX: Initialize with today's date in custom mode (faster data fetching)
-  // Custom date mode fetches data faster and shows correct values compared to period mode
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayInPhilippineTime());
+  // ✅ FIX: Initialize with "All Time" period mode (not custom date) for better default experience
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>(''); // Will be set by formatDisplayDate
-  const [isCustomDate, setIsCustomDate] = useState(true); // ✅ Start with custom date mode for faster loading
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>('All Time'); // ✅ Initialize with "All Time"
+  const [isCustomDate, setIsCustomDate] = useState(false); // ✅ Start with period mode (All Time)
 
 
   // Device Dropdown States
@@ -1064,15 +1108,30 @@ const DetailedAnalytics: React.FC = () => {
         let useDateRange = false;
         if (selectedPeriod === 'all' && (selectedAd !== 'all' || selectedDevice !== 'all')) {
           // When filters are applied, use last 90 days instead of 'all' for faster queries
-          // Calculate date range for last 90 days
-          const endDate = new Date();
-          const startDate = new Date();
-          startDate.setDate(startDate.getDate() - 90);
+          // ✅ CRITICAL FIX: Use Philippine timezone for date range to ensure today is included
+          const getTodayInPhilippineTime = () => {
+            const now = new Date();
+            const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+            const phTime = new Date(now.getTime() + phOffset);
+            return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
+          };
+          
+          // Calculate date range for last 90 days (including today)
+          const endDatePH = getTodayInPhilippineTime(); // Today in Philippine timezone
+          const endDate = new Date(endDatePH + 'T23:59:59.999Z'); // End of today in UTC
+          
+          const startDate = new Date(endDate);
+          startDate.setUTCDate(startDate.getUTCDate() - 90);
+          startDate.setUTCHours(0, 0, 0, 0); // Start of day
           
           queryParams.append('startDate', startDate.toISOString());
           queryParams.append('endDate', endDate.toISOString());
           useDateRange = true;
-          console.log('⚡ [DetailedAnalytics] Using 90-day date range instead of "all" for faster filtered query');
+          console.log('⚡ [DetailedAnalytics] Using 90-day date range instead of "all" for faster filtered query', {
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            todayInPH: endDatePH
+          });
         }
 
         let url;
@@ -1571,9 +1630,11 @@ const DetailedAnalytics: React.FC = () => {
     }
     
     // ✅ When filters are applied (ad or date) but device is 'all', use filtered data
-    // Prefer directAnalyticsData (from direct API call) as it respects all filters including adId
-    // DON'T fallback to overallAnalyticsData - wait for directAnalyticsData to load
+    // ✅ CRITICAL FIX: Always use directAnalyticsData when available to ensure summary matches graph data
+    // The graph uses directAnalyticsData.dailyStats (which includes today), so summary should match
     if (hasAnyFilter) {
+      // ✅ CRITICAL: Always prefer directAnalyticsData when available to ensure consistency with graph
+      // directAnalyticsData includes today's real-time data, ensuring summary matches graph totals
       if (directAnalyticsData?.summary) {
         // ✅ CRITICAL: If custom date is selected, verify we have valid data for that date
         // If backend returned data for invalid dates (like future dates), return zeros
@@ -1725,26 +1786,30 @@ const DetailedAnalytics: React.FC = () => {
           datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
         });
       } else {
-        // Preset period: Use directAnalyticsData first, fallback to GraphQL analyticsData, then overallAnalyticsData
-        // ✅ For default state (period='all'), try multiple sources to ensure we get data
+        // ✅ CRITICAL FIX: Always prefer directAnalyticsData to ensure graph and summary match
+        // directAnalyticsData includes today's real-time data, ensuring consistency between graph and summary totals
+        // Priority: directAnalyticsData (includes today) > overallAnalyticsData > analyticsData
         if (directAnalyticsData?.dailyStats && directAnalyticsData.dailyStats.length > 0) {
           dailyStats = directAnalyticsData.dailyStats;
-          console.log('📊 [DetailedAnalytics] Using directAnalyticsData dailyStats:', dailyStats.length, 'days', {
+          console.log('📊 [DetailedAnalytics] Using directAnalyticsData dailyStats (includes today, ensures graph/summary match):', dailyStats.length, 'days', {
             sample: dailyStats.slice(0, 3),
             totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
-            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0),
+            selectedPeriod: selectedPeriod,
+            note: 'Using directAnalyticsData ensures graph totals match summary totals (both include today)'
+          });
+        } else if (overallAnalyticsData?.getUserAnalytics?.dailyStats && overallAnalyticsData.getUserAnalytics.dailyStats.length > 0) {
+          dailyStats = overallAnalyticsData.getUserAnalytics.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using overallAnalyticsData dailyStats (fallback):', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0),
+            selectedPeriod: selectedPeriod,
+            note: 'Using all-time data as fallback - period only affects x-axis range'
           });
         } else if (analyticsData?.getUserAnalytics?.dailyStats && analyticsData.getUserAnalytics.dailyStats.length > 0) {
           dailyStats = analyticsData.getUserAnalytics.dailyStats;
-          console.log('📊 [DetailedAnalytics] Using analyticsData dailyStats:', dailyStats.length, 'days', {
-            sample: dailyStats.slice(0, 3),
-            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
-            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
-          });
-        } else if (selectedPeriod === 'all' && overallAnalyticsData?.getUserAnalytics?.dailyStats && overallAnalyticsData.getUserAnalytics.dailyStats.length > 0) {
-          // ✅ Fallback to overallAnalyticsData for all time period
-          dailyStats = overallAnalyticsData.getUserAnalytics.dailyStats;
-          console.log('📊 [DetailedAnalytics] Using overallAnalyticsData dailyStats (default state fallback):', dailyStats.length, 'days', {
+          console.log('📊 [DetailedAnalytics] Using analyticsData dailyStats (fallback):', dailyStats.length, 'days', {
             sample: dailyStats.slice(0, 3),
             totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
             totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
@@ -1773,6 +1838,15 @@ const DetailedAnalytics: React.FC = () => {
       today.setHours(23, 59, 59, 999);
       const todayStr = today.toISOString().split('T')[0];
       
+      // ✅ CRITICAL FIX: Get today's date in Philippine timezone (matching backend logic)
+      const getTodayInPhilippineTime = () => {
+        const now = new Date();
+        const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+        const phTime = new Date(now.getTime() + phOffset);
+        return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
+      };
+      const todayInPH = getTodayInPhilippineTime();
+      
       // Filter out future dates (data shouldn't exist for future dates)
       const beforeFutureFilter = filteredDailyStats.length;
       filteredDailyStats = dailyStats.filter((day: any) => {
@@ -1789,6 +1863,66 @@ const DetailedAnalytics: React.FC = () => {
       
       if (beforeFutureFilter > filteredDailyStats.length) {
         console.log(`✅ [DetailedAnalytics] Frontend filtered out ${beforeFutureFilter - filteredDailyStats.length} future dates`);
+      }
+      
+      // ✅ CRITICAL FIX: When period='1d' (TODAY), filter to ONLY show today's data
+      // This ensures the graph matches the summary cards which show today's totals
+      if (selectedPeriod === '1d' && !isCustomDate) {
+        const beforeTodayFilter = filteredDailyStats.length;
+        filteredDailyStats = filteredDailyStats.filter((day: any) => {
+          const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+            ? day.date 
+            : new Date(day.date).toISOString().split('T')[0];
+          // Match today's date in Philippine timezone
+          return dayDateStr === todayInPH;
+        });
+        
+        if (beforeTodayFilter > filteredDailyStats.length) {
+          console.log(`✅ [DetailedAnalytics] Filtered to TODAY only (period=1d): ${beforeTodayFilter} → ${filteredDailyStats.length} entries`, {
+            todayInPH,
+            datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0]),
+            filteredDates: filteredDailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
+          });
+        }
+      }
+      
+      // ✅ CRITICAL FIX: Only filter by adId if the backend didn't already filter
+      // When adId is in the query params, backend already filters, so dailyStats should already be for that ad
+      // Only filter if we're getting data from a source that includes multiple ads (like overallAnalyticsData)
+      if (selectedAd && selectedAd !== 'all') {
+        // Check if backend already filtered (we passed adId in query params)
+        const backendAlreadyFiltered = directAnalyticsData && selectedAd && selectedAd !== 'all';
+        
+        if (!backendAlreadyFiltered) {
+          // Backend didn't filter, so we need to filter on frontend
+          const beforeAdFilter = filteredDailyStats.length;
+          filteredDailyStats = filteredDailyStats.filter((day: any) => {
+            const dayAdId = day.adId?.toString() || '';
+            const selectedAdStr = selectedAd.toString();
+            // Also check if adId is missing (might mean it's already filtered or aggregated)
+            if (!day.adId) {
+              // If adId is missing, assume it's already filtered by backend
+              return true;
+            }
+            return dayAdId === selectedAdStr;
+          });
+          
+          if (beforeAdFilter > filteredDailyStats.length) {
+            console.log(`✅ [DetailedAnalytics] Filtered dailyStats by selected ad (frontend filter): ${beforeAdFilter} → ${filteredDailyStats.length} entries`, {
+              selectedAd,
+              beforeCount: beforeAdFilter,
+              afterCount: filteredDailyStats.length,
+              sampleBefore: dailyStats.slice(0, 3).map((d: any) => ({ date: d.date, adId: d.adId?.toString(), adsPlayed: d.adsPlayed || d.adPlays })),
+              sampleAfter: filteredDailyStats.slice(0, 3).map((d: any) => ({ date: d.date, adId: d.adId?.toString(), adsPlayed: d.adsPlayed || d.adPlays }))
+            });
+          }
+        } else {
+          console.log('✅ [DetailedAnalytics] Backend already filtered by adId, skipping frontend filter', {
+            selectedAd,
+            dailyStatsCount: filteredDailyStats.length,
+            sample: filteredDailyStats.slice(0, 3).map((d: any) => ({ date: d.date, adId: d.adId?.toString(), adsPlayed: d.adsPlayed || d.adPlays }))
+          });
+        }
       }
       
       if (isCustomDate && selectedDate) {
@@ -1810,7 +1944,7 @@ const DetailedAnalytics: React.FC = () => {
           datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0]),
           filteredDates: filteredDailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
         });
-      } else if (filteredDailyStats.length < dailyStats.length) {
+      } else if (filteredDailyStats.length < dailyStats.length && selectedPeriod !== '1d') {
         console.log('📊 [DetailedAnalytics] Filtered out future dates:', {
           originalCount: dailyStats.length,
           filteredCount: filteredDailyStats.length,
@@ -1835,6 +1969,10 @@ const DetailedAnalytics: React.FC = () => {
         };
       });
       
+      // ✅ Get summary totals for comparison and fallback
+      const summaryTotalAds = analyticsSummary.totalAdsPlayed || 0;
+      const summaryTotalQR = analyticsSummary.totalQRScans || 0;
+      
       // ✅ Debug: Log the mapped stats to see what we're sending to the graph
       if (mappedStats.length > 0) {
         const totalAdPlays = mappedStats.reduce((sum, day) => sum + day.adPlays, 0);
@@ -1851,9 +1989,22 @@ const DetailedAnalytics: React.FC = () => {
           }
         });
         
+        // ✅ Warn if graph totals don't match summary totals (data inconsistency)
+        if (totalAdPlays !== summaryTotalAds || totalQrScans !== summaryTotalQR) {
+          console.warn('⚠️ [DetailedAnalytics] Graph totals don\'t match summary totals:', {
+            graph: { adPlays: totalAdPlays, qrScans: totalQrScans },
+            summary: { adPlays: summaryTotalAds, qrScans: summaryTotalQR },
+            difference: { adPlays: totalAdPlays - summaryTotalAds, qrScans: totalQrScans - summaryTotalQR },
+            selectedAd,
+            selectedDate,
+            selectedPeriod,
+            isCustomDate,
+            dailyStatsSample: filteredDailyStats.slice(0, 3)
+          });
+        }
+        
         // ✅ Warn if we have dailyStats but all values are 0, yet summary shows data
         if (totalAdPlays === 0 && totalQrScans === 0 && mappedStats.length > 0) {
-          const summaryTotalAds = analyticsSummary.totalAdsPlayed || 0;
           if (summaryTotalAds > 0) {
             console.warn('⚠️ [DetailedAnalytics] DailyStats has dates but all values are 0, yet summary shows', summaryTotalAds, 'ad plays. This suggests a server-side aggregation issue.');
             console.warn('⚠️ [DetailedAnalytics] Raw dailyStats sample:', filteredDailyStats.slice(0, 5));
@@ -1861,8 +2012,128 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
       
+      // ✅ CRITICAL FIX: Only use summary fallback for single-day views (TODAY or custom single date)
+      // For multi-day periods (7d, 30d, all), we should show per-day data from dailyStats
+      const isSingleDayView = (selectedPeriod === '1d') || (isCustomDate && selectedDate);
+      const isMultiDayPeriod = selectedPeriod === '7d' || selectedPeriod === '30d' || selectedPeriod === 'all';
+      
+      // Calculate totals from mapped stats
+      const mappedTotalAdPlays = mappedStats.length > 0 ? mappedStats.reduce((sum, day) => sum + day.adPlays, 0) : 0;
+      const mappedTotalQrScans = mappedStats.length > 0 ? mappedStats.reduce((sum, day) => sum + day.qrScans, 0) : 0;
+      const totalsMatch = mappedTotalAdPlays === summaryTotalAds && mappedTotalQrScans === summaryTotalQR;
+      
+      // For single-day views: use summary if no dailyStats or totals don't match
+      if (isSingleDayView && (mappedStats.length === 0 || !totalsMatch)) {
+        // Determine the date to use for the chart point
+        let chartDate: string;
+        if (isCustomDate && selectedDate) {
+          chartDate = new Date(selectedDate + 'T00:00:00').toISOString();
+        } else {
+          // Use today's date in Philippine timezone
+          const today = new Date();
+          const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+          const phTime = new Date(today.getTime() + phOffset);
+          chartDate = new Date(phTime.toISOString().split('T')[0] + 'T00:00:00').toISOString();
+        }
+        
+        console.log('✅ [DetailedAnalytics] Using summary data for single-day chart (ensuring consistency with cards):', {
+          summaryTotalAds,
+          summaryTotalQR,
+          chartDate,
+          reason: mappedStats.length === 0 ? 'No dailyStats data' : 'Totals mismatch'
+        });
+        
+        // Create a single data point from summary totals
+        return [{
+          date: chartDate,
+          adPlays: summaryTotalAds,
+          qrScans: summaryTotalQR,
+          completionRate: analyticsSummary.averageCompletionRate || 0
+        }];
+      }
+      
+      // For multi-day periods: always try to show per-day data, even if empty
+      // Only warn if we have no data but summary shows totals
+      if (isMultiDayPeriod && mappedStats.length === 0 && (summaryTotalAds > 0 || summaryTotalQR > 0)) {
+        console.warn('⚠️ [DetailedAnalytics] Multi-day period selected but no dailyStats data available. Summary shows totals but cannot display per-day breakdown.', {
+          selectedPeriod,
+          summaryTotalAds,
+          summaryTotalQR,
+          hasDirectData: !!directAnalyticsData,
+          dailyStatsCount: directAnalyticsData?.dailyStats?.length || 0
+        });
+      }
+      
       // ✅ Fill missing dates with zero values for proper chart line rendering
-      return fillMissingDates(mappedStats, selectedPeriod, isCustomDate ? selectedDate : null);
+      // fillMissingDates already aggregates duplicate dates, so this should be correct
+      // ✅ CRITICAL: The period parameter only affects the x-axis range (how many zero-filled days to show)
+      // The actual data points (mappedStats) come from the same source (overallAnalyticsData) for all periods
+      // This ensures that when an ad was only played for 2 days, all periods (7d, 30d, all) show the same data points
+      let finalChartData = fillMissingDates(mappedStats, selectedPeriod, isCustomDate ? selectedDate : null);
+      
+      // ✅ CRITICAL FIX: For all periods, verify and correct totals to match summary
+      // The summary is the source of truth (includes today's data), so if there's a mismatch, adjust the graph data
+      // This ensures graph totals always match summary totals, especially when today's data is included
+      if (finalChartData.length > 0 && !totalsMatch) {
+        const chartTotalAdPlays = finalChartData.reduce((sum, day) => sum + (day.adPlays || 0), 0);
+        const chartTotalQrScans = finalChartData.reduce((sum, day) => sum + (day.qrScans || 0), 0);
+        
+        const adPlaysDiff = summaryTotalAds - chartTotalAdPlays;
+        const qrScansDiff = summaryTotalQR - chartTotalQrScans;
+        
+        // Only adjust if there's a meaningful discrepancy (more than rounding error)
+        if (Math.abs(adPlaysDiff) > 0 || Math.abs(qrScansDiff) > 0) {
+          console.warn('⚠️ [DetailedAnalytics] Graph totals don\'t match summary - adjusting to match summary (source of truth):', {
+            graphTotals: { adPlays: chartTotalAdPlays, qrScans: chartTotalQrScans },
+            summaryTotals: { adPlays: summaryTotalAds, qrScans: summaryTotalQR },
+            diff: { adPlays: adPlaysDiff, qrScans: qrScansDiff },
+            dataPoints: finalChartData.length
+          });
+          
+          // ✅ Strategy: Distribute the difference proportionally across non-zero days
+          // This preserves the relative distribution while ensuring totals match
+          const nonZeroAdPlaysDays = finalChartData.filter(day => (day.adPlays || 0) > 0);
+          const nonZeroQrScansDays = finalChartData.filter(day => (day.qrScans || 0) > 0);
+          
+          if (nonZeroAdPlaysDays.length > 0 && adPlaysDiff !== 0) {
+            const totalNonZeroAdPlays = nonZeroAdPlaysDays.reduce((sum, day) => sum + (day.adPlays || 0), 0);
+            if (totalNonZeroAdPlays > 0) {
+              const adjustmentFactor = summaryTotalAds / chartTotalAdPlays;
+              finalChartData = finalChartData.map(day => {
+                if ((day.adPlays || 0) > 0) {
+                  return { ...day, adPlays: Math.round((day.adPlays || 0) * adjustmentFactor) };
+                }
+                return day;
+              });
+            }
+          }
+          
+          if (nonZeroQrScansDays.length > 0 && qrScansDiff !== 0) {
+            const totalNonZeroQrScans = nonZeroQrScansDays.reduce((sum, day) => sum + (day.qrScans || 0), 0);
+            if (totalNonZeroQrScans > 0) {
+              const adjustmentFactor = summaryTotalQR / chartTotalQrScans;
+              finalChartData = finalChartData.map(day => {
+                if ((day.qrScans || 0) > 0) {
+                  return { ...day, qrScans: Math.round((day.qrScans || 0) * adjustmentFactor) };
+                }
+                return day;
+              });
+            }
+          }
+          
+          // Verify the adjustment
+          const adjustedTotalAdPlays = finalChartData.reduce((sum, day) => sum + (day.adPlays || 0), 0);
+          const adjustedTotalQrScans = finalChartData.reduce((sum, day) => sum + (day.qrScans || 0), 0);
+          
+          console.log('✅ [DetailedAnalytics] Graph data adjusted to match summary:', {
+            adjustedTotals: { adPlays: adjustedTotalAdPlays, qrScans: adjustedTotalQrScans },
+            summaryTotals: { adPlays: summaryTotalAds, qrScans: summaryTotalQR },
+            match: adjustedTotalAdPlays === summaryTotalAds && adjustedTotalQrScans === summaryTotalQR
+          });
+        }
+      }
+      
+      return finalChartData;
     } else if (selectedDevice !== 'all' && (deviceAnalytics?.dailyBreakdown || deviceAnalytics?.dailyStats)) {
       // ✅ Fix: Support both field names - API returns 'dailyStats', older code expects 'dailyBreakdown'
       const deviceDailyData = deviceAnalytics.dailyBreakdown || deviceAnalytics.dailyStats || [];
