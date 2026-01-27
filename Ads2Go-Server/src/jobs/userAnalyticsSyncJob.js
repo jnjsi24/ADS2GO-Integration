@@ -14,92 +14,12 @@ class UserAnalyticsSyncJob {
   }
 
   // 🔥 NEW: Update flat collections (DailyUserAnalytics & UserAnalyticsSummary)
-  // ✅ CRITICAL FIX: Recalculates totals from dailyStats to ensure accuracy across all collections
   async updateFlatCollections(userAnalytics) {
     try {
       const mongoose = require('mongoose');
       const userId = userAnalytics.userId;
       
       console.log(`📊 [FLAT SYNC] Updating flat collections for user ${userId}...`);
-      
-      // ✅ CRITICAL FIX: Recalculate totals from dailyStats (source of truth)
-      // This ensures all collections use the same accurate data
-      let recalculatedTotals = {
-        totalAdPlays: 0,
-        totalAdPlayTime: 0,
-        totalQRScans: 0,
-        totalAdImpressions: 0,
-        averageAdCompletionRate: 0
-      };
-      
-      if (userAnalytics.dailyStats && Array.isArray(userAnalytics.dailyStats) && userAnalytics.dailyStats.length > 0) {
-        recalculatedTotals.totalAdPlays = userAnalytics.dailyStats.reduce((sum, dateEntry) => 
-          sum + (dateEntry.totals?.adsPlayed || 0), 0);
-        recalculatedTotals.totalAdPlayTime = userAnalytics.dailyStats.reduce((sum, dateEntry) => 
-          sum + (dateEntry.totals?.displayTime || 0), 0);
-        recalculatedTotals.totalQRScans = userAnalytics.dailyStats.reduce((sum, dateEntry) => 
-          sum + (dateEntry.totals?.qrScans || 0), 0);
-        recalculatedTotals.totalAdImpressions = userAnalytics.dailyStats.reduce((sum, dateEntry) => 
-          sum + (dateEntry.totals?.impressions || 0), 0);
-        
-        // Calculate average completion rate
-        let totalCompletionRate = 0;
-        let completionRateCount = 0;
-        userAnalytics.dailyStats.forEach(dateEntry => {
-          if (dateEntry.totals?.completionRate && dateEntry.totals.completionRate > 0) {
-            totalCompletionRate += dateEntry.totals.completionRate;
-            completionRateCount++;
-          }
-        });
-        recalculatedTotals.averageAdCompletionRate = completionRateCount > 0 
-          ? totalCompletionRate / completionRateCount 
-          : 0;
-        
-        console.log(`📊 [FLAT SYNC] Recalculated totals from dailyStats:`, {
-          totalAdPlays: recalculatedTotals.totalAdPlays,
-          totalQRScans: recalculatedTotals.totalQRScans,
-          totalAdPlayTime: recalculatedTotals.totalAdPlayTime,
-          daysCount: userAnalytics.dailyStats.length
-        });
-      } else {
-        // If no dailyStats, use existing totals (fallback)
-        recalculatedTotals = {
-          totalAdPlays: userAnalytics.totalAdPlays || 0,
-          totalAdPlayTime: userAnalytics.totalAdPlayTime || 0,
-          totalQRScans: userAnalytics.totalQRScans || 0,
-          totalAdImpressions: userAnalytics.totalAdImpressions || 0,
-          averageAdCompletionRate: userAnalytics.averageAdCompletionRate || 0
-        };
-        console.log(`⚠️ [FLAT SYNC] No dailyStats found, using existing totals as fallback`);
-      }
-      
-      // ✅ CRITICAL FIX: Recalculate ad-level totals from dailyStats
-      const adTotalsFromDailyStats = {};
-      if (userAnalytics.dailyStats && Array.isArray(userAnalytics.dailyStats)) {
-        userAnalytics.dailyStats.forEach(dateEntry => {
-          if (dateEntry.ads && Array.isArray(dateEntry.ads)) {
-            dateEntry.ads.forEach(adEntry => {
-              const adIdStr = adEntry.adId?.toString ? adEntry.adId.toString() : String(adEntry.adId);
-              if (!adTotalsFromDailyStats[adIdStr]) {
-                adTotalsFromDailyStats[adIdStr] = {
-                  totalAdPlays: 0,
-                  totalAdPlayTime: 0,
-                  totalQRScans: 0,
-                  totalAdImpressions: 0,
-                  completionRates: []
-                };
-              }
-              adTotalsFromDailyStats[adIdStr].totalAdPlays += adEntry.totals?.adsPlayed || 0;
-              adTotalsFromDailyStats[adIdStr].totalAdPlayTime += adEntry.totals?.displayTime || 0;
-              adTotalsFromDailyStats[adIdStr].totalQRScans += adEntry.totals?.qrScans || 0;
-              adTotalsFromDailyStats[adIdStr].totalAdImpressions += adEntry.totals?.impressions || 0;
-              if (adEntry.totals?.completionRate && adEntry.totals.completionRate > 0) {
-                adTotalsFromDailyStats[adIdStr].completionRates.push(adEntry.totals.completionRate);
-              }
-            });
-          }
-        });
-      }
       
       // 1. Update DailyUserAnalytics (flatten nested dailyStats)
       const dailyDocs = [];
@@ -134,41 +54,26 @@ class UserAnalyticsSyncJob {
       }
       
       // 2. Update UserAnalyticsSummary (aggregate data)
-      // ✅ CRITICAL FIX: Use recalculated totals from dailyStats, not stale userAnalytics totals
       const summaryData = {
         userId: new mongoose.Types.ObjectId(userId),
         userName: userAnalytics.userName || null,
-        totalAdsPlayed: recalculatedTotals.totalAdPlays,
-        totalDisplayTime: recalculatedTotals.totalAdPlayTime,
-        totalQRScans: recalculatedTotals.totalQRScans,
-        totalAdImpressions: recalculatedTotals.totalAdImpressions,
-        totalAds: userAnalytics.totalAds || (userAnalytics.ads?.length || 0),
+        totalAdsPlayed: userAnalytics.totalAdPlays || 0,
+        totalDisplayTime: userAnalytics.totalAdPlayTime || 0,
+        totalQRScans: userAnalytics.totalQRScans || 0,
+        totalAdImpressions: userAnalytics.totalAdImpressions || 0,
+        totalAds: userAnalytics.totalAds || 0,
         totalDevices: userAnalytics.totalDevices || 0,
-        averageAdCompletionRate: recalculatedTotals.averageAdCompletionRate,
-        ads: (userAnalytics.ads || []).map(ad => {
-          const adIdStr = ad.adId?.toString ? ad.adId.toString() : String(ad.adId);
-          const dailyStatsTotals = adTotalsFromDailyStats[adIdStr];
-          
-          // ✅ Use recalculated totals from dailyStats if available, otherwise use ad totals
-          const adTotalPlays = dailyStatsTotals ? dailyStatsTotals.totalAdPlays : (ad.totalAdPlays || 0);
-          const adTotalPlayTime = dailyStatsTotals ? dailyStatsTotals.totalAdPlayTime : (ad.totalAdPlayTime || 0);
-          const adTotalQRScans = dailyStatsTotals ? dailyStatsTotals.totalQRScans : (ad.totalQRScans || 0);
-          const adTotalImpressions = dailyStatsTotals ? dailyStatsTotals.totalAdImpressions : (ad.totalAdImpressions || 0);
-          const adAvgCompletionRate = dailyStatsTotals && dailyStatsTotals.completionRates.length > 0
-            ? dailyStatsTotals.completionRates.reduce((sum, rate) => sum + rate, 0) / dailyStatsTotals.completionRates.length
-            : (ad.averageAdCompletionRate || 0);
-          
-          return {
-            adId: new mongoose.Types.ObjectId(ad.adId),
-            adTitle: ad.adTitle,
-            totalPlays: adTotalPlays,
-            totalQRScans: adTotalQRScans,
-            totalDisplayTime: adTotalPlayTime,
-            totalImpressions: adTotalImpressions,
-            averageCompletionRate: adAvgCompletionRate,
-            lastActivity: ad.lastActivity || null
-          };
-        }),
+        averageAdCompletionRate: userAnalytics.averageAdCompletionRate || 0,
+        ads: (userAnalytics.ads || []).map(ad => ({
+          adId: new mongoose.Types.ObjectId(ad.adId),
+          adTitle: ad.adTitle,
+          totalPlays: ad.totalAdPlays || (ad.totalAdPlayTime ? Math.round(ad.totalAdPlayTime / 35) : 0),
+          totalQRScans: ad.totalQRScans || 0,
+          totalDisplayTime: ad.totalAdPlayTime || 0,
+          totalImpressions: ad.totalAdImpressions || 0,
+          averageCompletionRate: ad.averageAdCompletionRate || 0,
+          lastActivity: ad.lastActivity || null
+        })),
         materialBreakdown: (userAnalytics.materialBreakdown || []).map(m => ({
           materialId: m.materialId,
           carGroupId: m.carGroupId || null,
@@ -184,9 +89,7 @@ class UserAnalyticsSyncJob {
       
       console.log(`📊 [FLAT SYNC] Summary data for ${userId}:`, {
         adsCount: summaryData.ads.length,
-        totalAdPlays: summaryData.totalAdsPlayed,
-        totalQRScans: summaryData.totalQRScans,
-        recalculatedFromDailyStats: true
+        efficascentQRScans: summaryData.ads.find(a => String(a.adId) === '695bbb2fefe78bace15c6e7f')?.totalQRScans
       });
       
       const result = await UserAnalyticsSummary.findOneAndUpdate(
@@ -197,14 +100,11 @@ class UserAnalyticsSyncJob {
       
       console.log(`✅ [FLAT SYNC] Updated user analytics summary for user ${userId}`, {
         resultExists: !!result,
-        adsCount: result?.ads?.length,
-        totalAdPlays: result?.totalAdsPlayed,
-        totalQRScans: result?.totalQRScans
+        adsCount: result?.ads?.length
       });
       
     } catch (error) {
       console.error('❌ [FLAT SYNC] Error updating flat collections:', error);
-      console.error(error.stack);
       // Don't throw - we don't want to break the main sync if flat collection update fails
     }
   }

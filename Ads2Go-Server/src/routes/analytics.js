@@ -900,16 +900,6 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     const startDateStr = dateRange.startDateStr;
     const endDateStr = dateRange.endDateStr;
     
-    // ✅ CRITICAL FIX: Calculate today's date in Philippine timezone for filtering
-    // dailyStats dates are stored in Philippine timezone (YYYY-MM-DD), so we must compare with Philippine timezone
-    const getTodayInPhilippineTime = () => {
-      const now = new Date();
-      const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-      const phTime = new Date(now.getTime() + phOffset);
-      return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
-    };
-    const todayStrPH = getTodayInPhilippineTime();
-    
     console.log('🔍 [DIRECT-V2] Date range processing:', {
       rawStartDate: startDate,
       rawEndDate: endDate,
@@ -917,8 +907,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
       normalizedStartDateStr: startDateStr,
       normalizedEndDateStr: endDateStr,
       hasStartDate: !!startDateStr,
-      hasEndDate: !!endDateStr,
-      todayInPH: todayStrPH
+      hasEndDate: !!endDateStr
     });
     
     // Get valid (non-archived) ad IDs
@@ -985,10 +974,8 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
                   // Filter by date range (if provided)
                   ...(startDateStr ? [{ $gte: ['$$day.date', startDateStr] }] : []),
                   ...(endDateStr ? [{ $lte: ['$$day.date', endDateStr] }] : []),
-                  // ✅ CRITICAL FIX: Use Philippine timezone for "today" comparison
-                  // Dates in dailyStats are stored in Philippine timezone (YYYY-MM-DD), so we must compare with Philippine timezone date
-                  // MongoDB aggregation doesn't support functions, so we pass the pre-calculated todayStrPH
-                  { $lte: ['$$day.date', todayStrPH] },
+                  // Filter out future dates
+                  { $lte: ['$$day.date', new Date().toISOString().split('T')[0]] },
                   // Filter out dates before first ad (if known)
                   ...(firstAdDate ? [{ $gte: ['$$day.date', firstAdDate] }] : [])
                 ]
@@ -1132,9 +1119,10 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     
     // ✅ CRITICAL FIX: Always merge today's data from DeviceTracking for real-time accuracy
     // This ensures QR scans and ad plays from today appear immediately, even if sync job hasn't run
-    // ✅ FIX: Use Philippine timezone date string to match dailyStats format
-    // Note: DeviceTracking uses UTC dates, but we convert to Philippine timezone for consistency with dailyStats
-    const todayStr = todayStrPH; // Use Philippine timezone date string (already calculated above)
+    // ✅ FIX: Use getUTCMidnight() to match DeviceTracking date format (UTC midnight)
+    const { getUTCMidnight } = require('../utils/dateUtils');
+    const today = getUTCMidnight(); // Use UTC midnight to match DeviceTracking storage format
+    const todayStr = today.toISOString().split('T')[0];
     const includesToday = (!startDateStr || startDateStr <= todayStr) && (!endDateStr || endDateStr >= todayStr);
     
     // ✅ Declare todayDataByAd outside if block so it's accessible when building adPerformance
@@ -1174,15 +1162,10 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
         }
         
         if (materialIds.length > 0) {
-          // ✅ Get today's DeviceTracking records
-          // DeviceTracking stores dates in UTC, so we need to query using UTC date
-          // But we'll merge the results using Philippine timezone date string to match dailyStats format
-          const { getUTCMidnight } = require('../utils/dateUtils');
-          const todayUTC = getUTCMidnight(); // UTC midnight for DeviceTracking query
-          
+          // Get today's DeviceTracking records
           const todayRecords = await DeviceTracking.find({
             materialId: { $in: materialIds },
-            date: todayUTC
+            date: today
           }).lean();
           
           console.log(`📊 [direct-v2] Found ${todayRecords.length} DeviceTracking records for today`);
@@ -2051,23 +2034,17 @@ router.get('/user/:userId/direct', async (req, res) => {
       let filteredDailyStats = userAnalytics.dailyStats || [];
       
       // ✅ CRITICAL: Filter out future dates and dates before first ad creation
-      // ✅ FIX: Use Philippine timezone for "today" comparison (dates in dailyStats are in Philippine timezone)
-      const getTodayInPhilippineTime = () => {
-        const now = new Date();
-        const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-        const phTime = new Date(now.getTime() + phOffset);
-        return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
-      };
-      const todayStr = getTodayInPhilippineTime();
+      const today = new Date();
+      today.setUTCHours(23, 59, 59, 999);
+      const todayStr = today.toISOString().split('T')[0];
       
       const beforeFilterCount = filteredDailyStats.length;
       filteredDailyStats = filteredDailyStats.filter(dateEntry => {
         const entryDateStr = dateEntry.date;
         
         // Filter out future dates (data shouldn't exist for future dates)
-        // Compare using Philippine timezone date strings
         if (entryDateStr > todayStr) {
-          console.log(`🚫 [UserAnalytics] Filtering out future date: ${entryDateStr} (today in PH: ${todayStr})`);
+          console.log(`🚫 [UserAnalytics] Filtering out future date: ${entryDateStr} (today: ${todayStr})`);
           return false;
         }
         
@@ -2147,7 +2124,6 @@ router.get('/user/:userId/direct', async (req, res) => {
         datesInData: filteredDailyStats.map(d => d.date).slice(0, 5),
         datesFilteredOut: userAnalytics.dailyStats?.filter(d => {
           const entryDateStr = d.date;
-          // ✅ Use Philippine timezone date for comparison (already calculated above as todayStr)
           if (entryDateStr > todayStr) return true;
           if (firstAdCreationDate) {
             const firstAdDateStr = firstAdCreationDate.toISOString().split('T')[0];
