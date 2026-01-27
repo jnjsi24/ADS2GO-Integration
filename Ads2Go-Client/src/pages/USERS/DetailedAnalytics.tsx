@@ -109,17 +109,27 @@ export const clearDetailedAnalyticsCache = () => {
   }
 };
 
+// ✅ Format date as YYYY-MM-DD in local timezone (avoids UTC shift hiding "today" on chart)
+const toLocalDateStr = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // ✅ Helper function to fill in missing dates with zero values for proper chart rendering
-// This ensures the area/line chart has continuous data points to draw lines between
+// This ensures the area/line chart has continuous data points to draw lines between.
+// Always includes the current day for Last 7/30 days and All Time so the graph shows today.
 const fillMissingDates = (data: any[], period: string, customDate?: string | null): any[] => {
   if (!data || data.length === 0) return [];
   
   // For custom date, just return the data as-is (single day)
   if (customDate) return data;
   
-  // Calculate date range based on period
+  // Calculate date range based on period — use local dates throughout
   const now = new Date();
   now.setHours(23, 59, 59, 999);
+  const todayStr = toLocalDateStr(now);
   let startDate: Date;
   
   // First, create a map of existing data by date (aggregate multiple entries per day)
@@ -127,7 +137,7 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   data.forEach(item => {
     const dateStr = typeof item.date === 'string' && item.date.match(/^\d{4}-\d{2}-\d{2}$/)
       ? item.date
-      : new Date(item.date).toISOString().split('T')[0];
+      : toLocalDateStr(new Date(item.date));
     
     // If multiple entries for same date, sum them up
     if (dataMap.has(dateStr)) {
@@ -153,34 +163,33 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
       startDate.setHours(0, 0, 0, 0);
       break;
     case 'all':
-      // For 'all', find the earliest date in data and add some context before it
+      // For 'all', find the earliest date in data and add some context before it.
+      // End date is always today so current day is always shown.
       const sortedDates = Array.from(dataMap.keys()).sort();
       if (sortedDates.length === 0) return [];
       
-      // Start from earliest data point, but add 3 days before for visual context
       const earliestDate = new Date(sortedDates[0]);
       startDate = new Date(earliestDate);
-      startDate.setDate(startDate.getDate() - 3); // 3 days before first data point
+      startDate.setDate(startDate.getDate() - 3);
       startDate.setHours(0, 0, 0, 0);
       break;
     default:
       return Array.from(dataMap.values());
   }
   
-  // Fill in missing dates
+  // Fill in missing dates from startDate through today (inclusive)
   const filledData: any[] = [];
   const currentDate = new Date(startDate);
-  const todayStr = now.toISOString().split('T')[0];
+  currentDate.setHours(0, 0, 0, 0);
   
   while (currentDate <= now) {
-    const dateStr = currentDate.toISOString().split('T')[0];
+    const dateStr = toLocalDateStr(currentDate);
     
-    // Don't include future dates
+    // Don't include future dates; always include today
     if (dateStr <= todayStr) {
       if (dataMap.has(dateStr)) {
         filledData.push(dataMap.get(dateStr));
       } else {
-        // Add zero-value entry for missing date
         filledData.push({
           date: dateStr,
           adPlays: 0,
@@ -193,7 +202,19 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
     currentDate.setDate(currentDate.getDate() + 1);
   }
   
-  // Sort by date ascending for proper chart display
+  // Safeguard: always include today if not already present (e.g. edge cases around midnight)
+  if (filledData.length > 0) {
+    const lastDate = filledData[filledData.length - 1].date;
+    if (lastDate < todayStr) {
+      filledData.push({
+        date: todayStr,
+        adPlays: dataMap.has(todayStr) ? dataMap.get(todayStr).adPlays : 0,
+        qrScans: dataMap.has(todayStr) ? dataMap.get(todayStr).qrScans : 0,
+        completionRate: dataMap.has(todayStr) ? dataMap.get(todayStr).completionRate : 0
+      });
+    }
+  }
+  
   filledData.sort((a, b) => a.date.localeCompare(b.date));
   
   return filledData;
