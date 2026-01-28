@@ -253,7 +253,7 @@ const DetailedAnalytics: React.FC = () => {
   // Custom date mode fetches data faster and shows correct values compared to period mode
   const [selectedDate, setSelectedDate] = useState<string>(getTodayInPhilippineTime());
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>('TODAY'); // Today by default when initial date is today
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>(''); // Will be set by formatDisplayDate
   const [isCustomDate, setIsCustomDate] = useState(true); // ✅ Start with custom date mode for faster loading
 
 
@@ -958,14 +958,7 @@ const DetailedAnalytics: React.FC = () => {
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
     setIsCustomDate(true);
-    // When today's date is selected from the calendar, show "TODAY" and use same logic as TODAY filter (graph + cards)
-    const todayStr = getTodayInPhilippineTime();
-    if (date === todayStr) {
-      setSelectedPeriodLabel('TODAY');
-      setSelectedPeriod('1d');
-    } else {
-      setSelectedPeriodLabel(formatDisplayDate(date));
-    }
+    setSelectedPeriodLabel(formatDisplayDate(date));
     setShowDatePicker(false);
   };
 
@@ -991,9 +984,8 @@ const DetailedAnalytics: React.FC = () => {
     
     // ✅ CRITICAL FIX: Skip cache for:
     // 1. Silent refreshes (polling) - always fetch fresh data for real-time updates
-    // 2. TODAY filter (period=1d or calendar date = today) - always fetch fresh data to show latest scans
-    const todayStr = getTodayInPhilippineTime();
-    const isTodayFilter = selectedPeriod === '1d' || (isCustomDate && selectedDate === todayStr);
+    // 2. TODAY filter (period=1d) - always fetch fresh data to show latest scans
+    const isTodayFilter = selectedPeriod === '1d';
     const shouldSkipCache = silent || isTodayFilter;
     
     // ✅ Use cache if available and not expired, AND not skipping cache
@@ -1284,10 +1276,9 @@ const DetailedAnalytics: React.FC = () => {
       const cache = analyticsCacheRef.current;
       const cached = cache.get(cacheKey);
       const now = Date.now();
-      // 🔥 FIX: NEVER use cache for TODAY filter (period=1d or calendar date = today) - always fetch fresh data
+      // 🔥 FIX: NEVER use cache for TODAY filter (period=1d) - always fetch fresh data
       // Cached data might be from yesterday, showing wrong totals
-      const todayStr = getTodayInPhilippineTime();
-      const isTodayFilter = selectedPeriod === '1d' || (isCustomDate && selectedDate === todayStr);
+      const isTodayFilter = selectedPeriod === '1d';
       const hasValidCache = cached && (now - cached.timestamp) < CACHE_TTL && !isTodayFilter;
       
       if (isTodayFilter && cached) {
@@ -1734,20 +1725,43 @@ const DetailedAnalytics: React.FC = () => {
           datesInData: dailyStats.map((d: any) => typeof d.date === 'string' && d.date.match(/^\d{4}-\d{2}-\d{2}$/) ? d.date : new Date(d.date).toISOString().split('T')[0])
         });
       } else {
-        // Preset period (Last 7/30 days, All Time): All Devices uses ONLY directAnalyticsData
-        // ✅ No fallback to analyticsData/overallAnalyticsData — they can show wrong totals that don't match
-        // the cards when All Devices is selected (e.g. graph 12,4 vs cards 9,2). Chart must match cards.
+        // Preset period: Use directAnalyticsData first, fallback to GraphQL analyticsData, then overallAnalyticsData
+        // ✅ For default state (period='all'), try multiple sources to ensure we get data
         if (directAnalyticsData?.dailyStats && directAnalyticsData.dailyStats.length > 0) {
           dailyStats = directAnalyticsData.dailyStats;
-          console.log('📊 [DetailedAnalytics] Using directAnalyticsData dailyStats (All Devices):', dailyStats.length, 'days', {
+          console.log('📊 [DetailedAnalytics] Using directAnalyticsData dailyStats:', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+          });
+        } else if (analyticsData?.getUserAnalytics?.dailyStats && analyticsData.getUserAnalytics.dailyStats.length > 0) {
+          dailyStats = analyticsData.getUserAnalytics.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using analyticsData dailyStats:', dailyStats.length, 'days', {
+            sample: dailyStats.slice(0, 3),
+            totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
+            totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
+          });
+        } else if (selectedPeriod === 'all' && overallAnalyticsData?.getUserAnalytics?.dailyStats && overallAnalyticsData.getUserAnalytics.dailyStats.length > 0) {
+          // ✅ Fallback to overallAnalyticsData for all time period
+          dailyStats = overallAnalyticsData.getUserAnalytics.dailyStats;
+          console.log('📊 [DetailedAnalytics] Using overallAnalyticsData dailyStats (default state fallback):', dailyStats.length, 'days', {
             sample: dailyStats.slice(0, 3),
             totalAdsPlayed: dailyStats.reduce((sum: number, day: any) => sum + (day.adsPlayed || day.adPlays || 0), 0),
             totalQrScans: dailyStats.reduce((sum: number, day: any) => sum + (day.qrScans || 0), 0)
           });
         } else {
           dailyStats = [];
-          console.log('📊 [DetailedAnalytics] All Devices + preset period: using only directAnalyticsData (no fallback)', {
-            directStatsCount: directAnalyticsData?.dailyStats?.length ?? 0
+          console.log('📊 [DetailedAnalytics] No dailyStats found in any data source', {
+            hasDirectData: !!directAnalyticsData,
+            hasAnalyticsData: !!analyticsData?.getUserAnalytics,
+            hasOverallData: !!overallAnalyticsData?.getUserAnalytics,
+            directStatsCount: directAnalyticsData?.dailyStats?.length || 0,
+            analyticsStatsCount: analyticsData?.getUserAnalytics?.dailyStats?.length || 0,
+            overallStatsCount: overallAnalyticsData?.getUserAnalytics?.dailyStats?.length || 0,
+            // ✅ Debug: Check if dailyStats exists but is empty
+            directStatsSample: directAnalyticsData?.dailyStats?.slice(0, 2),
+            analyticsStatsSample: analyticsData?.getUserAnalytics?.dailyStats?.slice(0, 2),
+            overallStatsSample: overallAnalyticsData?.getUserAnalytics?.dailyStats?.slice(0, 2)
           });
         }
       }
@@ -1847,36 +1861,8 @@ const DetailedAnalytics: React.FC = () => {
         }
       }
       
-      // ✅ All Devices + single day: chart must match cards (summary) — backend dailyStats can differ from summary
-      if ((!selectedDevice || selectedDevice === 'all') && isCustomDate && selectedDate) {
-        const dateISO = new Date(selectedDate + 'T00:00:00').toISOString();
-        return [{
-          date: dateISO,
-          adPlays: analyticsSummary.totalAdsPlayed || 0,
-          qrScans: analyticsSummary.totalQRScans || 0,
-          completionRate: analyticsSummary.averageCompletionRate || 0
-        }];
-      }
       // ✅ Fill missing dates with zero values for proper chart line rendering
-      let chartData = fillMissingDates(mappedStats, selectedPeriod, isCustomDate ? selectedDate : null);
-      // ✅ All Devices + Last 7/30 days / All Time: scale chart so period totals match the cards (summary)
-      // This fixes the mismatch where graph showed 12,4 but cards showed 9,2 — chart now "adds up" like specific device
-      if ((!selectedDevice || selectedDevice === 'all') && !isCustomDate && chartData.length > 0) {
-        const chartSumAdPlays = chartData.reduce((s, d) => s + (d.adPlays || 0), 0);
-        const chartSumQrScans = chartData.reduce((s, d) => s + (d.qrScans || 0), 0);
-        const summaryAdPlays = analyticsSummary.totalAdsPlayed || 0;
-        const summaryQrScans = analyticsSummary.totalQRScans || 0;
-        const scaleAd = chartSumAdPlays > 0 ? summaryAdPlays / chartSumAdPlays : 1;
-        const scaleQr = chartSumQrScans > 0 ? summaryQrScans / chartSumQrScans : 1;
-        if (scaleAd !== 1 || scaleQr !== 1) {
-          chartData = chartData.map((d: any) => ({
-            ...d,
-            adPlays: Math.round((d.adPlays || 0) * scaleAd),
-            qrScans: Math.round((d.qrScans || 0) * scaleQr)
-          }));
-        }
-      }
-      return chartData;
+      return fillMissingDates(mappedStats, selectedPeriod, isCustomDate ? selectedDate : null);
     } else if (selectedDevice !== 'all' && (deviceAnalytics?.dailyBreakdown || deviceAnalytics?.dailyStats)) {
       // ✅ Fix: Support both field names - API returns 'dailyStats', older code expects 'dailyBreakdown'
       const deviceDailyData = deviceAnalytics.dailyBreakdown || deviceAnalytics.dailyStats || [];
@@ -1953,7 +1939,7 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return [];
     }
-  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDate, selectedDate, analyticsSummary]);
+  }, [selectedDevice, deviceAnalytics, directAnalyticsData, analyticsData, overallAnalyticsData, selectedPeriod, selectedAd, isCustomDate, selectedDate]);
 
   return (
     <div className="relative min-h-screen overflow-hidden">
