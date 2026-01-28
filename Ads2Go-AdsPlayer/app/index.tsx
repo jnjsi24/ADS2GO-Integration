@@ -37,8 +37,8 @@ export default function HomeScreen() {
     configureCleanLogging();
     initializeApp();
     
-    // ✅ TEMPORARILY DISABLED FOR TESTING - Periodic rest period check commented out
-    // Set up periodic check for rest period transitions (every minute)
+    // 12am–8am lock disabled: no periodic rest-period check; system runs 24/7
+    // (Optional: uncomment below to re-enable auto lock/unlock at 12am/8am)
     /*
     const restPeriodCheckInterval = setInterval(async () => {
       const lockCheck = await check8HourLock();
@@ -152,13 +152,11 @@ export default function HomeScreen() {
     try {
       console.log('🔍 [Lock Check] Checking for 8-hour completion lock and mandatory rest period...');
       
-      // ✅ TEMPORARILY DISABLED FOR TESTING - Rest period lock commented out
-      // Check current time FIRST (mandatory rest period check)
+      // 12am–8am lock DISABLED: system runs 24/7. No lock during 12:00 AM - 7:59 AM (Manila).
       const now = new Date();
       const currentHour = now.getHours();
       
-      // 🚨 MANDATORY REST PERIOD: 12:00 AM - 7:59 AM (ALL drivers must rest)
-      // ⚠️ COMMENTED OUT FOR TESTING - Ad player will NOT lock during rest period
+      // [DISABLED] MANDATORY REST PERIOD: 12:00 AM - 7:59 AM - kept commented so app works 24/7
       /*
       const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;
       
@@ -186,9 +184,8 @@ export default function HomeScreen() {
       }
       */
       
-      // ✅ NOT in rest period (8:00 AM - 11:59 PM) - Check if driver completed 8 hours
-      // ✅ TEMPORARILY DISABLED - Rest period check is commented out, so this always runs
-      console.log(`☀️ [Lock Check] Current time is ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - Rest period lock DISABLED for testing`);
+      // No 12am–8am lock: always allow operation; then check 8-hour completion if any
+      console.log(`☀️ [Lock Check] ${currentHour}:${now.getMinutes().toString().padStart(2, '0')} - 12am-8am lock disabled, system runs 24/7`);
       
       // Get 8-hour completion data from AsyncStorage
       const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
@@ -226,8 +223,7 @@ export default function HomeScreen() {
       
     } catch (error) {
       console.error('❌ [Lock Check] Error checking lock status:', error);
-      // ✅ TEMPORARILY DISABLED FOR TESTING - Rest period lock in error handler commented out
-      // On error, check time at minimum for safety
+      // 12am–8am lock disabled: do not enforce rest period on error; keep app usable 24/7
       /*
       const currentHour = new Date().getHours();
       const isMandatoryRestPeriod = currentHour >= 0 && currentHour < 8;

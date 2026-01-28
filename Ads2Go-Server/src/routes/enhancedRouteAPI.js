@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const GPSValidation = require('../utils/gpsValidation');
+const { getPhilippinesDateString, getPhilippinesMidnight } = require('../utils/dateUtils');
 
 /**
  * Enhanced Route API for Strava-style GPS tracking visualization
@@ -110,12 +111,11 @@ router.get('/route/:materialId', async (req, res) => {
         
         let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
         
-        // If not found, try direct query with today's date
+        // If not found, try direct query with today's date (Philippines)
         if (!deviceTracking) {
           console.log(`⚠️ [Enhanced Route API] findByMaterialId returned null, trying direct query...`);
-          const now = new Date();
-          const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
-          deviceTracking = await DeviceTracking.findOne({ materialId, date: today });
+          const todayStr = getPhilippinesDateString();
+          deviceTracking = await DeviceTracking.findOne({ materialId, date: todayStr });
         }
         
         // If still not found, try finding any record for this materialId
@@ -375,8 +375,7 @@ router.get('/route/:materialId', async (req, res) => {
     // ✅ FIX: If no location points found in historical data, try fallback to DeviceTracking for recent dates
     if (allLocationPoints.length === 0 && date) {
       const requestedDate = new Date(date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = getPhilippinesMidnight();
       const daysDiff = Math.floor((today - requestedDate) / (1000 * 60 * 60 * 24));
       
       // If the requested date is within the last 7 days, try DeviceTracking as fallback

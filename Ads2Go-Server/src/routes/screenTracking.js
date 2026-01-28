@@ -20,6 +20,7 @@ const clearFailedGeocodingCache = () => {
   }
 };
 const { checkAdminMiddleware } = require('../middleware/auth');
+const { getPhilippinesMidnight } = require('../utils/dateUtils');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
@@ -539,13 +540,12 @@ router.get('/route/:deviceId', async (req, res) => {
     // This handles edge cases where route data exists but session wasn't initialized
     if (!deviceTracking.currentSession && routeData.length > 0) {
       console.log(`⚠️ [ROUTE API] No currentSession found but route data exists - creating session`);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = getPhilippinesMidnight();
       
-      // Check if the requested date is today or a past date
-      const requestedDate = date ? new Date(date) : today;
-      requestedDate.setHours(0, 0, 0, 0);
-      const isToday = requestedDate.getTime() === today.getTime();
+      // Check if the requested date is today (Philippines) or a past date
+      const requestedDate = date ? new Date(date) : new Date();
+      const requestedDatePH = getPhilippinesMidnight(requestedDate);
+      const isToday = requestedDatePH.getTime() === today.getTime();
       
       // Determine session status based on date and hours
       let sessionIsActive = isToday; // Active only if today

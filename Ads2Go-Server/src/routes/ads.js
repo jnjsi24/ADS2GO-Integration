@@ -6,6 +6,7 @@ const AdsDeployment = require('../models/adsDeployment');
 const Analytics = require('../models/analytics');
 const CompanyAd = require('../models/CompanyAd'); // ✅ For company ad filler
 const OSMService = require('../services/osmService'); // ✅ Use existing geocoding service
+const { getPhilippinesDateString } = require('../utils/dateUtils');
 // QRScanTracking removed - QR scans are now handled directly in analytics collection
 
 // GET /ads/deployments - Get all deployments (for debugging) - MUST COME FIRST
@@ -857,42 +858,18 @@ router.post('/qr-scan', async (req, res) => {
     try {
       const DeviceTracking = require('../models/deviceTracking');
       
-      // Find existing device tracking record for this material
-      // ✅ FIX: Use today's date to ensure we update the correct day's record
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // #region agent log
-      // DISABLED: Debug logging
-    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ads.js:813',message:'Querying DeviceTracking',data:{materialId,date:today.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-      // #endregion
-      
-      let deviceTracking = await DeviceTracking.findOne({
-        materialId: materialId,
-        date: today
-      });
-      
-      // #region agent log
-      // DISABLED: Debug logging
-    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ads.js:820',message:'DeviceTracking query result',data:{materialId,found:!!deviceTracking,date:today.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-      // #endregion
-      
-      // If no record for today, try to get the most recent one
-      if (!deviceTracking) {
-        deviceTracking = await DeviceTracking.findOne({
-          materialId: materialId
-        }).sort({ date: -1 });
-      }
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
+      const todayStr = getPhilippinesDateString();
+      let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
       
       if (!deviceTracking) {
-        // Create new record for today (today variable already set above)
-        const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value for offline devices
+        const farFuture = new Date('2099-12-31T23:59:59Z');
         
         deviceTracking = new DeviceTracking({
           materialId: materialId,
-          carGroupId: 'GRP-UNKNOWN', // Will be updated when device connects
+          carGroupId: 'GRP-UNKNOWN',
           screenType: 'HEADDRESS',
-          date: today,
+          date: todayStr,
           slots: [],
           isOnline: false,
           totalAdPlays: 0,
@@ -912,7 +889,7 @@ router.post('/qr-scan', async (req, res) => {
             displayIssues: 0
           },
           currentSession: {
-            date: today,
+            date: todayStr,
             startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
             endTime: null,
             totalHoursOnline: 0,
@@ -953,58 +930,7 @@ router.post('/qr-scan', async (req, res) => {
         console.log(`⚠️ [QRScan /ads] No slot info, accepting all data (fallback)`);
       }
       
-      // Check if this is a new day - if so, we need to ensure we're using today's record
-      const recordDate = new Date(deviceTracking.date);
-      recordDate.setHours(0, 0, 0, 0);
-      // today is already declared above (line 806), so we reuse it
-      const isNewDay = recordDate.getTime() !== today.getTime();
-      
-      // If it's a new day and we're using an old record, create a new record for today
-      if (isNewDay) {
-        console.log(`📅 [QRScan /ads] New day detected. Creating new record for today.`);
-        
-        // Create a new record for today (per-day tracking)
-        deviceTracking = new DeviceTracking({
-          materialId,
-          carGroupId: deviceTracking.carGroupId || 'GRP-UNKNOWN',
-          screenType: deviceTracking.screenType || 'HEADDRESS',
-          date: today,
-          isOnline: true,
-          lastSeen: new Date(),
-          slots: deviceTracking.slots || [{
-            slotNumber: parseInt(slotNumber),
-            deviceId,
-            isOnline: true,
-            lastSeen: new Date(),
-            deviceInfo: {}
-          }],
-          currentSession: {
-            date: today,
-            startTime: new Date(),
-            lastOnlineUpdate: new Date(),
-            totalHoursOnline: 0,
-            totalDistanceTraveled: 0,
-            targetHours: 8,
-            complianceStatus: 'NON_COMPLIANT',
-            isActive: true
-          },
-          totalQRScans: 0,
-          qrScans: [],
-          qrScansByAd: []
-        });
-        // #region agent log
-        // DISABLED: Debug logging
-    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ads.js:933',message:'About to save DeviceTracking (new day)',data:{materialId,date:deviceTracking.date,qrScansCount:deviceTracking.qrScans?.length||0,totalQRScans:deviceTracking.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-        // #endregion
-        
-        await deviceTracking.save();
-        
-        // #region agent log
-        // DISABLED: Debug logging
-    // fetch('http://127.0.0.1:7242/ingest/cc36b36e-7fcf-4c8c-871a-9ca9767a6ccd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ads.js:940',message:'DeviceTracking saved (new day)',data:{materialId,date:deviceTracking.date,qrScansCount:deviceTracking.qrScans?.length||0,totalQRScans:deviceTracking.totalQRScans},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-        // #endregion
-      }
-      
+      // findByMaterialId already returns today's record (model updates existing doc to today at PH midnight)
       // Store the current count before adding the new scan
       const currentCount = deviceTracking.totalQRScans || 0;
       

@@ -153,12 +153,26 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
+    // ✅ Rollover catch-up: update any DeviceTracking still on yesterday's date (runs every 1 min, PH)
+    // Fully automatic - catches docs missed by midnight reset or created with wrong default within 1 min
+    const deviceDateRolloverTask = cron.schedule('* * * * *', async () => {
+      try {
+        await this.rolloverStaleDeviceTrackingDates();
+      } catch (error) {
+        console.error('❌ Device date rollover failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     this.jobs.set('frequentArchive', frequentArchiveTask);
     this.jobs.set('hourlyArchive', hourlyArchiveTask);
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
     this.jobs.set('preMidnightArchive', preMidnightArchiveTask);
     this.jobs.set('dailyFreshArchive', dailyFreshArchiveTask);
+    this.jobs.set('deviceDateRollover', deviceDateRolloverTask);
 
     // Hourly cleanup job - runs every hour to clean up old data
     const hourlyCleanupTask = cron.schedule('0 * * * *', async () => {
@@ -583,15 +597,12 @@ class CronJobs {
   async resetAllDeviceTracking() {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const { getUTCMidnight, formatDateString } = require('../utils/dateUtils');
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
       
       console.log('🔄 Starting daily reset of all DeviceTracking records...');
       
-      // ✅ FIX: Use standardized UTC midnight Date format
-      const todayUTC = getUTCMidnight();
-      const todayStr = formatDateString(todayUTC);
-      
-      console.log(`📅 Resetting to date: ${todayStr} (UTC: ${todayUTC.toISOString()})`);
+      const todayStr = getPhilippinesDateString();
+      console.log(`📅 Resetting to date: ${todayStr} (Philippines)`);
       
       // ✅ FIX: Add simple lock mechanism to prevent concurrent resets
       if (this._isResetting) {
@@ -617,20 +628,19 @@ class CronJobs {
             // This prevents counting hours from midnight for offline devices
             const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value
             device.currentSession = {
-              date: todayUTC,  // ✅ FIX: Standardized UTC midnight Date (not local PH date)
-              startTime: farFuture, // ✅ Sentinel: will be set to actual time when device comes online
+              date: todayStr,
+              startTime: farFuture,
               endTime: null,
-              completedAt: previousCompletedAt, // ✅ Preserve for 8 AM lock (12 AM - 7:59 AM)
+              completedAt: previousCompletedAt,
               totalHoursOnline: 0,
               totalDistanceTraveled: 0,
               isActive: true,
               targetHours: 8,
               complianceStatus: 'PENDING',
               locationHistory: [],
-              lastOnlineUpdate: null  // ✅ FIX: Initialize to null - will be set when device comes online
+              lastOnlineUpdate: null
             };
             
-            // ✅ FIX: Set all devices to offline at midnight - they'll report online when they connect
             device.isOnline = false;
             if (device.slots && device.slots.length > 0) {
               device.slots.forEach(slot => {
@@ -638,7 +648,6 @@ class CronJobs {
               });
             }
             
-            // Reset daily counters
             device.totalAdPlays = 0;
             device.totalQRScans = 0;
             device.totalDistanceTraveled = 0;
@@ -646,7 +655,6 @@ class CronJobs {
             device.totalAdImpressions = 0;
             device.totalAdPlayTime = 0;
             
-            // Clear daily data arrays
             device.adPlaybacks = [];
             device.qrScans = [];
             device.locationHistory = [];
@@ -654,20 +662,14 @@ class CronJobs {
             device.adPerformance = [];
             device.qrScansByAd = [];
             
-            // Reset current ad
             device.currentAd = null;
             
-            // Reset compliance data
             device.complianceData = {
               offlineIncidents: 0,
               displayIssues: 0
             };
             
-            // ✅ DON'T reset lastSeen - preserve actual last online time for admin tracking
-            // lastSeen will only update when device is actually online and sending data
-            
-            // ✅ FIX: Use standardized UTC midnight Date (not string)
-            device.date = todayUTC;
+            device.date = todayStr;
             
             // Save the updated record
             await device.save();
@@ -689,6 +691,86 @@ class CronJobs {
     } catch (error) {
       console.error('❌ Error in resetAllDeviceTracking:', error);
       this._isResetting = false; // Release lock on error
+      throw error;
+    }
+  }
+
+  /**
+   * Rollover any DeviceTracking documents that still have yesterday's date.
+   * Runs after midnight (0:10, 0:15 AM PH) to catch docs missed by the main reset
+   * or created with wrong default (e.g. UTC date instead of Philippines today).
+   */
+  async rolloverStaleDeviceTrackingDates() {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
+
+      const todayStr = getPhilippinesDateString();
+
+      const stale = await DeviceTracking.find({
+        date: { $ne: todayStr }
+      }).lean();
+
+      if (stale.length === 0) {
+        return;
+      }
+
+      console.log(`📅 [Rollover] Updating ${stale.length} DeviceTracking record(s) to ${todayStr} (PH)`);
+      const farFuture = new Date('2099-12-31T23:59:59Z');
+
+      for (const doc of stale) {
+        try {
+          const previousCompletedAt = doc.currentSession?.completedAt;
+          await DeviceTracking.findByIdAndUpdate(doc._id, {
+            $set: {
+              date: todayStr,
+              isOnline: false,
+              totalAdPlays: 0,
+              totalQRScans: 0,
+              totalDistanceTraveled: 0,
+              totalHoursOnline: 0,
+              totalAdImpressions: 0,
+              totalAdPlayTime: 0,
+              currentAd: null,
+              adPlaybacks: [],
+              qrScans: [],
+              locationHistory: [],
+              hourlyStats: [],
+              adPerformance: [],
+              qrScansByAd: [],
+              'complianceData.offlineIncidents': 0,
+              'complianceData.displayIssues': 0,
+              'currentSession': {
+                date: todayStr,
+                startTime: farFuture,
+                endTime: null,
+                completedAt: previousCompletedAt || undefined,
+                totalHoursOnline: 0,
+                totalDistanceTraveled: 0,
+                isActive: true,
+                targetHours: 8,
+                complianceStatus: 'PENDING',
+                locationHistory: [],
+                lastOnlineUpdate: null
+              }
+            }
+          });
+          if (doc.slots && doc.slots.length > 0) {
+            const slotUpdates = {};
+            doc.slots.forEach((_, i) => {
+              slotUpdates[`slots.${i}.isOnline`] = false;
+            });
+            if (Object.keys(slotUpdates).length > 0) {
+              await DeviceTracking.findByIdAndUpdate(doc._id, { $set: slotUpdates });
+            }
+          }
+          console.log(`✅ [Rollover] Updated ${doc.materialId} to date ${todayStr}`);
+        } catch (err) {
+          console.error(`❌ [Rollover] Failed ${doc.materialId}:`, err.message);
+        }
+      }
+    } catch (error) {
+      console.error('❌ rolloverStaleDeviceTrackingDates failed:', error);
       throw error;
     }
   }
@@ -729,11 +811,11 @@ class CronJobs {
   async updateCurrentHourStats() {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const today = new Date().toISOString().split('T')[0];
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
+      const todayStr = getPhilippinesDateString();
       const currentHour = new Date().getHours();
 
-      // Get all devices for today
-      const devices = await DeviceTracking.find({ date: today });
+      const devices = await DeviceTracking.find({ date: todayStr });
 
       for (const device of devices) {
         // Update online time for current hour
@@ -751,11 +833,11 @@ class CronJobs {
   async updateOnlineHours() {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const today = new Date().toISOString().split('T')[0];
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
+      const todayStr = getPhilippinesDateString();
 
-      // Get all devices for today that are online
       const devices = await DeviceTracking.find({ 
-        date: today,
+        date: todayStr,
         isOnline: true 
       });
 

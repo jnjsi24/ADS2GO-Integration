@@ -12,6 +12,7 @@ import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import AdProgressBar from '../../components/AdProgressBar';
 import CalendarWidget from '../../components/CalendarWidget';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { getPhilippinesDateString } from '../../utils/dateUtils';
 
 // ✅ PERFORMANCE OPTIMIZATION: Persistent cache for Dashboard analytics (same as Detailed Analytics)
 const DASHBOARD_CACHE_KEY = 'dashboard-analytics-cache-v2'; // 🔥 FIX: Changed key to invalidate old 5-minute cache entries
@@ -399,11 +400,8 @@ const Dashboard = () => {
         
         // 🔥 FIX: For "TODAY" (1d), use specific date instead of period for correct timezone handling
         if (analyticsPeriod === '1d') {
-          // 🔥 TIMEZONE FIX: Convert to Philippine timezone (UTC+8) before getting date
-          const now = new Date();
-          const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-          const phTime = new Date(now.getTime() + phOffset);
-          const today = phTime.toISOString().split('T')[0]; // YYYY-MM-DD in Philippine timezone
+          // Use Philippines "today" (aligned with backend)
+          const today = getPhilippinesDateString();
           queryParams.append('startDate', today);
           queryParams.append('endDate', today);
           console.log('🔥 [Dashboard TODAY FIX] Using date range for TODAY (PH timezone):', today);
@@ -543,9 +541,9 @@ const Dashboard = () => {
     }, silent ? 300 : 400);
   }, [user?.userId, getCacheKey, manageCache]);
   
-  // ✅ FIX: Calculate if auto-refresh should be enabled (enable for today's date, disable for past dates)
+  // ✅ Use Philippines "today" so route date comparison matches backend
   const shouldDisableAutoRefresh = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getPhilippinesDateString();
     const isToday = selectedRouteDate === today;
     return !isToday; // Disable auto-refresh only for past dates
   }, [selectedRouteDate]);
@@ -920,28 +918,24 @@ const Dashboard = () => {
     }
 
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // Use Philippines "today" so chart dates align with backend dailyStats (PH)
+    const todayStr = getPhilippinesDateString(now);
+    const today = new Date(todayStr + 'T12:00:00Z');
 
     switch (qrSelectedPeriod) {
       case 'Daily': {
-        // Show last 7 days
-        const last7Days = [];
+        // Last 7 days in PH; match backend dailyStats by date string (PH)
+        const last7Days: { dateStr: string; label: string }[] = [];
         for (let i = 6; i >= 0; i--) {
-          const date = new Date(today);
-          date.setDate(date.getDate() - i);
-          last7Days.push(date);
-        }
-
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        return last7Days.map(date => {
-          const stat = dailyStats.find((s: any) => {
-            const statDate = new Date(s.date);
-            return statDate.toDateString() === date.toDateString();
+          const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+          last7Days.push({
+            dateStr: getPhilippinesDateString(d),
+            label: d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'Asia/Manila' })
           });
-          return {
-            name: dayNames[date.getDay()],
-            value: stat?.qrScans || 0
-          };
+        }
+        return last7Days.map(({ dateStr, label }) => {
+          const stat = dailyStats.find((s: any) => s.date === dateStr);
+          return { name: label, value: stat?.qrScans || 0 };
         });
       }
 

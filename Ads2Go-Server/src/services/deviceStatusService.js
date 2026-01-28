@@ -3,6 +3,7 @@ const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusManager = require('./deviceStatusManager');
 const deviceOfflineNotificationService = require('./deviceOfflineNotificationService');
 const logger = require('../utils/logger');
+const { getPhilippinesDateString, toPhilippinesDateString } = require('../utils/dateUtils');
 
 class DeviceStatusService {
   constructor() {
@@ -793,10 +794,12 @@ class DeviceStatusService {
       }
       
       const now = new Date();
-      // Get materialId from active connections
-      const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId;
-      
+      // Get materialId from active connections (or from DB if reconnecting without materialId in URL)
+      let materialId = this.activeConnections.get(deviceId)?.materialId;
+      if (!materialId) {
+        const device = await DeviceTracking.findOne({ 'slots.deviceId': deviceId }).select('materialId').lean();
+        if (device) materialId = device.materialId;
+      }
       if (!materialId) {
         console.log(`⚠️ [updateDeviceStatus] No materialId found for device ${deviceId}. Skipping update.`);
         return;
@@ -804,45 +807,16 @@ class DeviceStatusService {
       
       console.log(`🔄 [updateDeviceStatus] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
-      // Find existing record by materialId
-      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+      // ✅ Use findByMaterialId so "today" (PH) is guaranteed: model updates existing doc to today at midnight rollover
+      let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
       
       if (!deviceTracking) {
         console.log(`⚠️ [updateDeviceStatus] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);
         return;
       }
       
-      // Ensure date field is always UTC midnight (no timezone confusion)
-      const today = new Date();
-      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+      const todayStr = getPhilippinesDateString();
       
-      // Compare dates properly in UTC timezone to avoid timezone conversion issues
-      const deviceDateUTC = deviceTracking.date ? new Date(deviceTracking.date) : null;
-      let needsDateUpdate = false;
-      
-      if (!deviceDateUTC) {
-        needsDateUpdate = true;
-      } else {
-        // Compare year, month, and date in UTC timezone (not local)
-        const deviceYear = deviceDateUTC.getUTCFullYear();
-        const deviceMonth = deviceDateUTC.getUTCMonth();
-        const deviceDay = deviceDateUTC.getUTCDate();
-        
-        const todayYear = todayUTC.getUTCFullYear();
-        const todayMonth = todayUTC.getUTCMonth();
-        const todayDay = todayUTC.getUTCDate();
-        
-        if (deviceYear !== todayYear || deviceMonth !== todayMonth || deviceDay !== todayDay) {
-          needsDateUpdate = true;
-        }
-      }
-      
-      if (needsDateUpdate) {
-        console.log(`📅 [updateDeviceStatus] Updating date from ${deviceDateUTC ? deviceDateUTC.toISOString() : 'null'} to UTC midnight: ${todayUTC.toISOString()}`);
-        deviceTracking.date = todayUTC;
-      }
-      
-      // Update the specific slot for this device
       const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
       if (slot) {
         slot.isOnline = status;
@@ -850,27 +824,17 @@ class DeviceStatusService {
         deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
         deviceTracking.lastSeen = now;
         
-        // If device is coming online, ensure we have an active session
         if (status && (!deviceTracking.currentSession || !deviceTracking.currentSession.isActive)) {
           console.log(`🔄 [updateDeviceStatus] Device ${deviceId} coming online, ensuring active session`);
-          // Use UTC midnight for date field (no timezone offset confusion)
-          const today = new Date();
-          const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
           
-          // Check if there's an existing session for today
           const existingSession = deviceTracking.currentSession;
           let preservedHours = 0;
           let preservedDistance = 0;
           let preservedLocationHistory = [];
           
           if (existingSession && existingSession.date) {
-            const sessionDate = new Date(existingSession.date);
-            sessionDate.setHours(0, 0, 0, 0);
-            const todayLocal = new Date(today);
-            todayLocal.setHours(0, 0, 0, 0);
-            
-            // If the session is from today, preserve the hours and distance
-            if (sessionDate.getTime() === todayLocal.getTime()) {
+            const sessionDateStr = toPhilippinesDateString(existingSession.date);
+            if (sessionDateStr === todayStr) {
               preservedHours = existingSession.totalHoursOnline || 0;
               preservedDistance = existingSession.totalDistanceTraveled || 0;
               preservedLocationHistory = existingSession.locationHistory || [];
@@ -879,7 +843,7 @@ class DeviceStatusService {
           }
           
           deviceTracking.currentSession = {
-            date: todayUTC,  // UTC midnight for current date
+            date: todayStr,
             startTime: existingSession?.startTime || now,  // Preserve original start time if available
             endTime: null,
             totalHoursOnline: preservedHours,  // Preserve hours from same-day session
@@ -938,9 +902,8 @@ class DeviceStatusService {
     try {
       const now = new Date();
       
-      
-      // Find existing record by materialId
-      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+      // ✅ Use findByMaterialId so "today" (PH) is guaranteed at midnight rollover
+      let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
       
       if (!deviceTracking) {
         console.log(`⚠️ [updateDeviceStatusWithMaterialId] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);

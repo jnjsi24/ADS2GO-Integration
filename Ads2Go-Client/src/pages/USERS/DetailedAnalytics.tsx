@@ -14,6 +14,7 @@ import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode, Clock } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { getPhilippinesDateString } from '../../utils/dateUtils';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // ✅ PERSISTENT CACHE: Module-level cache manager that survives component unmounts
@@ -240,18 +241,10 @@ const DetailedAnalytics: React.FC = () => {
     selectedDate: ''
   });
 
-  // 🔥 Helper: Get today's date in Philippine timezone
-  const getTodayInPhilippineTime = () => {
-    const now = new Date();
-    const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-    const phTime = new Date(now.getTime() + phOffset);
-    return phTime.toISOString().split('T')[0]; // YYYY-MM-DD
-  };
-
   // Date Picker States
-  // ✅ FIX: Initialize with today's date in custom mode (faster data fetching)
-  // Custom date mode fetches data faster and shows correct values compared to period mode
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayInPhilippineTime());
+  // ✅ FIX: Initialize with today's date in PH (custom mode - faster data fetching, aligned with backend)
+  const [selectedDate, setSelectedDate] = useState<string>(() => getPhilippinesDateString());
+
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedPeriodLabel, setSelectedPeriodLabel] = useState<string>(''); // Will be set by formatDisplayDate
   const [isCustomDate, setIsCustomDate] = useState(true); // ✅ Start with custom date mode for faster loading
@@ -363,11 +356,8 @@ const DetailedAnalytics: React.FC = () => {
     // 🔥 FIX: Make "TODAY" behave like date picker with today's date selected
     // This ensures correct timezone handling and avoids cache issues
     if (period === '1d') {
-      // 🔥 TIMEZONE FIX: Convert to Philippine timezone (UTC+8) before getting date
-      const now = new Date();
-      const phOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-      const phTime = new Date(now.getTime() + phOffset);
-      const todayStr = phTime.toISOString().split('T')[0]; // YYYY-MM-DD in Philippine timezone
+      // Use Philippines "today" (aligned with backend)
+      const todayStr = getPhilippinesDateString();
       setIsCustomDate(true); // Use custom date mode (sends startDate/endDate)
       setSelectedDate(todayStr); // Set to today's date
       setSelectedPeriod(period); // Keep period for UI state

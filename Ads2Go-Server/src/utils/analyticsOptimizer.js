@@ -11,6 +11,7 @@
  */
 
 const mongoose = require('mongoose');
+const { getPhilippinesMidnight: getPHMidnight } = require('./dateUtils');
 
 class AnalyticsOptimizer {
   constructor() {
@@ -73,18 +74,11 @@ class AnalyticsOptimizer {
   }
 
   /**
-   * Get midnight in Philippines timezone (UTC+8) for a given date
-   * Returns a Date object in UTC that represents midnight in Philippines
+   * Get midnight in Philippines timezone (UTC+8) for a given date.
+   * Delegates to dateUtils.getPhilippinesMidnight (single source of truth).
    */
   static getPhilippinesMidnight(date = new Date()) {
-    // Philippines is UTC+8
-    const philippinesOffset = 8 * 60; // 8 hours in minutes
-    // Get current time in Philippines timezone
-    const phTime = new Date(date.getTime() + (philippinesOffset * 60000));
-    // Set to midnight in Philippines time
-    phTime.setUTCHours(0, 0, 0, 0);
-    // Convert back to UTC
-    return new Date(phTime.getTime() - (philippinesOffset * 60000));
+    return getPHMidnight(date);
   }
 
   /**

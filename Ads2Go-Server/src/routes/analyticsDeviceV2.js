@@ -42,8 +42,7 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
       switch (period) {
         case '1d':
         case 'TODAY':
-          startDateObj = new Date(now);
-          startDateObj.setUTCHours(0, 0, 0, 0);
+          startDateObj = require('../utils/dateUtils').getPhilippinesMidnight(now);
           endDateObj = now;
           break;
         case '7d':
@@ -128,10 +127,9 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
     let result = await DailyUserAnalytics.aggregate(pipeline);
     
     // ✅ CRITICAL FIX: Always merge today's data from DeviceTracking for real-time accuracy
-    // ✅ FIX: Use getUTCMidnight() to match DeviceTracking date format (UTC midnight)
-    const { getUTCMidnight } = require('../utils/dateUtils');
-    const today = getUTCMidnight(); // Use UTC midnight to match DeviceTracking storage format
-    const todayStr = today.toISOString().split('T')[0];
+    // Use Philippines "today" (business day - single source of truth)
+    const { getPhilippinesDateString } = require('../utils/dateUtils');
+    const todayStr = getPhilippinesDateString();
     const includesToday = (!startDateStr || startDateStr <= todayStr) && (!endDateStr || endDateStr >= todayStr);
     
     if (includesToday) {
@@ -142,7 +140,7 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
         // Get today's DeviceTracking record for this device
         const todayRecord = await DeviceTracking.findOne({
           materialId: deviceId,
-          date: today
+          date: todayStr
         }).lean();
         
         // #region agent log

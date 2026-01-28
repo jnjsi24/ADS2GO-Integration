@@ -1,6 +1,7 @@
 // AdsDeployment.js
 
 const mongoose = require('mongoose');
+const { getPhilippinesDateString } = require('../utils/dateUtils');
 
 // Individual deployment slot schema for LCD materials
 const LCDSlotSchema = new mongoose.Schema({
@@ -393,8 +394,7 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
       if (!deviceTracking) {
         console.log(`📊 Creating DeviceTracking record for material ${materialId} during ad deployment`);
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const todayStr = getPhilippinesDateString();
         
         // ✅ FIX: Use sentinel value for startTime since device is offline
         const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
@@ -403,12 +403,12 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
           materialId,
           carGroupId: driverId, // Use driverId as carGroupId for now
           screenType: 'HEADDRESS',
-          date: today,
+          date: todayStr,
           isOnline: false, // Will be true when physical device connects
           lastSeen: new Date(),
           slots: [], // Will be populated when device connects
           currentSession: {
-            date: today,
+            date: todayStr,
             startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
             endTime: null,
             totalHoursOnline: 0,
@@ -654,8 +654,7 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
       if (!deviceTracking) {
         console.log(`📊 Creating DeviceTracking record for material ${materialId} during LCD ad deployment`);
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const todayStr = getPhilippinesDateString();
         
         // ✅ FIX: Use sentinel value for startTime since device is offline
         const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
@@ -664,12 +663,12 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
           materialId,
           carGroupId: driverId, // Use driverId as carGroupId for now
           screenType: 'LCD',
-          date: today,
+          date: todayStr,
           isOnline: false, // Will be true when physical device connects
           lastSeen: new Date(),
           slots: [], // Will be populated when device connects
           currentSession: {
-            date: today,
+            date: todayStr,
             startTime: farFuture,  // ✅ FIX: Use sentinel value - will be set when device comes online
             endTime: null,
             totalHoursOnline: 0,

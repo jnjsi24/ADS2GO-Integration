@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
 const DeviceTracking = require('../models/deviceTracking');
@@ -7,6 +6,7 @@ const AnalyticsService = require('../services/analyticsService');
 const AdsDeployment = require('../models/adsDeployment');
 const Material = require('../models/Material');
 const Ad = require('../models/Ad');
+const { getPhilippinesDateString, toPhilippinesDateString } = require('../utils/dateUtils');
 
 module.exports = {
   Query: {
@@ -263,14 +263,13 @@ module.exports = {
           }
           
           if (!existingDeviceTracking) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const todayStr = getPhilippinesDateString();
             
             const deviceTracking = new DeviceTracking({
               materialId,
               carGroupId: material.carGroupId,
               screenType: 'HEADDRESS',
-              date: today,
+              date: todayStr,
               isOnline: true,
               lastSeen: new Date(),
               slots: [{
@@ -281,7 +280,7 @@ module.exports = {
                 deviceInfo: {}
               }],
               currentSession: {
-                date: today,
+                date: todayStr,
                 startTime: new Date(),
                 lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
                 totalHoursOnline: 0,
@@ -294,12 +293,9 @@ module.exports = {
             await deviceTracking.save();
             console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
           } else {
-            // Check if this is a new day
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const sessionDate = new Date(existingDeviceTracking.currentSession?.date || 0);
-            sessionDate.setHours(0, 0, 0, 0);
-            const isNewDay = sessionDate.getTime() !== today.getTime();
+            const todayStr = getPhilippinesDateString();
+            const sessionDateStr = existingDeviceTracking.currentSession?.date ? toPhilippinesDateString(existingDeviceTracking.currentSession.date) : null;
+            const isNewDay = !sessionDateStr || sessionDateStr !== todayStr;
             
             if (isNewDay) {
               // NEW DAY: Reset session and start fresh
@@ -307,7 +303,7 @@ module.exports = {
               // ✅ FIX: Use sentinel value for startTime - will be set to actual time when device comes online
               const farFuture = new Date('2099-12-31T23:59:59Z');
               existingDeviceTracking.currentSession = {
-                date: today,
+                date: todayStr,
                 startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
                 endTime: null,  // ✅ FIX: Initialize endTime
                 lastOnlineUpdate: new Date(),
@@ -325,7 +321,7 @@ module.exports = {
                 // ✅ FIX: Use sentinel value for startTime
                 const farFuture = new Date('2099-12-31T23:59:59Z');
                 existingDeviceTracking.currentSession = {
-                  date: today,
+                  date: todayStr,
                   startTime: farFuture, // ✅ Sentinel: will be updated when device sends data
                   endTime: null,  // ✅ FIX: Initialize endTime
                   lastOnlineUpdate: new Date(),

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const UserAnalytics = require('../models/userAnalytics');
 const logger = require('../utils/logger');
+const { getPhilippinesMidnight } = require('../utils/dateUtils');
 
 // ✅ Helper to check if verbose logging is enabled
 const isVerbose = () => process.env.VERBOSE_LOGS === 'true';
@@ -3239,13 +3240,10 @@ class UserAnalyticsService {
         materials: {}
       };
 
-      // ✅ CRITICAL FIX: Also fetch current day data from DeviceTracking
-      // This ensures we include today's scans that haven't been archived yet
+      // ✅ CRITICAL FIX: Also fetch current day data from DeviceTracking (Philippines "today")
       const DeviceTracking = require('../models/deviceTracking');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const today = getPhilippinesMidnight();
+      const tomorrow = getPhilippinesMidnight(new Date(today.getTime() + 24 * 60 * 60 * 1000));
       
       // 🔧 FIX: Use materialIdsArray which includes both current AND historical devices
       const currentDayData = await DeviceTracking.find({
@@ -5939,16 +5937,9 @@ class UserAnalyticsService {
         }
       }
 
-      // Get current day data from DeviceTracking
-      // ✅ Always fetch current day data (it's not date-filtered in DeviceTracking)
-      // ✅ FIX: Use exact date match (same format as when records are created)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // ✅ FIX: Use range query to find today's records (handles timezone and date format differences)
-      // Records might have date stored as Date object or string, so use range query
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Get current day data from DeviceTracking (Philippines "today" - single source of truth)
+      const today = getPhilippinesMidnight();
+      const tomorrow = getPhilippinesMidnight(new Date(today.getTime() + 24 * 60 * 60 * 1000));
       
       const currentData = await DeviceTracking.find({
         materialId: { $in: materialIds },
@@ -6505,12 +6496,9 @@ class UserAnalyticsService {
         }
       }
 
-      // Get current status from DeviceTracking
-      // ✅ FIX: Query by date range to match Date objects, not strings
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Get current status from DeviceTracking (Philippines "today")
+      const today = getPhilippinesMidnight();
+      const tomorrow = getPhilippinesMidnight(new Date(today.getTime() + 24 * 60 * 60 * 1000));
       
       const currentData = await DeviceTracking.find({
         materialId: { $in: materialIds },

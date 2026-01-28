@@ -10,6 +10,7 @@ import {
   FlexiblePricingCalculation 
 } from '../../graphql/queries/flexibleAdQueries';
 import { uploadFileToFirebase } from '../../utils/fileUpload';
+import { getPhilippinesDateString } from '../../utils/dateUtils';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
 import CalendarWidget from '../../components/CalendarWidget';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
@@ -402,12 +403,8 @@ const CreateAdvertisement: React.FC = () => {
       if (!formData.startDate) {
         newErrors.startDate = 'Start date is required';
       } else {
-        // Validate that the start date is not in the past
-        const selectedDate = new Date(formData.startDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
-        
-        if (selectedDate < today) {
+        // Validate that the start date is not in the past (Philippines business day)
+        if (formData.startDate < getPhilippinesDateString()) {
           newErrors.startDate = 'Start date cannot be in the past';
         }
       }
@@ -503,11 +500,10 @@ const CreateAdvertisement: React.FC = () => {
       const selectedDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
       const now = new Date();
       
-      // If selected date is today or in the past, use current time (instant deployment)
-      // Otherwise, use the selected date at current time (not 8:00 AM)
+      // If selected date is today or in the past (Philippines business day), use current time (instant deployment)
       let startDate: Date;
-      if (selectedDate <= new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
-        // Today or past date - deploy instantly
+      if (formData.startDate <= getPhilippinesDateString()) {
+        // Today or past date in PH - deploy instantly
         startDate = now;
       } else {
         // Future date - use selected date at current time of day

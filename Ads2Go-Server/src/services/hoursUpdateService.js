@@ -47,16 +47,11 @@ class HoursUpdateService {
    */
   async updateAllDeviceHours() {
     try {
-      const now = new Date();
-      // ✅ FIX: Use Date object (UTC midnight) instead of string for proper query matching
-      // This matches the pattern used in deviceTracking.js findByDeviceId method
-      const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+      const { getPhilippinesDateString } = require('../utils/dateUtils');
+      const todayStr = getPhilippinesDateString();
 
-      // Get all devices for today that are online AND displaying ads
-      // ✅ FIX: Only update hours for devices that are actually displaying ads
-      // Note: We'll do the isDisplaying check in updateDeviceHours method for more reliable checking
       const devices = await DeviceTracking.find({
-        date: today,
+        date: todayStr,
         isOnline: true,
         'currentSession.isActive': true
       });

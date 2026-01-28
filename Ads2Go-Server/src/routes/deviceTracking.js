@@ -5,6 +5,7 @@ const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const cronJobs = require('../jobs/cronJobs');
 const GPSValidation = require('../utils/gpsValidation');
 const { validateGPSData, logGPSQuality, enforceQualityThresholds } = require('../middleware/gpsValidation');
+const { getPhilippinesDateString } = require('../utils/dateUtils');
 
 // Note: GPS validation functions (validateCoordinates, calculateDistance) 
 // are centralized in utils/gpsValidation.js and used via GPSValidation.* throughout the codebase
@@ -132,15 +133,14 @@ router.post('/location-update',
         });
       }
       
-      // Create new car record for today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Create new car record for today (Philippines business day)
+      const todayStr = getPhilippinesDateString();
       
       carTracking = new DeviceTracking({
         materialId,
         carGroupId: req.body.carGroupId || 'UNKNOWN',
         screenType: 'HEADDRESS',
-        date: today,
+        date: todayStr,
         isOnline: true,
         lastSeen: new Date(),
         slots: [{
@@ -151,7 +151,7 @@ router.post('/location-update',
           deviceInfo: req.body.deviceInfo || {}
         }],
         currentSession: {
-          date: today,
+          date: todayStr,
           startTime: new Date(),
           lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
@@ -309,15 +309,14 @@ router.post('/status-update', async (req, res) => {
     }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
-      // Create new car record for today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Create new car record for today (Philippines business day)
+      const todayStr = getPhilippinesDateString();
       
       deviceTracking = new DeviceTracking({
         materialId,
         carGroupId,
         screenType: 'HEADDRESS',
-        date: today,
+        date: todayStr,
         isOnline: isOnline || false,
         lastSeen: new Date(),
         slots: [{
@@ -328,7 +327,7 @@ router.post('/status-update', async (req, res) => {
           deviceInfo: deviceInfo || {}
         }],
         currentSession: {
-          date: today,
+          date: todayStr,
           startTime: new Date(),
           lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
@@ -403,15 +402,14 @@ router.post('/ad-playback', async (req, res) => {
     }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
-      // Create new car record for today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Create new car record for today (Philippines business day)
+      const todayStr = getPhilippinesDateString();
       
       deviceTracking = new DeviceTracking({
         materialId,
         carGroupId,
         screenType: 'HEADDRESS',
-        date: today,
+        date: todayStr,
         isOnline: true,
         lastSeen: new Date(),
         slots: [{
@@ -422,7 +420,7 @@ router.post('/ad-playback', async (req, res) => {
           deviceInfo: {}
         }],
         currentSession: {
-          date: today,
+          date: todayStr,
           startTime: new Date(),
           lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
@@ -634,14 +632,13 @@ router.post('/qr-scan', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // ✅ FIX: Use today's date to ensure we update the correct day's record
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Use Philippines "today" (business day - single source of truth)
+    const todayStr = getPhilippinesDateString();
 
     // Find existing device tracking record for this material
     let deviceTracking = await DeviceTracking.findOne({
       materialId: materialId,
-      date: today
+      date: todayStr
     });
     
     // If no record for today, try to get the most recent one
@@ -658,7 +655,7 @@ router.post('/qr-scan', async (req, res) => {
         materialId,
         carGroupId,
         screenType: 'HEADDRESS',
-        date: today,
+        date: todayStr,
         isOnline: true,
         lastSeen: new Date(),
         slots: [{
@@ -669,7 +666,7 @@ router.post('/qr-scan', async (req, res) => {
           deviceInfo: {}
         }],
         currentSession: {
-          date: today,
+          date: todayStr,
           startTime: new Date(),
           lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
@@ -722,10 +719,9 @@ router.post('/qr-scan', async (req, res) => {
     // Track QR scan using the new schema (always store, with slotNumber)
     const slot = deviceTracking.getSlot(parseInt(deviceSlot));
     if (slot) {
-      // Check if this is a new day - if so, we need to ensure we're using today's record
-      const recordDate = new Date(deviceTracking.date);
-      recordDate.setHours(0, 0, 0, 0);
-      const isNewDay = recordDate.getTime() !== today.getTime();
+      const { toPhilippinesDateString } = require('../utils/dateUtils');
+      const recordDateStr = typeof deviceTracking.date === 'string' ? deviceTracking.date : toPhilippinesDateString(deviceTracking.date);
+      const isNewDay = recordDateStr !== todayStr;
       
       // If it's a new day and we're using an old record, create a new record for today
       if (isNewDay) {
@@ -736,7 +732,7 @@ router.post('/qr-scan', async (req, res) => {
           materialId,
           carGroupId,
           screenType: deviceTracking.screenType || 'HEADDRESS',
-          date: today,
+          date: todayStr,
           isOnline: true,
           lastSeen: new Date(),
           slots: deviceTracking.slots || [{
@@ -747,7 +743,7 @@ router.post('/qr-scan', async (req, res) => {
             deviceInfo: {}
           }],
           currentSession: {
-            date: today,
+            date: todayStr,
             startTime: new Date(),
             lastOnlineUpdate: new Date(),
             totalHoursOnline: 0,
@@ -936,12 +932,11 @@ router.post('/qr-scan', async (req, res) => {
 router.post('/repair-qr-scans/:materialId', async (req, res) => {
   try {
     const { materialId } = req.params;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = getPhilippinesDateString();
     
     const deviceTracking = await DeviceTracking.findOne({
       materialId: materialId,
-      date: today
+      date: todayStr
     });
     
     if (!deviceTracking) {
@@ -1018,14 +1013,10 @@ router.get('/diagnostic/:materialId', async (req, res) => {
     let query = { materialId: materialId };
     
     if (date) {
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-      query.date = targetDate;
+      query.date = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : getPhilippinesDateString(new Date(date));
     } else {
-      // Default to today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      query.date = today;
+      const todayStr = getPhilippinesDateString();
+      query.date = todayStr;
     }
     
     const record = await DeviceTracking.findOne(query);

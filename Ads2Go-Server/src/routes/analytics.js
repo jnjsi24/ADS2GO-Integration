@@ -1118,11 +1118,9 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
     }
     
     // ✅ CRITICAL FIX: Always merge today's data from DeviceTracking for real-time accuracy
-    // This ensures QR scans and ad plays from today appear immediately, even if sync job hasn't run
-    // ✅ FIX: Use getUTCMidnight() to match DeviceTracking date format (UTC midnight)
-    const { getUTCMidnight } = require('../utils/dateUtils');
-    const today = getUTCMidnight(); // Use UTC midnight to match DeviceTracking storage format
-    const todayStr = today.toISOString().split('T')[0];
+    // Use Philippines "today" (business day - single source of truth)
+    const { getPhilippinesDateString } = require('../utils/dateUtils');
+    const todayStr = getPhilippinesDateString();
     const includesToday = (!startDateStr || startDateStr <= todayStr) && (!endDateStr || endDateStr >= todayStr);
     
     // ✅ Declare todayDataByAd outside if block so it's accessible when building adPerformance
@@ -1165,7 +1163,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
           // Get today's DeviceTracking records
           const todayRecords = await DeviceTracking.find({
             materialId: { $in: materialIds },
-            date: today
+            date: todayStr
           }).lean();
           
           console.log(`📊 [direct-v2] Found ${todayRecords.length} DeviceTracking records for today`);
@@ -1501,7 +1499,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
               if (materialIds.length > 0) {
                 const todayRecords = await DeviceTracking.find({
                   materialId: { $in: materialIds },
-                  date: today
+                  date: todayStr
                 }).lean();
                 
                 // Aggregate QR scans for this ad from today's records
@@ -1627,7 +1625,7 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
               try {
                 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
                 const Ad = require('../models/Ad');
-                const { getUTCMidnight } = require('../utils/dateUtils');
+                const { getPhilippinesMidnight } = require('../utils/dateUtils');
                 
                 // ✅ FIX: Get materials from the Ad model, not Material.find with userId
                 // Materials are linked to ads via ad.materialId array
@@ -1644,9 +1642,8 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
                 }
                 
                 if (materialIds.length > 0) {
-                  // Get historical QR scans from DeviceDataHistoryV2 (all days except today)
-                  // ✅ FIX: Use getUTCMidnight to ensure consistent date comparison
-                  const todayMidnight = getUTCMidnight(today);
+                  // Get historical QR scans from DeviceDataHistoryV2 (all days except today - Philippines)
+                  const todayMidnight = getPhilippinesMidnight(today);
                   const historicalQRScans = await DeviceDataHistoryV2.aggregate([
                     { $match: { materialId: { $in: materialIds } } },
                     { $unwind: '$dailyData' },

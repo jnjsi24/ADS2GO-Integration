@@ -1107,7 +1107,7 @@ class DailyArchiveJobV2 {
           }
 
           // Archive this device
-          const dateStr = device.date.toISOString().split('T')[0];
+          const dateStr = typeof device.date === 'string' ? device.date : require('../utils/dateUtils').toPhilippinesDateString(device.date);
           await this.archiveMaterialDataV2(device, dateStr);
           archivedCount++;
           console.log(`✅ Archived ${device.materialId} for date ${dateStr}`);
@@ -1147,7 +1147,7 @@ class DailyArchiveJobV2 {
       for (const device of allDevices) {
         try {
           // Force archive this device regardless of existing data
-          const dateStr = device.date.toISOString().split('T')[0];
+          const dateStr = typeof device.date === 'string' ? device.date : require('../utils/dateUtils').toPhilippinesDateString(device.date);
           await this.archiveMaterialDataV2(device, dateStr);
           archivedCount++;
           console.log(`✅ Force archived ${device.materialId} for date ${dateStr}`);

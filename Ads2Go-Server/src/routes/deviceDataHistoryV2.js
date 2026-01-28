@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+const { getPhilippinesDateString } = require('../utils/dateUtils');
 
 // Get all materials with their daily data (optimized with pagination and filtering)
 router.get('/materials', async (req, res) => {
@@ -204,33 +205,29 @@ router.put('/materials/:materialId/daily-data/:date', async (req, res) => {
 
     // Parse the date
     const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
 
-    // Check if the date is today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isToday = targetDate.getTime() === today.getTime();
+    const todayStr = getPhilippinesDateString();
+    const targetDateStr = getPhilippinesDateString(targetDate);
+    const isToday = targetDateStr === todayStr;
 
     console.log(`🔄 Updating data for ${materialId} on ${date} (${isToday ? 'TODAY' : 'PAST DATE'})`);
     console.log(`📊 Update data received:`, updateData);
 
     if (isToday) {
-      // Update DeviceTracking collection for current date
       const DeviceTracking = require('../models/deviceTracking');
       
       let deviceTracking = await DeviceTracking.findOne({ materialId });
       
       if (!deviceTracking) {
-        // Create new DeviceTracking record if it doesn't exist
         deviceTracking = new DeviceTracking({
           materialId,
           carGroupId: req.body.carGroupId || 'UNKNOWN',
           screenType: 'HEADDRESS',
-          date: today,
+          date: todayStr,
           isOnline: true,
           lastSeen: new Date(),
           currentSession: {
-            date: today,
+            date: todayStr,
             startTime: new Date(),
             lastOnlineUpdate: new Date(),
             totalHoursOnline: updateData.totalHoursOnline || 0,

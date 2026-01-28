@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const GPSValidation = require('../utils/gpsValidation');
-const { getUTCMidnight, isSameDay } = require('../utils/dateUtils');
+const { getPhilippinesMidnight, getPhilippinesDateString, toPhilippinesDateString, isSameDay } = require('../utils/dateUtils');
 const { setStartTimeIfNeeded: helperSetStartTime, syncDeviceDates, validateHours, syncHoursFromSession } = require('./deviceTrackingHelpers');
 //for data history
 // Location Point Schema for real-time data
@@ -147,10 +147,11 @@ const DeviceTrackingSchema = new mongoose.Schema({
     enum: ['HEADDRESS', 'LCD', 'BILLBOARD', 'DIGITAL_DISPLAY'],
     default: 'HEADDRESS'
   },
+  // Philippines date only (YYYY-MM-DD) - no UTC, no other timezone
   date: { 
-    type: Date, 
+    type: String, 
     required: true,
-    default: () => new Date().toISOString().split('T')[0],
+    default: () => getPhilippinesDateString(),
     index: true
   },
   
@@ -260,7 +261,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   
   // Daily session tracking (from ScreenTracking)
   currentSession: {
-    date: { type: Date, required: true },
+    date: { type: String, required: true }, // Philippines YYYY-MM-DD
     startTime: { type: Date, required: true },
     endTime: { type: Date },
     completedAt: { type: Date }, // ✅ NEW: When 8-hour requirement was completed
@@ -321,9 +322,9 @@ DeviceTrackingSchema.index({ carGroupId: 1 });
 DeviceTrackingSchema.index({ 'currentSession.date': 1 });
 DeviceTrackingSchema.index({ 'currentSession.complianceStatus': 1 });
 
-// Virtual for formatted date
+// Virtual for formatted date (date is already PH YYYY-MM-DD)
 DeviceTrackingSchema.virtual('dateString').get(function() {
-  return this.date.toISOString().split('T')[0];
+  return typeof this.date === 'string' ? this.date : toPhilippinesDateString(this.date);
 });
 
 // Virtual for current hour
@@ -356,10 +357,15 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
     return 0;
   }
   
-  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
-  const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(this.currentSession.date, deviceTimezone);
+  const todayStrPH = getPhilippinesDateString();
+  const sessionDateStr = typeof this.currentSession.date === 'string' ? this.currentSession.date : toPhilippinesDateString(this.currentSession.date);
+  if (sessionDateStr !== todayStrPH) {
+    return 0; // New day in Philippines
+  }
   
-  // If it's a new day in device timezone, return 0 hours (fresh start) - regardless of online status
+  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
+  const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(new Date(this.currentSession.date + 'T00:00:00+08:00'), deviceTimezone);
+  
   if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
     return 0;
   }
@@ -407,15 +413,11 @@ DeviceTrackingSchema.virtual('hoursRemaining').get(function() {
   const targetHours = this.currentSession?.targetHours || 8;
   const currentHours = this.currentHoursToday;
   
-  // If it's a new day, show 8 hours remaining
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sessionDate = new Date(this.currentSession?.date);
-  if (sessionDate) {
-    sessionDate.setHours(0, 0, 0, 0);
-    if (sessionDate.getTime() !== today.getTime()) {
-      return 8;
-    }
+  // If it's a new day (Philippines), show 8 hours remaining
+  const todayStrPH = getPhilippinesDateString();
+  const sessionDateStr = this.currentSession?.date ? toPhilippinesDateString(this.currentSession.date) : null;
+  if (sessionDateStr && sessionDateStr !== todayStrPH) {
+    return 8;
   }
   
   return Math.max(0, targetHours - currentHours);
@@ -442,44 +444,27 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  // Get today's date as UTC midnight (consistent with rest of system)
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+  const todayStr = getPhilippinesDateString();
   
-  // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
     'slots.deviceId': deviceId, 
-    date: today 
+    date: todayStr 
   });
   
   if (car) {
     return car;
   }
   
-  // If no record for today, find the most recent record for this device
   const recentCar = await this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
   
   if (recentCar) {
-    // Check if the recent record is from a different day using timezone-aware comparison
-    const recentDate = new Date(recentCar.date);
+    const recentDateStr = toPhilippinesDateString(recentCar.date);
     
-    // Convert both dates to Philippines timezone (GMT+8) for comparison
-    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    
-    // Compare just the date parts (year, month, day) in Philippines timezone
-    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
-    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
-    
-    if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
-      // Different day - update the existing record to today's date and reset daily data
-      const todayStr = today.toISOString().split('T')[0];
+    if (recentDateStr !== todayStr) {
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for device ${deviceId} to today: ${todayStr}`);
-      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
-      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Previous record date: ${recentDateStr}, Today (PH): ${todayStr}`);
       
-      // Update the existing record to today's date and reset daily data
-      recentCar.date = today;
+      recentCar.date = todayStr;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -513,7 +498,7 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
       
       // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+        date: todayStr,
         startTime: farFuture,  // Sentinel value - will be set to actual time when device comes online
         endTime: null,
         totalHoursOnline: 0,
@@ -525,32 +510,26 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
         lastOnlineUpdate: null
       };
       
-      // ✅ FIX: Set online status to false at midnight - devices will report online when they actually connect
-      // This prevents counting hours from midnight when devices are offline
       recentCar.isOnline = false;
       recentCar.slots.forEach(slot => {
-        slot.isOnline = false; // Reset all slots to offline - they will report online when connected
+        slot.isOnline = false;
         slot.lastSeen = new Date();
       });
       
-      // Update lastSeen
       recentCar.lastSeen = new Date();
       
-      // Save the updated record with error handling
       try {
         await recentCar.save();
         console.log(`✅ Successfully updated DeviceTracking record for device ${deviceId} to new day`);
       } catch (saveError) {
         console.error(`❌ Error saving DeviceTracking record for device ${deviceId}:`, saveError.message);
-        // If save fails due to validation, try to create a new record instead
         if (saveError.name === 'ValidationError') {
           console.log(`⚠️ Validation error - creating new record for device ${deviceId} instead of updating`);
-          // Create a new record for today instead
           const newCar = new this({
             materialId: recentCar.materialId,
             carGroupId: recentCar.carGroupId || 'UNKNOWN',
             screenType: recentCar.screenType || 'HEADDRESS',
-            date: today,
+            date: todayStr,
             isOnline: false,
             lastSeen: new Date(),
             slots: recentCar.slots.map(slot => ({
@@ -558,7 +537,7 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
               isOnline: false
             })),
             currentSession: {
-              date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+              date: todayStr,
               startTime: farFuture,
               endTime: null,
               totalHoursOnline: 0,
@@ -574,62 +553,38 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
           console.log(`✅ Created new DeviceTracking record for device ${deviceId}`);
           return newCar;
         }
-        throw saveError; // Re-throw if it's not a validation error
+        throw saveError;
       }
-      console.log(`✅ Successfully updated existing DeviceTracking record for device ${deviceId} to today's date`);
-      
-      return recentCar;
-    } else {
-      // Same day - return the existing record
-      console.log(`📅 Same day detected: Using existing record for device ${deviceId}`);
       return recentCar;
     }
+    console.log(`📅 Same day detected: Using existing record for device ${deviceId}`);
+    return recentCar;
   }
   
-  return null; // No existing record found
+  return null;
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  // Get today's date as UTC midnight (consistent with rest of system)
-  const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
+  const todayStr = getPhilippinesDateString();
   
-  // First try to find today's record for this material
-  let car = await this.findOne({ materialId, date: today });
+  let car = await this.findOne({ materialId, date: todayStr });
   
   if (car) {
     return car;
   }
   
-  // If no record for today, find the most recent record for this material
   const recentCar = await this.findOne({ materialId }).sort({ date: -1 });
   
   if (recentCar) {
-    // Check if the recent record is from a different day using timezone-aware comparison
-    const recentDate = new Date(recentCar.date);
+    const recentDateStr = toPhilippinesDateString(recentCar.date);
     
-    // Convert both dates to Philippines timezone (GMT+8) for comparison
-    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    
-    // Compare just the date parts (year, month, day) in Philippines timezone
-    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
-    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
-    
-    if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
-      // Different day - update the existing record to today's date and reset daily data
-      const todayStr = today.toISOString().split('T')[0];
+    if (recentDateStr !== todayStr) {
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for ${materialId} to today: ${todayStr}`);
-      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
-      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Previous record date: ${recentDateStr}, Today (PH): ${todayStr}`);
       
-      // ⚠️ IMPORTANT: Use sentinel value (far future date) for startTime until device actually comes online
-      // This prevents counting hours from midnight when devices are offline
-      // The sentinel value is checked in setOnlineStatus and currentHoursToday virtual
-      const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value - device hasn't come online yet
+      const farFuture = new Date('2099-12-31T23:59:59Z');
       
-      // Update the existing record to today's date and reset daily data
-      recentCar.date = today;
+      recentCar.date = todayStr;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -656,10 +611,9 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
         displayIssues: 0
       };
       
-      // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        startTime: farFuture,  // Sentinel value - will be set to actual time when device comes online
+        date: todayStr,
+        startTime: farFuture,
         endTime: null,
         totalHoursOnline: 0,
         totalDistanceTraveled: 0,
@@ -670,31 +624,24 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
         lastOnlineUpdate: null
       };
       
-      // Reset online status for new day
       recentCar.isOnline = false;
       recentCar.slots.forEach(slot => {
         slot.isOnline = false;
         slot.lastSeen = new Date();
       });
-      
-      // Update lastSeen
       recentCar.lastSeen = new Date();
       
-      // Save the updated record with error handling
       try {
         await recentCar.save();
         console.log(`✅ Successfully updated DeviceTracking record for ${materialId} to new day`);
       } catch (saveError) {
         console.error(`❌ Error saving DeviceTracking record for ${materialId}:`, saveError.message);
-        // If save fails due to validation, try to create a new record instead
         if (saveError.name === 'ValidationError') {
-          console.log(`⚠️ Validation error - creating new record for ${materialId} instead of updating`);
-          // Create a new record for today instead
           const newCar = new this({
             materialId: recentCar.materialId,
             carGroupId: recentCar.carGroupId || 'UNKNOWN',
             screenType: recentCar.screenType || 'HEADDRESS',
-            date: today,
+            date: todayStr,
             isOnline: false,
             lastSeen: new Date(),
             slots: recentCar.slots.map(slot => ({
@@ -702,7 +649,7 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
               isOnline: false
             })),
             currentSession: {
-              date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+              date: todayStr,
               startTime: farFuture,
               endTime: null,
               totalHoursOnline: 0,
@@ -715,22 +662,17 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
             }
           });
           await newCar.save();
-          console.log(`✅ Created new DeviceTracking record for ${materialId}`);
           return newCar;
         }
-        throw saveError; // Re-throw if it's not a validation error
+        throw saveError;
       }
-      console.log(`✅ Successfully updated existing DeviceTracking record for ${materialId} to today's date`);
-      
-      return recentCar;
-    } else {
-      // Same day - return the existing record
-      console.log(`📅 Same day detected: Using existing record for ${materialId}`);
       return recentCar;
     }
+    console.log(`📅 Same day detected: Using existing record for ${materialId}`);
+    return recentCar;
   }
   
-  return null; // No existing record found
+  return null;
 };
 
 // Helper method to get a specific slot
@@ -833,16 +775,16 @@ DeviceTrackingSchema.methods.getSlotStatus = function() {
 };
 
 DeviceTrackingSchema.statics.findByDeviceSlot = function(deviceSlot) {
-  const today = new Date().toISOString().split('T')[0];
-  return this.find({ 
-    'slots.slotNumber': deviceSlot, 
-    date: today 
+  const todayStr = getPhilippinesDateString();
+  return this.find({
+    'slots.slotNumber': deviceSlot,
+    date: todayStr
   });
 };
 
 DeviceTrackingSchema.statics.getCurrentDayData = function() {
-  const today = new Date().toISOString().split('T')[0];
-  return this.find({ date: today });
+  const todayStr = getPhilippinesDateString();
+  return this.find({ date: todayStr });
 };
 
 // Static methods from ScreenTracking
@@ -992,7 +934,7 @@ DeviceTrackingSchema.post('save', async function(doc) {
       setTimeout(async () => {
         try {
           const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
-          const dateStr = this.date.toISOString().split('T')[0];
+          const dateStr = typeof this.date === 'string' ? this.date : toPhilippinesDateString(this.date);
           await dailyArchiveJobV2.archiveMaterialDataV2(this, dateStr);
           console.log(`✅ Auto-archived updated data for ${this.materialId}`);
           
@@ -1049,7 +991,7 @@ DeviceTrackingSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate'], async
         setTimeout(async () => {
           try {
             const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
-            const dateStr = doc.date.toISOString().split('T')[0];
+            const dateStr = typeof doc.date === 'string' ? doc.date : toPhilippinesDateString(doc.date);
             await dailyArchiveJobV2.archiveMaterialDataV2(doc, dateStr);
             console.log(`✅ Auto-archived updated data for ${doc.materialId}`);
           } catch (error) {
@@ -1072,12 +1014,10 @@ DeviceTrackingSchema.statics.findByScreenType = function(screenType) {
 };
 
 DeviceTrackingSchema.statics.findNonCompliantDrivers = function(date = new Date()) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  
+  const todayStr = getPhilippinesDateString(date);
   return this.find({
     screenType: 'HEADDRESS',
-    'currentSession.date': startOfDay,
+    'currentSession.date': todayStr,
     'currentSession.complianceStatus': 'NON_COMPLIANT'
   });
 };
@@ -1517,17 +1457,13 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
     return false; // No reset needed
   }
   
-  // Reset for new day
-  const today = getUTCMidnight();
-  const farFuture = new Date('2099-12-31T23:59:59Z'); // Sentinel value
+  const todayStr = getPhilippinesDateString();
+  const farFuture = new Date('2099-12-31T23:59:59Z');
   
-  // ✅ Use centralized date sync
-  syncDeviceDates(this, today);
+  syncDeviceDates(this, todayStr);
   
-  // ⚠️ IMPORTANT: Use sentinel value for startTime until device actually comes online
-  // This prevents counting hours from midnight when devices are offline
   this.currentSession = {
-    date: today,
+    date: todayStr,
     startTime: farFuture,  // Sentinel: will be set when device comes online
     endTime: null,
     totalHoursOnline: 0,
@@ -1578,14 +1514,12 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
   return true; // Session was reset
 };
 
-// Method to start daily session (from ScreenTracking)
 DeviceTrackingSchema.methods.startDailySession = function() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = getPhilippinesDateString();
   const now = new Date();
   
   this.currentSession = {
-    date: today,
+    date: todayStr,
     startTime: now,  // ✅ FIX: Set to current time when session starts
     endTime: null,
     totalHoursOnline: 0,
@@ -1672,14 +1606,9 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
     return this;
   }
   
-  // Check if this is a new day - if so, reset session
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sessionDate = new Date(this.currentSession.date);
-  sessionDate.setHours(0, 0, 0, 0);
-  
-  if (sessionDate.getTime() !== today.getTime()) {
-    // New day - reset session
+  const todayStr = getPhilippinesDateString();
+  const sessionDateStr = this.currentSession.date ? toPhilippinesDateString(this.currentSession.date) : null;
+  if (!sessionDateStr || sessionDateStr !== todayStr) {
     this.resetDailySession();
     return this;
   }

@@ -3,7 +3,7 @@
  * Centralized logic for device tracking operations to prevent conflicts
  */
 
-const { getUTCMidnight, isSameDay } = require('../utils/dateUtils');
+const { getPhilippinesDateString, toPhilippinesDateString } = require('../utils/dateUtils');
 
 /**
  * ✅ CENTRALIZED: Set startTime when device comes online
@@ -31,21 +31,22 @@ function setStartTimeIfNeeded(device) {
 }
 
 /**
- * ✅ CENTRALIZED: Sync device.date and currentSession.date
- * Ensures both dates are always in sync
+ * ✅ CENTRALIZED: Sync device.date and currentSession.date (Philippines YYYY-MM-DD only)
  * 
  * @param {Object} device - Device tracking document
- * @param {Date} date - Date to set (defaults to today UTC midnight)
+ * @param {string|Date} date - Philippines date string "YYYY-MM-DD" or Date (converted to PH string)
  */
 function syncDeviceDates(device, date = null) {
-  const targetDate = date || getUTCMidnight();
+  const targetStr = !date
+    ? getPhilippinesDateString()
+    : typeof date === 'string' ? date : getPhilippinesDateString(date);
   
-  device.date = targetDate;
+  device.date = targetStr;
   if (device.currentSession) {
-    device.currentSession.date = targetDate;
+    device.currentSession.date = targetStr;
   }
   
-  console.log(`📅 [syncDeviceDates] ${device.materialId}: Synced dates to ${targetDate.toISOString()}`);
+  console.log(`📅 [syncDeviceDates] ${device.materialId}: Synced dates to ${targetStr} (PH)`);
 }
 
 /**
@@ -57,13 +58,13 @@ function syncDeviceDates(device, date = null) {
  */
 function needsDailyReset(device) {
   if (!device || !device.currentSession || !device.currentSession.date) {
-    return true; // No session, needs reset
+    return true;
   }
   
-  const today = getUTCMidnight();
-  const sessionDate = getUTCMidnight(new Date(device.currentSession.date));
+  const todayStr = getPhilippinesDateString();
+  const sessionDateStr = toPhilippinesDateString(device.currentSession.date);
   
-  return !isSameDay(sessionDate, today);
+  return sessionDateStr !== todayStr;
 }
 
 /**

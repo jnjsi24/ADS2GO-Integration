@@ -27,11 +27,51 @@ function getUTCMidnight(date = new Date()) {
 /**
  * Get today's date in Philippines timezone as UTC midnight
  * Useful for display purposes, but still returns UTC midnight Date
- * 
- * @returns {Date} UTC midnight Date object (representing today in PH timezone)
+ *
+ * @deprecated For business "today" use getPhilippinesMidnight() instead.
+ * @returns {Date} UTC midnight Date object (server-local; for PH use getPhilippinesMidnight())
  */
 function getTodayUTCMidnight() {
   return getUTCMidnight();
+}
+
+/**
+ * Get midnight in Philippines timezone (Asia/Manila, UTC+8) for a given date.
+ * ✅ USE THIS FOR ALL BUSINESS "TODAY" - DeviceTracking, archive, analytics, ads.
+ *
+ * @param {Date} date - Optional date, defaults to now
+ * @returns {Date} Date object at midnight Philippines (as UTC instant)
+ */
+function getPhilippinesMidnight(date = new Date()) {
+  const phOffsetMs = 8 * 60 * 60 * 1000; // UTC+8 in ms
+  const phTime = new Date(date.getTime() + phOffsetMs);
+  phTime.setUTCHours(0, 0, 0, 0);
+  return new Date(phTime.getTime() - phOffsetMs);
+}
+
+/**
+ * Get today's date string (YYYY-MM-DD) in Philippines timezone.
+ * Use for storage and display - always returns the PH calendar date (e.g. "2026-01-29").
+ *
+ * @param {Date} date - Optional date, defaults to now
+ * @returns {string} YYYY-MM-DD (Philippines calendar date)
+ */
+function getPhilippinesDateString(date = new Date()) {
+  const phCal = new Date(date.getTime() + 8 * 60 * 60 * 1000); // +8h so UTC components = PH date
+  return formatDateString(phCal);
+}
+
+/**
+ * Normalize any value (Date or YYYY-MM-DD string) to Philippines date string.
+ * Use when reading DeviceTracking.date which may be legacy Date or new string.
+ *
+ * @param {Date|string} val - Date object or "YYYY-MM-DD" string
+ * @returns {string} YYYY-MM-DD (Philippines)
+ */
+function toPhilippinesDateString(val) {
+  if (!val) return getPhilippinesDateString();
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  return getPhilippinesDateString(new Date(val));
 }
 
 /**
@@ -95,6 +135,9 @@ function formatDateString(date) {
 module.exports = {
   getUTCMidnight,
   getTodayUTCMidnight,
+  getPhilippinesMidnight,
+  getPhilippinesDateString,
+  toPhilippinesDateString,
   isSameDay,
   normalizeToUTCMidnight,
   isToday,
