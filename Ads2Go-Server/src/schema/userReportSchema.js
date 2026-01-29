@@ -23,7 +23,7 @@ const typeDefs = gql`
   type UserReport {
     id: ID!
     userId: ID!
-    user: User!
+    user: User
     title: String!
     description: String!
     reportType: ReportType!

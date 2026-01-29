@@ -25,7 +25,7 @@ const typeDefs = gql`
   type DriverReport {
     id: ID!
     driverId: ID!
-    driver: Driver!
+    driver: Driver
     title: String!
     description: String!
     reportType: DriverReportType!
