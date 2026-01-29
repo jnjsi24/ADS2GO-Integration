@@ -1514,172 +1514,20 @@ const AdDetailsPage: React.FC = () => {
         {/* Device (mobile) */}
         {activeTab === 'TabletActivity' && (
           <div className="space-y-3 mb-20">
-            <div className="w-full h-56 rounded-lg overflow-hidden shadow border border-gray-200">
-              {deviceLocations.length > 0 ? (
-                <MapView
-                  center={[
-                    deviceLocations.reduce((sum, loc) => sum + loc.lat, 0) / deviceLocations.length,
-                    deviceLocations.reduce((sum, loc) => sum + loc.lng, 0) / deviceLocations.length
-                  ]}
-                  zoom={12}
-                  style={{ height: '100%', width: '100%' }}
-                >
-                  {deviceLocations.map((location) => (
-                    <Marker
-                      key={location.deviceId}
-                      position={[location.lat, location.lng]}
-                      icon={new L.DivIcon({
-                        html: `
-                          <div style="
-                            width: 24px !important; 
-                            height: 24px !important; 
-                            background-color: ${location.isOnline ? '#22c55e' : '#ef4444'} !important; 
-                            border: 2px solid ${location.isOnline ? '#16a34a' : '#dc2626'} !important; 
-                            border-radius: 50% !important; 
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            font-size: 14px !important;
-                            cursor: pointer !important;
-                          ">
-                            <span style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)) !important;">🚗</span>
-                          </div>
-                        `,
-                        className: 'custom-vehicle-icon',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12],
-                        popupAnchor: [0, -12]
-                      })}
-                    >
-                      <Popup maxWidth={240} maxHeight={260}>
-                        <div className="p-2 space-y-1 max-w-xs">
-                          <div className="border-b pb-1">
-                            <h3 className="text-xs font-semibold text-gray-900 flex items-center gap-2">
-                              <span className="text-base">🚗</span>
-                              Device {location.deviceId.slice(-4)}
-                            </h3>
-                          </div>
-                          <div className="space-y-0.5 text-[11px]">
-                            <p><span className="font-medium">Status:</span> {location.isOnline ? 'Online' : 'Offline'}</p>
-                            <p><span className="font-medium">Hours:</span> {location.currentHours.toFixed(1)}h</p>
-                            <p><span className="font-medium">Distance:</span> {location.totalDistance.toFixed(1)} km</p>
-                            <p><span className="font-medium">Address:</span> {location.address}</p>
-                            <p><span className="font-medium">Last Seen:</span> {new Date(location.lastSeen).toLocaleTimeString()}</p>
-                          </div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-                </MapView>
-              ) : (
-                <div className="flex items-center justify-center h-full bg-gray-100">
-                  <div className="text-center">
-                    <MapPin className="w-6 h-6 mx-auto mb-1 text-gray-400" />
-                    <p className="text-xs text-gray-600">No devices found</p>
-                    <p className="text-[11px] text-gray-500">Devices will appear when online</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* Material Selection Dropdown (mobile) */}
-            <div className="relative w-full dropdown-container">
-              <button
-                onClick={() => setShowAdDropdown(!showAdDropdown)}
-                className="flex items-center rounded-md justify-between w-full text-xs text-black px-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"
-              >
-                <div className="flex flex-col items-start">
-                  <div className="font-medium">
-                    {selectedMaterialId 
-                      ? selectedMaterialId
-                      : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
-                        ? 'All Materials'
-                        : 'No Material'}
-                  </div>
-                  <div className="text-gray-500 text-xs">
-                    {selectedMaterialId
-                      ? (() => {
-                          const material = ad?.materialId?.find((m: any) => m.materialId === selectedMaterialId);
-                          return material ? `(${material.materialType || 'Unknown Type'})` : '';
-                        })()
-                      : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
-                        ? `(${ad.materialId.length} locations)`
-                        : '(Unknown Type)'}
-                  </div>
-                </div>
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform duration-200 ${
-                    showAdDropdown ? 'rotate-180' : 'rotate-0'
-                  }`}
-                />
-              </button>
-
-              <AnimatePresence>
-                {showAdDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-50 top-full mt-2 w-full shadow-lg bg-white/90 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
-                  >
-                    {adOptions.map((adOption, index) => {
-                      const materialId = index === 0 
-                        ? null 
-                        : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId[index - 1] 
-                          ? ad.materialId[index - 1].materialId 
-                          : null;
-                      return (
-                        <button
-                          key={adOption}
-                          onClick={() => {
-                            setSelectedAd(adOption);
-                            setSelectedMaterialId(materialId);
-                            setShowAdDropdown(false);
-                          }}
-                          className={`block w-full text-left px-4 py-2 text-xs transition-colors duration-150 ${
-                            (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
-                              ? 'bg-blue-50 text-blue-700 font-medium'
-                              : 'text-gray-700 hover:bg-white/60'
-                          }`}
-                        >
-                          {adOption}
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
             {/* Device List (mobile) */}
             <div className="max-h-64 overflow-y-auto">
               {deviceLocations.map((location, index) => (
                 <div key={location.deviceId} className="flex items-start space-x-2">
-                  <div className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
-                    location.isOnline ? 'bg-green-500' : 'bg-red-500'
-                  }`}>
-                    {index + 1}
-                  </div>
                   <div className="flex flex-col">
-                    <p className="text-xs text-black/90">
-                      {new Date(location.lastSeen).toLocaleTimeString()} | {location.totalDistance.toFixed(1)} km
-                    </p>
-                    <p className={`text-sm font-semibold px-2 py-1 rounded ${
-                      location.isOnline 
-                        ? 'text-green-600 bg-green-50' 
-                        : 'text-red-600 bg-red-50'
-                    }`}>
-                      {location.isOnline ? 'Online' : 'Offline'} • {location.currentHours.toFixed(1)}h today
-                    </p>
-                    <p className="text-xs text-gray-500">{location.address}</p>
+                    {location.address && location.address !== 'Location not available' && (
+                      <p className="text-xs text-gray-500">{location.address}</p>
+                    )}
                   </div>
                 </div>
               ))}
               {deviceLocations.length === 0 && (
                 <div className="text-center text-black/90 py-10">
-                  <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                  <Activity className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                   <p>No devices found for this ad.</p>
                   <p className="text-xs text-gray-500 mt-1">Devices will appear here when they come online.</p>
                 </div>
@@ -1876,9 +1724,36 @@ const AdDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Row: Left (Tabs + Delete) + Right (Tablet Activity) */}
+      {/* Bottom Row: Left (Tablet Activity) + Right (Tabs + Delete) */}
       <div className="hidden lg:grid grid-cols-2 gap-8 pt-10">
-        {/* Left: Tabs + Delete */}
+        {/* Left: Tablet Activity - Only show if fully paid and approved */}
+        {isFullyPaidAndApproved && (
+          <div className="flex flex-col">
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {/* ---- Device List ---- */}
+              <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
+                {deviceLocations.length > 0 ? (
+                  deviceLocations.map((location, index) => (
+                    <div key={location.deviceId} className="flex items-start space-x-2">
+                      <div className="flex flex-col">
+                        {location.address && location.address !== 'Location not available' && (
+                          <p className="text-xs text-gray-500">{location.address}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10">
+                    <Activity className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-xs text-gray-600">No devices found</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Right: Tabs + Delete */}
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-4 ">
             {/* Tabs */}
@@ -2219,191 +2094,6 @@ const AdDetailsPage: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* Right: Tablet Activity - Only show if fully paid and approved */}
-        {isFullyPaidAndApproved && (
-          <div className="relative h-64"> {/* height matches the map */}
-            {/* ---------- FULL MAP (background) ---------- */}
-            <div className="absolute inset-0 rounded-lg overflow-hidden shadow border border-gray-200">
-              {deviceLocations.length > 0 ? (
-                <MapView
-                  center={[
-                    deviceLocations.reduce((sum, loc) => sum + loc.lat, 0) / deviceLocations.length,
-                    deviceLocations.reduce((sum, loc) => sum + loc.lng, 0) / deviceLocations.length
-                  ]}
-                  zoom={12}
-                  style={{ height: '100%', width: '100%' }}
-                >
-                  {deviceLocations.map((location) => (
-                    <Marker
-                      key={location.deviceId}
-                      position={[location.lat, location.lng]}
-                      icon={new L.DivIcon({
-                        html: `
-                          <div style="
-                            width: 30px !important; 
-                            height: 30px !important; 
-                            background-color: ${location.isOnline ? '#22c55e' : '#ef4444'} !important; 
-                            border: 2px solid ${location.isOnline ? '#16a34a' : '#dc2626'} !important; 
-                            border-radius: 50% !important; 
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
-                            display: flex !important;
-                            align-items: center !important;
-                            justify-content: center !important;
-                            font-size: 16px !important;
-                            cursor: pointer !important;
-                          ">
-                            <span style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.3)) !important;">🚗</span>
-                          </div>
-                        `,
-                        className: 'custom-vehicle-icon',
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15],
-                        popupAnchor: [0, -15]
-                      })}
-                    >
-                      <Popup maxWidth={250} maxHeight={300}>
-                        <div className="p-2 space-y-2 max-w-xs">
-                          <div className="border-b pb-2">
-                            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                              <span className="text-lg">🚗</span>
-                              Device {location.deviceId.slice(-4)}
-                            </h3>
-                          </div>
-                          <div className="space-y-1 text-xs">
-                            <p><span className="font-medium">Status:</span> {location.isOnline ? 'Online' : 'Offline'}</p>
-                            <p><span className="font-medium">Hours:</span> {location.currentHours.toFixed(1)}h</p>
-                            <p><span className="font-medium">Distance:</span> {location.totalDistance.toFixed(1)} km</p>
-                            <p><span className="font-medium">Address:</span> {location.address}</p>
-                            <p><span className="font-medium">Last Seen:</span> {new Date(location.lastSeen).toLocaleTimeString()}</p>
-                          </div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-                </MapView>
-              ) : (
-                <div className="flex items-center justify-center h-full bg-gray-100">
-                  <div className="text-center">
-                    <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-xs text-gray-600">No devices found</p>
-                    <p className="text-xs text-gray-500">Devices will appear when online</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ---------- OVERLAY PANEL (right side) ---------- */}
-            <div className="absolute inset-y-0 right-0 z-[9999] w-60 flex flex-col">
-              <div className=" flex-1 overflow-hidden flex flex-col">
-                {/* ---- Dropdown ---- */}
-                <div className="relative dropdown-container p-3">
-                <button
-                  onClick={() => setShowAdDropdown(!showAdDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md rounded-md bg-white/80 backdrop-blur-md focus:outline-none"
-                >
-                  <div className="flex flex-col items-start">
-                    <div className="font-medium">
-                      {selectedMaterialId 
-                        ? selectedMaterialId
-                        : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
-                          ? 'All Materials'
-                          : 'No Material'}
-                    </div>
-                    <div className="text-gray-500 text-xs">
-                      {selectedMaterialId
-                        ? (() => {
-                            const material = ad?.materialId?.find((m: any) => m.materialId === selectedMaterialId);
-                            return material ? `(${material.materialType || 'Unknown Type'})` : '';
-                          })()
-                        : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0
-                          ? `(${ad.materialId.length} locations)`
-                          : '(Unknown Type)'}
-                    </div>
-                  </div>
-                  <ChevronDown
-                    size={16}
-                      className={`transform transition-transform duration-200 ${showAdDropdown ? 'rotate-180' : ''}`}
-                  />
-                </button>
-
-                <AnimatePresence>
-                  {showAdDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                        className="absolute z-50 left-3 right-3 mt-2 shadow-xl bg-white/95 rounded-md backdrop-blur-md overflow-hidden border border-gray-200"
-                    >
-                      {adOptions.map((adOption, index) => {
-                        const materialId = index === 0 
-                            ? null
-                          : ad?.materialId && Array.isArray(ad.materialId) && ad.materialId[index - 1] 
-                            ? ad.materialId[index - 1].materialId 
-                            : null;
-                        
-                        return (
-                          <button
-                            key={adOption}
-                            onClick={() => {
-                              setSelectedAd(adOption);
-                                setSelectedMaterialId(materialId);
-                              setShowAdDropdown(false);
-                            }}
-                              className={`block w-full text-left px-4 py-2 text-xs transition-colors ${
-                              (index === 0 && !selectedMaterialId) || materialId === selectedMaterialId
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                  : 'text-gray-700 hover:bg-white/70'
-                            }`}
-                          >
-                            {adOption}
-                          </button>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-                {/* ---- Device List ---- */}
-                <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
-                  {deviceLocations.length > 0 ? (
-                    deviceLocations.map((location, index) => (
-                  <div key={location.deviceId} className="flex items-start space-x-2">
-                        <div
-                          className={`flex-shrink-0 w-6 h-6 rounded-full text-white flex items-center justify-center font-bold text-xs ${
-                      location.isOnline ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        >
-                      {index + 1}
-                    </div>
-                    <div className="flex flex-col">
-                      <p className="text-xs text-black/90">
-                        {new Date(location.lastSeen).toLocaleTimeString()} | {location.totalDistance.toFixed(1)} km
-                      </p>
-                          <p
-                            className={`text-sm font-semibold px-2 py-1 rounded text-xs ${
-                        location.isOnline 
-                          ? 'text-green-600 bg-green-50' 
-                          : 'text-red-600 bg-red-50'
-                            }`}
-                          >
-                        {location.isOnline ? 'Online' : 'Offline'} • {location.currentHours.toFixed(1)}h today
-                      </p>
-                      <p className="text-xs text-gray-500">{location.address}</p>
-                    </div>
-                  </div>
-                    ))
-                  ) : (
-                    <div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
       </div>
 
       {/* Confirmation Modal */}
