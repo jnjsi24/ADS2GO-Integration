@@ -4,6 +4,14 @@ const logger = require('../utils/logger');
 const { getUTCMidnight, formatDateString } = require('../utils/dateUtils');
 const GPSValidation = require('../utils/gpsValidation');
 
+/** Safe date to ISO string (handles Date, string, or non-Date from MongoDB). */
+function safeDateToISOString(val) {
+  if (val == null) return null;
+  if (typeof val.toISOString === 'function') return val.toISOString();
+  if (typeof val === 'string') return val.includes('T') ? val : val + 'T00:00:00.000Z';
+  return String(val);
+}
+
 class DailyArchiveJobV2 {
   constructor() {
     this.isRunning = false;
@@ -89,37 +97,27 @@ class DailyArchiveJobV2 {
     }
   }
 
-  // ✅ FIX: Simplified date matching using single UTC midnight format
+  // ✅ FIX: Query by Philippines date string - DeviceTracking.date is stored as String "YYYY-MM-DD" (PH), not Date
   async getDevicesForArchiving(targetUTCDate) {
     try {
-      logger.database(`🔍 Searching for devices with date: ${targetUTCDate.toISOString()}`);
+      // DeviceTracking uses Philippines date string (YYYY-MM-DD); targetUTCDate was built from PH components
+      const dateStr = formatDateString(targetUTCDate);
+      logger.database(`🔍 Searching for devices with date: ${dateStr} (PH date string)`);
       
-      // ✅ FIX: Use exact match first (most efficient)
-      let devices = await DeviceTracking.find({
-        date: targetUTCDate
+      // Query by string OR Date: DB may have date as String (YYYY-MM-DD) or legacy Date (ISODate)
+      const dateAsISO = new Date(dateStr + 'T00:00:00.000Z');
+      const devices = await DeviceTracking.find({
+        $or: [
+          { date: dateStr },
+          { date: dateAsISO }
+        ]
       });
-      
-      // If no devices found with exact match, try range query as fallback
-      // This handles edge cases where dates might be slightly off
-      if (devices.length === 0) {
-        logger.database(`⚠️ No exact match found, trying range query...`);
-        const startOfDay = new Date(targetUTCDate);
-        const endOfDay = new Date(targetUTCDate);
-        endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
-        
-        devices = await DeviceTracking.find({
-          date: { 
-            $gte: startOfDay, 
-            $lt: endOfDay 
-          }
-        });
-      }
       
       logger.database(`📊 Found ${devices.length} devices for archiving`);
       
       if (devices.length === 0) {
         // ⚠️ WARNING: No devices found - possible issue
-        console.warn(`⚠️ WARNING: No devices found for ${targetUTCDate.toISOString().split('T')[0]}`);
+        console.warn(`⚠️ WARNING: No devices found for ${dateStr} (PH date)`);
         console.warn(`   This might indicate:`);
         console.warn(`   1. No devices were online today`);
         console.warn(`   2. Daily reset already ran and cleared the data`);
@@ -131,7 +129,7 @@ class DailyArchiveJobV2 {
         if (recentDevices.length > 0) {
           console.warn(`   Sample device dates in database:`);
           recentDevices.forEach(d => {
-            console.warn(`     ${d.materialId}: ${d.date ? d.date.toISOString() : 'null'}`);
+            console.warn(`     ${d.materialId}: ${safeDateToISOString(d.date) ?? 'null'}`);
           });
         }
       }
@@ -1072,13 +1070,12 @@ class DailyArchiveJobV2 {
 
           if (existingArchive) {
             // Check if this specific date is already archived with similar data
-            const deviceDate = device.date;
-            const deviceDateStr = deviceDate.toISOString().split('T')[0];
+            const deviceDateStr = safeDateToISOString(device.date)?.split('T')[0] ?? '';
             
             // Find existing daily data for the same date
             const existingDailyData = existingArchive.dailyData.find(dailyData => {
               if (!dailyData.date) return false;
-              const dailyDataDateStr = dailyData.date.toISOString().split('T')[0];
+              const dailyDataDateStr = safeDateToISOString(dailyData.date)?.split('T')[0] ?? '';
               return dailyDataDateStr === deviceDateStr;
             });
 
@@ -1191,9 +1188,13 @@ class DailyArchiveJobV2 {
     for (const material of registeredMaterials) {
       if (!archivedMaterialIds.has(material.materialId)) {
         // Check if device was online that day
+        const dateStrForQuery = formatDateString(targetDate);
         const deviceTracking = await DeviceTracking.findOne({
           materialId: material.materialId,
-          date: targetDate
+          $or: [
+            { date: dateStrForQuery },
+            { date: targetDate }
+          ]
         });
         
         if (deviceTracking && deviceTracking.totalHoursOnline > 0) {

@@ -3,7 +3,9 @@ const DriverSalaryCalculation = require('../models/DriverSalaryCalculation');
 const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+const DeviceTracking = require('../models/deviceTracking');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
+const { getPhilippinesDateString } = require('../utils/dateUtils');
 
 class DriverSalaryService {
   
@@ -149,7 +151,7 @@ class DriverSalaryService {
       }
 
       // ✅ FIXED: Filter daily data by both date range AND assignment period
-      const periodData = deviceHistory.dailyData ? deviceHistory.dailyData.filter(dailyData => {
+      let periodData = deviceHistory.dailyData ? deviceHistory.dailyData.filter(dailyData => {
         const dataDate = new Date(dailyData.date);
         const isInDateRange = dataDate >= start && dataDate <= end;
         
@@ -158,6 +160,34 @@ class DriverSalaryService {
         
         return isInDateRange && isInAssignmentPeriod;
       }) : [];
+
+      // ✅ Merge real-time DeviceTracking for "today" so salary updates during the day
+      const todayStr = getPhilippinesDateString();
+      const todayStart = new Date(todayStr + 'T00:00:00.000Z');
+      if (todayStart >= start && todayStart <= end && isDateInAssignmentPeriod(todayStart)) {
+        const deviceToday = await DeviceTracking.findOne({
+          materialId: materialId,
+          $or: [
+            { date: todayStr },
+            { date: todayStart }
+          ]
+        }).lean();
+        if (deviceToday) {
+          const todayDistance = deviceToday.totalDistanceTraveled ?? 0;
+          const todayHours = deviceToday.totalHoursOnline ?? 0;
+          const existingTodayIndex = periodData.findIndex(d => {
+            const dStr = (d.date instanceof Date ? d.date.toISOString() : String(d.date)).slice(0, 10);
+            return dStr === todayStr;
+          });
+          const todayEntry = { date: todayStart, totalDistanceTraveled: todayDistance, totalHoursOnline: todayHours };
+          if (existingTodayIndex >= 0) {
+            periodData[existingTodayIndex] = { ...periodData[existingTodayIndex], totalDistanceTraveled: todayDistance, totalHoursOnline: todayHours };
+          } else {
+            periodData.push(todayEntry);
+          }
+          console.log(`📊 [DriverSalaryService] Merged today's real-time data: ${todayDistance}km, ${todayHours}h`);
+        }
+      }
 
       console.log(`📊 [DriverSalaryService] Found ${periodData.length} days of data for period ${startDate} to ${endDate} (filtered by assignment period)`);
       if (periodData.length > 0) {
@@ -288,10 +318,12 @@ class DriverSalaryService {
             endDate.toISOString()
           );
 
-          // Create and save the calculation
+          // Create and save the calculation (driverName and deviceId required by schema)
           const calculation = await DriverSalaryCalculation.createCalculation({
             driverId: driver.driverId,
+            driverName: calculationData.driverName,
             materialId: driver.material._id,
+            deviceId: calculationData.deviceId,
             calculationPeriod: calculationData.calculationPeriod,
             rawData: calculationData.rawData,
             pricingConfig: calculationData.pricingConfig

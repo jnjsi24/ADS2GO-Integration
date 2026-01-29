@@ -153,7 +153,8 @@ class DriverSalaryJob {
           const existingCalc = calculationsMap.get(driver.driverId);
 
           if (existingCalc) {
-            // Update existing calculation (only if not APPROVED or PAID)
+            // Update existing calculation only if status is CALCULATED or PENDING (not APPROVED/PAID)
+            // Approved/paid amounts are locked for the period
             if (existingCalc.status === 'APPROVED' || existingCalc.status === 'PAID') {
               console.log(`⏭️  ${driver.driverId} calculation is ${existingCalc.status}, skipping update`);
               continue;
@@ -228,7 +229,15 @@ class DriverSalaryJob {
   start() {
     console.log('⏰ Starting driver salary cron jobs...');
 
-    // ✅ NEW: Hourly update - updates existing calculations and creates missing ones
+    // ✅ Every 2 minutes - near real-time refresh so driver app sees updated data during the day
+    cron.schedule('*/2 * * * *', () => {
+      console.log('🔄 2-min salary update check...');
+      this.updateExistingCalculations();
+    }, {
+      timezone: 'Asia/Manila'
+    });
+
+    // ✅ Hourly update - updates existing calculations and creates missing ones
     cron.schedule('0 * * * *', () => {
       console.log('🔄 Hourly salary update check...');
       this.updateExistingCalculations();
@@ -260,10 +269,11 @@ class DriverSalaryJob {
     });
 
     console.log('✅ Driver salary cron jobs started');
+    console.log('⏰ 2-min update: Every 2 min (near real-time refresh for driver app)');
     console.log('⏰ Hourly update: Every hour at :00 (updates existing + creates missing)');
     console.log('📅 Daily check: Every day at 12:01 AM (catches new drivers)');
     console.log('📅 Monthly generation: Last day of month at 11:59 PM');
-    console.log('⚡ Real-time updates: Automatic when tracking data changes');
+    console.log('⚡ Real-time updates: When DeviceDataHistoryV2 is saved (archive job)');
     
     // ✅ NEW: Run once on startup to catch up on any missing calculations
     console.log('🔄 Running initial salary generation check in 10 seconds...');

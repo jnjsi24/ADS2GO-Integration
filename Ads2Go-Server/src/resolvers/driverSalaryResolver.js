@@ -141,8 +141,9 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // ✅ FIXED: Filter daily data by both date range AND assignment period
-    const periodData = deviceHistory.dailyData.filter(dailyData => {
+    // ✅ FIXED: Filter daily data by both date range AND assignment period (guard against missing dailyData)
+    const dailyDataArray = deviceHistory.dailyData || [];
+    const periodData = dailyDataArray.filter(dailyData => {
       const dataDate = new Date(dailyData.date);
       const isInDateRange = dataDate >= start && dataDate <= end;
       
@@ -152,22 +153,25 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
       return isInDateRange && isInAssignmentPeriod;
     });
 
-    // Calculate totals for the period
+    // Calculate totals with same billable flooring as driverSalaryService (per-day floor then sum)
     let totalDistance = 0;
     let totalHours = 0;
     let daysWorked = 0;
 
     periodData.forEach(dailyData => {
-      totalDistance += dailyData.totalDistanceTraveled || 0;
-      totalHours += dailyData.totalHoursOnline || 0;
-      // Count days where there was some activity (distance > 0 or hours > 0)
-      if ((dailyData.totalDistanceTraveled > 0) || (dailyData.totalHoursOnline > 0)) {
+      const rawDistance = dailyData.totalDistanceTraveled || 0;
+      const rawHours = dailyData.totalHoursOnline || 0;
+      // Billable flooring: distance floor to nearest meter, hours floor to complete minutes
+      const distanceMeters = Math.floor(rawDistance * 1000);
+      const billableDistance = distanceMeters / 1000;
+      const totalMinutes = Math.floor(rawHours * 60);
+      const billableHours = totalMinutes / 60;
+      totalDistance += billableDistance;
+      totalHours += billableHours;
+      if (rawDistance > 0 || rawHours > 0) {
         daysWorked++;
       }
     });
-
-    // ✅ REMOVED: Don't use lifetime totals as fallback - they include data from all drivers
-    // This was causing the data leakage issue
 
     // Calculate days worked (simplified - in reality you'd count actual working days)
     const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
@@ -175,8 +179,8 @@ const getDriverTrackingData = async (driverId, startDate, endDate) => {
     daysWorked = Math.min(daysWorked, maxDaysWorked);
     
     return {
-      totalDistance: Math.round(totalDistance * 100) / 100,
-      totalHours: Math.round(totalHours * 100) / 100,
+      totalDistance: Math.round(totalDistance * 1000) / 1000,
+      totalHours: Math.round(totalHours * 10000) / 10000,
       daysWorked,
       material
     };
@@ -957,10 +961,14 @@ const resolvers = {
               driver.material.materialType
             );
             
-            // Create calculation
+            // Create calculation (driverName and deviceId required by schema)
+            const driverName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Unknown';
+            const deviceId = driver.material?.materialId || '';
             const calculation = await DriverSalaryCalculation.createCalculation({
               driverId: driver.driverId,
+              driverName,
               materialId: driver.material._id,
+              deviceId,
               calculationPeriod: {
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),

@@ -606,6 +606,7 @@ const Dashboard: React.FC = () => {
         if (calculations.length === 0) {
           console.log('📊 No salary calculations found');
           setTotalEarnings(0);
+          setLastCalculationData(null);
           await saveSalaryCache(0);
           return;
         }
@@ -849,6 +850,7 @@ const Dashboard: React.FC = () => {
         await saveSalaryCache(finalSalary);
       } else {
         setTotalEarnings(0);
+        setLastCalculationData(null);
         await saveSalaryCache(0);
       }
     } catch (error) {
@@ -1552,15 +1554,13 @@ const Dashboard: React.FC = () => {
           <Text style={styles.balanceCurrency}>PHP</Text>
         </View>
         <Text style={styles.balanceAmount}>{formatCurrency(totalEarnings)}</Text>
-        {/* Last calculation data for today only - shows static values from last calculation update */}
+        {/* Last calculation data - shows static values from last calculation update only */}
         {isSelectedDateToday() && lastCalculationData && (
           <View style={styles.lastCalculationContainer}>
             <Text style={styles.lastCalculationText}>
               {(() => {
-                // Use the static values from the last calculation (already billable)
                 const minutes = Math.floor(lastCalculationData.hours * 60);
                 const distanceKm = lastCalculationData.distance.toFixed(3);
-                
                 return `(${minutes} m, ${distanceKm} km)`;
               })()}
             </Text>
