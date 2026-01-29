@@ -281,14 +281,8 @@ const Dashboard = () => {
   // Map tab states
   const [mapActiveTab, setMapActiveTab] = useState<'today' | 'history'>('today');
   const [selectedAdForRoute, setSelectedAdForRoute] = useState<string | null>(null);
-  // ✅ FIX: Format date in local timezone to avoid UTC conversion issues
-  const getLocalDateString = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  const [selectedRouteDate, setSelectedRouteDate] = useState(getLocalDateString(new Date()));
+  // ✅ FIX: Use Philippines timezone for date formatting to match backend
+  const [selectedRouteDate, setSelectedRouteDate] = useState(getPhilippinesDateString());
   const [selectedRouteDateObj, setSelectedRouteDateObj] = useState<Date | null>(new Date());
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -1683,11 +1677,8 @@ const Dashboard = () => {
                           onDateSelect={(date) => {
                             if (date) {
                               setSelectedRouteDateObj(date);
-                              // ✅ FIX: Format date in local timezone, not UTC, to avoid date shift
-                              const year = date.getFullYear();
-                              const month = String(date.getMonth() + 1).padStart(2, '0');
-                              const day = String(date.getDate()).padStart(2, '0');
-                              setSelectedRouteDate(`${year}-${month}-${day}`);
+                              // ✅ FIX: Use Philippines timezone to match backend
+                              setSelectedRouteDate(getPhilippinesDateString(date));
                             }
                             setShowCalendar(false);
                           }}

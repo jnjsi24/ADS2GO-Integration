@@ -14,7 +14,7 @@ import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { ArrowLeft, RefreshCw, TrendingUp, Play, Target, Users, Calendar, Monitor, ChevronDown, BarChart3, Filter, LoaderCircle, Youtube, MonitorSmartphone, QrCode, Clock } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
-import { getPhilippinesDateString } from '../../utils/dateUtils';
+import { getPhilippinesDateString, getPhilippinesMidnight } from '../../utils/dateUtils';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // ✅ PERSISTENT CACHE: Module-level cache manager that survives component unmounts
@@ -118,17 +118,18 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   // For custom date, just return the data as-is (single day)
   if (customDate) return data;
   
-  // Calculate date range based on period
-  const now = new Date();
-  now.setHours(23, 59, 59, 999);
-  let startDate: Date;
+  // ✅ FIX: Use Philippines timezone to match backend date calculations
+  // Backend uses getPhilippinesMidnight() for all date calculations
+  const today = getPhilippinesMidnight();
+  const todayStr = getPhilippinesDateString();
+  const now = new Date(); // Current time for comparison
   
   // First, create a map of existing data by date (aggregate multiple entries per day)
   const dataMap = new Map<string, any>();
   data.forEach(item => {
     const dateStr = typeof item.date === 'string' && item.date.match(/^\d{4}-\d{2}-\d{2}$/)
       ? item.date
-      : new Date(item.date).toISOString().split('T')[0];
+      : getPhilippinesDateString(new Date(item.date));
     
     // If multiple entries for same date, sum them up
     if (dataMap.has(dateStr)) {
@@ -140,18 +141,20 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
     }
   });
   
+  let startDate: Date;
+  
   switch (period) {
     case '1d':
       return Array.from(dataMap.values()); // Single day, just aggregate
     case '7d':
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 6);
-      startDate.setHours(0, 0, 0, 0);
+      // Last 7 calendar days (including today) in Philippines timezone
+      startDate = getPhilippinesMidnight();
+      startDate.setDate(startDate.getDate() - 6); // 6 days ago + today = 7 days
       break;
     case '30d':
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 29);
-      startDate.setHours(0, 0, 0, 0);
+      // Last 30 calendar days (including today) in Philippines timezone
+      startDate = getPhilippinesMidnight();
+      startDate.setDate(startDate.getDate() - 29); // 29 days ago + today = 30 days
       break;
     case 'all':
       // For 'all', find the earliest date in data and add some context before it
@@ -159,10 +162,9 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
       if (sortedDates.length === 0) return [];
       
       // Start from earliest data point, but add 3 days before for visual context
-      const earliestDate = new Date(sortedDates[0]);
-      startDate = new Date(earliestDate);
+      const earliestDate = new Date(sortedDates[0] + 'T00:00:00Z');
+      startDate = getPhilippinesMidnight(earliestDate);
       startDate.setDate(startDate.getDate() - 3); // 3 days before first data point
-      startDate.setHours(0, 0, 0, 0);
       break;
     default:
       return Array.from(dataMap.values());
@@ -171,12 +173,16 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
   // Fill in missing dates
   const filledData: any[] = [];
   const currentDate = new Date(startDate);
-  const todayStr = now.toISOString().split('T')[0];
   
-  while (currentDate <= now) {
-    const dateStr = currentDate.toISOString().split('T')[0];
+  // ✅ FIX: Use Philippines date comparison to match backend logic
+  // Loop until we reach today (inclusive) in Philippines timezone
+  const todayEnd = new Date(today);
+  todayEnd.setHours(23, 59, 59, 999);
+  
+  while (currentDate <= todayEnd) {
+    const dateStr = getPhilippinesDateString(currentDate);
     
-    // Don't include future dates
+    // Don't include future dates (shouldn't happen, but safety check)
     if (dateStr <= todayStr) {
       if (dataMap.has(dateStr)) {
         filledData.push(dataMap.get(dateStr));
@@ -191,6 +197,7 @@ const fillMissingDates = (data: any[], period: string, customDate?: string | nul
       }
     }
     
+    // Move to next day
     currentDate.setDate(currentDate.getDate() + 1);
   }
   
@@ -343,13 +350,13 @@ const DetailedAnalytics: React.FC = () => {
   };
 
   const getDefaultEndDate = () => {
-    return new Date().toISOString().split('T')[0];
+    return getPhilippinesDateString();
   };
 
   const getDefaultStartDate = () => {
-    const date = new Date();
+    const date = getPhilippinesMidnight();
     date.setDate(date.getDate() - 7);
-    return date.toISOString().split('T')[0];
+    return getPhilippinesDateString(date);
   };
 
   const handlePresetPeriodSelect = (period: '1d' | '7d' | '30d' | 'all', label: string) => {
@@ -376,13 +383,12 @@ const DetailedAnalytics: React.FC = () => {
 
   // ✅ Helper function to check if current date is included in the selected range
   const isCurrentDateIncluded = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getPhilippinesMidnight();
+    const todayStr = getPhilippinesDateString();
     
     if (isCustomDate && selectedDate) {
-      const customDate = new Date(selectedDate);
-      customDate.setHours(0, 0, 0, 0);
-      return today.getTime() === customDate.getTime();
+      // Compare date strings in Philippines timezone
+      return selectedDate === todayStr;
     } else {
       // For preset periods, check if period includes today
       // '1d' = today only, '7d' = last 7 days (includes today), etc.
@@ -1054,9 +1060,9 @@ const DetailedAnalytics: React.FC = () => {
         let useDateRange = false;
         if (selectedPeriod === 'all' && (selectedAd !== 'all' || selectedDevice !== 'all')) {
           // When filters are applied, use last 90 days instead of 'all' for faster queries
-          // Calculate date range for last 90 days
+          // Calculate date range for last 90 days in Philippines timezone
           const endDate = new Date();
-          const startDate = new Date();
+          const startDate = getPhilippinesMidnight();
           startDate.setDate(startDate.getDate() - 90);
           
           queryParams.append('startDate', startDate.toISOString());
@@ -1568,9 +1574,7 @@ const DetailedAnalytics: React.FC = () => {
         // ✅ CRITICAL: If custom date is selected, verify we have valid data for that date
         // If backend returned data for invalid dates (like future dates), return zeros
         if (isCustomDate && selectedDate) {
-          const today = new Date();
-          today.setHours(23, 59, 59, 999);
-          const todayStr = today.toISOString().split('T')[0];
+          const todayStr = getPhilippinesDateString();
           
           // Check if selected date is valid (not in future)
           if (selectedDate > todayStr) {
@@ -1591,7 +1595,7 @@ const DetailedAnalytics: React.FC = () => {
           const validDailyStats = directAnalyticsData.dailyStats?.filter((day: any) => {
             const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
               ? day.date 
-              : new Date(day.date).toISOString().split('T')[0];
+              : getPhilippinesDateString(new Date(day.date));
             return dayDateStr === selectedDate && dayDateStr <= todayStr;
           }) || [];
           
@@ -1686,16 +1690,14 @@ const DetailedAnalytics: React.FC = () => {
         dailyStats = directAnalyticsData?.dailyStats || [];
         
         // ✅ CRITICAL: If backend returned data for invalid dates, filter it out immediately
-        const today = new Date();
-        today.setHours(23, 59, 59, 999);
-        const todayStr = today.toISOString().split('T')[0];
+        const todayStr = getPhilippinesDateString();
         
         // Filter out future dates immediately
         const beforeFilter = dailyStats.length;
         dailyStats = dailyStats.filter((day: any) => {
           const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
             ? day.date 
-            : new Date(day.date).toISOString().split('T')[0];
+            : getPhilippinesDateString(new Date(day.date));
           return dayDateStr <= todayStr;
         });
         
@@ -1759,16 +1761,14 @@ const DetailedAnalytics: React.FC = () => {
       // ✅ Filter dailyStats by date if custom date is selected (extra safeguard)
       // ✅ Also filter out future dates (likely test data or timezone issues)
       let filteredDailyStats = dailyStats;
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = getPhilippinesDateString();
       
       // Filter out future dates (data shouldn't exist for future dates)
       const beforeFutureFilter = filteredDailyStats.length;
       filteredDailyStats = dailyStats.filter((day: any) => {
         const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
           ? day.date 
-          : new Date(day.date).toISOString().split('T')[0];
+          : getPhilippinesDateString(new Date(day.date));
         
         if (dayDateStr > todayStr) {
           console.log(`🚫 [DetailedAnalytics] Frontend filtering out future date: ${dayDateStr} (today: ${todayStr})`);
@@ -1875,14 +1875,14 @@ const DetailedAnalytics: React.FC = () => {
       }
       
       if (isCustomDate && selectedDate) {
-        const startDate = new Date(selectedDate);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(selectedDate);
-        endDate.setHours(23, 59, 59, 999);
+        // Use Philippines timezone for date comparison
+        const selectedDateStr = selectedDate; // Already in YYYY-MM-DD format
         
         filteredDeviceDailyStats = filteredDeviceDailyStats.filter((day: any) => {
-          const dayDate = new Date(day.date);
-          return dayDate >= startDate && dayDate <= endDate;
+          const dayDateStr = typeof day.date === 'string' && day.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+            ? day.date 
+            : getPhilippinesDateString(new Date(day.date));
+          return dayDateStr === selectedDateStr;
         });
         
         console.log('📊 [DetailedAnalytics] Filtered device dailyStats by custom date:', {
