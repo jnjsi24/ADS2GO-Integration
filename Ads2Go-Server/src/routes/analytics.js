@@ -1236,37 +1236,30 @@ router.get('/user/:userId/direct-v2', async (req, res) => {
             }
           });
           
-          // Merge today's data into flatDailyStats
+          // ✅ FIX: Use real-time data ONLY for today to avoid double-counting.
+          // DailyUserAnalytics may already have today's data from the sync job; if we ADD
+          // DeviceTracking on top, the chart shows ~2x (cards use GraphQL summary, so they stay correct).
+          // Remove today's rows from flatDailyStats, then add today from todayDataByAd only.
+          const beforeRemove = flatDailyStats.length;
+          flatDailyStats = flatDailyStats.filter(stat => stat.date !== todayStr);
+          if (beforeRemove > flatDailyStats.length) {
+            console.log(`✅ [direct-v2] Removed ${beforeRemove - flatDailyStats.length} today row(s) to use real-time only (avoid double-count)`);
+          }
+          
           todayDataByAd.forEach((adData, adIdStr) => {
-            // Check if today's data already exists in flatDailyStats
-            const existingTodayIndex = flatDailyStats.findIndex(stat => 
-              stat.date === todayStr && stat.adId && stat.adId.toString() === adIdStr
-            );
-            
-            if (existingTodayIndex >= 0) {
-              // Merge: add today's real-time data to existing entry
-              const existing = flatDailyStats[existingTodayIndex];
-              existing.adsPlayed = (existing.adsPlayed || 0) + adData.adsPlayed;
-              existing.displayTime = (existing.displayTime || 0) + adData.displayTime;
-              existing.qrScans = (existing.qrScans || 0) + adData.qrScans;
-              existing.impressions = (existing.impressions || 0) + adData.impressions;
-              console.log(`✅ [direct-v2] Merged today's data for ad ${adIdStr}: +${adData.adsPlayed} plays, +${adData.qrScans} QR scans`);
-            } else {
-              // Add new entry for today
-              flatDailyStats.push({
-                userId: new mongoose.Types.ObjectId(userId),
-                date: todayStr,
-                adId: adData.adId,
-                adTitle: adData.adTitle,
-                adsPlayed: adData.adsPlayed,
-                displayTime: adData.displayTime,
-                qrScans: adData.qrScans,
-                impressions: adData.impressions,
-                completionRate: 0,
-                materialStats: []
-              });
-              console.log(`✅ [direct-v2] Added today's data for ad ${adIdStr}: ${adData.adsPlayed} plays, ${adData.qrScans} QR scans`);
-            }
+            flatDailyStats.push({
+              userId: new mongoose.Types.ObjectId(userId),
+              date: todayStr,
+              adId: adData.adId,
+              adTitle: adData.adTitle,
+              adsPlayed: adData.adsPlayed,
+              displayTime: adData.displayTime,
+              qrScans: adData.qrScans,
+              impressions: adData.impressions,
+              completionRate: 0,
+              materialStats: []
+            });
+            console.log(`✅ [direct-v2] Today's data for ad ${adIdStr}: ${adData.adsPlayed} plays, ${adData.qrScans} QR scans (real-time only)`);
           });
         }
       } catch (todayError) {
