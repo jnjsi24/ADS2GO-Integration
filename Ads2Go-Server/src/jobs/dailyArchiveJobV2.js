@@ -265,8 +265,13 @@ class DailyArchiveJobV2 {
           
           // ✅ FIX: Recalculate totals from arrays after merging (similar to QR scans)
           dailyData.totalQRScans = dailyData.qrScans.length;
-          // Recalculate totalAdPlays from merged adPlaybacks
-          dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+          // ✅ CRITICAL FIX: Recalculate totalAdPlays from merged adPlaybacks, filtering by isMaster
+          const masterPlaybacks = (dailyData.adPlaybacks || []).filter(pb => {
+            if (!pb.userId) return false;
+            const isMasterPlayback = pb.isMaster === true || pb.isMaster === undefined || pb.isMaster === null;
+            return isMasterPlayback;
+          });
+          dailyData.totalAdPlays = masterPlaybacks.length || dailyData.totalAdPlays;
           // Recalculate totalDistanceTraveled from merged locationHistory
           if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
             let mergedDistance = 0;
@@ -332,7 +337,13 @@ class DailyArchiveJobV2 {
                   dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
                   // ✅ FIX: Recalculate totals from arrays after merging
                   dailyData.totalQRScans = dailyData.qrScans.length;
-                  dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+                  // ✅ CRITICAL FIX: Filter by isMaster to exclude slave slot duplicates
+                  const masterPlaybacks = (dailyData.adPlaybacks || []).filter(pb => {
+                    if (!pb.userId) return false;
+                    const isMasterPlayback = pb.isMaster === true || pb.isMaster === undefined || pb.isMaster === null;
+                    return isMasterPlayback;
+                  });
+                  dailyData.totalAdPlays = masterPlaybacks.length || dailyData.totalAdPlays;
                   if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
                     let mergedDistance = 0;
                     for (let i = 1; i < dailyData.locationHistory.length; i++) {
@@ -475,7 +486,13 @@ class DailyArchiveJobV2 {
                   dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
                   // ✅ FIX: Recalculate totals from arrays
                   dailyData.totalQRScans = dailyData.qrScans.length;
-                  dailyData.totalAdPlays = (dailyData.adPlaybacks || []).filter(pb => pb.userId).length || dailyData.totalAdPlays;
+                  // ✅ CRITICAL FIX: Filter by isMaster to exclude slave slot duplicates
+                  const masterPlaybacks = (dailyData.adPlaybacks || []).filter(pb => {
+                    if (!pb.userId) return false;
+                    const isMasterPlayback = pb.isMaster === true || pb.isMaster === undefined || pb.isMaster === null;
+                    return isMasterPlayback;
+                  });
+                  dailyData.totalAdPlays = masterPlaybacks.length || dailyData.totalAdPlays;
                   if (dailyData.locationHistory && dailyData.locationHistory.length >= 2) {
                     let mergedDistance = 0;
                     for (let i = 1; i < dailyData.locationHistory.length; i++) {
@@ -797,8 +814,14 @@ class DailyArchiveJobV2 {
 
   // ✅ FIX: Calculate totalAdPlays from adPlaybacks array (similar to QR scans)
   calculateTotalAdPlays(device) {
-    // Filter adPlaybacks by userId (only count valid playbacks)
-    const validAdPlaybacks = (device.adPlaybacks || []).filter(pb => pb.userId);
+    // ✅ CRITICAL FIX: Filter adPlaybacks by userId AND isMaster to exclude slave slot duplicates
+    // Only count master playbacks (isMaster === true or undefined/missing for backward compatibility)
+    const validAdPlaybacks = (device.adPlaybacks || []).filter(pb => {
+      if (!pb.userId) return false;
+      // ✅ Include playbacks where isMaster is true, undefined, or missing (exclude only if explicitly false)
+      const isMasterPlayback = pb.isMaster === true || pb.isMaster === undefined || pb.isMaster === null;
+      return isMasterPlayback;
+    });
     return validAdPlaybacks.length;
   }
 

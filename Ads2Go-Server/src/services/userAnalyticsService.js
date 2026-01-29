@@ -1327,11 +1327,12 @@ class UserAnalyticsService {
         let adPlaybackFilterCondition;
         if (adPlaybackMatchConditions.length > 0) {
           // When we have adId conditions, combine with isMaster check
-          // ✅ Include playbacks where isMaster is true OR missing/undefined (backward compatibility)
-          // Strategy: Check that isMaster is NOT false (this includes true and missing)
+          // ✅ CRITICAL FIX: Include playbacks where isMaster is true OR missing/undefined (backward compatibility)
+          // The $ne operator correctly handles missing fields - returns true if field doesn't exist
+          // This means: include if isMaster is true, null, undefined, or missing (exclude only if explicitly false)
           adPlaybackFilterCondition = {
             $and: [
-              // isMaster must not be false (allows true and missing/undefined)
+              // isMaster must not be false (allows true, null, undefined, and missing)
               { $ne: ['$$playback.isMaster', false] },
               // Filter by user's adIds - must match at least one condition
               { $or: adPlaybackMatchConditions }
@@ -1339,7 +1340,7 @@ class UserAnalyticsService {
           };
         } else {
           // No adId filter, just filter by isMaster
-          // ✅ Include playbacks where isMaster is not false (allows true and missing)
+          // ✅ Include playbacks where isMaster is not false (allows true, null, undefined, and missing)
           adPlaybackFilterCondition = {
             $ne: ['$$playback.isMaster', false]
           };

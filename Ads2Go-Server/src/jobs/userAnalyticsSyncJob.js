@@ -412,6 +412,22 @@ class UserAnalyticsSyncJob {
   // Sync a specific user with their own materials only
   async syncUserWithAllMaterials(userId, startDate, endDate) {
     try {
+      // ✅ TIMING SAFEGUARD: Wait if archive job is running to prevent reading incomplete data
+      const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
+      if (dailyArchiveJobV2.isRunning) {
+        console.log('⏳ [SYNC] Archive job running, waiting up to 30 seconds...');
+        let waitCount = 0;
+        while (dailyArchiveJobV2.isRunning && waitCount < 6) {
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+          waitCount++;
+        }
+        if (dailyArchiveJobV2.isRunning) {
+          console.log('⚠️ [SYNC] Archive job still running after 30s, proceeding anyway');
+        } else {
+          console.log('✅ [SYNC] Archive job completed, proceeding with sync');
+        }
+      }
+
       // Get user's PAID, DEPLOYED ads only (exclude deleted ads)
       const Ad = require('../models/Ad');
       const Material = require('../models/Material');
@@ -544,10 +560,15 @@ class UserAnalyticsSyncJob {
               let userQRScans = 0;
               
               // Calculate totals from user-owned playbacks only
+              // ✅ CRITICAL FIX: Filter by isMaster to exclude slave slot duplicates
+              // Only count master playbacks (isMaster === true or undefined/missing for backward compatibility)
               if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
-                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => 
-                  validAdIds.includes(playback.adId)
-                );
+                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => {
+                  const belongsToUser = validAdIds.includes(playback.adId);
+                  // ✅ Include playbacks where isMaster is true, undefined, or missing (exclude only if explicitly false)
+                  const isMasterPlayback = playback.isMaster === true || playback.isMaster === undefined || playback.isMaster === null;
+                  return belongsToUser && isMasterPlayback;
+                });
                 userAdPlays = userOwnedPlaybacks.length;
                 userAdPlayTime = userOwnedPlaybacks.reduce((sum, playback) => sum + (playback.viewTime || 0), 0);
                 userAdImpressions = userOwnedPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 0), 0);
@@ -601,10 +622,14 @@ class UserAnalyticsSyncJob {
               processedData.totalQRScans += userQRScans;
               
               // Collect user-owned ad playbacks for detailed tracking
+              // ✅ CRITICAL FIX: Filter by isMaster to exclude slave slot duplicates
               if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
-                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => 
-                  validAdIds.includes(playback.adId)
-                );
+                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => {
+                  const belongsToUser = validAdIds.includes(playback.adId);
+                  // ✅ Include playbacks where isMaster is true, undefined, or missing (exclude only if explicitly false)
+                  const isMasterPlayback = playback.isMaster === true || playback.isMaster === undefined || playback.isMaster === null;
+                  return belongsToUser && isMasterPlayback;
+                });
                 
                 if (userOwnedPlaybacks.length > 0) {
                   processedData.materials[materialId].adPlaybacks.push(...userOwnedPlaybacks);
@@ -1114,6 +1139,22 @@ class UserAnalyticsSyncJob {
   // New: Sync a specific user by aggregating directly via userId
   async syncUserByUserId(userId, startDate, endDate) {
     try {
+      // ✅ TIMING SAFEGUARD: Wait if archive job is running to prevent reading incomplete data
+      const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
+      if (dailyArchiveJobV2.isRunning) {
+        console.log('⏳ [SYNC] Archive job running, waiting up to 30 seconds...');
+        let waitCount = 0;
+        while (dailyArchiveJobV2.isRunning && waitCount < 6) {
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+          waitCount++;
+        }
+        if (dailyArchiveJobV2.isRunning) {
+          console.log('⚠️ [SYNC] Archive job still running after 30s, proceeding anyway');
+        } else {
+          console.log('✅ [SYNC] Archive job completed, proceeding with sync');
+        }
+      }
+
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       const UserAnalytics = require('../models/userAnalytics');
 
