@@ -1514,7 +1514,12 @@ const ManageAds: React.FC = () => {
                   <p className="text-gray-600 pb-8 md:pb-16 text-xs md:text-sm">{selectedAd.description || 'No description provided'}</p>
                   <div className="flex items-center space-x-3">
                   <Tablet size={24} className="text-gray-500" />
-                    <span className="truncate">{selectedAd.materialId?.id || 'N/A'}</span>
+                    <span className="truncate">
+                      {Array.isArray(selectedAd.materialId) 
+                        ? (selectedAd.materialId[0]?.materialType || 'N/A')
+                        : (selectedAd.materialId?.materialType || 'N/A')
+                      }
+                    </span>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Coins size={24} className="text-gray-500" />

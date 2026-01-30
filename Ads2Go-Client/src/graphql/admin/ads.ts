@@ -37,6 +37,7 @@ export const GET_ALL_ADS = gql`
       materialId {
         id
         materialId
+        materialType
       }
       isArchived
       archivedAt
@@ -97,6 +98,7 @@ export const GET_AD_BY_ID = gql`
       materialId {
         id
         materialId
+        materialType
       }
       approvedBy {
         id
@@ -164,6 +166,7 @@ export const GET_ADS_BY_USER = gql`
       materialId {
         id
         materialId
+        materialType
       }
       approvedBy {
         id
@@ -229,6 +232,7 @@ export const CREATE_AD = gql`
       materialId {
         id
         materialId
+        materialType
       }
     }
   }
