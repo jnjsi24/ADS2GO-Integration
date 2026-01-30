@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Trash, ChevronLeft, ChevronRight, Pencil, Archive, RotateCcw, X, Plus } from 'lucide-react';
+import { Trash, ChevronLeft, ChevronRight, Pencil, Archive, RotateCcw, X, Plus, Check } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -26,6 +26,7 @@ import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 import { ToastContainer, useToast } from '../../components/ToastNotification';
 import { AdminLoader } from '../../components/ProtectedRoute';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Driver {
   driverId: string;
@@ -1366,39 +1367,58 @@ const Materials: React.FC = () => {
 
         {/* Bulk Actions Bar */}
         {selectedMaterials.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="p-4">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <span className="text-sm font-medium text-blue-800">
                   {selectedMaterials.length} material{selectedMaterials.length > 1 ? 's' : ''} selected
                 </span>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    // Check if any selected material has a driver or device connected
+                    const hasDriverOrDevice = selectedMaterials.some(id => {
+                      const material = materials.find(m => m.id === id);
+                      if (!material) return false;
+                      // Check if material has a driver
+                      if (material.driverId || material.driver) {
+                        return true;
+                      }
+                      // Check if material has ads deployed (which indicates device connection)
+                      const hasDeployments = deployments.some((deployment: any) => {
+                        if (deployment.materialId === material.materialId) {
+                          const hasActiveSlots = deployment.lcdSlots?.some((slot: any) => {
+                            return slot.status !== 'REMOVED' && slot.status !== 'COMPLETED' && slot.adId;
+                          });
+                          return hasActiveSlots;
+                        }
+                        return false;
+                      });
+                      return hasDeployments;
+                    });
+                    
+                    return (
+                      <button
+                        onClick={handleBulkDelete}
+                        disabled={hasDriverOrDevice}
+                        className={`px-3 py-1 text-xs font-medium rounded ${
+                          hasDriverOrDevice
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-red-100 text-red-800 hover:bg-red-200'
+                        }`}
+                        title={hasDriverOrDevice ? 'Cannot delete materials with drivers or devices connected' : ''}
+                      >
+                        Delete Selected
+                      </button>
+                    );
+                  })()}
                   <button
-                    onClick={handleBulkDelete}
-                    className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                    onClick={() => setSelectedMaterials([])}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    Delete Selected
-                  </button>
-                  <button
-                    onClick={handleBulkAssign}
-                    className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
-                  >
-                    Assign to Driver
-                  </button>
-                  <button
-                    onClick={handleExportToCSV}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
-                  >
-                    Export to CSV
+                    Clear Selection
                   </button>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedMaterials([])}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-              >
-                Clear Selection
-              </button>
             </div>
           </div>
         )}
@@ -1411,12 +1431,29 @@ const Materials: React.FC = () => {
               activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
             }`}>
             <div className="flex items-center gap-6 col-span-2">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                onChange={handleSelectAll}
-                checked={isAllSelected}
-              />
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                  onChange={() => {}}
+                  onClick={handleSelectAll}
+                  checked={isAllSelected}
+                />
+                <AnimatePresence>
+                  {isAllSelected && (
+                    <motion.div
+                      key="check"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      className="absolute text-black pointer-events-none"
+                    >
+                      <Check size={12} strokeWidth={3} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
             </div>
             <div className="col-span-2">ID</div>
@@ -1443,17 +1480,33 @@ const Materials: React.FC = () => {
                        <div className="p-4" onClick={() => handleRowClick(material)}>
                          {/* Top row: checkbox, material ID, and material type */}
                          <div className="flex items-center justify-between mb-3">
-                           <div className="flex items-center gap-3">
-                             <input
-                               type="checkbox"
-                               className="form-checkbox"
-                               checked={selectedMaterials.includes(material.id)}
-                               onChange={(e) => {
-                                 e.stopPropagation();
-                                 handleMaterialSelect(material.id);
-                               }}
-                               onClick={(e) => e.stopPropagation()}
-                             />
+                          <div className="flex items-center gap-3">
+                            <div className="relative flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                                checked={selectedMaterials.includes(material.id)}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleMaterialSelect(material.id);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <AnimatePresence>
+                                {selectedMaterials.includes(material.id) && (
+                                  <motion.div
+                                    key="check"
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0, opacity: 0 }}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                    className="absolute text-black pointer-events-none"
+                                  >
+                                    <Check size={12} strokeWidth={3} />
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
                              <div>
                                <div className="font-semibold text-gray-800 text-sm">
                                  {material.materialId}
@@ -1545,15 +1598,32 @@ const Materials: React.FC = () => {
                         onClick={() => handleRowClick(material)}
                       >
                         <div className="col-span-2 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="form-checkbox"
-                            checked={selectedMaterials.includes(material.id)}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              handleMaterialSelect(material.id);
-                            }}
-                          />
+                          <div className="relative flex items-center justify-center">
+                            <input
+                              type="checkbox"
+                              className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                              checked={selectedMaterials.includes(material.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                handleMaterialSelect(material.id);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <AnimatePresence>
+                              {selectedMaterials.includes(material.id) && (
+                                <motion.div
+                                  key="check"
+                                  initial={{ scale: 0, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  exit={{ scale: 0, opacity: 0 }}
+                                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                  className="absolute text-black pointer-events-none"
+                                >
+                                  <Check size={12} strokeWidth={3} />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
                           <span className="pl-5 truncate">{material.materialType}</span>
                         </div>
 

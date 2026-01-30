@@ -1772,13 +1772,21 @@ const ManageDrivers: React.FC = () => {
                       isMobile ? "text-center" : "md:col-span-2 pb-16"
                     }`}
                   >
+                    {/* Vehicle Info */}
                     <div className="flex flex-col items-center justify-center">
                       {selectedDriverDetails.vehicleType?.toLowerCase() === "car" ? (
                         <Car className={`${isMobile ? "w-10 h-10 mb-2" : "w-20 h-20 mb-3"} text-gray-700`} />
                       ) : (
                         <Bike className={`${isMobile ? "w-8 h-8 mb-2" : "w-12 h-12 mb-3"} text-gray-700`} />
                       )}
-                      <p className="text-sm sm:text-base font-bold text-gray-600">
+                      <p className="text-gray-900 font-bold text-sm xs:text-base text-center">
+                        {selectedDriverDetails.material?.materialId ||
+                          selectedDriverDetails.material?.materialType ||
+                          selectedDriverDetails.material?.description ||
+                          selectedDriverDetails.installedMaterialType ||
+                          "N/A"}
+                      </p>
+                      <p className="text-sm sm:text-base font-bold text-gray-900">
                         {selectedDriverDetails.vehiclePlateNumber}
                       </p>
                       <p className="text-xs sm:text-sm text-gray-900">
@@ -1787,22 +1795,12 @@ const ManageDrivers: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Right Side (Material Info) */}
+                  {/* Right Side (Other Info) */}
                   <div
                     className={`flex flex-col justify-between h-full ${
                       isMobile ? "items-start" : "p-6 md:col-span-3"
                     }`}
                   >
-                    <div className={`${isMobile ? "mb-2" : "mb-4"}`}>
-                      <p className="text-xs sm:text-sm text-gray-500">Assigned Material</p>
-                      <p className="text-gray-900 font-bold text-sm sm:text-base">
-                        {selectedDriverDetails.material?.materialId ||
-                          selectedDriverDetails.material?.materialType ||
-                          selectedDriverDetails.material?.description ||
-                          selectedDriverDetails.installedMaterialType ||
-                          "N/A"}
-                      </p>
-                    </div>
 
                     <div className={`${isMobile ? "mb-2" : "mb-4"}`}>
                       <p className="text-xs sm:text-sm text-gray-500">Assigned Date</p>

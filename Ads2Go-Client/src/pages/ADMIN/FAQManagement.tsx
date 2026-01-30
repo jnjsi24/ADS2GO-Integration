@@ -728,7 +728,7 @@ const FAQManagement: React.FC = () => {
         </div>
 
         {/* FAQs List */}
-        <div className="bg-gray-100 rounded-lg shadow-sm">
+        <div className="bg-gray-100">
           {loading ? (
             <AdminLoader />
           ) : error ? (

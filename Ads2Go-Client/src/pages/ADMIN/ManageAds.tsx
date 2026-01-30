@@ -969,18 +969,26 @@ const ManageAds: React.FC = () => {
 
             {/* Bulk Actions Bar */}
             {selectedAds.length > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 md:p-4 mb-4">
+              <div className='p-2'>
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <span className="text-xs md:text-sm font-medium text-blue-800">
                       {selectedAds.length} advertisement{selectedAds.length > 1 ? 's' : ''} selected
                     </span>
-                    <button
-                      onClick={() => setSelectedAds([])}
-                      className="text-blue-600 hover:text-blue-800 text-xs md:text-sm font-medium self-start md:self-auto"
-                    >
-                      Clear Selection
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleBulkDelete}
+                        className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
+                        >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setSelectedAds([])}
+                        className="text-gray-600 text-sm md:text-sm font-medium"
+                      >
+                        Clear
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {filteredAds.filter((ad: Ad) => selectedAds.includes(ad.id) && ad.status === 'PENDING').length > 0 && (
@@ -999,12 +1007,6 @@ const ManageAds: React.FC = () => {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={handleBulkDelete}
-                      className="px-3 py-1.5 bg-gray-100 text-gray-800 text-xs font-medium rounded hover:bg-gray-200 flex-1 md:flex-none"
-                    >
-                      Delete Selected
-                    </button>
                   </div>
                 </div>
               </div>

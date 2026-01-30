@@ -1436,117 +1436,101 @@ const AdminAdsControl: React.FC = () => {
         </div>
       </div>
       
-      <div className="flex flex-col lg:flex-row gap-4 mb-6">
-        {/* LEFT – stretch to fill the row height */}
-        <div className="lg:w-1/2 flex flex-col">
-          <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 flex-1">
-            {/* Total Screens */}
-            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="flex items-center justify-center gap-2">
-                <p className="text-3xl font-semibold text-gray-900">{screens.length}</p>
-              </div>
-              <p className="text-xs text-gray-600 font-medium mt-1">Total Screens</p>
-            </div>
-
-            {/* Online Screens */}
-            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="flex items-center justify-center gap-2">
-                <p className="text-3xl font-semibold">
-                  {screens.filter(s => s.isOnline).length}
-                </p>
-              </div>
-              <p className="text-xs text-gray-600 font-medium mt-1">Online Screens</p>
-            </div>
-
-            {/* Playing Ads */}
-            <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
-              <div className="flex items-center justify-center gap-2">
-                <p className="text-3xl font-semibold">
-                  {screens.filter(s => {
-                    const currentAd = s.screenMetrics?.currentAd;
-                    return (
-                      s.isOnline &&
-                      currentAd &&
-                      ['playing', 'buffering', 'loading'].includes(currentAd.state)
-                    );
-                  }).length}
-                </p>
-              </div>
-              <p className="text-xs text-gray-600 font-medium mt-1">Playing Ads</p>
-            </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-6">
+        {/* Total Screens */}
+        <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-3xl font-semibold text-gray-900">{screens.length}</p>
           </div>
+          <p className="text-xs text-gray-600 font-medium mt-1">Total Screens</p>
         </div>
 
-        {/* RIGHT – also stretch */}
-        <div className="lg:w-2/3 flex flex-col">
-          <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 gap-4 flex-1 items-center justify-center">
-            {/* Play / Pause All */}
-            <button
-              onClick={handleTogglePlayPause}
-              disabled={actionLoading === 'play' || actionLoading === 'pause'}
-              className={`flex flex-col items-center justify-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
-                isCurrentlyPlaying
-                  ? 'bg-yellow-50 hover:bg-yellow-100'
-                  : 'bg-green-50 hover:bg-green-100'
-              }`}
-            >
-              {actionLoading === 'play' || actionLoading === 'pause' ? (
-                <Loader2
-                  className={`w-6 h-6 mb-2 animate-spin ${
-                    isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-                  }`}
-                />
-              ) : isCurrentlyPlaying ? (
-                <Pause className="w-6 h-6 text-yellow-600 mb-2" />
-              ) : (
-                <Play className="w-6 h-6 text-green-600 mb-2" />
-              )}
-              <span
-                className={`text-sm font-medium ${
-                  isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-                }`}
-              >
-                {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
-              </span>
-            </button>
-
-            {/* Restart All button removed */}
-            {/* <button className="flex flex-col items-center justify-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-              <RotateCcw className="w-6 h-6 text-blue-600 mb-2" />
-              <span className="text-sm font-medium text-blue-600">Restart All</span>
-            </button> */}
-
-            {/* Lock / Unlock All */}
-            <button
-              onClick={handleToggleLock}
-              disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
-              className={`flex flex-col items-center justify-center p-4 rounded-lg disabled:opacity-50 ${
-                isLocked
-                  ? 'bg-green-50 hover:bg-green-100'
-                  : 'bg-red-50 hover:bg-red-100'
-              }`}
-            >
-              {actionLoading === 'lock' || actionLoading === 'unlock' ? (
-                <Loader2
-                  className={`w-6 h-6 mb-2 animate-spin ${
-                    isLocked ? 'text-green-600' : 'text-red-600'
-                  }`}
-                />
-              ) : isLocked ? (
-                <Unlock className="w-6 h-6 text-green-600 mb-2" />
-              ) : (
-                <Lock className="w-6 h-6 text-red-600 mb-2" />
-              )}
-              <span
-                className={`text-sm font-medium ${
-                  isLocked ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                {isLocked ? 'Unlock All' : 'Lock All'}
-              </span>
-            </button>
+        {/* Online Screens */}
+        <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-3xl font-semibold text-gray-900">
+              {screens.filter(s => s.isOnline).length}
+            </p>
           </div>
+          <p className="text-xs text-gray-600 font-medium mt-1">Online Screens</p>
         </div>
+
+        {/* Playing Ads */}
+        <div className="bg-white p-5 rounded-lg shadow-sm flex flex-col items-center justify-center text-center">
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-3xl font-semibold text-gray-900">
+              {screens.filter(s => {
+                const currentAd = s.screenMetrics?.currentAd;
+                return (
+                  s.isOnline &&
+                  currentAd &&
+                  ['playing', 'buffering', 'loading'].includes(currentAd.state)
+                );
+              }).length}
+            </p>
+          </div>
+          <p className="text-xs text-gray-600 font-medium mt-1">Playing Ads</p>
+        </div>
+
+        {/* Play / Pause All */}
+        <button
+          onClick={handleTogglePlayPause}
+          disabled={actionLoading === 'play' || actionLoading === 'pause'}
+          className={`flex flex-col items-center justify-center p-4 rounded-lg transition-colors disabled:opacity-50 shadow-sm ${
+            isCurrentlyPlaying
+              ? 'bg-yellow-50 hover:bg-yellow-100'
+              : 'bg-green-50 hover:bg-green-100'
+          }`}
+        >
+          {actionLoading === 'play' || actionLoading === 'pause' ? (
+            <Loader2
+              className={`w-6 h-6 mb-2 animate-spin ${
+                isCurrentlyPlaying ? 'text-orange-600' : 'text-green-600'
+              }`}
+            />
+          ) : isCurrentlyPlaying ? (
+            <Pause className="w-6 h-6 text-orange-600 mb-2" />
+          ) : (
+            <Play className="w-6 h-6 text-green-600 mb-2" />
+          )}
+          <span
+            className={`text-sm font-medium ${
+              isCurrentlyPlaying ? 'text-orange-600' : 'text-green-600'
+            }`}
+          >
+            {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+          </span>
+        </button>
+
+        {/* Lock / Unlock All */}
+        <button
+          onClick={handleToggleLock}
+          disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
+          className={`flex flex-col items-center justify-center p-4 rounded-lg disabled:opacity-50 shadow-sm transition-colors ${
+            isLocked
+              ? 'bg-green-50 hover:bg-green-100'
+              : 'bg-red-50 hover:bg-red-100'
+          }`}
+        >
+          {actionLoading === 'lock' || actionLoading === 'unlock' ? (
+            <Loader2
+              className={`w-6 h-6 mb-2 animate-spin ${
+                isLocked ? 'text-green-600' : 'text-red-600'
+              }`}
+            />
+          ) : isLocked ? (
+            <Unlock className="w-6 h-6 text-green-600 mb-2" />
+          ) : (
+            <Lock className="w-6 h-6 text-red-600 mb-2" />
+          )}
+          <span
+            className={`text-sm font-medium ${
+              isLocked ? 'text-green-600' : 'text-red-600'
+            }`}
+          >
+            {isLocked ? 'Unlock All' : 'Lock All'}
+          </span>
+        </button>
       </div>
 
 
@@ -1619,12 +1603,6 @@ const AdminAdsControl: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold">Screen Details - {selectedScreen}</h3>
-              <button
-                onClick={handleCloseScreenDetails}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XCircle className="w-6 h-6" />
-              </button>
             </div>
             
             {(() => {
@@ -1635,22 +1613,16 @@ const AdminAdsControl: React.FC = () => {
                 <div className="space-y-6">
                   {/* Basic Info */}
                   <div className="grid grid-cols-1 gap-4">
-                    <div>
+                    <div className="mt-4">
                       <label className="block text-sm font-medium text-gray-600">Device ID</label>
                       <p className="text-lg font-medium">{screen.deviceId}</p>
                     </div>
                     
                     {/* Slot Information */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 mt-4">
                       <div>
                         <div className="flex items-center gap-2 mb-2">
                           <label className="text-sm font-medium text-gray-600">Slot 1 Material ID</label>
-                          {screen.slot1DeviceId === screen.masterDeviceId && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                              <BarChart3 className="w-3 h-3" />
-                              <span>Analytics</span>
-                            </div>
-                          )}
                         </div>
                         <p className="text-lg font-medium mb-2">{screen.slot1DeviceId || 'Not connected'}</p>
                         <div className="flex items-center gap-2">
@@ -1680,20 +1652,22 @@ const AdminAdsControl: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Display Hours */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Display Hours</label>
-                      <p className="text-lg font-medium">{screen.screenMetrics?.displayHours?.toFixed(1) || '0.0'}h</p>
-                    </div>
-                    
-                    {/* Driver Information */}
-                    {screen.driverInfo && (
+                    {/* Display Hours and Driver Information */}
+                    <div className="grid grid-cols-2 gap-4 mt-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-600">Driver</label>
-                        <p className="text-lg font-medium">{screen.driverInfo.driverName}</p>
-                        <p className="text-sm text-gray-500">Vehicle: {screen.driverInfo.vehiclePlateNumber}</p>
+                        <label className="block text-sm font-medium text-gray-600">Display Hours</label>
+                        <p className="text-lg font-medium">{screen.screenMetrics?.displayHours?.toFixed(1) || '0.0'}h</p>
                       </div>
-                    )}
+                      
+                      {/* Driver Information */}
+                      {screen.driverInfo && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Driver</label>
+                          <p className="text-lg font-medium">{screen.driverInfo.driverName}</p>
+                          <p className="text-sm text-gray-500">Vehicle: {screen.driverInfo.vehiclePlateNumber}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
 
@@ -1701,7 +1675,7 @@ const AdminAdsControl: React.FC = () => {
                   <div className="flex justify-end">
                     <button
                       onClick={handleCloseScreenDetails}
-                      className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-100"
                     >
                       Close
                     </button>

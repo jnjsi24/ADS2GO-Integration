@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare, RotateCcw, Trash2 } from 'lucide-react';
+import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car, Save, X as CloseIcon, CheckCircle, AlertCircle, Loader, MessageSquare, RotateCcw, Trash2, Check } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useSearchParams } from 'react-router-dom';
@@ -1227,7 +1227,7 @@ const Reports: React.FC = () => {
         }
 
         return (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+          <div className="p-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <span className="text-sm font-medium text-blue-800">
@@ -1253,29 +1253,29 @@ const Reports: React.FC = () => {
                       Mark as Closed
                     </button>
                   )}
-                  
-                  {/* Show info message if no status actions available */}
-                  {infoMessage && (
-                    <span className="text-xs text-gray-600 italic px-2 py-1">
-                      {infoMessage}
-                    </span>
-                  )}
-                  
-                  {/* Export to CSV - Always available */}
-                  <button
-                    onClick={handleExportToCSV}
-                    className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
-                  >
-                    Export to CSV
-                  </button>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedReports([])}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-              >
-                Clear Selection
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Show info message if no status actions available */}
+                {infoMessage && (
+                  <span className="text-xs text-gray-600 italic">
+                    {infoMessage}
+                  </span>
+                )}
+                {/* Export to CSV - Always available */}
+                <button
+                  onClick={handleExportToCSV}
+                  className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded hover:bg-blue-200"
+                >
+                  Export to CSV
+                </button>
+                <button
+                  onClick={() => setSelectedReports([])}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  Clear Selection
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -1295,12 +1295,29 @@ const Reports: React.FC = () => {
           {/* Table Header */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
             <div className="col-span-3 flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                checked={paginatedReports.length > 0 && paginatedReports.every((report: Report) => selectedReports.includes(report.id))}
-                onChange={handleSelectAll}
-              />
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                  onChange={() => {}}
+                  onClick={handleSelectAll}
+                  checked={paginatedReports.length > 0 && paginatedReports.every((report: Report) => selectedReports.includes(report.id))}
+                />
+                <AnimatePresence>
+                  {paginatedReports.length > 0 && paginatedReports.every((report: Report) => selectedReports.includes(report.id)) && (
+                    <motion.div
+                      key="check"
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      className="absolute text-black pointer-events-none"
+                    >
+                      <Check size={12} strokeWidth={3} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
                 {reportSource === 'messages' ? 'Name' : 'Title'}
               </span>
@@ -1333,7 +1350,29 @@ const Reports: React.FC = () => {
                 <div className="flex items-start gap-2">
                   {/* Checkbox */}
                   <div className="flex-shrink-0 order-[-1]">
-                    <input type="checkbox" className="w-3 h-3" />
+                    <div className="relative flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                        checked={selectedReports.includes(report.id)}
+                        onChange={() => handleSelectReport(report.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <AnimatePresence>
+                        {selectedReports.includes(report.id) && (
+                          <motion.div
+                            key="check"
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                            className="absolute text-black pointer-events-none"
+                          >
+                            <Check size={12} strokeWidth={3} />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
 
                   {/* Content */}
@@ -1413,13 +1452,29 @@ const Reports: React.FC = () => {
                 onClick={() => handleRowClick(report)}
               >
                 <div className="col-span-3 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    checked={selectedReports.includes(report.id)}
-                    onChange={() => handleSelectReport(report.id)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  <div className="relative flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                      checked={selectedReports.includes(report.id)}
+                      onChange={() => handleSelectReport(report.id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <AnimatePresence>
+                      {selectedReports.includes(report.id) && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute text-black pointer-events-none"
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <span className="truncate font-semibold" title={reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}>
                     {reportSource === 'messages' ? (report as unknown as ContactMessage).name : (report as Report).title}
                   </span>

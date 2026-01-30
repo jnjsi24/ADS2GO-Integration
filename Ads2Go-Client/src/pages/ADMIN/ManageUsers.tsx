@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight, Menu, Archive, Users, RotateCcw } from 'lucide-react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight, Menu, Archive, Users, RotateCcw, Check } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
@@ -463,6 +463,17 @@ const ManageUsers: React.FC = () => {
   // Bulk action handlers
   const handleBulkDelete = () => {
     if (selectedUsers.length === 0) return;
+    
+    // Check if any selected user has active ads
+    const hasUsersWithAds = selectedUsers.some(userId => {
+      const user = users.find((u: User) => u.id === userId);
+      return user && !canDeleteUser(user);
+    });
+    
+    if (hasUsersWithAds) {
+      return; // Don't open modal if any user has ads
+    }
+    
     setShowBulkDeleteModal(true);
   };
 
@@ -913,33 +924,39 @@ const ManageUsers: React.FC = () => {
 
       {/* Bulk Actions Bar */}
       {selectedUsers.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <div className="p-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <span className="text-sm font-medium text-blue-800">
-                {selectedUsers.length} advertiser{selectedUsers.length > 1 ? 's' : ''} selected
-              </span>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={handleBulkDelete}
-                  className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
-                >
-                  Delete Selected
-                </button>
-                <button
-                  onClick={handleExportToCSV}
-                  className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
-                >
-                  Export to CSV
-                </button>
-              </div>
+            <span className="text-sm font-medium text-blue-800">
+              {selectedUsers.length} advertiser{selectedUsers.length > 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center gap-2">
+              {(() => {
+                const hasUsersWithAds = selectedUsers.some(userId => {
+                  const user = users.find((u: User) => u.id === userId);
+                  return user && !canDeleteUser(user);
+                });
+                return (
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={hasUsersWithAds}
+                    className={`px-3 py-1 text-xs font-medium rounded ${
+                      hasUsersWithAds
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-red-100 text-red-800 hover:bg-red-200'
+                    }`}
+                    title={hasUsersWithAds ? 'Cannot delete advertisers with active ads' : ''}
+                  >
+                    Delete
+                  </button>
+                );
+              })()}
+              <button
+                onClick={() => setSelectedUsers([])}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Clear Selection
+              </button>
             </div>
-            <button
-              onClick={() => setSelectedUsers([])}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-            >
-              Clear Selection
-            </button>
           </div>
         </div>
       )}
@@ -962,13 +979,29 @@ const ManageUsers: React.FC = () => {
                 activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
               }`}>
                 <div className="flex items-center gap-2 col-span-3">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    onChange={() => {}}
-                    onClick={handleSelectAll}
-                    checked={isAllSelected}
-                  />
+                  <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                      onChange={() => {}}
+                      onClick={handleSelectAll}
+                      checked={isAllSelected}
+                    />
+                    <AnimatePresence>
+                      {isAllSelected && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute inset-0 flex items-center justify-center text-black pointer-events-none"
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
                 <div className="col-span-2">Company</div>
@@ -994,13 +1027,29 @@ const ManageUsers: React.FC = () => {
                   <div className="p-4 cursor-pointer">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox"
-                          checked={selectedUsers.includes(user.id)}
-                          onChange={() => {}}
-                          onClick={(e) => handleUserSelect(user.id, e)}
-                        />
+                        <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                            checked={selectedUsers.includes(user.id)}
+                            onChange={() => {}}
+                            onClick={(e) => handleUserSelect(user.id, e)}
+                          />
+                          <AnimatePresence>
+                            {selectedUsers.includes(user.id) && (
+                              <motion.div
+                                key="check"
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                className="absolute inset-0 flex items-center justify-center text-black pointer-events-none"
+                              >
+                                <Check size={12} strokeWidth={3} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <div className="flex items-center justify-center w-10 h-10 text-sm font-semibold text-white rounded-full bg-[#FF9D3D]">
                           {getInitials(user.firstName, user.lastName)}
                         </div>
@@ -1077,13 +1126,29 @@ const ManageUsers: React.FC = () => {
                     activeTab === 'archived' ? 'grid-cols-12' : 'grid-cols-12'
                   }`}>
                     <div className="col-span-3 gap-3 flex items-center">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox"
-                        checked={selectedUsers.includes(user.id)}
-                        onChange={() => {}}
-                        onClick={(e) => handleUserSelect(user.id, e)}
-                      />
+                      <div className="relative w-3.5 h-3.5 flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => {}}
+                          onClick={(e) => handleUserSelect(user.id, e)}
+                        />
+                        <AnimatePresence>
+                          {selectedUsers.includes(user.id) && (
+                            <motion.div
+                              key="check"
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0, opacity: 0 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                              className="absolute inset-0 flex items-center justify-center text-black pointer-events-none"
+                            >
+                              <Check size={12} strokeWidth={3} />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                       <div className="flex items-center">
                         <div className="flex items-center justify-center w-8 h-8 mr-3 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
                           {getInitials(user.firstName, user.lastName)}
@@ -1262,9 +1327,9 @@ const ManageUsers: React.FC = () => {
                       <span className="text-gray-600">ID:</span>
                       <span className="font-semibold text-gray-700 text-right truncate">{selectedUser.id}</span>
                     </div>
-                    <div className="flex justify-between sm:border-b border-gray-300 pb-2">
-                      <span className="text-gray-600">Company Address:</span>
-                      <span className="font-semibold text-gray-700">{selectedUser.address}</span>
+                    <div className="sm:border-b border-gray-300 pb-2">
+                      <span className="text-gray-600 block mb-1">Company Address:</span>
+                      <span className="font-semibold text-right text-gray-700 block break-words">{selectedUser.address}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Email Verified:</span>

@@ -328,7 +328,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
       ) : (
         <div className="space-y-4">
           {groupedByMaterial.length === 0 ? (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
+            <div className="bg-gray-100 rounded-lg p-8 text-center">
               <Calendar className="w-10 h-10 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">No ads scheduled in this period.</p>
             </div>

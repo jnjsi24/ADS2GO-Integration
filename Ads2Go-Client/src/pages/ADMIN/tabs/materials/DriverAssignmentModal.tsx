@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 interface Driver {
   driverId: string;
@@ -49,6 +50,8 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
   assigning
 }) => {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Filter available drivers based on material requirements AND preferences
   const getCompatibleDrivers = (material: Material): DriverWithVehicleType[] => {
@@ -110,8 +113,26 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
 
   const handleClose = () => {
     setSelectedDriverId('');
+    setIsDropdownOpen(false);
     onClose();
   };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   if (!isOpen || !material) return null;
 
@@ -119,11 +140,11 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-30 z-[10000] flex items-end justify-center"
+      className="fixed inset-0 z-[10000] flex items-end justify-center"
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 mb-6 mr-36 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100 relative z-[10001]" 
+        className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 mb-6 mr-10 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100 relative z-[10001]" 
         onClick={(e) => e.stopPropagation()}
       >
         {/* Target Material Details */}
@@ -157,23 +178,64 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
 
         {/* Select Driver */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
+          <div className="relative" ref={dropdownRef}>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Select Driver
             </label>
-            <select
-              value={selectedDriverId}
-              onChange={(e) => setSelectedDriverId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline focus:outline-gray-300"
+            <button
+              type="button"
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               disabled={compatibleDrivers.length === 0}
-            >
-              <option value="">Choose a driver...</option>
-              {compatibleDrivers.map((driver) => (
-                <option key={driver.driverId} value={driver.driverId}>
-                  {driver.fullName} - {driver.vehiclePlateNumber} ({driver.vehicleType})
-                </option>
-              ))}
-            </select>
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+              <span className={selectedDriverId ? 'text-gray-900' : 'text-gray-500'}>
+                {selectedDriverId
+                  ? compatibleDrivers.find(d => d.driverId === selectedDriverId)?.fullName + 
+                    ' - ' + 
+                    compatibleDrivers.find(d => d.driverId === selectedDriverId)?.vehiclePlateNumber + 
+                    ' (' + 
+                    compatibleDrivers.find(d => d.driverId === selectedDriverId)?.vehicleType + 
+                    ')'
+                  : 'Choose a driver...'}
+              </span>
+              <ChevronDown 
+                size={16} 
+                className={`transform transition-transform duration-200 ${
+                  isDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+            
+            {isDropdownOpen && compatibleDrivers.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 -mb-6 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto z-50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDriverId('');
+                    setIsDropdownOpen(false);
+                  }}
+                  className="flex items-center justify-between w-full text-xs text-black pl-4 pr-3 py-2 focus:outline-none bg-white gap-2"
+                  >
+                  Choose a driver...
+                </button>
+                {compatibleDrivers.map((driver) => (
+                  <button
+                    key={driver.driverId}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDriverId(driver.driverId);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full pl-4 pr-3 py-2 text-left text-xs hover:bg-gray-100 ${
+                      selectedDriverId === driver.driverId ? 'bg-blue-50' : 'text-gray-900'
+                    }`}
+                  >
+                    {driver.fullName} - {driver.vehiclePlateNumber} ({driver.vehicleType})
+                  </button>
+                ))}
+              </div>
+            )}
+            
             {compatibleDrivers.length === 0 && (
               <p className="text-red-600 text-sm mt-2">No compatible drivers found!</p>
             )}
@@ -184,7 +246,7 @@ const DriverAssignmentModal: React.FC<DriverAssignmentModalProps> = ({
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100"
+              className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-200 bg-gray-100"
             >
               Cancel
             </button>

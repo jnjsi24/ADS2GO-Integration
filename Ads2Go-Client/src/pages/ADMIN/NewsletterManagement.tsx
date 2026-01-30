@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X, Mail, Upload, Loader, Send, Image as ImageIcon } from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight, X, Mail, Upload, Loader, Send, Image as ImageIcon, Check } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
 import { useToast, ToastContainer } from "../../components/ToastNotification";
 
@@ -918,10 +918,10 @@ const NewsletterManagement: React.FC = () => {
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-4 mb-8`}>
               {/* Total Subscribers */}
               <div className="bg-blue-50 shadow-md rounded-lg p-6">
-                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
+                <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
-                    <div className="text-sm text-right text-gray-600">Total</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Total</div>
                     <div className="text-xs text-gray-500">All time</div>
                   </div>
                 </div>
@@ -929,10 +929,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Active Subscribers */}
               <div className="bg-green-50 shadow-md rounded-lg p-6">
-                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
+                <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-green-600">{stats.active}</div>
-                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
-                    <div className="text-sm text-right text-gray-600">Active</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Active</div>
                     <div className="text-xs text-gray-500">Currently subscribed</div>
                   </div>
                 </div>
@@ -940,10 +940,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Registration Source */}
               <div className="bg-purple-50 shadow-md rounded-lg p-6">
-                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
+                <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
-                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
-                    <div className="text-sm text-right text-gray-600">Registration</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Registration</div>
                     <div className="text-xs text-gray-500">Registered users</div>
                   </div>
                 </div>
@@ -951,10 +951,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Contact Form Source */}
               <div className="bg-orange-50 shadow-md rounded-lg p-6">
-                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
+                <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
-                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
-                    <div className="text-sm text-right text-gray-600">Contact Form</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Contact Form</div>
                     <div className="text-xs text-gray-500">Contact submissions</div>
                   </div>
                 </div>
@@ -962,10 +962,10 @@ const NewsletterManagement: React.FC = () => {
 
               {/* Inactive Subscribers */}
               <div className="bg-red-50 shadow-md rounded-lg p-6">
-                <div className={`flex items-center ${isMobile ? 'justify-between' : ''}`}>
+                <div className="flex items-center justify-between">
                   <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
-                  <div className={`${isMobile ? 'ml-0' : 'ml-4'}`}>
-                    <div className="text-sm text-right text-gray-600">Inactive</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Inactive</div>
                     <div className="text-xs text-gray-500">No longer active</div>
                   </div>
                 </div>
@@ -983,35 +983,27 @@ const NewsletterManagement: React.FC = () => {
 
           {/* Bulk Actions Bar */}
           {selectedSubscribers.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div className="p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <span className="text-sm font-medium text-blue-800">
-                    {selectedSubscribers.length} subscriber{selectedSubscribers.length > 1 ? 's' : ''} selected
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {subscribers.filter(sub => selectedSubscribers.includes(sub._id) && sub.isActive).length > 0 && (
-                      <button
-                        onClick={handleBulkUnsubscribe}
-                        className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
-                      >
-                        Unsubscribe Selected
-                      </button>
-                    )}
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedSubscribers.length} subscriber{selectedSubscribers.length > 1 ? 's' : ''} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  {subscribers.filter(sub => selectedSubscribers.includes(sub._id) && sub.isActive).length > 0 && (
                     <button
-                      onClick={handleExportToCSV}
-                      className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded hover:bg-green-200"
+                      onClick={handleBulkUnsubscribe}
+                      className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded hover:bg-red-200"
                     >
-                      Export to CSV
+                      Unsubscribe
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => setSelectedSubscribers([])}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Clear Selection
+                  </button>
                 </div>
-                <button
-                  onClick={() => setSelectedSubscribers([])}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
-                >
-                  Clear Selection
-                </button>
               </div>
             </div>
           )}
@@ -1021,15 +1013,33 @@ const NewsletterManagement: React.FC = () => {
             {!isMobile && (
               <div className="grid grid-cols-12 gap-1 px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100">
                 <div className="col-span-3 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    checked={
-                      paginatedSubscribers.filter(sub => sub.isActive).length > 0 && 
-                      paginatedSubscribers.filter(sub => sub.isActive).every(sub => selectedSubscribers.includes(sub._id))
-                    }
-                    onChange={handleSelectAll}
-                  />
+                  <div className="relative flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded cursor-pointer"
+                      onChange={() => {}}
+                      onClick={handleSelectAll}
+                      checked={
+                        paginatedSubscribers.filter(sub => sub.isActive).length > 0 && 
+                        paginatedSubscribers.filter(sub => sub.isActive).every(sub => selectedSubscribers.includes(sub._id))
+                      }
+                    />
+                    <AnimatePresence>
+                      {paginatedSubscribers.filter(sub => sub.isActive).length > 0 && 
+                       paginatedSubscribers.filter(sub => sub.isActive).every(sub => selectedSubscribers.includes(sub._id)) && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute text-black pointer-events-none"
+                        >
+                          <Check size={12} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                   <span className="cursor-pointer" onClick={handleSelectAll}>Email</span>
                 </div>
                 <div className="col-span-2">Status</div>
@@ -1110,15 +1120,36 @@ const NewsletterManagement: React.FC = () => {
                   ) : (
                     <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
                       <div className="col-span-3 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className={`form-checkbox ${!subscriber.isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          checked={selectedSubscribers.includes(subscriber._id)}
-                          onChange={() => handleSubscriberSelect(subscriber._id)}
-                          onClick={(e) => e.stopPropagation()}
-                          disabled={!subscriber.isActive}
-                          title={!subscriber.isActive ? 'Cannot email inactive subscribers' : ''}
-                        />
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className={`form-checkbox appearance-none w-3.5 h-3.5 border border-gray-400 rounded ${!subscriber.isActive ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                            onChange={() => {}}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (subscriber.isActive) {
+                                handleSubscriberSelect(subscriber._id);
+                              }
+                            }}
+                            checked={selectedSubscribers.includes(subscriber._id)}
+                            disabled={!subscriber.isActive}
+                            title={!subscriber.isActive ? 'Cannot email inactive subscribers' : ''}
+                          />
+                          <AnimatePresence>
+                            {selectedSubscribers.includes(subscriber._id) && (
+                              <motion.div
+                                key="check"
+                                initial={{ scale: 0, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0, opacity: 0 }}
+                                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                className="absolute text-black pointer-events-none"
+                              >
+                                <Check size={12} strokeWidth={3} />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                         <span className={`truncate font-medium ${subscriber.isActive ? 'text-gray-900' : 'text-gray-400'}`}>
                           {subscriber.email}
                         </span>
@@ -1181,67 +1212,67 @@ const NewsletterManagement: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
 
-          {/* Pagination */}
-          <div className="mt-auto flex justify-center py-4">
-            <div className="flex items-center space-x-1 sm:space-x-2">
-              <button
-                onClick={handlePreviousPage}
-                disabled={currentPage === 1}
-                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Previous</span>
-              </button>
+        {/* Pagination - Moved to bottom */}
+        <div className="mt-auto flex justify-center py-4">
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Previous</span>
+            </button>
 
-              <div className="flex space-x-1">
-                {(() => {
-                  const pages = [];
-                  const maxVisiblePages = isMobile ? 1 : 3;
-                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = isMobile ? 1 : 3;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-                  if (endPage - startPage + 1 < maxVisiblePages) {
-                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                  }
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
 
-                  for (let i = startPage; i <= endPage; i++) {
-                    pages.push(
-                      <button
-                        key={i}
-                        onClick={() => handlePageChange(i)}
-                        className={`px-2 sm:px-3 py-1 text-sm rounded ${
-                          currentPage === i
-                            ? "border border-gray-300 text-black"
-                            : "text-gray-700 hover:border border-gray-300"
-                        }`}
-                      >
-                        {i}
-                      </button>
-                    );
-                  }
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-2 sm:px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black"
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
 
-                  if (endPage < totalPages && !isMobile) {
-                    pages.push(
-                      <span key="ellipsis" className="px-2 text-gray-500">
-                        …
-                      </span>
-                    );
-                  }
+                if (endPage < totalPages && !isMobile) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
 
-                  return pages;
-                })()}
-              </div>
-
-              <button
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="hidden sm:inline">Next</span>
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </button>
+                return pages;
+              })()}
             </div>
+
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
           </div>
         </div>
 
