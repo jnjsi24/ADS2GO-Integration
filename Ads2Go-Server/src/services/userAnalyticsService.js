@@ -996,6 +996,22 @@ class UserAnalyticsService {
         }
       }
 
+      // ✅ SYNC: When showing all ads (no adId filter), summary must equal sum of adPerformance
+      // so top cards and table stay in sync (fixes 29 vs 28 mismatch from different data paths)
+      if (!adId && data.adPerformance && data.adPerformance.length > 0) {
+        const sumFromAdPerformance = {
+          totalAdsPlayed: data.adPerformance.reduce((sum, ad) => sum + (ad.totalAdPlays || 0), 0),
+          totalDisplayTime: data.adPerformance.reduce((sum, ad) => sum + (ad.totalAdPlayTime || 0), 0),
+          totalQRScans: data.adPerformance.reduce((sum, ad) => sum + (ad.totalQRScans || 0), 0)
+        };
+        data.summary.totalAdsPlayed = sumFromAdPerformance.totalAdsPlayed;
+        data.summary.totalDisplayTime = sumFromAdPerformance.totalDisplayTime;
+        data.summary.totalQRScans = sumFromAdPerformance.totalQRScans;
+        if (isVerbose()) {
+          logger.verbose('📊 [SYNC] Summary set from sum of adPerformance (top cards = table):', sumFromAdPerformance);
+        }
+      }
+
       // For "All Devices" view, use only UserAnalytics data for summary - but still get device stats
       if (shouldReturnCumulative) {
         if (isVerbose()) {
@@ -1149,6 +1165,26 @@ class UserAnalyticsService {
           data.dailyStats = dailyStats || [];
         }
         // deviceStats already populated above
+      }
+
+      // ✅ SYNC: When request has adId and we have dailyStats, set that ad's totals from sum(dailyStats)
+      // so the expand response is self-consistent and row matches daily table (fixes "daily first, top delayed")
+      if (adId && data.dailyStats && data.dailyStats.length > 0 && data.adPerformance && data.adPerformance.length > 0) {
+        const adIdStr = adId.toString();
+        const sumFromDaily = {
+          totalAdPlays: data.dailyStats.reduce((s, d) => s + (d.adsPlayed || 0), 0),
+          totalAdPlayTime: data.dailyStats.reduce((s, d) => s + (d.displayTime || 0), 0),
+          totalQRScans: data.dailyStats.reduce((s, d) => s + (d.qrScans || 0), 0)
+        };
+        const adEntry = data.adPerformance.find(a => (a.adId || '').toString() === adIdStr);
+        if (adEntry) {
+          adEntry.totalAdPlays = sumFromDaily.totalAdPlays;
+          adEntry.totalAdPlayTime = sumFromDaily.totalAdPlayTime;
+          adEntry.totalQRScans = sumFromDaily.totalQRScans;
+          if (isVerbose()) {
+            logger.verbose('📊 [SYNC] Ad totals set from sum(dailyStats) for adId:', adIdStr, sumFromDaily);
+          }
+        }
       }
 
       // Debug logging to track data flow
@@ -2611,21 +2647,22 @@ class UserAnalyticsService {
             });
 
             // Aggregate current day stats per device
+            // ✅ FIX: Use adPlaybacks (same as getDailyStatsFromHistory) so device card matches chart for Today. adPerformance.playCount can be off-by-one.
             currentDayData.forEach(device => {
               let totalAdPlays = 0;
               let totalAdPlayTime = 0;
               let totalQRScans = 0;
 
-              // Process adPerformance for current day
-              if (device.adPerformance && device.adPerformance.length > 0) {
-                device.adPerformance.forEach(adPerf => {
-                  // ✅ FIX: Filter by userId AND check if adId belongs to user's ads
-                  const belongsToUser = adPerf.userId === userId.toString() || (adPerf.adId && userAdIds.includes(adPerf.adId));
-                  const matchesFilter = !adId || adPerf.adId === adId || adPerf.adId.toString() === adId;
-                  
-                  if (belongsToUser && matchesFilter) {
-                    totalAdPlays += adPerf.playCount || 0;
-                    totalAdPlayTime += adPerf.totalViewTime || 0;
+              // Process adPlaybacks for current day (match getDailyStatsFromHistory - count each playback as 1)
+              if (device.adPlaybacks && device.adPlaybacks.length > 0) {
+                device.adPlaybacks.forEach(playback => {
+                  const isMasterPlayback = playback.isMaster === true || playback.isMaster === undefined;
+                  const playbackAdId = playback.adId?.toString();
+                  const belongsToUser = playbackAdId && userAdIds.includes(playbackAdId);
+                  const matchesFilter = !adId || playbackAdId === adId || playbackAdId === adId.toString();
+                  if (isMasterPlayback && belongsToUser && matchesFilter) {
+                    totalAdPlays += 1;
+                    totalAdPlayTime += playback.viewTime || 0;
                   }
                 });
               }
