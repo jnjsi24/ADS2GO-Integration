@@ -64,9 +64,22 @@ const formatNumber = (num: number): string => {
 };
 
 /**
- * Format date to readable format
+ * Format date to readable format (full)
  */
 const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+/**
+ * Format date to short format (for mobile)
+ */
+const formatDateShort = (dateString: string): string => {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -153,35 +166,35 @@ const AdRow: React.FC<AdRowProps> = React.memo(({ ad, isExpanded, onToggle, onVi
       {/* Main Row */}
       <tr
         onClick={() => onToggle(ad.adId)}
-        className="hover:bg-blue-50 transition-colors cursor-pointer group"
+        className="hover:bg-gray-100 transition-colors cursor-pointer group"
       >
-        <td className="px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className={`p-1 rounded transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-              <ChevronDown className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+        <td className="px-4 sm:px-8 lg:px-6 py-3 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={`p-1 rounded transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
+              <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-[#3674B5]" />
             </div>
-            <div>
-              <div className="font-medium text-gray-900 group-hover:text-blue-600">
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-sm sm:text-base text-gray-900 group-hover:text-[#3674B5] truncate">
                 {ad.adTitle || 'Untitled Ad'}
               </div>
-              <div className="text-sm text-gray-500">
-                {ad.totalDevices} {ad.totalDevices === 1 ? 'device' : 'devices'} • Click to view daily stats
+              <div className="text-xs sm:text-sm text-gray-500">
+                {ad.totalDevices} {ad.totalDevices === 1 ? 'device' : 'devices'} • View daily stats
               </div>
             </div>
           </div>
         </td>
-        <td className="px-6 py-4 text-center">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
+        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+          <span className="inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold">
             {formatNumber(displayTotals.plays)}
           </span>
         </td>
-        <td className="px-6 py-4 text-center">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+          <span className="inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold">
             {formatAirtime(displayTotals.time)}
           </span>
         </td>
-        <td className="px-6 py-4 text-center">
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
+        <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+          <span className="inline-flex items-center px-2 sm:px-3 py-1 text-xs sm:text-sm font-semibold">
             {formatNumber(displayTotals.qr)}
           </span>
         </td>
@@ -192,63 +205,60 @@ const AdRow: React.FC<AdRowProps> = React.memo(({ ad, isExpanded, onToggle, onVi
         <tr>
           <td colSpan={4} className="px-0 py-0">
             <div className="bg-gray-50 border-t border-b border-gray-200">
-              <div className="px-6 py-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-600" />
-                    <h3 className="font-semibold text-gray-700">Daily Performance</h3>
-                  </div>
+              <div className="px-6 sm:px-6 py-4 sm:py-4">
+                <div className="flex justify-between gap-2 sm:gap-4 mb-4 flex-wrap">
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-700">Daily Performance</h3>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onViewChart(ad);
                     }}
-                    className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    className="flex justify-end px-3 sm:px-4 py-1 text-xs sm:text-sm bg-[#3674B5] text-white rounded-md hover:bg-[#2a5a94] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg flex-shrink-0"
                   >
-                    <LineChart className="w-4 h-4 mr-2" />
                     View Chart
                   </button>
                 </div>
 
                 {isLoadingDaily ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                    <span className="ml-2 text-gray-500">Loading daily stats...</span>
+                  <div className="flex items-center justify-center py-6 sm:py-8">
+                    <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 animate-spin" />
+                    <span className="ml-2 text-xs sm:text-sm text-gray-500">Loading daily stats...</span>
                   </div>
                 ) : !dailyStats || dailyStats.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Calendar className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    No daily data available for this ad
+                  <div className="text-center py-6 sm:py-8 text-gray-500">
+                    <Calendar className="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-xs sm:text-sm">No daily data available for this ad</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                    <table className="w-full min-w-[500px]">
                       <thead>
                         <tr className="text-xs text-gray-500 uppercase">
-                          <th className="px-4 py-2 text-left font-medium">Date</th>
-                          <th className="px-4 py-2 text-center font-medium">Ads Played</th>
-                          <th className="px-4 py-2 text-center font-medium">Airtime</th>
-                          <th className="px-4 py-2 text-center font-medium">QR Scans</th>
+                          <th className="px-4 sm:px-8 lg:px-10 py-2 text-left font-medium">Date</th>
+                          <th className="px-3 sm:px-5.5 py-2 text-center font-medium">Ads Played</th>
+                          <th className="px-3 sm:px-5.5 py-2 text-center font-medium">Airtime</th>
+                          <th className="px-3 sm:px-5.5 py-2 text-center font-medium">QR Scans</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="">
                         {dailyStats.map((day, idx) => (
-                          <tr key={day.date || idx} className="bg-white hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                              {formatDate(day.date)}
+                          <tr key={day.date || idx} className="mb-2 hover:bg-gray-100 group cursor-pointer">
+                            <td className="px-4 sm:px-8 lg:px-6 py-2 sm:py-3 text-xs sm:text-sm text-gray-900 group-hover:text-[#3674B5] font-medium">
+                              <span className="sm:hidden">{formatDateShort(day.date)}</span>
+                              <span className="hidden sm:inline">{formatDate(day.date)}</span>
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-sm text-blue-700 font-medium">
+                            <td className="px-3 sm:px-6 py-2 sm:py-3 text-center">
+                              <span className="text-xs sm:text-sm font-medium text-gray-900 group-hover:text-[#3674B5]">
                                 {formatNumber(day.adsPlayed)}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-sm text-green-700 font-medium">
+                            <td className="px-3 sm:px-6 py-2 sm:py-3 text-center">
+                              <span className="text-xs sm:text-sm font-medium text-gray-900 group-hover:text-[#3674B5]">
                                 {formatAirtime(day.displayTime)}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-sm text-purple-700 font-medium">
+                            <td className="px-3 sm:px-6 py-2 sm:py-3 text-center">
+                              <span className="text-xs sm:text-sm font-medium text-gray-900 group-hover:text-[#3674B5]">
                                 {formatNumber(day.qrScans)}
                               </span>
                             </td>
@@ -355,80 +365,88 @@ const DetailedAnalytics: React.FC = () => {
   const adPerformance: AdPerformance[] = analytics?.adPerformance || [];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-4">
+    <div className="relative min-h-screen overflow-hidden pl-0 lg:pl-64">
+      {/* Background Image */}
+      <div
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-sm brightness-90"
+        style={{ backgroundImage: "url('/image/bg.jpg')" }}
+      />
+      <div className="fixed inset-0 bg-white/40 backdrop-blur-xl" />
+      {/* Content */}
+      <div className="relative z-10 min-h-screen bg-transparent px-4 sm:px-5 lg:px-6 py-4 sm:py-6 lg:py-10">
+        {/* Header */}
+        <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
           <Link
             to="/dashboard"
-            className="inline-flex items-center text-blue-600 hover:text-blue-700"
+            className="inline-flex items-center text-black text-sm sm:text-base pt-10 sm:pt-3"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Dashboard
-          </Link>
-          
-          <button
-            onClick={handleRefresh}
-            disabled={loading || isRefreshing}
-            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          </Link>          
         </div>
         
-        <h1 className="text-3xl font-bold text-gray-900">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
           Detailed Analytics
         </h1>
-        <p className="text-gray-600 mt-2">
+        <p className="text-sm sm:text-base text-gray-600 mt-2">
           View comprehensive analytics for your ad campaigns
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* Total Ads Played */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white shadow-sm border border-gray-200 p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Ads Played</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {loading ? '...' : formatNumber(summary.totalAdsPlayed)}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Total Ads Played</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : formatNumber(summary.totalAdsPlayed)} <span className='text-base sm:text-lg font-medium text-black'>Plays</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Play className="w-6 h-6 text-blue-600" />
+              <div
+                className="p-2 sm:p-2 ml-2 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
+                border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+              >
+                <Play className="w-5 h-5 sm:w-7 sm:h-7 text-blue-700 drop-shadow-sm" />
               </div>
             </div>
           </div>
 
           {/* Total Airtime */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white shadow-sm border border-gray-200 p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Airtime</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {loading ? '...' : formatAirtime(summary.totalDisplayTime)}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Total Airtime</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : formatAirtime(summary.totalDisplayTime)} 
                 </p>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-green-600" />
+              <div
+                className="p-2 sm:p-2 ml-2 flex-shrink-0 rounded-full bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+                border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+              >
+                <Clock className="w-5 h-5 sm:w-7 sm:h-7 text-green-700 drop-shadow-sm" />
               </div>
             </div>
           </div>
 
           {/* Total QR Scans */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-white shadow-sm border border-gray-200 p-4 sm:p-6 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total QR Scans</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {loading ? '...' : formatNumber(summary.totalQRScans)}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-500">Total QR Scans</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">
+                  {loading ? '...' : formatNumber(summary.totalQRScans)} <span className='text-base sm:text-lg font-medium text-black'>Scans</span>
                 </p>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <QrCode className="w-6 h-6 text-purple-600" />
+              <div
+                className="p-2 sm:p-2 ml-2 flex-shrink-0 rounded-full bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 
+                border border-white/30 backdrop-blur-md shadow-md flex items-center justify-center"
+              >
+                <QrCode className="w-5 h-5 sm:w-7 sm:h-7 text-purple-700 drop-shadow-sm" />
               </div>
             </div>
           </div>
@@ -437,76 +455,75 @@ const DetailedAnalytics: React.FC = () => {
 
       {/* Ads Performance Table */}
       <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-gray-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Ad Performance</h2>
-                <span className="text-sm text-gray-500 ml-2">
-                  ({adPerformance.length} {adPerformance.length === 1 ? 'ad' : 'ads'})
-                </span>
-              </div>
-              {adPerformance.length > 0 && (
-                <span className="text-xs text-gray-400">
-                  Click on an ad to view daily breakdown
-                </span>
-              )}
+        <div className="overflow-hidden">
+          <div className="py-3 sm:py-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Ad Performance</h2>
+              <span className="text-xs sm:text-sm text-gray-900">
+                {adPerformance.length} {adPerformance.length === 1 ? 'advertiserment' : 'advertiserments'}
+              </span>
+              <button
+                onClick={handleRefresh}
+                disabled={loading || isRefreshing}
+                className="flex items-center px-3 sm:px-4 py-1 text-xs sm:text-sm bg-[#3674B5] text-white rounded-md hover:bg-[#2a5a94] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg ml-auto"
+                >
+                <RefreshCw className={`w-3 h-3 sm:w-4 sm:h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
           </div>
 
           {loading && adPerformance.length === 0 ? (
-            <div className="p-12 text-center">
+            <div className="p-6 sm:p-12 text-center">
               <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-gray-500">Loading analytics...</p>
+              <p className="text-sm sm:text-base text-gray-500">Loading analytics...</p>
             </div>
           ) : error ? (
-            <div className="p-12 text-center">
-              <div className="text-red-500 mb-2">Failed to load analytics</div>
+            <div className="p-6 sm:p-12 text-center">
+              <div className="text-sm sm:text-base text-red-500 mb-2">Failed to load analytics</div>
               <button
                 onClick={handleRefresh}
-                className="text-blue-600 hover:text-blue-700"
+                className="text-sm sm:text-base text-blue-600 hover:text-blue-700"
               >
                 Try again
               </button>
             </div>
           ) : adPerformance.length === 0 ? (
-            <div className="p-12 text-center">
-              <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No ad performance data yet</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="p-6 sm:p-12 text-center">
+              <TrendingUp className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-sm sm:text-base text-gray-500">No ad performance data yet</p>
+              <p className="text-xs sm:text-sm text-gray-400 mt-1">
                 Your ads analytics will appear here once they start playing
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ad Title
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center justify-center gap-1">
-                        <Play className="w-4 h-4" />
-                        Ads Played
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center justify-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        Airtime
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <div className="flex items-center justify-center gap-1">
-                        <QrCode className="w-4 h-4" />
-                        QR Scans
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
+            <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="inline-block min-w-full align-middle">
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th className="px-4 sm:px-8 lg:px-16 py-2 sm:py-3 text-left text-xs font-medium text-gray-800 uppercase tracking-wider">
+                        Ad Title
+                      </th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-800 uppercase tracking-wider">
+                        <div className="flex items-center justify-center gap-1">
+                          Ads Played
+                        </div>
+                      </th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-800 uppercase tracking-wider">
+                        <div className="flex items-center justify-center gap-1">
+                          Airtime
+                        </div>
+                      </th>
+                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-800 uppercase tracking-wider">
+                        <div className="flex items-center justify-center gap-1">
+                          QR Scans
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                <tbody className="bg-white/80 divide-y divide-gray-200">
                   {adPerformance.map((ad) => (
                     <AdRow
                       key={ad.adId}
@@ -519,7 +536,8 @@ const DetailedAnalytics: React.FC = () => {
                     />
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -530,7 +548,7 @@ const DetailedAnalytics: React.FC = () => {
         <Suspense
           fallback={
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-              <div className="bg-white rounded-xl shadow-xl px-6 py-4 flex items-center gap-3">
+              <div className="bg-white rounded-md shadow-xl px-6 py-4 flex items-center gap-3">
                 <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
                 <span className="text-gray-700">Loading chart...</span>
               </div>
@@ -544,6 +562,7 @@ const DetailedAnalytics: React.FC = () => {
           />
         </Suspense>
       )}
+      </div>
     </div>
   );
 };
