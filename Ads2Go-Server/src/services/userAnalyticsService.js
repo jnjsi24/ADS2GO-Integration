@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const UserAnalytics = require('../models/userAnalytics');
 const logger = require('../utils/logger');
-const { getPhilippinesMidnight } = require('../utils/dateUtils');
+const { getPhilippinesMidnight, getPhilippinesDateString } = require('../utils/dateUtils');
 
 // ✅ Helper to check if verbose logging is enabled
 const isVerbose = () => process.env.VERBOSE_LOGS === 'true';
@@ -6535,15 +6535,11 @@ class UserAnalyticsService {
       }
 
       // Get current status from DeviceTracking (Philippines "today")
-      const today = getPhilippinesMidnight();
-      const tomorrow = getPhilippinesMidnight(new Date(today.getTime() + 24 * 60 * 60 * 1000));
-      
+      // DeviceTracking.date is stored as string YYYY-MM-DD - must query by string, not Date
+      const todayStr = getPhilippinesDateString();
       const currentData = await DeviceTracking.find({
         materialId: { $in: materialIds },
-        date: {
-          $gte: today,
-          $lt: tomorrow
-        }
+        date: todayStr
       });
 
       // ✅ FIX: Get all material documents once to avoid repeated queries and fix ObjectId comparison

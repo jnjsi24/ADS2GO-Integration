@@ -1,6 +1,7 @@
 interface PlaybackUpdate {
   type: 'adPlaybackUpdate' | 'deviceUpdate' | 'deviceList' | 'locationUpdate';
   deviceId: string;
+  materialId?: string;
   adId?: string;
   adTitle?: string;
   state?: 'playing' | 'paused' | 'buffering' | 'loading' | 'ended';
@@ -214,18 +215,20 @@ class PlaybackWebSocketService {
           } else if (message.type === 'adPlaybackUpdate') {
             console.log('🎬 [Admin WebSocket] Received playback update:', message);
             
-            // Forward playback update to callbacks
+            // Forward playback update to callbacks (include gpsData and materialId for map/location)
             this.callbacks.forEach(callback => {
               try {
                 callback({
                   type: 'adPlaybackUpdate',
                   deviceId: message.deviceId,
+                  materialId: message.materialId,
                   adId: message.adId,
                   adTitle: message.adTitle,
                   state: message.state,
                   currentTime: message.currentTime,
                   duration: message.duration,
-                  progress: message.progress
+                  progress: message.progress,
+                  gpsData: message.gpsData
                 });
               } catch (error) {
                 console.error('Error in playback update callback:', error);

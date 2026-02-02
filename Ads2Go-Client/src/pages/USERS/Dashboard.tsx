@@ -1372,7 +1372,10 @@ const Dashboard = () => {
                 </div>
               </div>
               <Suspense fallback={<ChartLoader />}>
-                <AnalyticsChart data={periodAnalyticsData?.getUserAnalytics?.dailyStats || []} />
+                <AnalyticsChart
+                  data={periodAnalyticsData?.getUserAnalytics?.dailyStats || []}
+                  summary={periodAnalyticsData?.getUserAnalytics?.summary}
+                />
               </Suspense>
               {/* Currently Playing Ads - Real-time from WebSocket */}
               <div className="mt-6 mb-4">
