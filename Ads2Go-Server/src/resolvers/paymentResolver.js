@@ -75,11 +75,26 @@ async function triggerAdDeployment(ad) {
       return;
     }
 
+    // ✅ NEW: Sort materials by ad count (lowest first) with randomization
+    const { sortMaterialsByAdCount } = require('../utils/materialDeploymentSorter');
+    const sortedMaterials = await sortMaterialsByAdCount(targetMaterials);
+    
+    // ✅ CRITICAL: Verify sorting worked and use sorted array
+    let materialsToDeploy;
+    if (!sortedMaterials || sortedMaterials.length !== targetMaterials.length) {
+      console.error(`⚠️ Sorting failed or returned wrong number of materials. Using original order.`);
+      // Fallback to original order if sorting fails
+      materialsToDeploy = targetMaterials;
+    } else {
+      materialsToDeploy = sortedMaterials;
+      console.log(`🔄 Deploying Ad ${ad._id} to ${materialsToDeploy.length} materials (sorted by ad count, lowest first)`);
+    }
+
     // Deploy to each target device
     let deploymentSuccess = true;
     const deploymentResults = [];
     
-    for (const material of targetMaterials) {
+    for (const material of materialsToDeploy) {
       // ✅ Double-check material is not archived
       if (material.isArchived) {
         console.error(`❌ Cannot deploy Ad ${ad._id} to ${material.materialId}: Material is archived`);
@@ -163,7 +178,7 @@ async function triggerAdDeployment(ad) {
     if (deploymentSuccess) {
       // Clean up reservation from MaterialAvailability since ad is now deployed
       const MaterialAvailability = require('../models/MaterialAvailability');
-      for (const material of targetMaterials) {
+      for (const material of materialsToDeploy) {
         try {
           const availability = await MaterialAvailability.findOne({ materialId: material._id });
           if (availability) {
@@ -184,7 +199,7 @@ async function triggerAdDeployment(ad) {
         deploymentStatus: 'DEPLOYED',
         lastDeploymentAttempt: new Date()
       });
-      console.log(`✅ Multi-device Ad ${ad._id} deployed successfully to ${deploymentResults.filter(r => r.success).length}/${targetMaterials.length} devices`);
+      console.log(`✅ Multi-device Ad ${ad._id} deployed successfully to ${deploymentResults.filter(r => r.success).length}/${materialsToDeploy.length} devices`);
     } else {
       await Ad.findByIdAndUpdate(ad._id, { 
         deploymentStatus: 'FAILED',

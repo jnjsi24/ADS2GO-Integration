@@ -91,21 +91,12 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       availableMaterials.push(material);
     }
 
-    // Sort available materials by fill-in-order strategy (001, 002, 003...)
-    const sortedMaterials = availableMaterials.sort((a, b) => {
-      // Sort by material ID number (ascending) - fill materials in order 001, 002, 003, 004, 005, 006...
-      const getMaterialNumber = (materialId) => {
-        const match = materialId.match(/-(\d+)$/);
-        return match ? parseInt(match[1], 10) : 999;
-      };
-      
-      const numberA = getMaterialNumber(a.materialId);
-      const numberB = getMaterialNumber(b.materialId);
-      
-      return numberA - numberB;
-    });
+    // ✅ NEW: Sort available materials by ad count (lowest first) with randomization
+    // This prioritizes materials with fewer ads deployed
+    const { sortMaterialsByAdCount } = require('./materialDeploymentSorter');
+    const sortedMaterials = await sortMaterialsByAdCount(availableMaterials);
 
-    console.log(`📊 Materials sorted by fill-in-order strategy (001, 002, 003...):`);
+    console.log(`📊 Materials sorted by ad count (lowest first, randomized within groups):`);
     sortedMaterials.forEach((material, index) => {
       const avail = availabilityMap.get(material._id.toString());
       const slots = avail ? avail.availableSlots : 5;

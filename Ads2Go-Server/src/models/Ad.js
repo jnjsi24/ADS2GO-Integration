@@ -309,6 +309,21 @@ AdSchema.post('save', async function (doc) {
         return;
       }
 
+      // ✅ NEW: Sort materials by ad count (lowest first) with randomization
+      const { sortMaterialsByAdCount } = require('../utils/materialDeploymentSorter');
+      const sortedMaterials = await sortMaterialsByAdCount(targetMaterials);
+      
+      // ✅ CRITICAL: Verify sorting worked and use sorted array
+      let materialsToDeploy;
+      if (!sortedMaterials || sortedMaterials.length !== targetMaterials.length) {
+        console.error(`⚠️ Sorting failed or returned wrong number of materials. Using original order.`);
+        // Fallback to original order if sorting fails
+        materialsToDeploy = targetMaterials;
+      } else {
+        materialsToDeploy = sortedMaterials;
+        console.log(`🔄 Deploying Ad ${doc._id} to ${materialsToDeploy.length} materials (sorted by ad count, lowest first)`);
+      }
+
       // Deploy to each target device
       let deploymentSuccess = true;
       const deploymentResults = [];
@@ -316,7 +331,7 @@ AdSchema.post('save', async function (doc) {
       // ✅ ENHANCED: Validate device availability before deployment
       const { validateMaterialHasDevice } = require('../utils/materialDeviceValidator');
       
-      for (const material of targetMaterials) {
+      for (const material of materialsToDeploy) {
         if (!material.driverId) {
           console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: No driver assigned`);
           deploymentSuccess = false;
@@ -413,7 +428,7 @@ AdSchema.post('save', async function (doc) {
       if (deploymentSuccess) {
         // Clean up reservation from MaterialAvailability since ad is now deployed
         const MaterialAvailability = require('./MaterialAvailability');
-        for (const material of targetMaterials) {
+        for (const material of materialsToDeploy) {
           try {
             const availability = await MaterialAvailability.findOne({ materialId: material._id });
             if (availability) {
@@ -434,7 +449,7 @@ AdSchema.post('save', async function (doc) {
           deploymentStatus: 'DEPLOYED',
           lastDeploymentAttempt: new Date()
         });
-        console.log(`✅ Multi-device Ad ${doc._id} deployed successfully to ${deploymentResults.filter(r => r.success).length}/${targetMaterials.length} devices`);
+        console.log(`✅ Multi-device Ad ${doc._id} deployed successfully to ${deploymentResults.filter(r => r.success).length}/${materialsToDeploy.length} devices`);
       } else {
         await Ad.findByIdAndUpdate(doc._id, { 
           deploymentStatus: 'FAILED',
