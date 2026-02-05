@@ -762,16 +762,7 @@ const UserMaterialsMap: React.FC<UserMaterialsMapProps> = ({
                   </div>
                 )}
 
-                <div className="mt-3 pt-2 border-t border-gray-200 grid grid-cols-2 gap-2 text-xs">
-                  <div className="text-center">
-                    <p className="font-semibold text-gray-900">{material.totalAdPlays || 0}</p>
-                    <p className="text-gray-600">Ad Plays</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-semibold text-gray-900">{material.totalQRScans || 0}</p>
-                    <p className="text-gray-600">QR Scans</p>
-                  </div>
-                </div>
+                
               </div>
             </Popup>
           </Marker>
