@@ -1778,39 +1778,6 @@ const Dashboard: React.FC = () => {
             </View>
           </View>
 
-          {/* ✅ Show ignored values info */}
-          {analytics && (selectedMetric === 'distance' || selectedMetric === 'hours') && (
-            <View style={styles.ignoredInfo}>
-              {selectedMetric === 'distance' && (() => {
-                const rawDistance = isSelectedDateToday() 
-                  ? (analytics.totalDistance || 0)
-                  : (analytics.dailyData?.aggregatedMetrics?.totalDistance || 0);
-                const ignoredMeters = getIgnoredMeters(rawDistance);
-                const billableDistance = calculateBillableDistance(rawDistance);
-                return ignoredMeters > 0 ? (
-                  <Text style={styles.ignoredText}>
-                    {billableDistance.toFixed(3)} km
-                  </Text>
-                ) : (
-                  <Text style={styles.ignoredText}>
-                    {billableDistance.toFixed(3)} km
-                  </Text>
-                );
-              })()}
-              {selectedMetric === 'hours' && (() => {
-                const rawHours = isSelectedDateToday() 
-                  ? (analytics.totalHours || 0)
-                  : (analytics.dailyData?.aggregatedMetrics?.totalHours || 0);
-                const ignoredSeconds = getIgnoredSeconds(rawHours);
-                const billableMinutes = Math.floor(rawHours * 60);
-                return ignoredSeconds > 0 ? (
-                  <Text style={styles.ignoredText}>
-                    {billableMinutes} min
-                  </Text>
-                ) : null;
-              })()}
-            </View>
-          )}
           
           {selectedDataPoint && !isSelectedDateToday() && (
             <TouchableOpacity 
@@ -2546,23 +2513,6 @@ const styles = StyleSheet.create({
     color: '#059669',
     marginTop: 6,
     letterSpacing: 1,
-  },
-  ignoredInfo: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    width: '100%',
-  },
-  ignoredText: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  gaugePeriod: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#9ca3af',
   },
   
   chartContainer: {

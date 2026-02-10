@@ -58,7 +58,9 @@ const SadminDriverSalary: React.FC = () => {
       setErrorMsg('');
     },
     onError: (error) => {
-      setErrorMsg(error.message || 'Failed to create driver salary pricing');
+      if (isModalOpen) {
+        setErrorMsg(error.message || 'Failed to create driver salary pricing');
+      }
     }
   });
 
@@ -70,7 +72,9 @@ const SadminDriverSalary: React.FC = () => {
       setErrorMsg('');
     },
     onError: (error) => {
-      setErrorMsg(error.message || 'Failed to update driver salary pricing');
+      if (isModalOpen) {
+        setErrorMsg(error.message || 'Failed to update driver salary pricing');
+      }
     }
   });
 
@@ -202,11 +206,13 @@ const SadminDriverSalary: React.FC = () => {
   // Event handlers
   const handleCreatePricing = () => {
     resetForm();
+    setErrorMsg('');  
     setIsModalOpen(true);
   };
 
   const handleEditPricing = (pricing: DriverSalaryPricing) => {
     setEditingPricing(pricing);
+    setErrorMsg('');
     setIsModalOpen(true);
   };
 
@@ -259,6 +265,21 @@ const SadminDriverSalary: React.FC = () => {
     setErrorMsg('');
   };
 
+  // Helper to check for duplicate configurations
+  const checkForDuplicateConfig = (
+    vehicleType: string,
+    materialType: string,
+    excludeId?: string
+  ): boolean => {
+    return pricingList.some((pricing) => {
+      // Skip if we're excluding this ID (for updates)
+      if (excludeId && pricing.id === excludeId) return false;
+      
+      // Check if vehicleType and materialType match
+      return pricing.vehicleType === vehicleType && pricing.materialType === materialType;
+    });
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -273,6 +294,14 @@ const SadminDriverSalary: React.FC = () => {
     
     if (distanceRate < 0) errors.distanceRate = 'Distance rate must be non-negative';
     if (hoursRate < 0) errors.hoursRate = 'Hours rate must be non-negative';
+
+    if (!editingPricing) {
+      const isDuplicate = checkForDuplicateConfig(formData.vehicleType, formData.materialType);
+      if (isDuplicate) {
+        setErrorMsg(`A configuration with Vehicle Type "${formData.vehicleType}" and Material Type "${formData.materialType}" already exists. Please use a different combination.`);
+        return;
+      }
+    }
   
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -280,6 +309,7 @@ const SadminDriverSalary: React.FC = () => {
     }
   
     setValidationErrors({});
+    setErrorMsg('');
   
     if (editingPricing) {
       const updateInput: UpdateDriverSalaryPricingInput = {
@@ -383,7 +413,7 @@ const SadminDriverSalary: React.FC = () => {
         </div>
 
         {/* Error Message */}
-        {errorMsg && (
+        {errorMsg && !isModalOpen && (
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-50 border border-red-200 text-red-700 text-sm sm:text-base rounded-xl flex items-center gap-2">
             <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></div>
             <span>{errorMsg}</span>

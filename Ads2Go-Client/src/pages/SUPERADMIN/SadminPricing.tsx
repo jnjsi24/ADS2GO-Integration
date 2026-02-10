@@ -286,6 +286,16 @@ const SadminPricing: React.FC = () => {
     setErrorMsg('');
   };
 
+  const checkForDuplicate = (materialType: string, vehicleType: string, excludeId?: string): boolean => {
+    return configs.some(config => {
+      // Skip if we're excluding this ID (for updates)
+      if (excludeId && config.id === excludeId) return false;
+      
+      return config.materialType === materialType && 
+             config.vehicleType === vehicleType;
+    });
+  };
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -295,6 +305,31 @@ const SadminPricing: React.FC = () => {
     if (!formData.category) errors.category = 'Category is required';
     if (!formData.basePrice || formData.basePrice <= 0) errors.basePrice = 'Base Price must be greater than 0';
   
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    // Uniqueness validation (only for new configurations)
+    if (!editingConfig) {
+      const isDuplicate = checkForDuplicate(formData.materialType, formData.vehicleType);
+      if (isDuplicate) {
+        errors.materialType = `A configuration with ${formData.materialType}/${formData.vehicleType} already exists`;
+        errors.vehicleType = `A configuration with ${formData.materialType}/${formData.vehicleType} already exists`;
+      }
+    }
+    
+    // For updates, check if user is trying to change material/vehicle type to an existing combination
+    if (editingConfig && 
+        (formData.materialType !== editingConfig.materialType || 
+        formData.vehicleType !== editingConfig.vehicleType)) {
+      const isDuplicate = checkForDuplicate(formData.materialType, formData.vehicleType, editingConfig.id);
+      if (isDuplicate) {
+        errors.materialType = `A configuration with ${formData.materialType}/${formData.vehicleType} already exists`;
+        errors.vehicleType = `A configuration with ${formData.materialType}/${formData.vehicleType} already exists`;
+      }
+    }
+    
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
       return;
@@ -672,6 +707,13 @@ const SadminPricing: React.FC = () => {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {formData.vehicleType && formData.materialType && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    Note: Each Material/Vehicle combination must be unique across all configurations (Active and Inactive).
+                  </div>
+                )}
+                
                 {validationErrors.materialType && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.materialType}</p>
                 )}
@@ -726,7 +768,7 @@ const SadminPricing: React.FC = () => {
               </div>
 
               {/* Ad Length Multipliers - Display Only (Hardcoded) */}
-              <div className="mt-4 sm:mt-6 border-t pt-4 sm:pt-6">
+              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Ad Length Multipliers</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3">
                   These multipliers are automatically calculated based on ad length and cannot be changed.
@@ -751,7 +793,7 @@ const SadminPricing: React.FC = () => {
               </div>
 
               {/* Duration Discount Multipliers */}
-              <div className="mt-4 sm:mt-6 border-t pt-4 sm:pt-6">
+              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6">
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Duration Discount Multipliers</h3>
                 <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
                   These multipliers provide discounts for longer durations. 1 month is the base (1.0 = no discount).
