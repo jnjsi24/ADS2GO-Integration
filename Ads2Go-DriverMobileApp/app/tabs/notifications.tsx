@@ -339,6 +339,8 @@ export default function NotificationsScreen() {
         return 'trophy-outline';
       case 'DAILY_COMPLIANCE_MISSED':
         return 'warning-outline';
+      case 'SALARY_RATE_CHANGE':
+        return 'cash-outline';
       case 'MONTHLY_PHOTO_DUE_REMINDER':
         return 'calendar-outline';
       case 'MONTHLY_PHOTO_APPROVED':

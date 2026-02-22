@@ -108,6 +108,10 @@ class NotificationService {
     return await DriverNotificationService.sendDailyComplianceMissedNotification(driverId, materialId, hours, materialName);
   }
 
+  static async sendSalaryRateChangeNotificationToDriver(driverId, newDistanceRate, newHoursRate, effectiveAt) {
+    return await DriverNotificationService.sendSalaryRateChangeNotification(driverId, newDistanceRate, newHoursRate, effectiveAt);
+  }
+
   // ==================== ADMIN NOTIFICATIONS ====================
 
   static async sendNewAdSubmissionNotification(adId) {

@@ -29,6 +29,11 @@ const DriverSalaryPricingSchema = new mongoose.Schema({
     required: [true, 'Hours rate is required'],
     min: [0, 'Hours rate must be non-negative']
   },
+
+  // 24-hour delay: old rate used for salary computation until this time (then new rate applies)
+  previousDistanceRate: { type: Number, default: null },
+  previousHoursRate: { type: Number, default: null },
+  previousRateEffectiveUntil: { type: Date, default: null },
   
   // Metadata
   isActive: {

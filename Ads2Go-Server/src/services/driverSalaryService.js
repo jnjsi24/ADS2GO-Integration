@@ -30,22 +30,72 @@ class DriverSalaryService {
       }
 
       // Get pricing configuration for this driver's setup
-      const pricingConfig = await DriverSalaryPricing.findOne({
+      const pricing = await DriverSalaryPricing.findOne({
         vehicleType: driver.vehicleType,
         category: material.category,
         materialType: material.materialType,
         isActive: true
       });
 
-      if (!pricingConfig) {
+      if (!pricing) {
         throw new Error(`No pricing configuration found for ${material.materialType} (${material.category}) on ${driver.vehicleType}`);
       }
 
-      // Get tracking data for the period
-      const trackingData = await this.getDriverTrackingData(driverId, material.materialId, startDate, endDate);
+      const oldRates = pricing.previousDistanceRate != null && pricing.previousHoursRate != null
+        ? { distanceRate: pricing.previousDistanceRate, hoursRate: pricing.previousHoursRate }
+        : null;
+      const newRates = { distanceRate: pricing.distanceRate, hoursRate: pricing.hoursRate };
+      const effectiveDate = pricing.previousRateEffectiveUntil
+        ? (() => { const d = new Date(pricing.previousRateEffectiveUntil); d.setHours(0, 0, 0, 0); return d; })()
+        : null;
 
-      // Calculate salary using the formula
-      const calculations = this.performSalaryCalculation(trackingData, pricingConfig);
+      // Pro-rate by day: days before (rate change + 24h) use old rate; on/after that day use new rate
+      const shouldProRate = effectiveDate && oldRates;
+      let trackingData;
+      let calculations;
+
+      if (shouldProRate) {
+        const withDaily = await this.getDriverTrackingDataByDay(driverId, material.materialId, startDate, endDate);
+        trackingData = {
+          totalDistance: withDaily.totalDistance,
+          totalHours: withDaily.totalHours,
+          daysWorked: withDaily.daysWorked
+        };
+        let distanceComputation = 0;
+        let hoursComputation = 0;
+        (withDaily.dailyData || []).forEach(day => {
+          const dayStart = new Date(day.date);
+          dayStart.setHours(0, 0, 0, 0);
+          const rates = dayStart < effectiveDate ? oldRates : newRates;
+          distanceComputation += (day.totalDistance || 0) * rates.distanceRate;
+          hoursComputation += (day.totalHours || 0) * rates.hoursRate;
+        });
+        const totalSalary = distanceComputation + hoursComputation;
+        calculations = {
+          distanceComputation: Math.round(distanceComputation * 100) / 100,
+          hoursComputation: Math.round(hoursComputation * 100) / 100,
+          totalSalary: Math.round(totalSalary * 100) / 100
+        };
+      } else {
+        trackingData = await this.getDriverTrackingData(driverId, material.materialId, startDate, endDate);
+        const usePreviousRate = pricing.previousRateEffectiveUntil && new Date() < pricing.previousRateEffectiveUntil && oldRates;
+        const effectiveRates = usePreviousRate ? oldRates : newRates;
+        const pricingConfig = {
+          vehicleType: driver.vehicleType,
+          category: material.category,
+          materialType: material.materialType,
+          ...effectiveRates
+        };
+        calculations = this.performSalaryCalculation(trackingData, pricingConfig);
+      }
+
+      const pricingConfig = {
+        vehicleType: driver.vehicleType,
+        category: material.category,
+        materialType: material.materialType,
+        distanceRate: newRates.distanceRate,
+        hoursRate: newRates.hoursRate
+      };
 
       return {
         driverId,
@@ -74,10 +124,18 @@ class DriverSalaryService {
   }
 
   /**
+   * Get driver tracking data with per-day breakdown (for pro-rated salary by effective date).
+   */
+  static async getDriverTrackingDataByDay(driverId, materialId, startDate, endDate) {
+    return this.getDriverTrackingData(driverId, materialId, startDate, endDate, { returnDaily: true });
+  }
+
+  /**
    * Get driver tracking data for a specific period from devicedatahistoryv2
    * ✅ FIXED: Now filters by driver assignment period to prevent data leakage
+   * @param {Object} options - { returnDaily: true } to include dailyData for pro-rating
    */
-  static async getDriverTrackingData(driverId, materialId, startDate, endDate) {
+  static async getDriverTrackingData(driverId, materialId, startDate, endDate, options = {}) {
     try {
       // Get material ObjectId to query MaterialUsageHistory
       const material = await Material.findOne({ materialId: materialId });
@@ -202,45 +260,46 @@ class DriverSalaryService {
       let totalDistance = 0;
       let totalHours = 0;
       let daysWorked = 0;
+      const dailyData = options.returnDaily ? [] : null;
 
-      periodData.forEach(dailyData => {
-        const rawDistance = dailyData.totalDistanceTraveled || 0;
-        const rawHours = dailyData.totalHoursOnline || 0;
+      periodData.forEach(dailyDataEntry => {
+        const rawDistance = dailyDataEntry.totalDistanceTraveled || 0;
+        const rawHours = dailyDataEntry.totalHoursOnline || 0;
         
         // ✅ Apply billable flooring per day (1m precision for distance, complete minutes for time)
-        // Distance: Floor to nearest meter
         const distanceMeters = Math.floor(rawDistance * 1000);
         const billableDistance = distanceMeters / 1000;
-        
-        // Hours: Floor to complete minutes
         const totalMinutes = Math.floor(rawHours * 60);
         const billableHours = totalMinutes / 60;
         
-        // Sum floored values
         totalDistance += billableDistance;
         totalHours += billableHours;
-        
-        // Count days where there was some activity (distance > 0 or hours > 0)
-        if (rawDistance > 0 || rawHours > 0) {
-          daysWorked++;
+        if (rawDistance > 0 || rawHours > 0) daysWorked++;
+
+        if (dailyData) {
+          const dayDate = new Date(dailyDataEntry.date);
+          dayDate.setHours(0, 0, 0, 0);
+          dailyData.push({
+            date: dayDate,
+            totalDistance: billableDistance,
+            totalHours: billableHours
+          });
         }
       });
 
       console.log(`📊 [DriverSalaryService] Calculated totals - Distance: ${totalDistance}km, Hours: ${totalHours}h, Days: ${daysWorked}`);
 
-      // ✅ REMOVED: Don't use lifetime totals as fallback - they include data from all drivers
-      // This was causing the data leakage issue
-
-      // Calculate days worked (simplified - in reality you'd count actual working days)
       const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-      const maxDaysWorked = Math.min(daysDiff, 30); // Cap at 30 days as per formula
+      const maxDaysWorked = Math.min(daysDiff, 30);
       daysWorked = Math.min(daysWorked, maxDaysWorked);
 
-      return {
-        totalDistance: Math.round(totalDistance * 1000) / 1000, // Keep 3 decimal places for meter precision
-        totalHours: Math.round(totalHours * 10000) / 10000, // Keep precision for minute-level accuracy
+      const out = {
+        totalDistance: Math.round(totalDistance * 1000) / 1000,
+        totalHours: Math.round(totalHours * 10000) / 10000,
         daysWorked
       };
+      if (dailyData) out.dailyData = dailyData;
+      return out;
     } catch (error) {
       console.error('Error getting driver tracking data:', error);
       // Return zero values instead of throwing error to allow calculation creation

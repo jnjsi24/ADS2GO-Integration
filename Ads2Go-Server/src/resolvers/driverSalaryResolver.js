@@ -1,5 +1,6 @@
 const DriverSalaryPricing = require('../models/DriverSalaryPricing');
 const DriverSalaryCalculation = require('../models/DriverSalaryCalculation');
+const DriverSalaryService = require('../services/driverSalaryService');
 const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
@@ -700,11 +701,50 @@ const resolvers = {
         if (!pricing) {
           throw new Error('Driver salary pricing not found');
         }
-        
+
+        const isRateChange = (input.distanceRate !== undefined && input.distanceRate !== pricing.distanceRate) ||
+          (input.hoursRate !== undefined && input.hoursRate !== pricing.hoursRate);
+        if (isRateChange) {
+          const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          pricing.previousDistanceRate = pricing.distanceRate;
+          pricing.previousHoursRate = pricing.hoursRate;
+          pricing.previousRateEffectiveUntil = twentyFourHoursFromNow;
+        }
+
         Object.assign(pricing, input, { updatedBy: user.id });
         await pricing.save();
         await pricing.populate('createdBy', 'firstName lastName email');
         await pricing.populate('updatedBy', 'firstName lastName email');
+
+        if (isRateChange) {
+          const NotificationService = require('../services/notifications/NotificationService');
+          const twentyFourHoursFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          try {
+            const materials = await Material.find({
+              category: pricing.category,
+              materialType: pricing.materialType
+            }).select('_id');
+            const materialIds = materials.map(m => m._id);
+            const drivers = await Driver.find({
+              vehicleType: pricing.vehicleType,
+              materialId: { $in: materialIds },
+              accountStatus: 'ACTIVE'
+            }).select('_id');
+            for (const driver of drivers) {
+              await NotificationService.sendSalaryRateChangeNotificationToDriver(
+                driver._id,
+                pricing.distanceRate,
+                pricing.hoursRate,
+                twentyFourHoursFromNow
+              );
+            }
+            if (drivers.length > 0) {
+              console.log(`📢 Sent salary rate change notification to ${drivers.length} driver(s)`);
+            }
+          } catch (notifyErr) {
+            console.error('Error sending salary rate change notifications to drivers:', notifyErr);
+          }
+        }
         
         return {
           success: true,
@@ -1020,9 +1060,28 @@ const resolvers = {
         if (!calculation) {
           throw new Error('Driver salary calculation not found');
         }
-        
-        // Recalculate using the stored pricing configuration
-        calculation.calculateSalary();
+
+        // Always use effective rate from DriverSalaryPricing (24h delay), never stored pricingConfig
+        const pricing = await DriverSalaryPricing.findOne({
+          vehicleType: calculation.pricingConfig.vehicleType,
+          category: calculation.pricingConfig.category,
+          materialType: calculation.pricingConfig.materialType,
+          isActive: true
+        });
+        if (!pricing) {
+          throw new Error('Driver salary pricing not found for this configuration');
+        }
+        const now = new Date();
+        const usePreviousRate = pricing.previousRateEffectiveUntil && now < pricing.previousRateEffectiveUntil &&
+          pricing.previousDistanceRate != null && pricing.previousHoursRate != null;
+        const effectiveRates = usePreviousRate
+          ? { distanceRate: pricing.previousDistanceRate, hoursRate: pricing.previousHoursRate }
+          : { distanceRate: pricing.distanceRate, hoursRate: pricing.hoursRate };
+
+        const newCalculations = DriverSalaryService.performSalaryCalculation(calculation.rawData, effectiveRates);
+        calculation.calculations = newCalculations;
+        calculation.pricingConfig.distanceRate = effectiveRates.distanceRate;
+        calculation.pricingConfig.hoursRate = effectiveRates.hoursRate;
         await calculation.save();
         
         await calculation.populate('driver', 'driverId firstName lastName email vehicleType');

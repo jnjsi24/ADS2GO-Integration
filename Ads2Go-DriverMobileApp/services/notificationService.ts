@@ -169,6 +169,8 @@ class NotificationService {
       this.handleHoursMilestoneNotification(data);
     } else if (data?.category === 'DAILY_COMPLIANCE_MISSED') {
       this.handleDailyComplianceMissedNotification(data);
+    } else if (data?.category === 'SALARY_RATE_CHANGE') {
+      this.handleSalaryRateChangeNotification(data);
     }
   }
 
@@ -187,6 +189,8 @@ class NotificationService {
     } else if (data?.category === 'DRIVER_STATUS_CHANGE') {
       // Navigate to profile or dashboard
       this.navigateToDashboard();
+    } else if (data?.category === 'SALARY_RATE_CHANGE') {
+      this.navigateToSalary();
     }
   }
 
@@ -309,6 +313,19 @@ class NotificationService {
   }
 
   /**
+   * Handle salary rate change notification
+   */
+  private handleSalaryRateChangeNotification(data: NotificationData): void {
+    console.log('💰 Salary rate change notification:', data);
+    const effectiveAt = data.effectiveAt ? new Date(data.effectiveAt).toLocaleString() : '24 hours from now';
+    this.showInAppNotification(
+      '💰 Salary Rate Updated',
+      `Your salary rates have been updated. The new rate will apply ${effectiveAt}. Previous periods are unchanged.`,
+      'info'
+    );
+  }
+
+  /**
    * Show in-app notification toast
    */
   private showInAppNotification(title: string, message: string, type: 'success' | 'info' | 'warning' | 'error'): void {
@@ -342,6 +359,14 @@ class NotificationService {
     // This will depend on your navigation setup
     console.log('🧭 Navigating to dashboard');
     // Example: navigation.navigate('Dashboard');
+  }
+
+  /**
+   * Navigate to salary screen
+   */
+  private navigateToSalary(): void {
+    console.log('🧭 Navigating to salary screen');
+    // Example: navigation.navigate('Salary');
   }
 
   /**

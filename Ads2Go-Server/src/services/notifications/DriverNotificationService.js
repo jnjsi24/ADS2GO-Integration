@@ -441,6 +441,43 @@ class DriverNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send salary rate change notification to driver (when super admin updates driver salary rates)
+   */
+  static async sendSalaryRateChangeNotification(driverId, newDistanceRate, newHoursRate, effectiveAt) {
+    try {
+      const Driver = require('../../models/Driver');
+      const driver = await Driver.findById(driverId);
+      if (!driver) throw new Error('Driver not found');
+
+      const effectiveStr = effectiveAt ? new Date(effectiveAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '24 hours from now';
+      const message = `Your salary rates have been updated. New rate: ₱${Number(newDistanceRate).toFixed(2)}/km (distance), ₱${Number(newHoursRate).toFixed(2)}/hour. The new rate will apply ${effectiveStr}. Previous periods are unchanged.`;
+
+      const notification = await this.createNotification(
+        driver._id,
+        '💰 Salary Rate Updated',
+        message,
+        'INFO',
+        {
+          userRole: 'DRIVER',
+          category: 'SALARY_RATE_CHANGE',
+          priority: 'MEDIUM',
+          data: {
+            newDistanceRate: Number(newDistanceRate),
+            newHoursRate: Number(newHoursRate),
+            effectiveAt: effectiveAt ? new Date(effectiveAt).toISOString() : null,
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
+
+      return notification;
+    } catch (error) {
+      console.error('Error sending salary rate change notification:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send material assignment email to driver
    */
   static async sendMaterialAssignmentEmail(email, firstName, materialName) {
