@@ -154,7 +154,17 @@ module.exports = {
         throw new Error('Base price must be greater than 0');
       }
 
-      return await PricingConfig.findByIdAndUpdate(id, input, { new: true });
+      const updated = await PricingConfig.findByIdAndUpdate(id, input, { new: true });
+
+      // Notify all user clients when ads pricing is updated
+      try {
+        const NotificationService = require('../services/notifications/NotificationService');
+        await NotificationService.sendAdsPricingChangeNotificationToAllUsers();
+      } catch (notifyErr) {
+        console.error('Error sending ads pricing change notifications to users:', notifyErr);
+      }
+
+      return updated;
     },
 
     deletePricingConfig: async (_, { id }, { user }) => {

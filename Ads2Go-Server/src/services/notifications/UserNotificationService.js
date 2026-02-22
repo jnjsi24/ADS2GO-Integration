@@ -331,6 +331,30 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send ads pricing change notification to a user (in-app only).
+   * Called when super admin updates PricingConfig; broadcast to all user clients.
+   */
+  static async sendAdsPricingChangeNotification(userId) {
+    try {
+      const notification = await this.createNotification(
+        userId,
+        'Ads Pricing Updated',
+        'Ad pricing has been updated. New rates apply to new ads immediately.',
+        'INFO',
+        {
+          userRole: 'USER',
+          category: 'ADS_PRICING_CHANGE',
+          priority: 'MEDIUM'
+        }
+      );
+      return notification;
+    } catch (error) {
+      console.error('Error sending ads pricing change notification:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send profile change notification
    */
   static async sendProfileChangeNotification(userId, changedFields, oldValues = {}) {
