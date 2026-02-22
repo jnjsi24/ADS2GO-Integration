@@ -132,12 +132,25 @@ function formatDateString(date) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Get the next calendar day at 8:00 AM Philippines (Asia/Manila).
+ * Used for salary rate effective time so the new rate reflects after the ads player lock (12am–8am).
+ *
+ * @param {Date} from - Optional; defaults to now
+ * @returns {Date} UTC instant for next day 8:00 AM Philippines
+ */
+function getNextDay8amPhilippines(from = new Date()) {
+  const tomorrowMidnightPH = getPhilippinesMidnight(new Date(from.getTime() + 24 * 60 * 60 * 1000));
+  return new Date(tomorrowMidnightPH.getTime() + 8 * 60 * 60 * 1000);
+}
+
 module.exports = {
   getUTCMidnight,
   getTodayUTCMidnight,
   getPhilippinesMidnight,
   getPhilippinesDateString,
   toPhilippinesDateString,
+  getNextDay8amPhilippines,
   isSameDay,
   normalizeToUTCMidnight,
   isToday,
