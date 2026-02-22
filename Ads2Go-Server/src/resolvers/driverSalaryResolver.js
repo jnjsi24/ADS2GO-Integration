@@ -702,14 +702,13 @@ const resolvers = {
           throw new Error('Driver salary pricing not found');
         }
 
-        const { getNextDay8amPhilippines } = require('../utils/dateUtils');
         const isRateChange = (input.distanceRate !== undefined && input.distanceRate !== pricing.distanceRate) ||
           (input.hoursRate !== undefined && input.hoursRate !== pricing.hoursRate);
         if (isRateChange) {
-          const nextDay8amPH = getNextDay8amPhilippines();
-          pricing.previousDistanceRate = pricing.distanceRate;
-          pricing.previousHoursRate = pricing.hoursRate;
-          pricing.previousRateEffectiveUntil = nextDay8amPH;
+          // Immediate reflection: new rate applies to whole current month from next computation (no delay, no pro-rating)
+          pricing.previousDistanceRate = null;
+          pricing.previousHoursRate = null;
+          pricing.previousRateEffectiveUntil = null;
         }
 
         Object.assign(pricing, input, { updatedBy: user.id });
@@ -719,7 +718,6 @@ const resolvers = {
 
         if (isRateChange) {
           const NotificationService = require('../services/notifications/NotificationService');
-          const nextDay8amPH = getNextDay8amPhilippines();
           try {
             const materials = await Material.find({
               category: pricing.category,
@@ -736,7 +734,7 @@ const resolvers = {
                 driver._id,
                 pricing.distanceRate,
                 pricing.hoursRate,
-                nextDay8amPH
+                new Date() // effective immediately
               );
             }
             if (drivers.length > 0) {
