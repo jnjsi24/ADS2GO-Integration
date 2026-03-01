@@ -97,10 +97,20 @@ interface CachedData<T> {
   timestamp: number;
 }
 
+interface CurrentPricing {
+  vehicleType: string;
+  category: string;
+  materialType: string;
+  distanceRate: number;
+  hoursRate: number;
+}
+
 const SalaryScreen: React.FC = () => {
   const router = useRouter();
   const [calculations, setCalculations] = useState<SalaryCalculation[]>([]);
   const [summary, setSummary] = useState<SalarySummary | null>(null);
+  /** Current pricing set by super admin (for card display). Totals stay from calculation (historical). */
+  const [currentPricing, setCurrentPricing] = useState<CurrentPricing | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCalculation, setSelectedCalculation] = useState<SalaryCalculation | null>(null);
@@ -325,9 +335,10 @@ const SalaryScreen: React.FC = () => {
           const summaryCacheStr = await AsyncStorage.getItem(CACHE_KEYS.SALARY_SUMMARY);
           
           if (calculationsCacheStr && !cachedCalculations) {
-            const cached: CachedData<SalaryCalculation[]> = JSON.parse(calculationsCacheStr);
+            const cached = JSON.parse(calculationsCacheStr) as { data: SalaryCalculation[]; currentPricing?: CurrentPricing | null; timestamp: number };
             if ((Date.now() - cached.timestamp) < CACHE_EXPIRY.CALCULATIONS) {
               setCalculations(cached.data);
+              setCurrentPricing(cached.currentPricing ?? null);
               setDataCache(prev => ({ ...prev, calculations: cached }));
               if (!silent) setLoading(false);
             }
@@ -407,6 +418,13 @@ const SalaryScreen: React.FC = () => {
                     updatedAt
                   }
                   totalCount
+                  currentPricing {
+                    vehicleType
+                    category
+                    materialType
+                    distanceRate
+                    hoursRate
+                  }
                 }
               }
             `,
@@ -467,18 +485,21 @@ const SalaryScreen: React.FC = () => {
       }
       
       if (calculationsData.data?.getMySalaryCalculations?.success) {
-        const fetchedCalculations = calculationsData.data.getMySalaryCalculations.calculations || [];
+        const res = calculationsData.data.getMySalaryCalculations;
+        const fetchedCalculations = res.calculations || [];
         const deduplicatedCalculations = deduplicateCalculations(fetchedCalculations);
-        
+        const pricing = res.currentPricing ?? null;
         setCalculations(deduplicatedCalculations);
+        setCurrentPricing(pricing);
         
-        // Cache the results
-        const cacheData: CachedData<SalaryCalculation[]> = {
+        // Cache the results (include currentPricing so card shows correct rates when offline/stale)
+        const cachePayload = {
           data: deduplicatedCalculations,
+          currentPricing: pricing,
           timestamp: Date.now(),
         };
-        setDataCache(prev => ({ ...prev, calculations: cacheData }));
-        await AsyncStorage.setItem(CACHE_KEYS.SALARY_CALCULATIONS, JSON.stringify(cacheData));
+        setDataCache(prev => ({ ...prev, calculations: { ...cachePayload } }));
+        await AsyncStorage.setItem(CACHE_KEYS.SALARY_CALCULATIONS, JSON.stringify(cachePayload));
         
         // Fetch breakdown summaries immediately for all calculations (frontend calculation)
         // Fetch first calculation immediately, then stagger the rest
@@ -1066,14 +1087,14 @@ const SalaryScreen: React.FC = () => {
                       <Ionicons name="map-outline" size={14} color="#6B7280" />
                       <Text style={styles.pricingConfigRateLabel}>Distance Rate:</Text>
                       <Text style={styles.pricingConfigRateValue}>
-                        {formatCurrency(calculation.pricingConfig.distanceRate)}/km
+                        {formatCurrency((currentPricing?.distanceRate ?? calculation.pricingConfig.distanceRate))}/km
                       </Text>
                     </View>
                     <View style={styles.pricingConfigRateRow}>
                       <Ionicons name="time-outline" size={14} color="#6B7280" />
                       <Text style={styles.pricingConfigRateLabel}>Hours Rate:</Text>
                       <Text style={styles.pricingConfigRateValue}>
-                        {formatCurrency(calculation.pricingConfig.hoursRate)}/hour
+                        {formatCurrency((currentPricing?.hoursRate ?? calculation.pricingConfig.hoursRate))}/hour
                       </Text>
                     </View>
                   </View>
@@ -1206,13 +1227,13 @@ const SalaryScreen: React.FC = () => {
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Distance Rate:</Text>
                   <Text style={styles.detailValue}>
-                    {formatCurrency(selectedCalculation.pricingConfig?.distanceRate || 0)}/km
+                    {formatCurrency((currentPricing?.distanceRate ?? selectedCalculation.pricingConfig?.distanceRate) || 0)}/km
                   </Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Hours Rate:</Text>
                   <Text style={styles.detailValue}>
-                    {formatCurrency(selectedCalculation.pricingConfig?.hoursRate || 0)}/hour
+                    {formatCurrency((currentPricing?.hoursRate ?? selectedCalculation.pricingConfig?.hoursRate) || 0)}/hour
                   </Text>
                 </View>
               </View>

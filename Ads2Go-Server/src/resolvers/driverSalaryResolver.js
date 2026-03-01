@@ -570,12 +570,39 @@ const resolvers = {
           }
           return calcObj;
         });
+
+        // Current pricing from DriverSalaryPricing (what super admin set). Card shows this; calculation totals stay historical.
+        let currentPricing = null;
+        try {
+          const fullDriver = await Driver.findOne({ driverId: driver.driverId }).populate('material');
+          if (fullDriver?.vehicleType && fullDriver?.material?.category && fullDriver?.material?.materialType) {
+            const pricing = await DriverSalaryPricing.findOne({
+              vehicleType: fullDriver.vehicleType,
+              category: fullDriver.material.category,
+              materialType: fullDriver.material.materialType,
+              isActive: true,
+              isArchived: { $ne: true }
+            });
+            if (pricing) {
+              currentPricing = {
+                vehicleType: pricing.vehicleType,
+                category: pricing.category,
+                materialType: pricing.materialType,
+                distanceRate: pricing.distanceRate,
+                hoursRate: pricing.hoursRate
+              };
+            }
+          }
+        } catch (pricingErr) {
+          console.error('Error fetching current pricing for driver:', pricingErr);
+        }
         
         return {
           success: true,
           message: 'Your salary calculations retrieved successfully',
           calculations,
-          totalCount: calculations.length
+          totalCount: calculations.length,
+          currentPricing
         };
       } catch (error) {
         console.error('❌ Error getting driver salary calculations:', error);
@@ -584,7 +611,8 @@ const resolvers = {
           success: false,
           message: `Failed to retrieve your salary calculations: ${error.message}`,
           calculations: [],
-          totalCount: 0
+          totalCount: 0,
+          currentPricing: null
         };
       }
     },
@@ -743,36 +771,8 @@ const resolvers = {
           } catch (notifyErr) {
             console.error('Error sending salary rate change notifications to drivers:', notifyErr);
           }
-
-          // Recalculate existing salary calculations that use this pricing so driver app shows updated amounts.
-          // Only update CALCULATED or PENDING (not APPROVED/PAID/DISPUTED).
-          try {
-            const newRates = { distanceRate: pricing.distanceRate, hoursRate: pricing.hoursRate };
-            const affected = await DriverSalaryCalculation.find({
-              'pricingConfig.vehicleType': pricing.vehicleType,
-              'pricingConfig.category': pricing.category,
-              'pricingConfig.materialType': pricing.materialType,
-              status: { $in: ['CALCULATED', 'PENDING'] },
-              isActive: true
-            });
-            let updated = 0;
-            for (const calc of affected) {
-              const oldTotal = calc.calculations?.totalSalary;
-              const newCalculations = DriverSalaryService.performSalaryCalculation(calc.rawData, newRates);
-              calc.calculations = newCalculations;
-              calc.pricingConfig.distanceRate = newRates.distanceRate;
-              calc.pricingConfig.hoursRate = newRates.hoursRate;
-              await calc.save();
-              updated++;
-              console.log(`   [Salary recalc] calculationId=${calc.id} driverId=${calc.driverId} driverName=${calc.driverName} oldTotal=${oldTotal} newTotal=${newCalculations.totalSalary}`);
-            }
-            if (updated > 0) {
-              console.log(`✅ Recalculated ${updated} salary calculation(s) so driver app reflects new rates (drivers will see updated amounts on next refresh)`);
-            }
-          } catch (recalcErr) {
-            console.error('Error recalculating salary calculations after rate change:', recalcErr);
-            // Do not fail the mutation; pricing was already saved and drivers were notified
-          }
+          // Do NOT recalculate existing salary calculations. Existing totals stay as-is (earned at old rate).
+          // New calculations (e.g. next period or new days) will use the new rates from DriverSalaryPricing.
         }
         
         return {

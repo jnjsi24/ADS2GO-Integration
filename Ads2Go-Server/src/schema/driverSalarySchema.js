@@ -126,6 +126,8 @@ const typeDefs = gql`
     message: String!
     calculations: [DriverSalaryCalculation!]!
     totalCount: Int!
+    # Current pricing config (from DriverSalaryPricing) for this driver's vehicle+material. Use for card display; calculation totals stay historical.
+    currentPricing: SalaryPricingConfig
   }
 
   type DriverSalarySummaryResponse {
