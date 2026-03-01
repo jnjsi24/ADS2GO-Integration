@@ -743,6 +743,36 @@ const resolvers = {
           } catch (notifyErr) {
             console.error('Error sending salary rate change notifications to drivers:', notifyErr);
           }
+
+          // Recalculate existing salary calculations that use this pricing so driver app shows updated amounts.
+          // Only update CALCULATED or PENDING (not APPROVED/PAID/DISPUTED).
+          try {
+            const newRates = { distanceRate: pricing.distanceRate, hoursRate: pricing.hoursRate };
+            const affected = await DriverSalaryCalculation.find({
+              'pricingConfig.vehicleType': pricing.vehicleType,
+              'pricingConfig.category': pricing.category,
+              'pricingConfig.materialType': pricing.materialType,
+              status: { $in: ['CALCULATED', 'PENDING'] },
+              isActive: true
+            });
+            let updated = 0;
+            for (const calc of affected) {
+              const oldTotal = calc.calculations?.totalSalary;
+              const newCalculations = DriverSalaryService.performSalaryCalculation(calc.rawData, newRates);
+              calc.calculations = newCalculations;
+              calc.pricingConfig.distanceRate = newRates.distanceRate;
+              calc.pricingConfig.hoursRate = newRates.hoursRate;
+              await calc.save();
+              updated++;
+              console.log(`   [Salary recalc] calculationId=${calc.id} driverId=${calc.driverId} driverName=${calc.driverName} oldTotal=${oldTotal} newTotal=${newCalculations.totalSalary}`);
+            }
+            if (updated > 0) {
+              console.log(`✅ Recalculated ${updated} salary calculation(s) so driver app reflects new rates (drivers will see updated amounts on next refresh)`);
+            }
+          } catch (recalcErr) {
+            console.error('Error recalculating salary calculations after rate change:', recalcErr);
+            // Do not fail the mutation; pricing was already saved and drivers were notified
+          }
         }
         
         return {
