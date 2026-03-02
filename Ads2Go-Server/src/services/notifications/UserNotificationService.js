@@ -331,27 +331,135 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
-   * Send ads pricing change notification to a user (in-app only).
-   * Called when super admin updates PricingConfig; broadcast to all user clients.
+   * Fetch active pricing configs and return a summary for notifications/email.
+   * Returns { summaryText, rows } where rows are { materialType, vehicleType, category, basePrice }.
    */
-  static async sendAdsPricingChangeNotification(userId) {
+  static async getActivePricingSummary() {
+    const PricingConfig = require('../../models/PricingConfig');
+    const configs = await PricingConfig.find({
+      isActive: true,
+      isArchived: { $ne: true }
+    })
+      .sort({ materialType: 1, vehicleType: 1, category: 1 })
+      .select('materialType vehicleType category basePrice')
+      .lean();
+    const rows = configs.map(c => ({
+      materialType: c.materialType,
+      vehicleType: c.vehicleType,
+      category: c.category,
+      basePrice: c.basePrice
+    }));
+    const summaryText = rows.length === 0
+      ? 'Ad pricing has been updated. New rates apply to new ads immediately.'
+      : rows.map(r => `${r.materialType} / ${r.vehicleType} / ${r.category}: ₱${Number(r.basePrice).toLocaleString()}`).join(' • ');
+    return { summaryText, rows };
+  }
+
+  /**
+   * Send ads pricing change notification to a user (in-app + email).
+   * Called when super admin updates PricingConfig; broadcast to all user clients.
+   * @param {string} userId - User ID
+   * @param {object} [pricingSummary] - Optional { summaryText, rows } from getActivePricingSummary (avoids refetch per user)
+   */
+  static async sendAdsPricingChangeNotification(userId, pricingSummary = null) {
     try {
+      const User = require('../../models/User');
+      const user = await User.findById(userId);
+      if (!user) {
+        console.error('UserNotificationService: User not found for pricing notification:', userId);
+        return { notification: null, sentToEmail: null };
+      }
+
+      const summary = pricingSummary || await this.getActivePricingSummary();
+      const message = summary.rows.length === 0
+        ? 'Ad pricing has been updated. New rates apply to new ads immediately.'
+        : `Ad pricing updated. New rates (base per 20s, 1 mo, 1 vehicle): ${summary.summaryText}`;
+
       const notification = await this.createNotification(
         userId,
         'Ads Pricing Updated',
-        'Ad pricing has been updated. New rates apply to new ads immediately.',
+        message,
         'INFO',
         {
           userRole: 'USER',
           category: 'ADS_PRICING_CHANGE',
-          priority: 'MEDIUM'
+          priority: 'MEDIUM',
+          data: { pricingRows: summary.rows }
         }
       );
-      return notification;
+
+      let sentToEmail = null;
+      try {
+        const emailData = await this.getAdsPricingChangeEmailData(user.firstName, summary);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'ADS_PRICING_CHANGE',
+          emailData,
+          'MEDIUM',
+          notification._id
+        );
+        if (result.sent) {
+          sentToEmail = user.email;
+          console.log('✅ Pricing notification email sent successfully to:', user.email);
+        } else if (result.queued) {
+          console.log('UserNotificationService: Ads pricing change email queued (announcements disabled)');
+        }
+      } catch (emailError) {
+        console.error('UserNotificationService: Failed to send ads pricing change email:', emailError.message);
+      }
+
+      return { notification, sentToEmail };
     } catch (error) {
       console.error('Error sending ads pricing change notification:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get email data for ads pricing change notification
+   * @param {string} firstName - User first name
+   * @param {object} pricingSummary - { summaryText, rows } from getActivePricingSummary
+   */
+  static async getAdsPricingChangeEmailData(firstName, pricingSummary = { summaryText: '', rows: [] }) {
+    const clientUrl = process.env.CLIENT_URL || 'https://ads2go.com';
+    const { rows } = pricingSummary;
+    const pricingHtml = rows.length === 0
+      ? '<p style="margin: 5px 0; color: #333;">View current pricing and create or update your campaigns on the website.</p>'
+      : `
+        <p style="margin: 5px 0 10px 0; color: #333; font-weight: bold;">New rates (base per 20s ad, 1 month, 1 vehicle):</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          ${rows.map(r => `
+            <tr>
+              <td style="padding: 6px 8px; color: #333;">${r.materialType} / ${r.vehicleType} / ${r.category}</td>
+              <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: #1a73e8;">₱${Number(r.basePrice).toLocaleString()}</td>
+            </tr>
+          `).join('')}
+        </table>
+        <p style="margin: 10px 0 5px 0; color: #666; font-size: 12px;">Rates scale by ad length (20/40/60s), duration, and number of vehicles. View the website for exact quotes.</p>
+      `;
+    return {
+      subject: 'Ad Pricing Updated – New Rates Now in Effect',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">Ad Pricing Updated</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName},</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Our ad pricing has been updated. New rates apply to new ads immediately.</p>
+            <div style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
+              ${pricingHtml}
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${clientUrl}/create-advertisement" style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Pricing & Create Ad</a>
+            </div>
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">Thank you for choosing Ads2Go.</p>
+          </div>
+        </div>
+      `,
+      templateData: { firstName }
+    };
   }
 
   /**

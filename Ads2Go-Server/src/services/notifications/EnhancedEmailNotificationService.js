@@ -15,7 +15,8 @@ class EnhancedEmailNotificationService {
     'AD_REJECTION',
     'PAYMENT_CONFIRMATION',
     'AD_DEPLOYED',
-    'AD_DELETION'
+    'AD_DELETION',
+    'ADS_PRICING_CHANGE'  // Super admin edited pricing – notify all users
   ];
 
   /**

@@ -4,6 +4,7 @@ const UserNotificationService = require('./UserNotificationService');
 const DriverNotificationService = require('./DriverNotificationService');
 const AdminNotificationService = require('./AdminNotificationService');
 const SuperAdminNotificationService = require('./SuperAdminNotificationService');
+const User = require('../../models/User');
 
 class NotificationService {
   // ==================== BASE FUNCTIONALITY ====================
@@ -70,19 +71,24 @@ class NotificationService {
    * Notify all user clients (role USER) that ads pricing has been updated.
    */
   static async sendAdsPricingChangeNotificationToAllUsers() {
-    const User = require('../models/User');
     const users = await User.find({ role: 'USER', isArchived: { $ne: true } }).select('_id').lean();
+    const pricingSummary = await UserNotificationService.getActivePricingSummary();
     let sent = 0;
+    const emailsSent = [];
     for (const u of users) {
       try {
-        await UserNotificationService.sendAdsPricingChangeNotification(u._id);
-        sent++;
+        const result = await UserNotificationService.sendAdsPricingChangeNotification(u._id, pricingSummary);
+        if (result && result.notification) sent++;
+        if (result && result.sentToEmail) emailsSent.push(result.sentToEmail);
       } catch (err) {
         console.error(`Error sending ads pricing notification to user ${u._id}:`, err.message);
       }
     }
     if (sent > 0) {
       console.log(`📢 Sent ads pricing change notification to ${sent} user(s)`);
+    }
+    if (emailsSent.length > 0) {
+      console.log('📧 Emails sent successfully to:', emailsSent.join(', '));
     }
     return sent;
   }

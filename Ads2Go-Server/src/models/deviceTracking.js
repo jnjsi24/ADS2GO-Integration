@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const GPSValidation = require('../utils/gpsValidation');
 const { getPhilippinesMidnight, getPhilippinesDateString, toPhilippinesDateString, isSameDay } = require('../utils/dateUtils');
-const { setStartTimeIfNeeded: helperSetStartTime, syncDeviceDates, validateHours, syncHoursFromSession } = require('./deviceTrackingHelpers');
+const { setStartTimeIfNeeded: helperSetStartTime, syncDeviceDates, validateHours, syncHoursFromSession } = require('./deviceTrackingHelpers.js');
 //for data history
 // Location Point Schema for real-time data
 const LocationPointSchema = new mongoose.Schema({

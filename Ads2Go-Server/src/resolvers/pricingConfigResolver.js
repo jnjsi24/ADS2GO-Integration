@@ -136,7 +136,17 @@ module.exports = {
         createdBy: user.id
       });
 
-      return await newConfig.save();
+      const saved = await newConfig.save();
+
+      // Notify all users when new pricing config is added (same as edit)
+      try {
+        const NotificationService = require('../services/notifications/NotificationService');
+        await NotificationService.sendAdsPricingChangeNotificationToAllUsers();
+      } catch (notifyErr) {
+        console.error('Error sending ads pricing change notifications to users:', notifyErr);
+      }
+
+      return saved;
     },
 
     updatePricingConfig: async (_, { id, input }, { user }) => {
